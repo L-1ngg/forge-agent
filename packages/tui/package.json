@@ -1,0 +1,17 @@
+{
+  "name": "@myh/tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.84.4",
+    "@myh/protocol": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -1,0 +1,371 @@
+import {
+	Agent,
+	type AgentEvent,
+	type AgentMessage,
+	type AgentTool,
+} from "@earendil-works/pi-agent-core";
+import {
+	InMemoryCredentialStore,
+	Type,
+	createModels,
+	fauxAssistantMessage,
+	fauxProvider,
+	fauxText,
+	fauxToolCall,
+	type AssistantMessage,
+	type Message,
+	type Model,
+	type ToolResultMessage,
+	type UserMessage,
+} from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import type { SessionContentBlock, SessionEvent, SessionMessage, StopReason } from "@myh/protocol";
+import type { HarnessTool } from "@myh/tools";
+import type { AgentPort } from "./agent-runner.ts";
+
+export interface PiPortOptions {
+	provider: string;
+	model: string;
+	apiKey?: string;
+	systemPrompt: string;
+	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+	cwd: string;
+	history?: SessionMessage[];
+	tools?: HarnessTool<object, unknown>[];
+}
+
+export interface PiTestResponse {
+	text?: string;
+	echoLastUser?: boolean;
+	toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+	stopReason?: StopReason;
+	errorMessage?: string;
+}
+
+export interface PiTestPortOptions {
+	responses: PiTestResponse[];
+	tools?: HarnessTool<object, unknown>[];
+	cwd?: string;
+	tokensPerSecond?: number;
+}
+
+interface QueueWaiter<T> {
+	resolve(result: IteratorResult<T>): void;
+	reject(error: unknown): void;
+}
+
+class AsyncQueue<T> implements AsyncIterable<T>, AsyncIterator<T> {
+	private readonly values: T[] = [];
+	private readonly waiters: QueueWaiter<T>[] = [];
+	private done = false;
+	private error: unknown;
+
+	push(value: T): void {
+		if (this.done) return;
+		const waiter = this.waiters.shift();
+		if (waiter) waiter.resolve({ value, done: false });
+		else this.values.push(value);
+	}
+
+	close(): void {
+		if (this.done) return;
+		this.done = true;
+		for (const waiter of this.waiters.splice(0)) waiter.resolve({ value: undefined, done: true });
+	}
+
+	fail(error: unknown): void {
+		if (this.done) return;
+		this.error = error;
+		this.done = true;
+		for (const waiter of this.waiters.splice(0)) waiter.reject(error);
+	}
+
+	next(): Promise<IteratorResult<T>> {
+		const value = this.values.shift();
+		if (value !== undefined) return Promise.resolve({ value, done: false });
+		if (this.error !== undefined) return Promise.reject(this.error);
+		if (this.done) return Promise.resolve({ value: undefined, done: true });
+		return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
+	}
+
+	[Symbol.asyncIterator](): AsyncIterator<T> {
+		return this;
+	}
+}
+
+function stringify(value: unknown): string {
+	if (typeof value === "string") return value;
+	try {
+		return JSON.stringify(value) ?? String(value);
+	} catch {
+		return String(value);
+	}
+}
+
+function toProtocolStopReason(reason: AssistantMessage["stopReason"]): StopReason | undefined {
+	if (reason === "pending") return undefined;
+	if (reason === "toolUse") return "tool_use";
+	return reason;
+}
+
+function toPiStopReason(reason: StopReason | undefined): AssistantMessage["stopReason"] {
+	if (reason === undefined) return "stop";
+	if (reason === "tool_use") return "toolUse";
+	return reason;
+}
+
+function toSessionContent(message: Message): SessionContentBlock[] {
+	if (message.role === "user") {
+		if (typeof message.content === "string") return [{ type: "text", text: message.content }];
+		return message.content.map((block) =>
+			block.type === "text" ? { type: "text" as const, text: block.text } : { type: "text" as const, text: `[image: ${block.mimeType}]` },
+		);
+	}
+	if (message.role === "toolResult") {
+		return message.content.map((block) =>
+			block.type === "text" ? { type: "text" as const, text: block.text } : { type: "text" as const, text: `[image: ${block.mimeType}]` },
+		);
+	}
+	return message.content.map((block) => {
+		if (block.type === "text") return { type: "text" as const, text: block.text };
+		if (block.type === "thinking") return { type: "thinking" as const, thinking: block.thinking };
+		return { type: "tool_call" as const, id: block.id, name: block.name, arguments: block.arguments };
+	});
+}
+
+function toSessionMessage(message: AgentMessage): SessionMessage | undefined {
+	if (typeof message !== "object" || message === null || !("role" in message)) return undefined;
+	const standard = message as Message;
+	if (standard.role !== "user" && standard.role !== "assistant" && standard.role !== "toolResult") return undefined;
+	const base: SessionMessage = {
+		role: standard.role,
+		content: toSessionContent(standard),
+		timestamp: standard.timestamp,
+	};
+	if (standard.role === "assistant") {
+		const stopReason = toProtocolStopReason(standard.stopReason);
+		return {
+			...base,
+			provider: standard.provider,
+			model: standard.model,
+			api: standard.api,
+			usage: {
+				input: standard.usage.input,
+				output: standard.usage.output,
+				cacheRead: standard.usage.cacheRead,
+				cacheWrite: standard.usage.cacheWrite,
+				totalTokens: standard.usage.totalTokens,
+			},
+			...(stopReason !== undefined ? { stopReason } : {}),
+			...(standard.errorMessage ? { errorMessage: standard.errorMessage } : {}),
+		};
+	}
+	if (standard.role === "toolResult") {
+		return { ...base, toolCallId: standard.toolCallId, toolName: standard.toolName, isError: standard.isError };
+	}
+	return base;
+}
+
+function zeroUsage() {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	};
+}
+
+function fromSessionMessage(message: SessionMessage, model: Model<string>): Message {
+	const textAndImages = message.content
+		.filter((block) => block.type === "text")
+		.map((block) => ({ type: "text" as const, text: block.text }));
+	if (message.role === "user") {
+		return { role: "user", content: textAndImages, timestamp: message.timestamp } satisfies UserMessage;
+	}
+	if (message.role === "toolResult") {
+		return {
+			role: "toolResult",
+			toolCallId: message.toolCallId ?? "unknown",
+			toolName: message.toolName ?? "unknown",
+			content: textAndImages,
+			isError: message.isError ?? false,
+			timestamp: message.timestamp,
+		} satisfies ToolResultMessage;
+	}
+	return {
+		role: "assistant",
+		content: message.content.map((block) => {
+			if (block.type === "text") return { type: "text" as const, text: block.text };
+			if (block.type === "thinking") return { type: "thinking" as const, thinking: block.thinking };
+			return { type: "toolCall" as const, id: block.id, name: block.name, arguments: block.arguments };
+		}),
+		api: message.api ?? model.api,
+		provider: message.provider ?? model.provider,
+		model: message.model ?? model.id,
+		usage: message.usage ? { ...zeroUsage(), ...message.usage, cost: zeroUsage().cost } : zeroUsage(),
+		stopReason: toPiStopReason(message.stopReason),
+		...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
+		timestamp: message.timestamp,
+	} satisfies AssistantMessage;
+}
+
+function eventTimestamp(): number {
+	return Date.now();
+}
+
+function mapEvent(event: AgentEvent): SessionEvent[] {
+	const timestamp = eventTimestamp();
+	switch (event.type) {
+		case "agent_start":
+			return [{ type: "agent_start", timestamp }];
+		case "agent_end":
+			return [{ type: "agent_end", timestamp }];
+		case "turn_start":
+			return [{ type: "turn_start", timestamp }];
+		case "turn_end": {
+			const message = toSessionMessage(event.message);
+			return [{ type: "turn_end", timestamp, ...(message?.stopReason ? { stopReason: message.stopReason } : {}) }];
+		}
+		case "message_start": {
+			const message = toSessionMessage(event.message);
+			return message ? [{ type: "message_start", timestamp, message }] : [];
+		}
+		case "message_update": {
+			const update = event.assistantMessageEvent;
+			if (update.type === "text_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "text", delta: update.delta }];
+			if (update.type === "thinking_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "thinking", delta: update.delta }];
+			if (update.type === "toolcall_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "tool_call", delta: update.delta }];
+			return [];
+		}
+		case "message_end": {
+			const message = toSessionMessage(event.message);
+			return message ? [{ type: "message_end", timestamp, message }] : [];
+		}
+		case "tool_execution_start":
+			return [{ type: "tool_execution_start", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, args: event.args as Record<string, unknown> }];
+		case "tool_execution_update":
+			return [{ type: "tool_execution_update", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, content: stringify(event.partialResult) }];
+		case "tool_execution_end":
+			return [{ type: "tool_execution_end", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, content: stringify(event.result), isError: event.isError }];
+	}
+}
+
+function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {
+	return {
+		name: tool.name,
+		label: tool.label,
+		description: tool.description,
+		parameters: Type.Unsafe(tool.parameters),
+		async execute(_toolCallId, params, signal) {
+			const outcome = await tool.execute(params as object, { cwd, ...(signal ? { signal } : {}) });
+			if (!outcome.ok) throw new Error(JSON.stringify(outcome.error));
+			return { content: [{ type: "text", text: stringify(outcome.value) }], details: outcome.value };
+		},
+	};
+}
+
+class PiAgentPort implements AgentPort {
+	constructor(private readonly agent: Agent) {}
+
+	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		const queue = new AsyncQueue<SessionEvent>();
+		const unsubscribe = this.agent.subscribe((event) => {
+			for (const mapped of mapEvent(event)) queue.push(mapped);
+		});
+		let completed = false;
+		const running = this.agent.prompt(input).then(
+			() => {
+				completed = true;
+				queue.close();
+			},
+			(error) => queue.fail(error),
+		);
+		try {
+			for await (const event of queue) yield event;
+			await running;
+		} finally {
+			if (!completed) this.agent.abort();
+			unsubscribe();
+		}
+	}
+
+	steer(input: string): void {
+		this.agent.steer({ role: "user", content: input, timestamp: Date.now() });
+	}
+
+	followUp(input: string): void {
+		this.agent.followUp({ role: "user", content: input, timestamp: Date.now() });
+	}
+
+	abort(): void {
+		this.agent.abort();
+	}
+}
+
+export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
+	const credentials = new InMemoryCredentialStore();
+	const apiKey = options.apiKey;
+	if (apiKey) await credentials.modify(options.provider, async () => ({ type: "api_key", key: apiKey }));
+	const models = builtinModels({ credentials });
+	const model = models.getModel(options.provider, options.model);
+	if (!model) throw new Error(`Unknown model ${options.provider}/${options.model}`);
+	const agent = new Agent({
+		streamFn: models.streamSimple.bind(models),
+		initialState: {
+			systemPrompt: options.systemPrompt,
+			model,
+			thinkingLevel: options.thinkingLevel,
+			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd)),
+			messages: (options.history ?? []).map((message) => fromSessionMessage(message, model)),
+		},
+	});
+	return new PiAgentPort(agent);
+}
+
+function lastUserText(messages: Message[]): string {
+	let message: UserMessage | undefined;
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const candidate = messages[index];
+		if (candidate?.role === "user") {
+			message = candidate;
+			break;
+		}
+	}
+	if (!message) return "";
+	if (typeof message.content === "string") return message.content;
+	return message.content.filter((block) => block.type === "text").map((block) => block.text).join("");
+}
+
+export function createPiTestPort(options: PiTestPortOptions): AgentPort {
+	const faux = fauxProvider({ tokensPerSecond: options.tokensPerSecond ?? 10_000, tokenSize: { min: 1, max: 1 } });
+	faux.setResponses(
+		options.responses.map((response) => (context) => {
+			const content = [
+				...((response.echoLastUser ? lastUserText(context.messages) : response.text) ? [fauxText(response.echoLastUser ? lastUserText(context.messages) : (response.text ?? ""))] : []),
+				...(response.toolCalls ?? []).map((call) => fauxToolCall(call.name, call.arguments, { id: call.id })),
+			];
+			const stopReason = toPiStopReason(response.stopReason ?? (response.toolCalls?.length ? "tool_use" : "stop"));
+			return fauxAssistantMessage(content, {
+				stopReason,
+				...(response.errorMessage ? { errorMessage: response.errorMessage } : {}),
+				...(stopReason === "deferred"
+					? { deferred: { provider: "faux", modelId: "faux-1", api: "faux", id: "deferred-test" } }
+					: {}),
+			});
+		}),
+	);
+	const models = createModels();
+	models.setProvider(faux.provider);
+	const agent = new Agent({
+		streamFn: models.streamSimple.bind(models),
+		initialState: {
+			systemPrompt: "pi contract test",
+			model: faux.getModel(),
+			thinkingLevel: "off",
+			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd ?? process.cwd())),
+		},
+	});
+	return new PiAgentPort(agent);
+}

@@ -1,0 +1,141 @@
+# 个人 Coding Harness — 规划
+
+> 状态:Phase 1 实现中(2026-08-31)。Phase 0 自动化门禁已通过;人工终端检查与真实使用验收待完成。
+> **本文件只放行动项。** 论证、探测证据、子系统设计见 [appendix.md](./appendix.md)。
+> 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
+> 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 appendix。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
+
+---
+
+## 0. 结论
+
+三个参考项目占三个不重叠的层,不是三个竞争方案:
+
+| 来源 | 提供 | 采用方式 |
+|---|---|---|
+| **pi** | 多供应商抽象、agent loop、TUI 渲染原语、harness 积木 | 作为 npm 依赖,**分层取用**(→ A) |
+| **grok-build** | TUI 的交互设计与信息架构 | 只借设计(Rust,UX 不受版权保护) |
+| **clowder-ai** | 团队协作语义、记忆、压缩恢复 | 只借机制,不引依赖 |
+
+四条决策:
+
+1. **agent loop 用 pi 的生成器层,现在不自研。** `pi-agent-core` 是四层且成熟度不同:`pi-ai` 永久依赖、`agentLoop()` 现在用、`harness/` 积木单取、`AgentHarness` 是空壳。→ A、C.1
+2. **TUI 建在 `pi-tui` 原语上,UX 概念全部自写成 Component。** pi-tui 只有渲染没有 UX;grok 的每个设计对应一个类。→ C.2
+3. **team 用文件实现 clowder 的语义,in-process 多 `Agent` 实例。** 语义值得抄,Redis / A2A / web UI 不要。→ C.3
+4. **core 与 UI 以协议隔离,现在就做。** 成本几天,不做则以后是重写。→ C.4
+
+技术栈 **TypeScript + Bun**。走 Rust 等于放弃 `pi-ai` 重写整个供应商层。
+
+---
+
+## 1. 架构
+
+```
+my-coding-harness/
+├── packages/
+│   ├── protocol/   # 事件 union + request/response 类型。零依赖
+│   ├── core/       # 编排:agent 调度、team、session store、config、context 装配
+│   ├── tools/      # read / write / edit / bash / grep + 自有工具
+│   ├── tui/        # shell:block / card / dashboard,建在 pi-tui 上
+│   └── cli/        # 入口:interactive / -p print / --json
+└── (deps) @earendil-works/pi-ai  pi-agent-core  pi-tui    [exact pinned]
+```
+
+### 依赖方向
+
+```
+protocol  ←  core  ←  cli  →  tui  →  protocol
+              ↑
+            tools
+```
+
+三条铁律,靠 CI 检查而非自觉:
+
+- `core` 的 `package.json` 里永远不出现 `tui`
+- `tui` 只认 `protocol`,不 import `core` 的内部类型
+- `cli` 是唯一把两侧接起来的地方
+
+### 与 pi 的接缝
+
+```ts
+const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
+```
+
+在 `core` 里包一层自己的窄接口,不让 pi 的类型漏到 `tui` 和 `tools`。pi 12 个月发了 43 个版本,隔离层几十行,收益是 breaking change 只砸一个文件。
+
+---
+
+## 2. 路线
+
+### Phase 0 — 底座验证 spike(半天到 1 天)
+
+后面全押在这上面,必须先做。
+
+1. **`pi-tui` 的 flex / overlay 能否做二维分栏** — dashboard 的左列表 + 右 peek panel。**本 Phase 的头号任务。**做不到走 C.2 的退路(纵向展开区)。
+2. `pi-tui` 在 WSL2 Linux 上跑起来 — 快速确认,不再当阻断项:你此前在 WSL 下用过 pi。*依据是使用回忆,不是本机对 `pi-tui` native binding 的复现,所以仍要在 `bun add` 后当场看一眼 `.node` 加载。*
+3. 读 pi 的 `packages/{client,server,protocol}` — 不打算依赖,但是同一问题的现成答案。
+
+外加:`bun add` 三包 exact 版本跑通 30 行 demo;验证 alt-screen 下鼠标滚轮 / OSC 52 / truecolor;跑一次 `pi-coding-agent` 并翻它的 `examples/extensions/`。
+
+**Plan B**(概率已降低,保留):只用 `pi-ai`(无 native 依赖),TUI 自己在 Bun 上写。
+
+### Phase 1 — 每天能用
+
+> 施工图(路径 / tradeoff / 验收)见 [phase-1.md](./phase-1.md);此处只留行动项。
+
+- `protocol` 包定形状(借 ACP)+ CI 依赖检查
+- `TuiMainScreen` 起步(比 alt-screen 便宜)
+- 4 个工具:read / write / edit / bash。**入参 schema 与错误形状按纪律写**:能 `enum` 不用自由文本、`additionalProperties: false`、错误统一含 `error_code` / `field` / `expected` / `example` / `retryable`(→ F.5)
+- 流式渲染按 `contentIndex` 归组
+- session JSONL 树形持久化 + **`session_search` 等价的本地检索函数**(grep 定位 → 只读那一处,→ F.1 ⑤)
+- `Esc` 取消保留草稿;`Enter` 排队
+- `--json` headless 入口
+- **loop 一致性测试套件** — 先跑在 pi 的实现上锁住行为契约,是 Phase 3 敢换 loop 的前提(→ C.1)。abort 部分写成**纯函数状态机 + fast-check 属性测试**,不止验配对性(→ F.2)
+
+**唯一验收标准:开始用它而不是用别的。**
+
+### Phase 2 — TUI 升级到 grok 水准
+
+- 切 `TuiAltScreen`
+- block 模型 + 折叠 + inline diff
+- `FocusStack` + blocking card 契约
+- **request 总线**(带 id 的 request/response)—— 本规划唯一「现在不做、以后一定后悔」项,→ C.4
+- permission 流水线:hooks → rules → 记住的授权 → 内置自动批准 → mode
+- status line —— context 用量**在真相点计算**,不展示上一次调用的缓存快照(→ F.1 ②)
+- `/` 菜单 + `@` file picker
+- 语义色槽主题
+
+### Phase 2.5 — Team(与 Phase 2 并行)
+
+- `.harness/team/<name>/` + `IDENTITY.md` 进 system prompt slot
+- `@mention` 路由(在 `core`)+ inbox + `rename()` 租约。**单一执行入口**:mention 解析的唯一输出是「写 inbox + 入队」,消费者只有一个(→ F.2,P0)
+- **三个硬上限**:深度 `MAX_A2A_DEPTH=15`、fan-out ≤2 且串行、入队去重 + 「目标已被父调用覆盖」短路(→ F.2)
+- `board.jsonl` 任务板
+- in-process N 个 `Agent` 实例。工具取显式 cwd,env 走 per-agent context —— in-process 交出了 OS 隔离(→ F.2)
+- 独立的 `hasActiveInvocation`,不从「是否在流式输出」推导能否停止(→ F.2)
+- dashboard + peek panel(依赖 Phase 0 验证项 ①)
+
+### Phase 3 — 产品化
+
+SKILL.md 加载 · plan mode · `/rewind` · todo · `beforeToolCall` deny 规则 · compaction + 重注入载荷 · SQLite FTS5 记忆
+
+其中四条来自 F.1 / F.3,不是可选打磨:
+
+- **用户原始请求的原文进 slot**,与 `IDENTITY.md` 同级放 transcript 之外 —— AC / 摘要是需求的有损压缩(→ F.1 ①)
+- **压缩写出阈值留余量**:预警 0.80 / 动作 0.88。阈值贴着自动压缩点等于机制一次也不会跑起来(→ F.1 ②)
+- **状态文件的 key 带写出时的 head entry id**,SessionStart 校验它是当前 head 的祖先,否则丢弃 —— 树形 session 有多分支(→ F.1 ④)
+- **记忆写入准入三门禁**:可追溯锚点、「防护」必须是可执行机制、「原理」需有真实失败案例。默认查询排除 `superseded_by`(→ F.3)
+
+载荷里写死「不确定之前做了什么就去搜,不要猜」,并且任何需要模型自述或判断的部分挪到**读取时**做(→ F.1 ⑤⑥)。
+
+### Phase 4 — 深化
+
+subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评审 · (可选)ACP 完整合规 → Zed 当客户端 · (可选)core 包 server 层 → web UI
+
+---
+
+## 3. 下一步
+
+Phase 0 自动化门禁已完成,进入 **Phase 1** 实现。人工终端检查与 3 天真实使用仍是发布前验收项。
+
+开工时一并 `git init`。
