@@ -10,10 +10,10 @@ created: 2026-08-31
 
 ## 背景
 
-仓库处于规划期,已有 4 份文档(plan / phase-1 / appendix / cat-cafe),但缺:
+仓库处于规划期,已有 4 份文档(plan / phase-1 / 原附录文档 / cat-cafe;其中原附录文档现名为 design-rationale),但缺:
 
 - AI 协作者的统一入口 —— 哪个文档说了算,靠口口相传
-- 决策的固定安放处 —— 目前埋在 plan.md §0 和 appendix.md,以后会被重新争论
+- 决策的固定安放处 —— 当时埋在 plan.md §0 和原附录文档(现 [design-rationale.md](../design-rationale.md)),以后会被重新争论
 - 教训与跨 session 交接的制度化格式
 
 调研对象:clowder-ai commit `7188f73`(2026-08-31)。其文档系统的本质是**机器可校验、AI 可导航的知识协作基础设施**:frontmatter 契约(ADR-011)、Feature Doc 作为唯一真相源、热/温/冷三层生命周期、review-request 交接信、证据只引用不复制。
@@ -24,7 +24,7 @@ created: 2026-08-31
 
 1. **AGENTS.md 单入口 + CLAUDE.md 指针** —— clowder 按模型分角色(AGENTS / CLAUDE / GEMINI 三份角色卡);本项目单 operator,收敛为一个入口,其它工具入口只做指针,防漂移。
 2. **docs/README.md 索引 + 命名 / 元信息约定** —— 对应 clowder ADR-011 元数据契约,取最小集(`doc_kind` + `created`),不上全套 frontmatter CI。
-3. **docs/decisions/ ADR 目录** —— `NNN-slug.md`,三位编号不重排不复用,本文件即 001。**历史决策不回填**:plan.md §0 四条决策与 appendix.md 已有出处和证据,原地保留,ADR 从本文件起算。
+3. **docs/decisions/ ADR 目录** —— `NNN-slug.md`,三位编号不重排不复用,本文件即 001。**历史决策不回填**:plan.md §0 四条决策与原附录文档(现 [design-rationale.md](../design-rationale.md))已有出处和证据,原地保留,ADR 从本文件起算。
 4. **docs/lessons.md 教训库** —— LL-XXX 七槽位 + 入库门禁,与 plan.md F.3 三门禁对齐。
 5. **review-notes/ 交接信** —— `YYYY-MM-DD-{topic}-review-request.md`,原话引用 + verdict 绑定 SHA;轻量评审不落盘。
 6. **docs/SOP.md** —— 改动分级、验证纪律(Ran / Not run / Why / Risk)、「文档领路,代码跟随」。

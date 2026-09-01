@@ -3,14 +3,14 @@ doc_kind: decision
 created: 2026-08-31
 ---
 
-# ADR-002: 单进程架构 + 协议隔离
+# ADR-004: 单进程架构 + 协议隔离
 
 > 状态:已批准(2026-08-31,operator 发起)
 > 参与者:operator(发起)、Grok(分析)
 
 ## 背景
 
-clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了核心与界面的物理分离。代价:Redis 快照空档丢数据(28 秒,307→144 keys)、进程管理、Lua CAS 并发控制(单用户场景防的是不存在的并发)、Mission Hub 运维面板——每一层基础设施都在解决上一层制造的问题,而不是用户的问题。详见 [appendix.md](../appendix.md) C.4、[cat-cafe.md](../cat-cafe.md) F.1。
+clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了核心与界面的物理分离。代价:Redis 快照空档丢数据(28 秒,307→144 keys)、进程管理、Lua CAS 并发控制(单用户场景防的是不存在的并发)、Mission Hub 运维面板——每一层基础设施都在解决上一层制造的问题,而不是用户的问题。详见 [design-rationale.md](../design-rationale.md) C.4、[cat-cafe.md](../cat-cafe.md) F.1。
 
 本项目需要回答:如何在不做分布式的前提下,让核心与界面之间的边界同样牢固?
 
@@ -47,6 +47,6 @@ clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了�
 
 ## 出处
 
-- 详细论证:[appendix.md](../appendix.md) C.3(in-process 多 agent)、C.4(协议边界与演进路径)
+- 详细论证:[design-rationale.md](../design-rationale.md) C.3(in-process 多 agent)、C.4(协议边界与演进路径)
 - 失效模式证据:[cat-cafe.md](../cat-cafe.md) F.1(Redis 数据丢失)、F.2(双执行入口、并发上限)
 - 实现:[plan.md](../plan.md) §1 架构与依赖方向
