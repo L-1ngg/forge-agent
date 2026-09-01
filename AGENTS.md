@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。当前状态:**Phase 1 实现中**。Phase 0 自动化门禁已通过,人工终端检查与真实使用验收待完成。
+个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2 M1 已实现，待 review gate**。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并视为通过。
 
 ## 真相源层级
 

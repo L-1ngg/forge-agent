@@ -1,4 +1,5 @@
 import type { SessionEvent, SessionMessage } from "@myh/protocol";
+import type { RequestBus } from "./request-bus.ts";
 import type { SessionStore } from "./session-store.ts";
 
 export interface AgentPort {
@@ -9,26 +10,35 @@ export interface AgentPort {
 }
 
 export class AgentRunner {
+	private activeTurn: { aborted: boolean } | undefined;
+
 	constructor(
 		private readonly port: AgentPort,
 		private readonly store: SessionStore,
+		private readonly requestBus: RequestBus | undefined = undefined,
 	) {}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		const turn = { aborted: false };
+		this.activeTurn = turn;
 		const messages: SessionMessage[] = [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }];
 		let ended = false;
 		let aborted = false;
-		for await (const event of this.port.runTurn(input)) {
-			if (event.type === "message_end" && event.message.role !== "user") {
-				messages.push(event.message);
-				if (event.message.stopReason === "aborted") aborted = true;
+		try {
+			for await (const event of this.port.runTurn(input)) {
+				if (event.type === "message_end" && event.message.role !== "user") {
+					messages.push(event.message);
+					if (event.message.stopReason === "aborted") aborted = true;
+				}
+				if (event.type === "turn_end" && event.stopReason === "aborted") aborted = true;
+				if (event.type === "agent_end") ended = true;
+				yield event;
 			}
-			if (event.type === "turn_end" && event.stopReason === "aborted") aborted = true;
-			if (event.type === "agent_end") ended = true;
-			yield event;
+			if (!ended) throw new Error("Agent event stream ended without agent_end");
+			if (!turn.aborted && !aborted && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
+		} finally {
+			if (this.activeTurn === turn) this.activeTurn = undefined;
 		}
-		if (!ended) throw new Error("Agent event stream ended without agent_end");
-		if (!aborted && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
 	}
 
 	steer(input: string): void {
@@ -40,6 +50,8 @@ export class AgentRunner {
 	}
 
 	abort(): void {
+		if (this.activeTurn) this.activeTurn.aborted = true;
+		this.requestBus?.abort();
 		this.port.abort();
 	}
 }

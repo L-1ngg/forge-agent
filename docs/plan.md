@@ -1,6 +1,6 @@
 # 个人 Coding Harness — 规划
 
-> 状态:Phase 1 实现中(2026-08-31)。Phase 0 自动化门禁已通过;人工终端检查与真实使用验收待完成。
+> 状态:Phase 2 M1 已实现，待 review gate(2026-09-01)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并视为通过;E4 已复核。
 > **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
 > 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
@@ -134,6 +134,6 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-Phase 0 自动化门禁已完成,进入 **Phase 1** 实现。人工终端检查与 3 天真实使用仍是发布前验收项。
+M1 request 总线已完成自动化验收,当前停在 review gate;E1-E3 的未实测风险由 operator 接受,E4 已通过。review 通过后再开始 M2。
 
 开工时一并 `git init`。

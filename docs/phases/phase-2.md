@@ -5,7 +5,7 @@ created: 2026-09-01
 
 # Phase 2 施工图 — TUI 升到 grok 水准 + permission 流水线
 
-> 状态:草稿(2026-09-01),**待 operator 确认后才写码**。Owner:operator。
+> 状态:M1 已实现，待 review gate(2026-09-01)。operator 已确认开工并指示 E1-E3 暂缓实测、视为通过。Owner:operator。
 > 对应 [plan.md](../plan.md) §2 Phase 2;设计论证见 [design-rationale.md](../design-rationale.md) A / C.2 / C.4,失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
 > 本文档是 Phase 2 的唯一施工图。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架(entry criteria → milestone → test plan → release criteria → rollback)见 §5 的映射说明。
 
@@ -33,6 +33,8 @@ Phase 1 做出了「能用」,Phase 2 做「敢放手用」。
 | E4 | pi 的 `beforeToolCall` 契约复核 | grep `dist/` 确认 `block` / `reason` / `terminate` 已实现(非 `NotImplemented`),且确认仍无 `updatedInput` | 有 `updatedInput` → M2 的 rewrite 层可简化;`beforeToolCall` 是空壳 → deny 半边也落到自有包装层 |
 
 E3 是 Phase 0 留下的唯一真门禁项。Phase 1 用 `TuiMainScreen` 时它无关紧要,**切 alt-screen 后它决定「能不能复制粘贴」**——所以现在升级为阻断项。
+
+2026-09-01 operator 明确指示 E1-E3 **先不测、假定已通过**。这是开工豁免,不是实测证据;未验证风险保留并记录在 §8。E4 已按固定依赖发布物复核通过。
 
 ---
 
@@ -67,6 +69,17 @@ M2 × M3 汇合 ─→ blocking card(permission 卡片是第一张真卡)
 
 - **五种 kind 一次定全**,不留「以后再加」:`permission` / `cancel_confirm` / `question` / `plan_approval` / `oauth`。plan_approval 的**消费者**在 Phase 3,但**形状现在定**——理由同 Phase 1 对 envelope 的处理:形状晚定就是协议 breaking change。
   - `oauth` 是最容易漏的第五种([design-rationale C.4 ②](../design-rationale.md)):`pi-ai` 用本地回调端口等浏览器跳转,同样是阻塞式交互,不许 `core` 直接往 stdout 打 URL。
+- **payload / result 一次定形**,后续只许加 optional 字段:
+
+| kind | payload 核心字段 | result | headless 默认动作 / 退出码 |
+|---|---|---|---|
+| `permission` | `toolCall` / `reason?` / `rememberRule?` | `allow_once` / `allow_always(scope)` / `deny` | `deny` / `20` |
+| `cancel_confirm` | `action` / `consequence?` | `cancel` / `keep_running` | `cancel` / `21` |
+| `question` | `prompt` / `choices?` / `allowFreeText?` / `multiple?` | `answer(answers[])` / `cancel` | `cancel` / `22` |
+| `plan_approval` | `plan` | `approve` / `reject(feedback?)` | `reject` / `23` |
+| `oauth` | `provider` / `authorizationUrl` / `instructions?` | `completed` / `cancel` | `cancel` / `24` |
+
+`rememberRule` 是确认前展示给用户的规则原文;字段缺席时 UI 不得提供 Always allow。`question.answers` 对选择题承载 choice id,对自由输入承载原文。退出码 `1` / `2` 继续保留给既有启动错误 / 参数错误。
 - **总线契约**(这是 M1 的真正交付物,不是那几十行实现):
   - id 由 core 分配,全局唯一,不复用。
   - 每个 request 恰好一个终态:`response` | `cancelled` | `timeout`。
@@ -185,11 +198,11 @@ Phase 2 关闭需要**同时**满足:
 
 **M1 request 总线**
 
-- [ ] AC-1:五种 kind 的类型在 `protocol` 定稿;`core` 里不存在第二条阻塞式交互路径(grep 断言:`core` 无 `ui.` 调用、无 `prompt(`/`confirm(` 直调)。
-- [ ] AC-2:属性测试(fast-check,≥500 轮)覆盖总线四条不变量:每个 request 恰好一个终态;重复 response 只生效一次;未知 / 迟到 id 被丢弃且不改变状态;终态吸收(终态后任何输入不改变状态)。
-- [ ] AC-3:turn abort 时在飞 request 自动 `cancelled`,且决策落到 **deny**;session JSONL 中不留半个 turn(与 Phase 1 ⑦ 的 abort 原子性同一条约束)。
-- [ ] AC-4:headless 下五种 kind 各有确定行为与稳定退出码;CI 用例逐 kind 断言退出码。
-- [ ] AC-5:**反向验证**——人为往 `core` 里加一处直调 UI 的代码 → CI 变红(依赖检查扩一条规则)。
+- [x] AC-1:五种 kind 的类型在 `protocol` 定稿;`core` 里不存在第二条阻塞式交互路径(grep 断言:`core` 无 `ui.` 调用、无 `prompt(`/`confirm(` 直调)。
+- [x] AC-2:属性测试(fast-check,≥500 轮)覆盖总线四条不变量:每个 request 恰好一个终态;重复 response 只生效一次;未知 / 迟到 id 被丢弃且不改变状态;终态吸收(终态后任何输入不改变状态)。
+- [x] AC-3:turn abort 时在飞 request 自动 `cancelled`,且决策落到 **deny**;session JSONL 中不留半个 turn(与 Phase 1 ⑦ 的 abort 原子性同一条约束)。
+- [x] AC-4:headless 下五种 kind 各有确定行为与稳定退出码;CI 用例逐 kind 断言退出码。
+- [x] AC-5:**反向验证**——人为往 `core` 里加一处直调 UI 的代码 → CI 变红(依赖检查扩一条规则)。
 
 **M2 permission**
 
@@ -204,7 +217,7 @@ Phase 2 关闭需要**同时**满足:
 - [ ] AC-11:焦点契约测试——录制键序回放,断言 `FocusStack` 状态:`Tab` 不越界、`Esc` 只 pop 一层、pop 后卡片仍在可读区。
 - [ ] AC-12:**四种卡片跑同一套焦点测试**(同一测试参数化四遍全绿),而非各写一套。
 - [ ] AC-13:`ui.host` 在 `alt` / `main` 间切换,Component 树不变(同一棵树在两种宿主下渲染均无异常)。
-- [ ] AC-14:E3 三项在 alt-screen 下的实测结论记录进本文档 §7;若走降级路径,降级方案与代价一并落盘。
+- [ ] AC-14:E3 三项在 alt-screen 下的实测结论记录进本文档 §8;若走降级路径,降级方案与代价一并落盘。
 
 **M4 block**
 
@@ -231,7 +244,7 @@ Phase 2 关闭需要**同时**满足:
 | unit | `decide()` 决策链、`digest()`、diff 计算、解析器 | CI 每次 push |
 | contract(属性测试) | 总线四不变量、abort 原子性、焦点契约 | CI 每次 push,fast-check ≥500 轮 |
 | integration | headless 五 kind × 退出码;录制事件流回放渲染 | CI 每次 push |
-| manual UX checklist | E3 三项、卡片焦点手感、滚动与复制、状态栏诚实性 | 里程碑收尾各一次,结论落 §7 |
+| manual UX checklist | E3 三项、卡片焦点手感、滚动与复制、状态栏诚实性 | 里程碑收尾各一次,结论落 §8 |
 
 **每个里程碑都要带一次反向验证**(人为注入 bug → 对应测试变红)。Phase 1 ⑦ 已证明这条值钱:只证明「测试绿」不等于证明「测试有效」。
 
@@ -299,3 +312,9 @@ Phase 2 关闭需要**同时**满足:
 ## 8. 实证记录
 
 > 施工期间在此追加:E3 三项的实测结论、E4 的 grep 结果、各里程碑的反向验证证据、manual UX checklist 的逐次结论。格式照 [phase-1.md](./phase-1.md) §6——写可复现的观察,不写信心。
+
+- 2026-09-01 门禁豁免:operator 原话「E1-3先不测，假定已通过」。因此 E1-E3 没有新增实测证据;Phase 2 接受该风险从 M1 开工。
+- 2026-09-01 E4:`@earendil-works/pi-agent-core@0.84.4` 的 `dist/types.d.ts` 定义 `BeforeToolCallResult.block` / `reason` / `terminate`;`dist/agent-loop.js` 在参数校验后调用 hook,`block` 时生成错误 tool result,并传播 `terminate`;`dist` 中不存在 `updatedInput`。
+- 2026-09-01 M1 自动化验收:`bun run check` 通过;依赖边界、workspace typecheck、45 tests 全绿。`tests/request-bus/request-bus.property.test.ts` 的 fast-check 为 500 runs,覆盖 request 单终态、重复/迟到/未知 response 丢弃和终态吸收;`packages/core/test/session.test.ts` 覆盖 runner abort 取消 pending request、权限取消映射 deny、session 不落半个 turn;`packages/cli/test/headless-request.test.ts` 覆盖五种 kind 的保守应答与退出码 20-24。
+- 2026-09-01 M1 反向验证:`bun test scripts/check-deps.test.ts` 在临时 core fixture 注入 `ui.prompt` / `ui.confirm` / `ui.ask` 与裸 `prompt` / `confirm`,依赖检查按预期报错;当前工作区 `bun run check:deps` 通过。
+- 2026-09-01 M1 协议回归:permission `allow_always` 缺少或错误 `scope.tool` / `scope.argsPattern` 时被丢弃,合法作用域响应通过;对应 `tests/request-bus/request-bus.test.ts` 已纳入完整检查。

@@ -5,7 +5,7 @@ created: 2026-08-31
 
 # Phase 1 实现方案 — 每天能用
 
-> 状态:实现中(2026-08-31)。Phase 0 自动化门禁已通过,Phase 1 代码与测试已落地;人工验收待完成。对应 [plan.md](../plan.md) §2 Phase 1;设计论证见 [design-rationale.md](../design-rationale.md),失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
+> 状态:已完成(2026-09-01,按 operator 指示将未执行的人工验收暂缓并视为通过)。Phase 1 代码与自动化测试已落地。对应 [plan.md](../plan.md) §2 Phase 1;设计论证见 [design-rationale.md](../design-rationale.md),失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
 > 本文档是 Phase 1 的唯一施工图:每个工作项带**路径**(要创建的文件)、**tradeoff**(选了什么、放弃了什么)、**验收**(可验证的检查)。plan.md 只保留行动项,细节以本文为准。
 
 ---

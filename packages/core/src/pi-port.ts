@@ -22,6 +22,7 @@ import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { SessionContentBlock, SessionEvent, SessionMessage, StopReason } from "@myh/protocol";
 import type { HarnessTool } from "@myh/tools";
 import type { AgentPort } from "./agent-runner.ts";
+import type { RequestBus } from "./request-bus.ts";
 
 export interface PiPortOptions {
 	provider: string;
@@ -32,6 +33,7 @@ export interface PiPortOptions {
 	cwd: string;
 	history?: SessionMessage[];
 	tools?: HarnessTool<object, unknown>[];
+	requestBus?: RequestBus;
 }
 
 export interface PiTestResponse {
@@ -47,6 +49,7 @@ export interface PiTestPortOptions {
 	tools?: HarnessTool<object, unknown>[];
 	cwd?: string;
 	tokensPerSecond?: number;
+	requestBus?: RequestBus;
 }
 
 interface QueueWaiter<T> {
@@ -267,7 +270,11 @@ function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {
 }
 
 class PiAgentPort implements AgentPort {
-	constructor(private readonly agent: Agent) {}
+	private readonly requestBus: RequestBus | undefined;
+
+	constructor(private readonly agent: Agent, requestBus?: RequestBus) {
+		this.requestBus = requestBus;
+	}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
 		const queue = new AsyncQueue<SessionEvent>();
@@ -300,6 +307,7 @@ class PiAgentPort implements AgentPort {
 	}
 
 	abort(): void {
+		this.requestBus?.abort();
 		this.agent.abort();
 	}
 }
@@ -321,7 +329,7 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 			messages: (options.history ?? []).map((message) => fromSessionMessage(message, model)),
 		},
 	});
-	return new PiAgentPort(agent);
+	return new PiAgentPort(agent, options.requestBus);
 }
 
 function lastUserText(messages: Message[]): string {
@@ -367,5 +375,5 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd ?? process.cwd())),
 		},
 	});
-	return new PiAgentPort(agent);
+	return new PiAgentPort(agent, options.requestBus);
 }

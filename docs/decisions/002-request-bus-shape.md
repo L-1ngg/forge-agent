@@ -39,6 +39,22 @@ Phase 2 把这条落成 M1([phases/phase-2.md#L62](../phases/phase-2.md)),要求
 6. 五种 kind 一次定全,不留「以后再加」。`plan_approval` 的消费者在 Phase 3,形状现在定;`oauth` 是最容易漏的第五种(`pi-ai` 用本地回调端口等浏览器跳转,同样是阻塞式交互)。
 7. headless 五种 kind 各有确定行为,**默认全部 deny + 稳定退出码**,不做隐式降级。
 
+### M1 的具体协议形状
+
+`RequestEnvelope` 保留 Phase 1 的通用 `{ type, id, kind, payload }` 外形;Phase 2 为五种 kind 提供强类型 payload/result 映射。后续只许增加 optional 字段,不改变现有字段语义:
+
+| kind | payload | response result | headless exit code |
+|---|---|---|---:|
+| `permission` | `toolCall`, `reason?`, `rememberRule?` | `allow_once` / `allow_always(scope)` / `deny` | 20 |
+| `cancel_confirm` | `action`, `consequence?` | `cancel` / `keep_running` | 21 |
+| `question` | `prompt`, `choices?`, `allowFreeText?`, `multiple?` | `answer(answers[])` / `cancel` | 22 |
+| `plan_approval` | `plan` | `approve` / `reject(feedback?)` | 23 |
+| `oauth` | `provider`, `authorizationUrl`, `instructions?` | `completed` / `cancel` | 24 |
+
+`rememberRule` 是确认前展示给用户的规则原文;没有该字段时 UI 不得提供 Always allow。headless 的 permission 结果是 deny,cancel_confirm/question/oauth 是 cancel,plan_approval 是 reject。既有退出码 `1` / `2` 继续分别表示启动错误 / 参数错误。
+
+`allow_always` 的 `scope` 必须同时携带 `tool` 与 `argsPattern` 字符串;它表达具体被授权对象,不能退化成只按工具名记忆。
+
 被否方案:
 
 | 方案 | 否决理由 |

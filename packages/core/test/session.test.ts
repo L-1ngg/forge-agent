@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AgentRunner, loadConfig, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
+import { AgentRunner, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
 
 const temporaryDirectories: string[] = [];
 async function temporaryDirectory(): Promise<string> {
@@ -69,6 +69,43 @@ test("agent runner does not persist an aborted or unpaired turn", async () => {
 	for await (const event of runner.runTurn("abort me")) events.push(event);
 	expect(events).toHaveLength(3);
 	expect(store.getEntries()).toHaveLength(0);
+});
+
+test("agent runner abort cancels pending blocking requests before aborting the port", async () => {
+	const cwd = await temporaryDirectory();
+	const path = join(cwd, "session.jsonl");
+	const store = await SessionStore.open(path, cwd);
+	const bus = new RequestBus({ idPrefix: "runner", timeoutMs: 60_000 });
+	let portAborted = false;
+	const runner = new AgentRunner(
+		{
+			async *runTurn() {
+				await bus.ask("permission", {
+					toolCall: { type: "tool_call", id: "call-1", name: "write", arguments: { path: "file.txt" } },
+				});
+				yield { type: "agent_end", timestamp: 1 };
+			},
+			steer() {},
+			followUp() {},
+			abort() {
+				portAborted = true;
+			},
+		},
+		store,
+		bus,
+	);
+	const eventsPromise = (async () => {
+		const events = [];
+		for await (const event of runner.runTurn("needs permission")) events.push(event);
+		return events;
+	})();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	runner.abort();
+	expect(await eventsPromise).toEqual([{ type: "agent_end", timestamp: 1 }]);
+	expect(portAborted).toBe(true);
+	expect(bus.pendingCount).toBe(0);
+	expect(store.getEntries()).toHaveLength(0);
+	bus.close();
 });
 
 describe("config", () => {

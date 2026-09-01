@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { cwd } from "node:process";
-import { AgentRunner, createPiPort, loadConfig, resolveSecret, SessionStore, type AgentPort, type PiPortOptions } from "@myh/core";
+import { AgentRunner, createPiPort, loadConfig, RequestBus, resolveSecret, SessionStore, type AgentPort, type PiPortOptions } from "@myh/core";
 import { builtinTools } from "@myh/tools";
 import { App } from "@myh/tui";
 import { jsonError, runHeadless } from "./headless.ts";
@@ -73,6 +73,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 	const store = await SessionStore.open(sessionPath, workingDirectory);
 
 	try {
+		const requestBus = new RequestBus();
 		const apiKey = await resolveSecret(config.apiKey);
 		const port = await portFactory({
 			provider,
@@ -83,11 +84,11 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			cwd: workingDirectory,
 			history: store.messages(),
 			tools: builtinTools,
+			requestBus,
 		});
-		const runner = new AgentRunner(port, store);
+		const runner = new AgentRunner(port, store, requestBus);
 		if (args.json) {
-			await runHeadless(runner, prompt as string);
-			return 0;
+			return await runHeadless(runner, prompt as string, console.log, { requestBus });
 		}
 		const app = new App({ port: runner });
 		await app.start();
