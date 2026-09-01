@@ -1,6 +1,11 @@
+---
+doc_kind: plan
+created: 2026-08-31
+---
+
 # Phase 1 实现方案 — 每天能用
 
-> 状态:实现中(2026-08-31)。Phase 0 自动化门禁已通过,Phase 1 代码与测试已落地;人工验收待完成。对应 [plan.md](./plan.md) §2 Phase 1;设计论证见 [appendix.md](./appendix.md),失效模式出处见 [cat-cafe.md](./cat-cafe.md)。
+> 状态:实现中(2026-08-31)。Phase 0 自动化门禁已通过,Phase 1 代码与测试已落地;人工验收待完成。对应 [plan.md](../plan.md) §2 Phase 1;设计论证见 [design-rationale.md](../design-rationale.md),失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
 > 本文档是 Phase 1 的唯一施工图:每个工作项带**路径**(要创建的文件)、**tradeoff**(选了什么、放弃了什么)、**验收**(可验证的检查)。plan.md 只保留行动项,细节以本文为准。
 
 ---
@@ -93,7 +98,7 @@ my-coding-harness/
 - `RequestEnvelope` / `ResponseEnvelope` 类型(`{ type: 'request', id, kind, payload }` / `{ type: 'response', id, result }`)。**Phase 1 只定类型,不实现总线**——permission 等真实使用者 Phase 2 才进来,但形状现在定死,避免 Phase 2 改协议。
 - 零依赖,纯类型 + 窄的构造函数。
 
-**Tradeoff**:借 ACP 形状**放弃**完全自定义。理由:appendix C.4——以后真接 ACP 是机械映射而非重构;代价是现在要忍受少量用不上的字段。边界:ACP 未核实的部分一律不猜,只定我们用到的子集。
+**Tradeoff**:借 ACP 形状**放弃**完全自定义。理由:design-rationale C.4——以后真接 ACP 是机械映射而非重构;代价是现在要忍受少量用不上的字段。边界:ACP 未核实的部分一律不猜,只定我们用到的子集。
 
 **验收**:`bun run --filter protocol build`(或 `tsc --noEmit`)通过;`core` 与 `tui` 各能只凭 `protocol` 类型完成一次事件收发(编译期检查,不写 mock 实现)。
 
@@ -106,7 +111,7 @@ my-coding-harness/
 - 错误统一形状:`{ error_code(稳定枚举), message, field, expected, example, retryable }`。
 - 自测法:删掉 schema 字段描述只留类型,工具应变难用——变难用说明描述本来就不够结构化(留给模型自己判断的部分过多)。
 
-**Tradeoff**:**自己写,放弃**直接依赖 pi 第 3 层积木(`harness/tools/`,read 109 行 / bash 131 / edit 107)。理由:(a) 错误形状纪律是我们的差异化要求,pi 的不长这样;(b) 工具包装层是 permission「rewrite 半边」的家(appendix A),这层必须自己持有;(c) pi 的积木作为**参考实现**读,错误分支比我们的要求粗。代价:约 400 行自有代码 + pi 升级时没有免费的修复。缓解:四个工具的语义面很窄,维护量可控。
+**Tradeoff**:**自己写,放弃**直接依赖 pi 第 3 层积木(`harness/tools/`,read 109 行 / bash 131 / edit 107)。理由:(a) 错误形状纪律是我们的差异化要求,pi 的不长这样;(b) 工具包装层是 permission「rewrite 半边」的家(design-rationale A),这层必须自己持有;(c) pi 的积木作为**参考实现**读,错误分支比我们的要求粗。代价:约 400 行自有代码 + pi 升级时没有免费的修复。缓解:四个工具的语义面很窄,维护量可控。
 
 pi 接缝说明:工具以 pi `AgentTool` 形状暴露给 loop(`prepareArguments` 只做兼容性修补,策略判断留给 Phase 2 的包装层)。
 
@@ -126,7 +131,7 @@ pi 接缝说明:工具以 pi `AgentTool` 形状暴露给 loop(`prepareArguments`
 - `session-search.ts`:本地检索(cat-cafe F.1 ⑤):`search(query) → 命中 entry id 列表`,`readEntry(id) → 只读那一处`。grep 式扫描,不建索引。
 - `config.ts`:分层路径 + `"!cmd"` 取密钥设计直接抄 pi(`"!op read 'op://vault/item/credential'"`、`"$VAR"` 插值)。
 
-**Tradeoff 1(重要,对 plan 的收窄决策)**:plan.md §1 的接缝画的是 `new Agent(...)`,appendix C.1 的文字写的是「生成器层 + 状态自持」。Phase 1 决策:**先用 `Agent` 类**(接缝简单,steering/队列白拿),**状态通过事件订阅镜像到自己的 session store**,不让 `Agent` 的内存状态成为权威。这与 C.1 不矛盾:C.1 的要点是「状态自持 + 有逃生口」,`Agent` 类当引擎用、事件流当事实源,两条都满足。掉到 `agentLoop()` 自己排的真正时点是 Phase 2.5(team 要 N 份独立状态、调度假设可能冲突),届时 ⑦ 的一致性测试套件保证 drop-in 替换。**放弃**的是 C.1 字面意义上的「第一天就走生成器层」——理由是 Phase 1 只有一个 agent,`Agent` 的状态假设尚未构成冲突,提前掉层是纯成本。
+**Tradeoff 1(重要,对 plan 的收窄决策)**:plan.md §1 的接缝画的是 `new Agent(...)`,design-rationale C.1 的文字写的是「生成器层 + 状态自持」。Phase 1 决策:**先用 `Agent` 类**(接缝简单,steering/队列白拿),**状态通过事件订阅镜像到自己的 session store**,不让 `Agent` 的内存状态成为权威。这与 C.1 不矛盾:C.1 的要点是「状态自持 + 有逃生口」,`Agent` 类当引擎用、事件流当事实源,两条都满足。掉到 `agentLoop()` 自己排的真正时点是 Phase 2.5(team 要 N 份独立状态、调度假设可能冲突),届时 ⑦ 的一致性测试套件保证 drop-in 替换。**放弃**的是 C.1 字面意义上的「第一天就走生成器层」——理由是 Phase 1 只有一个 agent,`Agent` 的状态假设尚未构成冲突,提前掉层是纯成本。
 
 **Tradeoff 2**:`session-search` 用线性扫描 JSONL,**放弃**建索引。理由:Phase 1 单 session 量级(千行级),grep 式扫描足够;FTS5 是 Phase 3 记忆层的事,提前建索引是投机。触发重估的条件:单文件 >1MB 且搜索可感知变慢。
 
@@ -142,7 +147,7 @@ pi 接缝说明:工具以 pi `AgentTool` 形状暴露给 loop(`prepareArguments`
 
 **内容**:
 - 宿主用 `TuiMainScreen`(保留 scrollback),**不切 alt-screen**(Phase 2)。
-- `stream-renderer.ts`:流式渲染**按 `contentIndex` 归组**——block 不保证连续到达,这是 appendix C.1 点名的 bug 农场,Phase 1 就必须对。
+- `stream-renderer.ts`:流式渲染**按 `contentIndex` 归组**——block 不保证连续到达,这是 design-rationale C.1 点名的 bug 农场,Phase 1 就必须对。
 - 键位:`Esc` 取消当前 turn **保留草稿**;`Enter` 排队(映射到 pi 的 followUp 队列)。`Ctrl+Enter` cancel-and-send 是 Phase 2 的事。
 - 不渲染花哨 block 类型:thinking / diff 一律按纯文本段落显示,block 模型是 Phase 2 的一等公民。
 
@@ -160,7 +165,7 @@ pi 接缝说明:工具以 pi `AgentTool` 形状暴露给 loop(`prepareArguments`
 **内容**:
 - `myh`(占位名):默认进 interactive(接 ⑤)。
 - `myh -p "..." --json`:headless,把 `SessionEvent` 流以 JSON lines 打到 stdout。
-- **headless 是边界腐烂探测器**(appendix C.4 ③):headless 跑得通 ⟺ core 没有 UI 泄漏。它必须进 CI,不是手动测。
+- **headless 是边界腐烂探测器**(design-rationale C.4 ③):headless 跑得通 ⟺ core 没有 UI 泄漏。它必须进 CI,不是手动测。
 
 **Tradeoff**:无实质分支。唯一注意:headless 模式遇到需要阻塞输入的情形(Phase 1 没有 permission,但工具错误重试不算阻塞)直接报错退出,不做隐式降级——让边界问题暴露而非被吞掉。
 
@@ -170,7 +175,7 @@ pi 接缝说明:工具以 pi `AgentTool` 形状暴露给 loop(`prepareArguments`
 
 **路径**:`tests/loop-contract/{abort-machine.ts, abort.property.test.ts, steering.test.ts, parallel-tools.test.ts, stop-reason.test.ts}`
 
-**内容**(appendix C.1 + cat-cafe F.2,已审):
+**内容**(design-rationale C.1 + cat-cafe F.2,已审):
 - `abort-machine.ts`:**纯函数状态机**,输入事件序列,输出状态;不变量——每个 `toolCall` 恰好一个 `toolResult` 且不早于它的 call、进入 `aborted` 后任何输入不改变状态、**abort 按 turn 原子写**(不留半个 turn,与 `agentLoopContinue` 末条消息约束同一件事的两面)。
 - `abort.property.test.ts`:fast-check 跑 ≥500 轮随机事件序列,验证上述不变量。⚠️ 注意 cat-cafe F.9 的审核结论:F25 是 InvocationRecord 生命周期状态机,我们借的是**方法论**(单一规格文件 + 属性测试),abort 语义是我们自己的设计。
 - 其余三条不变量:steering 插入后消息序列合法(满足 `agentLoopContinue` 末条约束)、并行 tool 一个 throw 其余不丢、`StopReason` 六态各有后续动作。

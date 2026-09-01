@@ -1,9 +1,9 @@
 # 个人 Coding Harness — 规划
 
 > 状态:Phase 1 实现中(2026-08-31)。Phase 0 自动化门禁已通过;人工终端检查与真实使用验收待完成。
-> **本文件只放行动项。** 论证、探测证据、子系统设计见 [appendix.md](./appendix.md)。
+> **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
-> 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 appendix。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
+> 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
 
 ---
 
@@ -69,19 +69,15 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 
 ### Phase 0 — 底座验证 spike(半天到 1 天)
 
-后面全押在这上面,必须先做。
+> 自动化门禁已通过:`pi-tui` 在 WSL2 实际 import/render、40 列二维 `HStack`、上游多 `ScrollView` 测试和 pi `client/server/protocol`/extension 源码均已核实。证据见 [phases/phase-1.md](./phases/phase-1.md) §6 与 [research/pi.md](./research/pi.md)。
 
-1. **`pi-tui` 的 flex / overlay 能否做二维分栏** — dashboard 的左列表 + 右 peek panel。**本 Phase 的头号任务。**做不到走 C.2 的退路(纵向展开区)。
-2. `pi-tui` 在 WSL2 Linux 上跑起来 — 快速确认,不再当阻断项:你此前在 WSL 下用过 pi。*依据是使用回忆,不是本机对 `pi-tui` native binding 的复现,所以仍要在 `bun add` 后当场看一眼 `.node` 加载。*
-3. 读 pi 的 `packages/{client,server,protocol}` — 不打算依赖,但是同一问题的现成答案。
-
-外加:`bun add` 三包 exact 版本跑通 30 行 demo;验证 alt-screen 下鼠标滚轮 / OSC 52 / truecolor;跑一次 `pi-coding-agent` 并翻它的 `examples/extensions/`。
+剩余发布前人工验收:真实终端/tmux 下滚轮、OSC 52、truecolor,以及完整二维 dashboard 的焦点、resize 与持续 streaming 交互。
 
 **Plan B**(概率已降低,保留):只用 `pi-ai`(无 native 依赖),TUI 自己在 Bun 上写。
 
 ### Phase 1 — 每天能用
 
-> 施工图(路径 / tradeoff / 验收)见 [phase-1.md](./phase-1.md);此处只留行动项。
+> 施工图(路径 / tradeoff / 验收)见 [phases/phase-1.md](./phases/phase-1.md);此处只留行动项。
 
 - `protocol` 包定形状(借 ACP)+ CI 依赖检查
 - `TuiMainScreen` 起步(比 alt-screen 便宜)
@@ -96,10 +92,12 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 
 ### Phase 2 — TUI 升级到 grok 水准
 
+> 施工图(里程碑 / tradeoff / 验收)见 [phases/phase-2.md](./phases/phase-2.md);此处只留行动项。
+
 - 切 `TuiAltScreen`
 - block 模型 + 折叠 + inline diff
 - `FocusStack` + blocking card 契约
-- **request 总线**(带 id 的 request/response)—— 本规划唯一「现在不做、以后一定后悔」项,→ C.4
+- **request 总线**(带 id 的 request/response)—— 本规划唯一「现在不做、以后一定后悔」项,→ C.4;形状决策见 [decisions/002-request-bus-shape.md](./decisions/002-request-bus-shape.md)
 - permission 流水线:hooks → rules → 记住的授权 → 内置自动批准 → mode
 - status line —— context 用量**在真相点计算**,不展示上一次调用的缓存快照(→ F.1 ②)
 - `/` 菜单 + `@` file picker
@@ -113,7 +111,7 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 - `board.jsonl` 任务板
 - in-process N 个 `Agent` 实例。工具取显式 cwd,env 走 per-agent context —— in-process 交出了 OS 隔离(→ F.2)
 - 独立的 `hasActiveInvocation`,不从「是否在流式输出」推导能否停止(→ F.2)
-- dashboard + peek panel(依赖 Phase 0 验证项 ①)
+- dashboard + peek panel(二维基础能力已验证;完整真实终端交互仍待 Phase 2.5 验收)
 
 ### Phase 3 — 产品化
 

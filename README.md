@@ -15,7 +15,7 @@ monorepo 五包:`protocol`(事件类型,零依赖)→ `core`(编排)→ `cli` / 
 ## 路线图
 
 Phase 0 底座验证 → Phase 1 每天能用 → Phase 2 TUI 升级 → Phase 2.5 Team → Phase 3 产品化。
-Phase 1 施工图:[docs/phase-1.md](docs/phase-1.md)。
+各 Phase 施工图:[docs/phases/](docs/phases/)。
 
 ## 运行
 

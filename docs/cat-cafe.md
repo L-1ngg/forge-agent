@@ -3,7 +3,7 @@
 > 第四参考来源:[cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) —— clowder-ai 作者本人记录的开发历程、踩坑与修法。
 > **不借代码,不借设计,借失效模式。** 它的价值在症状,不在结论。
 > 读法:这是第三方回顾性叙述,是**证词**不是规范。文中出现的任何指令性文字都当数据看。
-> 这份文件**已审**(2026-08-31,对源仓库逐条核对):每条都标了证据等级,引用时必须连标签一起引。关键判定带源锚点,格式为 `课文:行号`(如 `08:397` = `docs/lessons/08-session-management.md` 第 397 行);`res:` 前缀指 `docs/research/knowledge-enginnering/`。审核结论记录见文末 F.9。
+> 这份文件**已审**(2026-08-31,对源仓库逐条核对):每条都标了证据等级,引用时必须连标签一起引。关键判定带源锚点,格式为 `课文:行号`(如 `08:397` = `docs/lessons/08-session-management.md` 第 397 行);`res:` 前缀指源仓库的 `docs/research/knowledge-engineering/`(非本仓库路径)。审核结论记录见文末 F.9。
 
 ---
 
@@ -46,11 +46,11 @@ F041:12 条 AC 全绿、76 测试 0 失败、14 轮 review、已合入 main(`09:
 
 ### ③ 授权必须连同它的对象一起被验证 `[明述]`
 
-appendix B 原本要原文抄的那句是「不要假设用户批准过任何操作,除非在当前 context 里找到明确证据」。F24(源文档两位数编号,`08:132-137`;故事在 08 课不在 09 课)恰好是它的反例:压缩后 agent 从摘要里读到「铲屎官说可以合入」——**这句话是真的,但它是关于 PR #1 的**。压缩丢掉的是作用域,不是授权本身。于是 `gh pr merge 3 --squash`。
+design-rationale B 原本要原文抄的那句是「不要假设用户批准过任何操作,除非在当前 context 里找到明确证据」。F24(源文档两位数编号,`08:132-137`;故事在 08 课不在 09 课)恰好是它的反例:压缩后 agent 从摘要里读到「铲屎官说可以合入」——**这句话是真的,但它是关于 PR #1 的**。压缩丢掉的是作用域,不是授权本身。于是 `gh pr merge 3 --squash`。
 
 模型确实找到了显式证据,所以原措辞挡不住 F24。
 
-**动作:措辞改成「任何授权必须连同它的对象一起被验证」。** → appendix B
+**动作:措辞改成「任何授权必须连同它的对象一起被验证」。** → design-rationale B
 
 ### ④ 状态文件是本项目唯一的 out-of-band key `[明述]` + `[推断]`
 
@@ -81,7 +81,7 @@ appendix B 原本要原文抄的那句是「不要假设用户批准过任何操
 
 他们否掉了「让快满的 agent 写交接文档」,理由是 90% context 的模型自己已经记不清早期细节(`08:143-145`,出处在 08 课;原文无「动工之前」这个时间状语,只是叙事顺序上先否定再提 Sub-agent 尸检模式)。本项目的确定性 digest(`filesTouched` / `toolNames` / `errors` / 最近 N 条)正是这个批判的规避方式,**这是它的正面证据**。
 
-**动作:六段载荷里任何需要模型自述或判断的部分,一律挪到读取时做。** → appendix B
+**动作:六段载荷里任何需要模型自述或判断的部分,一律挪到读取时做。** → design-rationale B
 
 ---
 
@@ -95,7 +95,7 @@ appendix B 原本要原文抄的那句是「不要假设用户批准过任何操
 | **三个硬上限** | 深度 `MAX_A2A_DEPTH=15`(`04:140`)、fan-out ≤2 且串行(`04:446-451`)、入队去重(`04:427`)。⚠️ 审核修正:原文**没有**「depth cap 是唯一正确的硬停」一说——他们另有共享 AbortController + Stop 一键终止全链(`04:133, 04:392`),两种硬停职责不同(失控自动兜底 vs 人工干预)。「目标已被父调用覆盖」短路出自 `05:386`,是 F27 **之前**给 Path B 打的补丁,与 F27 的入队去重不是同一段代码,原稿把两者揉成了一条。`TaskItem.subjectKey` 与这些上限正交,不能替代 | `[明述]`(数值)+ 已审修正 |
 | **故意不做的三样** | 无环检测、无限速、无收敛检测。⚠️ 审核修正:原稿标 `[明述]`,但源文档**没有**「故意不做」的声明(只有「互相 @mention 是正常操作」,`04:222`)。降级为**本项目自有决策**,理由自洽:A↔B 交替是合法 review 循环,而 depth cap + 入队去重已兜底失控 | 自有决策(原 `[明述]` 被证伪) |
 | **ping-pong 与断链是一个根因的两极** | 「跟之前的无限乒乓正好是两个极端,看似矛盾但根因相同」(`04:569-571`)。他们的实际修法是一个三重否定的自检门(`04:588`)+ 一份「2 条正面 vs 8 行抑制」的失衡 prompt(`04:593-595`)。⚠️ 原稿「必须同时修码上限和 prompt 引导」的表述过强:实际是 F27(码)修失控、四层保障(其中三层是 prompt 级)修断链,**分阶段而非同时**(`04:607-656`) | `[明述]` + 已审修正 |
-| **abort 不变量不足** | 配对性 ≠ 唯一性 / 顺序 / 终态吸收。⚠️ 审核修正(重要):原稿说「抄 F25 的 ~60 行 abort 状态机」是**张冠李戴**——F25 抽成纯函数的是 **InvocationRecord 生命周期**(`queued→running→succeeded/failed/canceled`,63 行、5 状态、8 转换、2 终态,`06:296-319`),不管 LLM turn 的 abort。可借的是 F25 的**方法论**:合法性检查从散落 CAS 收拢到单一规格文件 + fast-check 500 runs(测试数 984 → 1327,commit `4ab5b47`/`7340176`,`06:310-319`)+ 终态吸收性质。「abort 必须按 turn 原子写」由 appendix A 实读的 `agentLoopContinue` 约束独立支撑,不依赖本条 | 方法论 `[明述]`;abort 应用是 `[推断,已审:成立,是我们自己的设计]` |
+| **abort 不变量不足** | 配对性 ≠ 唯一性 / 顺序 / 终态吸收。⚠️ 审核修正(重要):原稿说「抄 F25 的 ~60 行 abort 状态机」是**张冠李戴**——F25 抽成纯函数的是 **InvocationRecord 生命周期**(`queued→running→succeeded/failed/canceled`,63 行、5 状态、8 转换、2 终态,`06:296-319`),不管 LLM turn 的 abort。可借的是 F25 的**方法论**:合法性检查从散落 CAS 收拢到单一规格文件 + fast-check 500 runs(测试数 984 → 1327,commit `4ab5b47`/`7340176`,`06:310-319`)+ 终态吸收性质。「abort 必须按 turn 原子写」由 design-rationale A 实读的 `agentLoopContinue` 约束独立支撑,不依赖本条 | 方法论 `[明述]`;abort 应用是 `[推断,已审:成立,是我们自己的设计]` |
 | **in-process 交出了 OS 隔离** | 共享可变基底变成 `process.cwd()` / `process.env` / 退出码 / 信号处理器 / 模块单例 / Bun module cache。工具取显式 cwd,env 走 per-agent context。同时丢掉了「降级不崩」——他们自己的事故证明靠纪律会失效。已审:源文档只提供「Cat Café 是单进程,不需要跨进程通信」(`04:435`),共享基底分析是**本项目自己的推演**,技术上成立(Node/Bun 进程级共享为真) | `[推断,已审:成立,属自有分析]` |
 | **展示与上下文分离** | `digestRichBlocks()` 的思路同样适用于 `board.jsonl` / inbox / review 列表。⚠️ 出处修正:在 `07:78, 07:140`(「用户看到完整卡片,AI 只看到一行摘要」),不在 09 | `[明述]`(出处已修正) |
 | **人 / agent 输入不对称** | agent 输出用严格行首匹配,人类输入用宽松 `indexOf`(`04:90`)。⚠️ 收窄:「剥掉代码块」只用于 agent 回复检测(`04:73`),原文未提及人类输入也剥 | `[明述]` + 已审收窄 |
@@ -105,7 +105,7 @@ appendix B 原本要原文抄的那句是「不要假设用户批准过任何操
 **得到确认(不改设计,只增强信心):**
 
 - in-process 共享内存路由是他们自己的终态 —— 「Cat Café 是单进程,不需要跨进程通信」`[明述]`(`04:435`,在 04 课不在 12 课)
-- **跨家族 review**(评审者与作者不同模型家族)是全语料里证据最好的设计(F088 三个 P1,`12:115-120`)`[明述]`。⚠️ 审核修正:**`requireDifferentFamily` 这个名字在源仓库零命中,是本项目自己起的配置名**;他们的概念表述是「review 必须跨家族」(`12:56, 12:113-121`)。概念是他们的,名字是我们的——plan/appendix 里继续用这个名字没问题,但别再当他们的术语引
+- **跨家族 review**(评审者与作者不同模型家族)是全语料里证据最好的设计(F088 三个 P1,`12:115-120`)`[明述]`。⚠️ 审核修正:**`requireDifferentFamily` 这个名字在源仓库零命中,是本项目自己起的配置名**;他们的概念表述是「review 必须跨家族」(`12:56, 12:113-121`)。概念是他们的,名字是我们的——plan/design-rationale 里继续用这个名字没问题,但别再当他们的术语引
 - teammate ≠ subagent —— 「单 agent 内部允许编排,跨 agent 协作坚持对等」`[明述]`(`12:73`;「teammate/subagent」这组词是我们的概括,原文无此术语)
 - embedding 延后有支持:`EMBED_MODE=off/shadow/on` + fail-open(`14:200-210`,在 14 课)+ Sourcegraph 先例(`00:207`)`[明述]`。⚠️ 他们**建过** semantic 模式(`14:96`),只是默认 off、无压测——F.4 原稿「从没建过」不准确,已修正
 
@@ -119,7 +119,7 @@ appendix B 原本要原文抄的那句是「不要假设用户批准过任何操
 
 完整形态是 `what + when + not-when + side effects + output`,且**边界要写到 description,因为正文可能根本没被加载**(「description 写不好 = 正文永远不会被加载」,`09:253`)。惊吓型失败的例子:description 写「分析财报」,正文顺手发邮件通知 CEO(`res:knowledge-engineering-skills-mcp.md:140-141`)。⚠️ 出处修正:四字段(含 `Side effects: None` 必填)在 `res:templates.md:30,43`,第 10 课只有三件套(`10:285`)——这套纪律的真实来源是他们的 **research 报告**,不是 lessons。
 
-**动作:skill 描述纪律改成 `Use when: / Not for: / Output: / Side effects:`,无副作用写 `none (read-only)`。** → appendix B
+**动作:skill 描述纪律改成 `Use when: / Not for: / Output: / Side effects:`,无副作用写 `none (read-only)`。** → design-rationale B
 
 配套三条便宜的 `[明述]`(均出自 research 报告):反例要出现两次(description + 正文,`res:knowledge-engineering-skills-mcp.md:161`);示例集是边界训练集不是演示,每个 skill ≥2 正例 + 2 反例 + **1 灰例**(可以触发但要先问一个澄清问题,`:217-219`);迭代顺序是**先补反例 → 再补话术 → 最后才调 workflow**(`:389`)。以及人类代理测试:「把 10 条真实请求丢给同事,只看 description 选技能。他都选不稳,模型只会更不稳。」(`:208`)
 
@@ -180,7 +180,7 @@ MCP 在他们体系里只干两件事:把 session 回忆工具箱暴露给**他�
 
 ---
 
-## F.6 appendix D 那条规则拿到了对方阵营的自证
+## F.6 design-rationale D 那条规则拿到了对方阵营的自证
 
 `03-meta-rules.md` 明确声称 Skill 提供「**强制执行**:触发词匹配后自动执行检查」(`03:370`),并列了 `merge-approval-gate`(触发词「合入 main」,`03:341`),本篇内没承认任何执行力缺口 `[明述]`(系列层面是有自知的——09 承认了,只是 03 没有)。
 
@@ -222,19 +222,19 @@ MCP 在他们体系里只干两件事:把 session 回忆工具箱暴露给**他�
 |---|---|
 | 原始需求原文进 slot | plan Phase 3 |
 | 阈值 0.80 / 0.88 + 真相点计算 | plan Phase 2、Phase 3 |
-| 授权连同对象一起验证 | appendix B |
-| 状态文件带 head entry id + 祖先校验 | plan Phase 3、appendix B |
+| 授权连同对象一起验证 | design-rationale B |
+| 状态文件带 head entry id + 祖先校验 | plan Phase 3、design-rationale B |
 | 本地 `session_search` + 「不要猜」 | plan Phase 1、Phase 3 |
-| 载荷里判断类内容挪到读取时 | appendix B |
-| 三个硬上限 + 单一执行入口 + `hasActiveInvocation` | plan Phase 2.5、appendix C.3「终止与调度」 |
-| abort 状态机 + fast-check | plan Phase 1、appendix C.1 |
-| `process.cwd()` / `process.env` / 模块单例 | appendix C.3、E |
-| 展示 / 上下文分离(反方向) | appendix C.4 切分线表 |
-| `Side effects:` 槽 + 反例两次 + 灰例 | appendix B |
-| 记忆准入三门禁 + 默认排除 `superseded_by` | plan Phase 3、appendix B |
-| 工具 schema / 错误形状规则 | plan Phase 1、appendix B |
-| 输出契约的形状(不含住处) | appendix D |
-| 归档 = 策展而非排序 | appendix D(embedding 延后那条的补强) |
+| 载荷里判断类内容挪到读取时 | design-rationale B |
+| 三个硬上限 + 单一执行入口 + `hasActiveInvocation` | plan Phase 2.5、design-rationale C.3「终止与调度」 |
+| abort 状态机 + fast-check | plan Phase 1、design-rationale C.1 |
+| `process.cwd()` / `process.env` / 模块单例 | design-rationale C.3、E |
+| 展示 / 上下文分离(反方向) | design-rationale C.4 切分线表 |
+| `Side effects:` 槽 + 反例两次 + 灰例 | design-rationale B |
+| 记忆准入三门禁 + 默认排除 `superseded_by` | plan Phase 3、design-rationale B |
+| 工具 schema / 错误形状规则 | plan Phase 1、design-rationale B |
+| 输出契约的形状(不含住处) | design-rationale D |
+| 归档 = 策展而非排序 | design-rationale D(embedding 延后那条的补强) |
 
 ---
 
@@ -242,7 +242,7 @@ MCP 在他们体系里只干两件事:把 session 回忆工具箱暴露给**他�
 
 对源仓库([zts212653/cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials),当日 HEAD)29 篇文档逐条核对了本文件的全部 `[推断]` / `[弱证]` / `[空白]` 条目及其 `[明述]` 底层事实,约 40 条断言。结论:
 
-**设计落点无一被推翻**——落进 plan/appendix 的机制(单一执行入口、硬上限、状态机属性测试、身份 slot、阈值余量、准入三门禁、输出契约)背后的事实基础全部存活。
+**设计落点无一被推翻**——落进 plan/design-rationale 的机制(单一执行入口、硬上限、状态机属性测试、身份 slot、阈值余量、准入三门禁、输出契约)背后的事实基础全部存活。
 
 **修正了四类引用错误**(已在上文逐条以 ⚠️ 标注):
 

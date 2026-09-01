@@ -1,4 +1,4 @@
-# 附录 — 论证与探测证据
+# 设计论证 — 综合分析与探测证据
 
 > [plan.md](./plan.md) 的支撑材料。行动项不在这里。
 
@@ -17,7 +17,7 @@
 | **3** | `harness/` 积木:`tools/`(read 109 行 / bash 131 / edit 107)、`session/`(656K)、`compaction/`(569 行)、`skills.js`(322 行)、`system-prompt.js`(29 行) | 真实现,全部从 `index.d.ts` 再导出 | 按需单取,不整套吞 |
 | **4** | `AgentHarness` 编排器 | ⚠️ **空壳** | 不碰 |
 
-[^1]: 既然第 4 层是空壳,`pi-coding-agent` 只可能走第 2 层——但未实读该包,Phase 0 跑它时确认。
+[^1]: Phase 0 已运行 `pi-coding-agent@0.84.4`,本轮又实读固定 commit 的启动与 extension 路径;它使用 `Agent`/loop 与 extension 机制,不经过 `AgentHarness`。详见 [research/pi.md](./research/pi.md) §3.6。
 
 ### 第 4 层是空壳的证据
 
@@ -234,13 +234,13 @@ interface Component {
 | 语义色槽 `accent_thinking` / `accent_plan` | 一张 theme 表,Component 只查槽名不写颜色 |
 | Enter 排队 / Ctrl+Enter 打断 | pi 底层已有 steer / followUp 两个队列,只做键位→队列的映射 |
 
-#### 必须提前验证的约束
+#### 已验证的布局约束与剩余验收
 
 `pi-tui` 是**行导向**的(`render → string[]`),ratatui 是**单元格导向**的(切 Rect 画二维)。
 
-grok 大部分设计天然行导向——block、card 都是流式往下堆,直接对得上。**但 dashboard 的「左列表 + 右 peek panel」是真二维分栏**,pi-tui 的 flex / overlay 能否干净做到,未核实。Phase 0 验证项 ①,也是该 Phase 现在唯一真正未核实的阻断项。
+grok 大部分设计天然行导向——block、card 都是流式往下堆,直接对得上。dashboard 的「左列表 + 右 peek panel」是真二维分栏,但它的**基础表达能力已经核实**:`pi-tui@0.84.4` 有 `HStack`/`VStack` 的 flex 约束与 `ScrollView`;上游测试覆盖两个并排 scroll view 的独立 pointer 命中;本机 WSL2 的 40 列 `HStack` 探针也同时渲染了左右区域。源码与探针见 [research/pi.md](./research/pi.md) §3.4、[research/peer-agent-team-tui.md](./research/peer-agent-team-tui.md) §3.2。
 
-**退路**:peek panel 改成列表下方的展开区(纵向而非横向),损失可接受。
+尚未验收的是完整 dashboard 在真实 WSL2/tmux 中的多滚动区焦点、滚轮、resize、OSC 52、truecolor 与持续 streaming 交互。响应式退路仍保留:中宽度把 peek 放到列表下方,窄屏改成单 pane drill-in,不把两栏硬压在一起。
 
 ### C.3 Team:clowder 的语义,文件的实现
 
@@ -269,7 +269,7 @@ grok 大部分设计天然行导向——block、card 都是流式往下堆,直�
 
 四个机制,全部来自 clowder:
 
-1. **`@mention` 行首路由** —— 打 `@reviewer 看下这个 diff`,消息投进那个 teammate 的 inbox;teammate 之间也走同一条路。这是 clowder 唯一的通信原语,而它够了。**路由逻辑归 `core`**,不能在 TUI 里,否则以后 web UI 要重实现。
+1. **`@mention` 行首路由** —— 打 `@reviewer 看下这个 diff`,消息投进那个 teammate 的 inbox;teammate 之间也走同一条路。**路由逻辑归 `core`**,不能在 TUI 里,否则以后 web UI 要重实现。源码事实修正:固定 commit 的 Clowder 还支持显式 `targetCats`,所以“唯一通信原语”的旧表述不成立;本项目是否采用 structured target first 仍待 Phase 2.5 ADR/operator 定案,见 [research/clowder-ai.md](./research/clowder-ai.md) §4。
 2. **`rename()` 抢锁** —— 收件箱取信用原子 rename 拿租约。同文件系统下这是真原子操作,不需要 Redis 的 Lua CAS。clowder 自己的 file outbox 才是可保留的那部分。
 3. **task board 的 `TaskItem` 形状** —— `{ id, title, why, owner, status: todo|doing|blocked|done, subjectKey }`。`subjectKey` 是去重键(同一件事别开两张卡),`why` 强制写动机。类型定义直接搬,只是存 JSONL 而非 Redis。
 4. **`requireDifferentFamily`** —— 「评审者不能是作者」两行配置就成立,两个模型也能跑。(⚠️ 名字是本项目起的;概念证据在 cat-cafe 12 课「review 必须跨家族」+ F088 三个 P1,→ F.2、F.9)
@@ -415,8 +415,8 @@ TUI 那一步的改动量是把 bus 的实现从函数调用换成 socket,协议
 
 | 风险 | 处置 |
 |---|---|
-| **二维分栏能力未核实** | Phase 0 头号任务;退路是纵向展开区(C.2) |
-| `pi-tui` 在 Linux/WSL2 的 native 依赖 | **已降级为快速确认。**依据:使用者此前在 WSL 下运行过 pi。*该依据是使用回忆,不是本机对 `pi-tui` native binding 的复现* —— `bun add` 后当场看 `.node` 是否加载即可;不通仍退到只用 `pi-ai` |
+| **完整 dashboard 的真实终端交互未验收** | 二维基础能力已由源码、上游测试与本机 WSL2 探针确认;Phase 2.5 仍需验多滚动区焦点/滚轮、resize、tmux、OSC 52、truecolor 与 streaming 稳定性(C.2) |
+| `pi-tui` 在 Linux/WSL2 的加载风险 | `0.84.4` Linux 发布物无 Linux native `.node`;本机实际 ESM import 与 `HStack` render 已通过。风险已从“能否加载”收敛为上一行的真实终端行为 |
 | **request/response 边界写错的代价** | Phase 2 必须一次做对;本规划唯一「以后一定后悔」项(C.4 ②) |
 | **`pi-agent-core` 已发布的接口不等于已实现** | `AgentHarness` 251 行全是 `HarnessNotImplemented`(A)。**纪律:用 pi 任何一层之前先 grep `dist/` 里的 `NotImplemented` / `unavailable`,不信 `.d.ts`。** 这次差点押错 |
 | **pi 正在往多 lane + 可挂起走,可能与自建 team 撞车** | 观察项非阻塞项。team 照 C.3 自己实现;`AgentLane` / `DeferredHandle` 一旦落地则评估 rebase。代价可控的前提是 **team 的调度逻辑不渗进 `packages/tui`** |
@@ -432,12 +432,8 @@ TUI 那一步的改动量是把 bus 的实现从函数调用换成 socket,协议
 
 ### 未核实项清单
 
-- `pi-tui` 的二维布局能力(Phase 0 ①)
-- `pi-tui` 在 Linux 的 native binding(Phase 0 ②)—— 有使用回忆支撑,但无本机复现
-- `packages/{client,server,protocol}` 的 API(只发过 5 个版本、无文档)(Phase 0 ③)
-- **`pi-coding-agent` 走的是第 2 层** —— 该包未装进探测环境,只从「第 4 层是空壳」反推。Phase 0 跑它时确认
-- **第 3 层积木的实际质量** —— 只核实了「不是空壳」(行数 + grep),没读实现。`compaction/` 569 行、`session/` 656K,是否合用要单取时再判
+- 完整 dashboard 在 WSL2/tmux 的多滚动区焦点/滚轮、resize、OSC 52、truecolor 与 streaming 稳定性
+- **第 3 层积木是否适合本项目** —— 已确认 session/tools/compaction 等有真实实现,但仍坚持单件引入前逐个审查,不按目录批量采用
 - **`./session/testing` 导出里有什么** —— 写一致性测试套件前先看,可能有现成夹具
 - `@earendil-works/pi-session-backend-sqlite-node` 是否已发布
 - ACP 完整规范
-- **grok-build 未读任何 `.rs` 源码** —— 全部 TUI 细节来自其仓库内的用户指南;`inline` 渲染模式的具体绘制行为是最大的文档空白

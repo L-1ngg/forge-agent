@@ -35,7 +35,7 @@ created: 2026-08-31
 | clowder 机制 | 不迁理由 | 何时再议 |
 |---|---|---|
 | F 编号 feature 系统 + ROADMAP 热表 | 现有 phase 体系已覆盖,两套编号并存违反单一真相源 | Phase 3 后 feature 粒度变细时 |
-| frontmatter CI / check:features 等校验脚本 | 仓库未 git init,无工具链与 CI | Phase 0 工具链落地后 |
+| frontmatter CI / check:features 等校验脚本 | 原理由「仓库未 git init,无工具链与 CI」已过时(2026-08-31 已 git init,CI 已就位) | **触发条件已命中**(Phase 0 工具链已落地),可再议是否补校验脚本 |
 | guides/ registry、sop-definitions 机器真相源 | 无 runtime 消费方 | harness 自身要消费文档时 |
 | perspectives/、harness-feedback 评估系统 | 面向多 agent 团队与运行时自评,过重 | team 语义落地(Phase 2.5)后 |
 | 多模型角色卡 | 单 operator 项目 | 多 agent team 落地时 |

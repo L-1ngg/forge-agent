@@ -23,7 +23,7 @@ UI   → { type: 'response', id: 'r7', result: { decision: 'allow_always', scope
 
 并且明确 pi 的 `ctx.ui.confirm()` 属于**被否的那一种形态**:pi 的 hook 只能当触发点,总线要在 `core` 里自己做。
 
-Phase 2 把这条落成 M1([phases/phase-2.md#L62](../phases/phase-2.md)),要求它最先做、单独合入。决策必须在写代码前定下来,因为协议是本项目唯一不可回退面([phase-2.md#L275](../phases/phase-2.md))。
+Phase 2 把这条落成 M1([phases/phase-2.md#L62](../phases/phase-2.md)),要求它最先做、单独合入。决策必须在写代码前定下来,因为协议是本项目唯一不可回退面([phase-2.md#L279](../phases/phase-2.md))。
 
 ## 决策
 

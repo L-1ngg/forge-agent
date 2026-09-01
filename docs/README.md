@@ -8,10 +8,11 @@
 | 文档 | 职责 |
 |---|---|
 | [plan.md](plan.md) | 规划 + 行动项(**热层**:只放当前要做的) |
-| [phase-1.md](phase-1.md) | Phase 1 施工图:路径 / tradeoff / 验收 |
-| [appendix.md](appendix.md) | plan 的论证与探测证据(**冷层**) |
+| [phases/](phases/) | 各 Phase 施工图:路径 / tradeoff / 验收(**温层**) |
+| [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |
+| [research/](research/) | 固定源码快照的上游/专题深度调研(**冷层**,不是已批准 ADR) |
 | [cat-cafe.md](cat-cafe.md) | cat-cafe-tutorials 失效模式附录(带证据标签) |
-| [SOP.md](SOP.md) | 开发协作流程:改动分级、验证纪律、review 交接 |
+| [SOP.md](SOP.md) | 开发协作流程:工作规则、改动分级、验证纪律、review 交接 |
 | [lessons.md](lessons.md) | 教训库(LL-XXX),入库有质量门禁 |
 | [decisions/](decisions/) | ADR:已定决策,防重新争论 |
 | [templates/](templates/) | ADR / feature doc / review request 模板 |
@@ -21,6 +22,8 @@
 | 位置 | 内容 | 命名 |
 |---|---|---|
 | `docs/decisions/` | 架构决策记录(ADR) | `NNN-slug.md`,三位数字递增,不重排不复用 |
+| `docs/phases/` | 各 Phase 施工图 | `phase-{N}.md`,N 含小数段(如 `phase-2.5.md`) |
+| `docs/research/` | 固定快照的源码调研、可迁移结论与未决问题 | `{topic}.md` |
 | `docs/templates/` | 文档模板 | `{type}.md` |
 | `review-notes/`(仓库根) | 跨 session 的 review 交接信 | `YYYY-MM-DD-{topic}-review-request.md` |
 
@@ -31,9 +34,9 @@
 
 给不给文件夹,看两条:**数量是否无界增长** × **是否被单独精确引用**。
 
-- 数量无界 + 单独引用(decisions/、review-notes/)→ 文件夹,一文一件。
+- 数量无界 + 单独引用(decisions/、research/、review-notes/)→ 文件夹,一文一件。
 - 整体消费 + 条目短(lessons.md)→ 单文件;拆分触发条件:条目多到无法整体阅读(参考:clowder 102 条 / 1944 行仍是单文件)。
-- 数量有界(phase-*.md,路线图上共 5 个 phase)→ 平铺;升格 `docs/phases/` 的触发条件:第二份 phase 施工图出现,或单 phase 开始携带证据 / 资产附件。
+- 数量有界(phase-*.md,路线图上共 6 个 phase:0 / 1 / 2 / 2.5 / 3 / 4)→ 原本平铺;**触发条件已于 2026-09-01 命中**(第二份 phase 施工图 phase-2.md 出现),已升格 `docs/phases/`。
 
 ## 元信息约定
 
@@ -46,14 +49,14 @@ created: 2026-08-31
 ---
 ```
 
-正文首行用状态行(延续现有文档风格):`> 状态:草稿 / 已批准 / 已审(日期)`。
+正文首行用状态行(延续现有文档风格):`> 状态:<状态词>(日期)`。状态词按文档性质取——决策类用 `草稿 / 已批准 / 被 NNN 取代`;流程与索引类用 `生效 / 启用`;施工图类用 `实现中 / 已完成 / 草稿`。
 **状态只写在一处**:文档自己的状态行。别的文档引用它时给链接,不复制状态。
 
 ## 生命周期
 
 - **热层** —— plan.md:完成的行动项移除,不堆积。
-- **温层** —— phase-*.md 施工图:Phase 进行中是唯一施工图;Phase 结束后保留,状态行标 `已完成`。
-- **冷层** —— appendix / decisions / lessons / review-notes:永久保留,只追加不移除。
+- **温层** —— `phases/phase-*.md` 施工图:Phase 进行中是唯一施工图;Phase 结束后保留,状态行标 `已完成`。
+- **冷层** —— design-rationale / decisions / research / lessons / review-notes:永久保留,只追加不移除。
 
 ## 有意不采用
 

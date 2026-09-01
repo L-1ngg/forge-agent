@@ -13,20 +13,15 @@
 | 问题 | 真相源 |
 |---|---|
 | 要做什么、做到哪了 | [docs/plan.md](docs/plan.md)(只放行动项) |
-| 当前 Phase 怎么施工 | [docs/phase-1.md](docs/phase-1.md) 等 phase 施工图(路径 / tradeoff / 验收) |
-| 为什么这样设计 | [docs/appendix.md](docs/appendix.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
+| 当前 Phase 怎么施工 | [docs/phases/](docs/phases/) 下的 phase 施工图(路径 / tradeoff / 验收) |
+| 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
 | 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |
 | 踩过的坑 | [docs/lessons.md](docs/lessons.md) |
 | 怎么协作、怎么写文档 | [docs/SOP.md](docs/SOP.md)、[docs/README.md](docs/README.md) |
 
 ## 工作规则
 
-1. **方向 > 速度**:不确定就停 → 搜(代码 / 文档)→ 问 operator → 确认 → 再动手。不要猜。
-2. **最小改动**:每行改动都能追溯到当前请求;不顺手"改进"相邻代码,不重构没坏的东西。
-3. **证据说话**:声明完成前给出验证证据。改动后报告 Ran(跑了什么)/ Not run / Why / Risk。
-4. **引用纪律**:引用 docs/cat-cafe.md 的结论必须连证据标签(`[明述]` / `[自证]` / `[推断]` / `[弱证]`)一起引;`[推断]` 不可当事实,`[弱证]` 不可用于反驳相反方案。
-5. **单一真相源**:每个概念只在一处定义。发现文档间矛盾,先指出来,不要默默选一个。
-6. **状态行同步**:改动使某文档承诺的事实过时,同步更新该文档开头的状态行。
+详见 [docs/SOP.md](docs/SOP.md)「工作规则」。摘要:方向 > 速度;最小改动;证据说话(报告 Ran / Not run / Why / Risk);引用 cat-cafe 结论连证据标签一起引;单一真相源,发现矛盾先指出;状态行同步。
 
 ## 写文档时
 
