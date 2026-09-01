@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import type { PermissionMode } from "./permission/decide.ts";
 
 export interface HarnessConfig {
 	provider?: string;
@@ -8,6 +9,7 @@ export interface HarnessConfig {
 	apiKey?: string;
 	systemPrompt: string;
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+	permissionMode: PermissionMode;
 	sessionPath?: string;
 }
 
@@ -20,6 +22,7 @@ export interface LoadConfigOptions {
 const defaults: HarnessConfig = {
 	systemPrompt: "You are a coding assistant. Work carefully in the current directory and keep responses concise.",
 	thinkingLevel: "medium",
+	permissionMode: "default",
 };
 
 async function readConfig(path: string): Promise<Partial<HarnessConfig>> {

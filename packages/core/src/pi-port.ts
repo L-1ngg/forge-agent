@@ -3,6 +3,8 @@ import {
 	type AgentEvent,
 	type AgentMessage,
 	type AgentTool,
+	type BeforeToolCallContext,
+	type BeforeToolCallResult,
 } from "@earendil-works/pi-agent-core";
 import {
 	InMemoryCredentialStore,
@@ -21,8 +23,9 @@ import {
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { SessionContentBlock, SessionEvent, SessionMessage, StopReason } from "@myh/protocol";
 import type { HarnessTool } from "@myh/tools";
+import { decide, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
-import type { RequestBus } from "./request-bus.ts";
+import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 
 export interface PiPortOptions {
 	provider: string;
@@ -34,6 +37,7 @@ export interface PiPortOptions {
 	history?: SessionMessage[];
 	tools?: HarnessTool<object, unknown>[];
 	requestBus?: RequestBus;
+	permission?: PermissionContext;
 }
 
 export interface PiTestResponse {
@@ -50,6 +54,7 @@ export interface PiTestPortOptions {
 	cwd?: string;
 	tokensPerSecond?: number;
 	requestBus?: RequestBus;
+	permission?: PermissionContext;
 }
 
 interface QueueWaiter<T> {
@@ -269,6 +274,37 @@ function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {
 	};
 }
 
+export interface PermissionHookOptions {
+	context: PermissionContext;
+	requestBus?: RequestBus;
+}
+
+/** Adapt the pure permission decision to pi's deny-only beforeToolCall hook. */
+export function createPermissionBeforeToolCall(options: PermissionHookOptions): (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined> {
+	return async (context, signal) => {
+		const toolCall = {
+			type: "tool_call" as const,
+			id: context.toolCall.id,
+			name: context.toolCall.name,
+			arguments: (context.args ?? context.toolCall.arguments) as Record<string, unknown>,
+		};
+		const decision = decide(toolCall, options.context);
+		if (decision.kind === "allow") return undefined;
+		if (decision.kind === "deny") return { block: true, reason: decision.reason, terminate: true };
+		if (!options.requestBus) return { block: true, reason: "Interactive permission request is unavailable", terminate: true };
+
+		const outcome = await options.requestBus.ask("permission", decision.payload, signal ? { signal } : {});
+		const result = permissionResultFromOutcome(outcome);
+		if (result.decision === "allow_once") return undefined;
+		if (result.decision === "allow_always") {
+			if (result.scope.tool !== toolCall.name) return { block: true, reason: "Permission scope does not match the requested tool", terminate: true };
+			options.context.memory?.remember(result.scope);
+			return undefined;
+		}
+		return { block: true, reason: result.reason ?? "Tool execution denied", terminate: true };
+	};
+}
+
 class PiAgentPort implements AgentPort {
 	private readonly requestBus: RequestBus | undefined;
 
@@ -328,6 +364,14 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd)),
 			messages: (options.history ?? []).map((message) => fromSessionMessage(message, model)),
 		},
+		...(options.permission
+			? {
+					beforeToolCall: createPermissionBeforeToolCall({
+						context: options.permission,
+						...(options.requestBus ? { requestBus: options.requestBus } : {}),
+					}),
+				}
+			: {}),
 	});
 	return new PiAgentPort(agent, options.requestBus);
 }
@@ -374,6 +418,14 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 			thinkingLevel: "off",
 			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd ?? process.cwd())),
 		},
+		...(options.permission
+			? {
+					beforeToolCall: createPermissionBeforeToolCall({
+						context: options.permission,
+						...(options.requestBus ? { requestBus: options.requestBus } : {}),
+					}),
+				}
+			: {}),
 	});
 	return new PiAgentPort(agent, options.requestBus);
 }

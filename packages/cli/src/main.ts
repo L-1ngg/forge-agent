@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { cwd } from "node:process";
-import { AgentRunner, createPiPort, loadConfig, RequestBus, resolveSecret, SessionStore, type AgentPort, type PiPortOptions } from "@myh/core";
+import { AgentRunner, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
 import { builtinTools } from "@myh/tools";
 import { App } from "@myh/tui";
 import { jsonError, runHeadless } from "./headless.ts";
@@ -74,6 +74,11 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 
 	try {
 		const requestBus = new RequestBus();
+		const permission: PermissionContext = {
+			mode: config.permissionMode,
+			memory: new MemoryPermissionStore(),
+			builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }],
+		};
 		const apiKey = await resolveSecret(config.apiKey);
 		const port = await portFactory({
 			provider,
@@ -85,6 +90,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			history: store.messages(),
 			tools: builtinTools,
 			requestBus,
+			permission,
 		});
 		const runner = new AgentRunner(port, store, requestBus);
 		if (args.json) {
