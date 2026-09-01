@@ -68,9 +68,29 @@ test("dangerous commands still ask despite remembered or explicit allow rules", 
 		expect(decision.kind).toBe("ask");
 		if (decision.kind === "ask") expect(decision.payload.rememberRule).toBeUndefined();
 	}
+	for (const command of ["  rm -rf tmp", "echo ok;\n  chmod 777 file", "sudo kill 123", "git push origin main"]) {
+		expect(decide(bashCall(command), { memory }).kind).toBe("ask");
+	}
 	const explicitlyRememberable = decide(bashCall("rm -rf tmp"), { rememberable: true, memory });
 	expect(explicitlyRememberable.kind).toBe("ask");
 	if (explicitlyRememberable.kind === "ask") expect(explicitlyRememberable.payload.rememberRule).toBeUndefined();
+});
+
+test("an explicit built-in deny remains authoritative for dangerous calls", () => {
+	const decision = decide(bashCall("rm -rf tmp"), {
+		builtInAutoApprove: [{ tool: "bash", argsPattern: "*", effect: "deny", reason: "blocked by policy" }],
+	});
+	expect(decision).toEqual({ kind: "deny", source: "built-in", reason: "blocked by policy" });
+});
+
+test("a deny wins over an allow when multiple rules in one layer match", () => {
+	const decision = decide(readCall, {
+		rules: [
+			{ tool: "read", argsPattern: "*", effect: "allow" },
+			{ tool: "read", argsPattern: "*", effect: "deny", reason: "blocked by project policy" },
+		],
+	});
+	expect(decision).toEqual({ kind: "deny", source: "rule", reason: "blocked by project policy" });
 });
 
 test("Always allow is omitted when no memory store can honor it", () => {

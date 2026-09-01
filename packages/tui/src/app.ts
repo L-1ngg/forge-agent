@@ -1,5 +1,5 @@
 import type { ContextUsageSnapshot, RequestEnvelopeUnion, RequestKind, RequestOutcome, ResponseEnvelope, SessionEvent } from "@myh/protocol";
-import { Key, VStack, Container, ProcessTerminal, matchesKey, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
+import { Key, VStack, Container, ProcessTerminal, matchesKey, truncateToWidth, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import { EscController } from "./esc.ts";
 import { createEditor } from "./editor.ts";
 import { FocusStack } from "./focus-stack.ts";
@@ -58,6 +58,7 @@ export class App {
 	private resolveStopSignal!: () => void;
 	private readonly esc = new EscController();
 	private readonly blockingCards = new Container();
+	private readonly shortcutsBar: Component;
 	private readonly pendingTerminalOutcomes = new Map<string, RequestOutcome<RequestKind>>();
 	private requestTask?: Promise<void>;
 	private terminalTask?: Promise<void>;
@@ -91,12 +92,14 @@ export class App {
 				};
 			},
 		});
+		this.shortcutsBar = new FocusShortcutsBar(this.focusStack);
 		const autocompleteProvider = options.autocompleteProvider ?? (options.completionSource ? createInputAutocompleteProvider(options.completionSource) : undefined);
 		this.editor = createEditor(this.tui, (text) => void this.submit(text), autocompleteProvider ? { autocompleteProvider } : {});
 		const layout = new VStack([
 			{ component: this.transcript, grow: 1, minSize: 1 },
 			{ component: this.blockingCards, basis: "auto", shrink: 0 },
 			{ component: this.statusLine, basis: "auto", shrink: 0 },
+			{ component: this.shortcutsBar, basis: "auto", shrink: 0 },
 			{ component: this.editor, basis: "auto", shrink: 0 },
 		]);
 		if ("setLayoutRoot" in this.tui && typeof this.tui.setLayoutRoot === "function") this.tui.setLayoutRoot(layout);
@@ -336,4 +339,18 @@ export class App {
 		this.renderer.apply(event);
 		this.tui.requestRender();
 	}
+}
+
+/** Dynamic hint row whose source is the current focus owner, never a card copy. */
+class FocusShortcutsBar implements Component {
+	constructor(private readonly focusStack: FocusStack) {}
+
+	render(width: number): string[] {
+		const shortcuts = this.focusStack.shortcuts();
+		if (shortcuts.length === 0) return [];
+		const line = truncateToWidth(shortcuts.join(" | "), Math.max(1, Math.floor(width)));
+		return line ? [line] : [];
+	}
+
+	invalidate(): void {}
 }

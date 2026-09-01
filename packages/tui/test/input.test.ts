@@ -16,19 +16,39 @@ test("slash menu delegates selection and navigation to the list component", () =
 	expect(menu.isOpen()).toBe(false);
 });
 
+test("slash menu preserves its active prefix when items are refreshed", () => {
+	const menu = new SlashMenu([
+		{ value: "help", label: "/help" },
+		{ value: "model", label: "/model" },
+	]);
+	menu.open("/mo");
+	menu.setItems([
+		{ value: "model", label: "/model" },
+		{ value: "mode", label: "/mode" },
+	]);
+	expect(menu.getSelectedItem()?.value).toBe("model");
+});
+
 test("file picker scans synchronously and filters by path prefix", async () => {
 	const root = await mkdtemp("/tmp/myh-picker-");
 	try {
 		await mkdir(join(root, "src"), { recursive: true });
+		await mkdir(join(root, "src2"), { recursive: true });
 		await mkdir(join(root, "node_modules", "ignored"), { recursive: true });
 		await writeFile(join(root, "src", "app.ts"), "");
+		await writeFile(join(root, "src2", "wrong.ts"), "");
 		await writeFile(join(root, "README.md"), "");
 		await writeFile(join(root, "node_modules", "ignored", "bad.ts"), "");
 		expect(scanFiles(root, "src/")).toEqual(["src/app.ts"]);
+		expect(scanFiles(root, "src")).toEqual(["src/app.ts"]);
 		const picker = new FilePicker({ cwd: root, files: [{ value: "src/app.ts" }, { value: "README.md" }] });
 		picker.open("src/");
 		expect(picker.render(80).join("\n")).toContain("src/app.ts");
 		expect(picker.render(80).join("\n")).not.toContain("README.md");
+		picker.setFiles([{ value: "src/app.ts" }, { value: "src/other.ts" }]);
+		picker.setPrefix("src/app");
+		expect(picker.render(80).join("\n")).toContain("src/app.ts");
+		expect(picker.render(80).join("\n")).not.toContain("src/other.ts");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

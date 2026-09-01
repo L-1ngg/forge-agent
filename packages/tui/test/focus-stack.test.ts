@@ -49,3 +49,12 @@ test("retiring the top card resets focus for the newly exposed card", () => {
 	expect(stack.top()?.id).toBe("first");
 	expect(stack.focusIndex).toBe(0);
 });
+
+test("invalid focusable counts fall back to one control", () => {
+	for (const focusableCount of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+		const stack = new FocusStack();
+		stack.push({ id: String(focusableCount), focusableCount });
+		expect(stack.handleInput("\t")).toMatchObject({ action: "focus_next", index: 0 });
+		expect(Number.isFinite(stack.focusIndex)).toBe(true);
+	}
+});

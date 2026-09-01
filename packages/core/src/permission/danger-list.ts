@@ -6,10 +6,10 @@ export interface DangerMatch {
 }
 
 const commandPatterns: readonly [DangerMatch["command"], RegExp][] = [
-	["rm", /(?:^|[;&|]\s*)rm\b/],
-	["chmod", /(?:^|[;&|]\s*)chmod\b/],
-	["kill", /(?:^|[;&|]\s*)kill\b/],
-	["git push", /(?:^|[;&|]\s*)git\s+push\b/],
+	["rm", /(?:^\s*|[;&|()\n]\s*)(?:sudo\s+)?rm\b/],
+	["chmod", /(?:^\s*|[;&|()\n]\s*)(?:sudo\s+)?chmod\b/],
+	["kill", /(?:^\s*|[;&|()\n]\s*)(?:sudo\s+)?kill\b/],
+	["git push", /(?:^\s*|[;&|()\n]\s*)(?:sudo\s+)?git\s+push\b/],
 ];
 
 /** Dangerous shell operations never inherit remembered allow rules. */

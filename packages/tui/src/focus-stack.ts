@@ -43,7 +43,7 @@ export class FocusStack<T extends FocusCard = FocusCard> {
 		this.dismissed.push(card);
 		if (wasTop) this.index = 0;
 		else {
-			const count = Math.max(1, Math.floor(this.stack.at(-1)?.focusableCount ?? 1));
+			const count = normalizedFocusableCount(this.stack.at(-1)?.focusableCount);
 			this.index = Math.min(this.index, count - 1);
 		}
 		return card;
@@ -82,12 +82,12 @@ export class FocusStack<T extends FocusCard = FocusCard> {
 		const card = this.top();
 		if (!card) return { action: "none", index: 0 };
 		if (matchesKey(data, Key.tab) || data === "\t") {
-			const count = Math.max(1, Math.floor(card.focusableCount ?? 1));
+			const count = normalizedFocusableCount(card.focusableCount);
 			this.index = (this.index + 1) % count;
 			return { action: "focus_next", card, index: this.index };
 		}
 		if (matchesKey(data, "shift+tab")) {
-			const count = Math.max(1, Math.floor(card.focusableCount ?? 1));
+			const count = normalizedFocusableCount(card.focusableCount);
 			this.index = (this.index - 1 + count) % count;
 			return { action: "focus_previous", card, index: this.index };
 		}
@@ -97,4 +97,9 @@ export class FocusStack<T extends FocusCard = FocusCard> {
 		}
 		return { action: "none", card, index: this.index };
 	}
+}
+
+function normalizedFocusableCount(value: number | undefined): number {
+	if (value === undefined || !Number.isFinite(value) || value < 1) return 1;
+	return Math.max(1, Math.floor(value));
 }

@@ -47,10 +47,8 @@ export function decide(toolCall: ToolCallBlock, context: PermissionContext = {})
 	if (remembered && !danger) return { kind: "allow", source: "remembered" };
 
 	const builtIn = findMatchingRule(context.builtInAutoApprove ?? [], toolCall);
-	if (builtIn) {
-		if (builtIn.rule.effect === "deny") return { kind: "deny", source: "built-in", reason: builtIn.rule.reason ?? `Built-in policy denied ${toolCall.name}` };
-		if (!danger) return { kind: "allow", source: "built-in" };
-	}
+	if (builtIn?.rule.effect === "deny") return { kind: "deny", source: "built-in", reason: builtIn.rule.reason ?? `Built-in policy denied ${toolCall.name}` };
+	if (builtIn?.rule.effect === "allow" && !danger) return { kind: "allow", source: "built-in" };
 
 	const mode = context.mode ?? "default";
 	if (mode === "deny-all") return { kind: "deny", source: "mode", reason: "Permission mode deny-all blocks tool execution" };

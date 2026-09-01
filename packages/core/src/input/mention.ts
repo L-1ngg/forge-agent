@@ -16,7 +16,14 @@ export function parseMentions(input: string): MentionToken[] {
 }
 
 export function activeMention(input: string, cursor = input.length): MentionToken | undefined {
-	return parseMentions(input).find((mention) => cursor >= mention.start && cursor <= mention.end);
+	const boundedCursor = Number.isFinite(cursor) ? Math.max(0, Math.min(input.length, Math.floor(cursor))) : input.length;
+	return parseMentions(input).find((mention) => {
+		if (boundedCursor < mention.start || boundedCursor > mention.end) return false;
+		if (boundedCursor < mention.end) return true;
+		// A cursor at the token's end is useful while the token is still the last
+		// thing in the input (not after a separating whitespace character).
+		return mention.end === input.length || !/\s/.test(input[mention.end] ?? "");
+	});
 }
 
 export const parseMention = parseMentions;

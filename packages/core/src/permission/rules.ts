@@ -33,10 +33,16 @@ export function matchesPermissionRule(rule: Pick<PermissionRule, "tool" | "argsP
 }
 
 export function findMatchingRule(rules: readonly PermissionRule[], toolCall: Pick<ToolCallBlock, "name" | "arguments">): PermissionRuleMatch | undefined {
+	let firstAllow: PermissionRuleMatch | undefined;
 	for (const rule of rules) {
-		if (matchesPermissionRule(rule, toolCall)) return { rule, scope: permissionScope(toolCall) };
+		if (!matchesPermissionRule(rule, toolCall)) continue;
+		const match = { rule, scope: permissionScope(toolCall) };
+		// A broad allow must never hide a more specific deny merely because it
+		// appeared earlier in the configured table.
+		if (rule.effect === "deny") return match;
+		firstAllow ??= match;
 	}
-	return undefined;
+	return firstAllow;
 }
 
 /** Explicit glob matching: '*' spans any characters and '?' spans one. */

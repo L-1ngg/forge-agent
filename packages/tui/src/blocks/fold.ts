@@ -1,5 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import type { BlockDisplayMode } from "@myh/protocol";
+import type { BlockDisplayMode, BlockFoldConfig, BlockMetadata } from "@myh/protocol";
 
 export interface FoldStateOptions {
 	defaultDisplayMode?: BlockDisplayMode;
@@ -10,7 +10,7 @@ export interface FoldStateOptions {
 
 /** Owns the user-vs-streaming fold precedence for one block. */
 export class FoldState {
-	private readonly respectManualFolds: boolean;
+	private respectManualFolds: boolean;
 	private defaultMode: BlockDisplayMode;
 	private currentMode: BlockDisplayMode;
 	private manual = false;
@@ -58,6 +58,20 @@ export class FoldState {
 		if (!this.manual || !this.respectManualFolds) this.currentMode = mode;
 	}
 
+	/** Merge a streamed envelope while retaining a local manual fold. */
+	updateFromEnvelope(metadata: Pick<BlockMetadata, "defaultDisplayMode" | "currentDisplayMode" | "manualOverride">, fold: BlockFoldConfig = {}): void {
+		const incomingDefault = metadata.defaultDisplayMode ?? fold.defaultDisplayMode;
+		if (fold.respectManualFolds !== undefined) this.respectManualFolds = fold.respectManualFolds;
+		if (incomingDefault !== undefined) this.defaultMode = incomingDefault;
+
+		const preserveManual = this.manual && this.respectManualFolds;
+		if (!preserveManual) {
+			if (metadata.manualOverride !== undefined) this.manual = metadata.manualOverride;
+			if (metadata.currentDisplayMode !== undefined) this.currentMode = metadata.currentDisplayMode;
+			else if (incomingDefault !== undefined) this.currentMode = incomingDefault;
+		}
+	}
+
 	clearManualOverride(): void {
 		this.manual = false;
 		this.currentMode = this.defaultMode;
@@ -103,6 +117,15 @@ export class FoldBlock implements Component {
 	setLines(lines: readonly string[], defaultMode?: BlockDisplayMode): void {
 		this.lines = [...lines];
 		if (defaultMode) this.fold.updateDefault(defaultMode);
+		this.invalidate();
+	}
+
+	/** Apply transport metadata without changing body content. */
+	applyEnvelopeMetadata(metadata: Pick<BlockMetadata, "defaultDisplayMode" | "currentDisplayMode" | "manualOverride">, fold: BlockFoldConfig = {}): void {
+		if (fold.truncatedLines !== undefined) this.truncatedLines = normalizeCount(fold.truncatedLines, 0);
+		if (fold.firstLines !== undefined) this.firstLines = normalizeCount(fold.firstLines, 0);
+		if (fold.lastLines !== undefined) this.lastLines = normalizeCount(fold.lastLines, 0);
+		this.fold.updateFromEnvelope(metadata, fold);
 		this.invalidate();
 	}
 

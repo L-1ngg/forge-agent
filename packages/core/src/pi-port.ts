@@ -237,7 +237,7 @@ function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<As
 	};
 }
 
-function mapEvent(event: AgentEvent): SessionEvent[] {
+function mapEvent(event: AgentEvent, toolCommands: Map<string, string>): SessionEvent[] {
 	const timestamp = eventTimestamp();
 	switch (event.type) {
 		case "agent_start":
@@ -266,6 +266,7 @@ function mapEvent(event: AgentEvent): SessionEvent[] {
 			return message ? [{ type: "message_end", timestamp, message }] : [];
 		}
 		case "tool_execution_start":
+			rememberToolCommand(toolCommands, event.toolCallId, event.toolName, event.args);
 			const startBlock = startToolBlock(event.toolCallId, event.toolName, event.args, timestamp);
 			return [{
 				type: "tool_execution_start",
@@ -276,7 +277,7 @@ function mapEvent(event: AgentEvent): SessionEvent[] {
 				...(startBlock ? { block: startBlock } : {}),
 			}];
 		case "tool_execution_update":
-			const updateBlock = executeToolBlock(event.toolCallId, event.toolName, event.partialResult, "streaming", timestamp);
+			const updateBlock = executeToolBlock(event.toolCallId, event.toolName, event.partialResult, "streaming", timestamp, toolCommandFrom(toolCommands, event.toolCallId, event.args));
 			return [{
 				type: "tool_execution_update",
 				timestamp,
@@ -286,7 +287,8 @@ function mapEvent(event: AgentEvent): SessionEvent[] {
 				...(updateBlock ? { block: updateBlock } : {}),
 			}];
 		case "tool_execution_end":
-			const endBlock = executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp);
+			const endBlock = executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp, toolCommands.get(event.toolCallId));
+			toolCommands.delete(event.toolCallId);
 			return [{
 				type: "tool_execution_end",
 				timestamp,
@@ -316,7 +318,7 @@ function startToolBlock(toolCallId: string, toolName: string, args: unknown, tim
 	);
 }
 
-function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number): BlockEnvelope<"execute"> | undefined {
+function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number, fallbackCommand?: string): BlockEnvelope<"execute"> | undefined {
 	if (toolName !== "bash") return undefined;
 	const wrapper = objectValue(result);
 	const details = objectValue(wrapper.details ?? result);
@@ -324,7 +326,7 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 		? wrapper.content.map((entry) => objectValue(entry).text).filter((entry): entry is string => typeof entry === "string").join("\n")
 		: "";
 	const data: ExecuteBlockData = {
-		command: typeof details.command === "string" ? details.command : "bash",
+		command: typeof details.command === "string" ? details.command : fallbackCommand ?? "bash",
 		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content ? { stdout: content } : {}),
 		...(typeof details.stderr === "string" ? { stderr: details.stderr } : {}),
 		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
@@ -335,6 +337,17 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 		data,
 		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
 	);
+}
+
+function rememberToolCommand(commands: Map<string, string>, toolCallId: string, toolName: string, args: unknown): void {
+	if (toolName !== "bash") return;
+	const command = objectValue(args).command;
+	if (typeof command === "string") commands.set(toolCallId, command);
+}
+
+function toolCommandFrom(commands: Map<string, string>, toolCallId: string, args: unknown): string | undefined {
+	const command = objectValue(args).command;
+	return typeof command === "string" ? command : commands.get(toolCallId);
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -420,9 +433,10 @@ class PiAgentPort implements AgentPort {
 		this.usage.beginTurn();
 		this.syncUsageContext();
 		const queue = new AsyncQueue<SessionEvent>();
+		const toolCommands = new Map<string, string>();
 		const unsubscribe = this.agent.subscribe((event) => {
 			this.observeUsage(event);
-			for (const mapped of mapEvent(event)) queue.push(mapped);
+			for (const mapped of mapEvent(event, toolCommands)) queue.push(mapped);
 		});
 		let completed = false;
 		const running = this.agent.prompt(input).then(
@@ -438,6 +452,7 @@ class PiAgentPort implements AgentPort {
 		} finally {
 			if (!completed) this.agent.abort();
 			unsubscribe();
+			toolCommands.clear();
 			this.usage.endTurn();
 		}
 	}

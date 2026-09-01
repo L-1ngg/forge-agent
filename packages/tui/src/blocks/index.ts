@@ -36,19 +36,23 @@ export function componentForBlock(block: AnyBlockEnvelope): Component {
 export function updateBlockComponent(component: Component, block: AnyBlockEnvelope): Component {
 	if (block.kind === "thinking" && component instanceof ThinkingBlock) {
 		component.setText(block.data.markdown);
+		component.applyEnvelopeMetadata(block, block.fold);
 		return component;
 	}
 	if (block.kind === "edit" && component instanceof EditBlock) {
 		component.setData(block.data);
+		component.applyEnvelopeMetadata(block, block.fold);
 		return component;
 	}
 	if (block.kind === "execute" && component instanceof ExecuteBlock) {
 		component.setOutput(block.data);
+		component.applyEnvelopeMetadata(block, block.fold);
 		return component;
 	}
 	if (block.kind === "fold" && component instanceof FoldBlock) {
 		component.setTitle(block.data.title);
 		component.setLines(block.data.lines);
+		component.applyEnvelopeMetadata(block, block.fold);
 		return component;
 	}
 	return componentForBlock(block);

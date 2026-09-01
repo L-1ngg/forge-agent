@@ -1,6 +1,7 @@
 import type { AnyBlockEnvelope, SessionEvent, SessionMessage } from "@myh/protocol";
 import { Container, type Component, Text } from "@earendil-works/pi-tui";
 import { componentForBlock, updateBlockComponent } from "./blocks/index.ts";
+import { FoldBlock } from "./blocks/fold.ts";
 
 interface ContentBlock {
 	kind: "text" | "thinking" | "tool_call";
@@ -75,8 +76,13 @@ export class StreamRenderer extends Container {
 
 	toggleBlock(id: string): boolean {
 		const component = this.richComponents.get(id);
-		if (!component || !("toggle" in component) || typeof component.toggle !== "function") return false;
+		if (!(component instanceof FoldBlock)) return false;
 		component.toggle();
+		const block = this.richBlocks.get(id);
+		if (block) {
+			block.currentDisplayMode = component.displayMode;
+			block.manualOverride = component.manualOverride;
+		}
 		return true;
 	}
 
@@ -95,6 +101,13 @@ export class StreamRenderer extends Container {
 			const previous = this.richComponents.get(block.id);
 			const component = previous ? updateBlockComponent(previous, block) : componentForBlock(block);
 			this.richComponents.set(block.id, component);
+			if (component instanceof FoldBlock) {
+				// The component is the local source of truth for a manual fold. Keep
+				// the serialized projection aligned so headless/TUI state can compare.
+				block.currentDisplayMode = component.displayMode;
+				block.manualOverride = component.manualOverride;
+				this.richBlocks.set(block.id, block);
+			}
 			this.addChild(component);
 		}
 	}

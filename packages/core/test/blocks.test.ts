@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { block, type BlockEnvelope } from "@myh/protocol";
-import { createEditBlockData, digest } from "../src/index.ts";
+import { bashTool } from "@myh/tools";
+import { createEditBlockData, createPiTestPort, digest } from "../src/index.ts";
 
 test("core computes line hunks and aggregate edit counts", () => {
 	const data = createEditBlockData("src/demo.ts", "keep\nold\n", "keep\nnew\nadded\n");
@@ -30,4 +31,15 @@ test("digest strips terminal sequences, has a hard limit, and is stable", () => 
 
 test("digest omits a trailing placeholder for short values", () => {
 	expect(digest("  one\n two  ", { maxLength: 100 })).toBe("one two");
+});
+
+test("execute block keeps its original command when a failed result has no details", async () => {
+	const port = createPiTestPort({
+		tools: [bashTool],
+		responses: [{ stopReason: "stop", toolCalls: [{ id: "failed-exec", name: "bash", arguments: { command: "false" } }] }],
+	});
+	const events = [];
+	for await (const event of port.runTurn("run command")) events.push(event);
+	const end = events.find((event) => event.type === "tool_execution_end");
+	expect(end?.block).toMatchObject({ kind: "execute", lifecycle: "failed", data: { command: "false" } });
 });

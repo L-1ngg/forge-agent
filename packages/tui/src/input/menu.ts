@@ -19,6 +19,7 @@ export class SlashMenu implements Component {
 	private items: SelectItem[];
 	private list: SelectList;
 	private visible = false;
+	private prefix = "";
 
 	onSelect: ((item: SlashMenuItem) => void) | undefined;
 	onCancel: (() => void) | undefined;
@@ -31,7 +32,7 @@ export class SlashMenu implements Component {
 
 	open(prefix = ""): void {
 		this.visible = true;
-		this.list.setFilter(prefix.replace(/^\//, ""));
+		this.setPrefix(prefix);
 	}
 
 	close(): void {
@@ -44,10 +45,11 @@ export class SlashMenu implements Component {
 
 	setItems(items: readonly SlashMenuItem[]): void {
 		this.items = items.map((item) => ({ ...item }));
-		this.list = this.createList();
+		this.list = this.createList(this.prefix);
 	}
 
 	setPrefix(prefix: string): void {
+		this.prefix = prefix;
 		this.list.setFilter(prefix.replace(/^\//, ""));
 	}
 
@@ -74,8 +76,9 @@ export class SlashMenu implements Component {
 		this.list.invalidate();
 	}
 
-	private createList(): SelectList {
+	private createList(prefix = ""): SelectList {
 		const list = new SelectList([...this.items], 8, theme);
+		list.setFilter(prefix.replace(/^\//, ""));
 		list.onSelect = (item) => {
 			this.visible = false;
 			this.onSelect?.({ value: item.value, label: item.label, ...(item.description ? { description: item.description } : {}) });

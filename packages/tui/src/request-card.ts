@@ -56,7 +56,7 @@ export class RequestCard implements Component {
 
 	/** Keep the visual selection in lockstep with the shared FocusStack. */
 	setFocusIndex(index: number): void {
-		const count = Math.max(1, this.record.focusableCount ?? 1);
+		const count = normalizedFocusableCount(this.record.focusableCount);
 		const next = Number.isFinite(index) ? Math.max(0, Math.min(count - 1, Math.floor(index))) : 0;
 		if (next === this.focusIndex) return;
 		this.focusIndex = next;
@@ -94,6 +94,11 @@ export class RequestCard implements Component {
 		const status = outcome?.status ?? this.record.state;
 		this.text.setText(`${body}\n\nStatus: ${status}`);
 	}
+}
+
+function normalizedFocusableCount(value: number | undefined): number {
+	if (value === undefined || !Number.isFinite(value) || value < 1) return 1;
+	return Math.max(1, Math.floor(value));
 }
 
 export function responseForRequestAction(request: RequestEnvelopeUnion, action: RequestCardAction): ResponseEnvelope | undefined {

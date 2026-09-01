@@ -318,7 +318,8 @@ Phase 2 关闭需要**同时**满足:
 - 2026-09-01 M1 自动化验收:`bun run check` 通过;依赖边界、workspace typecheck、45 tests 全绿。`tests/request-bus/request-bus.property.test.ts` 的 fast-check 为 500 runs,覆盖 request 单终态、重复/迟到/未知 response 丢弃和终态吸收;`packages/core/test/session.test.ts` 覆盖 runner abort 取消 pending request、权限取消映射 deny、session 不落半个 turn;`packages/cli/test/headless-request.test.ts` 覆盖五种 kind 的保守应答与退出码 20-24。
 - 2026-09-01 M1 反向验证:`bun test scripts/check-deps.test.ts` 在临时 core fixture 注入 `ui.prompt` / `ui.confirm` / `ui.ask` 与裸 `prompt` / `confirm`,依赖检查按预期报错;当前工作区 `bun run check:deps` 通过。
 - 2026-09-01 M1 协议回归:permission `allow_always` 缺少或错误 `scope.tool` / `scope.argsPattern` 时被丢弃,合法作用域响应通过;对应 `tests/request-bus/request-bus.test.ts` 已纳入完整检查。
-- 2026-09-02 M2-M6 自动化验收:`bun run check` 通过(依赖边界、五包 typecheck、92 tests across 24 files,0 fail);覆盖 permission 决策链 / danger-list / rewrite、FocusStack 与四类卡片、双宿主、block/digest、输入导航、usage truth point 与 status line。
+- 2026-09-02 M2-M6 自动化验收:`bun run check` 通过(依赖边界、五包 typecheck、113 tests across 24 files,0 fail);覆盖 permission 决策链 / danger-list / rewrite、FocusStack 与四类卡片、双宿主、block/digest、输入导航、usage truth point 与 status line。
 - 2026-09-02 headless 回归:`bun run test:headless` 退出码 0,输出为逐行合法 JSON 的完整 agent/turn/message 事件流;结构化 block 同时保留在 headless 与 TUI protocol envelope。
 - 2026-09-02 静态门禁:`bun run check:deps`、workspace typecheck、`git diff --check` 均通过;对 `packages/tui` 做 ANSI / 十六进制色值检索未发现裸颜色依赖。新增卡片动作边界回归后,受影响测试 13 pass / 0 fail。
+- 2026-09-02 Phase 2 回归收口:重新运行的 `bun run check` 为 113 pass / 0 fail;新增 permission deny precedence、streamed fold metadata、failed execute command provenance 回归均通过。`bun run test:headless`、`bun run check:deps`、`git diff --check` 继续通过。
 - 2026-09-02 未运行人工项:E3 的 alt-screen 鼠标滚轮 / OSC 52 / truecolor 实测、卡片焦点手感与滚动复制 checklist、5 天 `ui.host = "alt"` dogfooding;这些按 operator 豁免或发布出口条件保留,未将 AC-14 标为通过。

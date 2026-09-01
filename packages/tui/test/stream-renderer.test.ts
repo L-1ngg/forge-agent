@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { block } from "@myh/protocol";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { App, StreamRenderer } from "../src/index.ts";
+import { FoldBlock } from "../src/blocks/fold.ts";
 
 test("groups streamed deltas by contentIndex even when they arrive out of order", () => {
 	const renderer = new StreamRenderer();
@@ -169,6 +170,50 @@ test("streamed block updates reuse the component and respect a manual fold", () 
 	renderer.apply({ type: "tool_execution_end", timestamp: 2, toolCallId: "exec-1", toolName: "bash", content: "done", isError: false, block: update });
 	expect(renderer.getBlockComponent("exec-1")).toBe(component);
 	expect(component?.render(80)).toHaveLength(1);
+});
+
+test("streamed block updates apply new fold metadata without reopening a manual fold", () => {
+	const renderer = new StreamRenderer();
+	const initial = block(
+		{ id: "metadata-1", kind: "execute", lifecycle: "streaming", defaultDisplayMode: "expanded", currentDisplayMode: "expanded", manualOverride: false },
+		{ command: "run", stdout: "one\ntwo\nthree" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: true },
+	);
+	renderer.apply({ type: "tool_execution_start", timestamp: 1, toolCallId: "metadata-1", toolName: "bash", args: { command: "run" }, block: initial });
+	const component = renderer.getBlockComponent("metadata-1");
+	expect(component).toBeInstanceOf(FoldBlock);
+	if (!(component instanceof FoldBlock)) throw new Error("expected a fold block component");
+
+	const update = block(
+		{ id: "metadata-1", kind: "execute", lifecycle: "complete", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false },
+		{ command: "run", stdout: "one\ntwo\nthree\nfour\nfive" },
+		{ defaultDisplayMode: "truncated", firstLines: 1, lastLines: 1, respectManualFolds: true },
+	);
+	renderer.apply({ type: "tool_execution_end", timestamp: 2, toolCallId: "metadata-1", toolName: "bash", content: "done", isError: false, block: update });
+	expect(renderer.getBlockComponent("metadata-1")).toBe(component);
+	expect(component?.render(80).join("\n")).toContain("lines omitted");
+
+	renderer.toggleBlock("metadata-1");
+	const folded = renderer.getRichBlocks().find((value) => value.id === "metadata-1");
+	expect(folded).toMatchObject({ currentDisplayMode: "collapsed", manualOverride: true });
+
+	const streamed = block(
+		{ id: "metadata-1", kind: "execute", lifecycle: "streaming", defaultDisplayMode: "expanded", currentDisplayMode: "expanded", manualOverride: false },
+		{ command: "run", stdout: "new\ncontent" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: true },
+	);
+	renderer.apply({ type: "tool_execution_update", timestamp: 3, toolCallId: "metadata-1", toolName: "bash", content: "partial", block: streamed });
+	expect(component?.render(80)).toHaveLength(1);
+	expect(renderer.getRichBlocks().find((value) => value.id === "metadata-1")).toMatchObject({ currentDisplayMode: "collapsed", manualOverride: true });
+
+	const releaseManual = block(
+		{ id: "metadata-1", kind: "execute", lifecycle: "streaming", defaultDisplayMode: "expanded", currentDisplayMode: "expanded", manualOverride: false },
+		{ command: "run", stdout: "released" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: false },
+	);
+	renderer.apply({ type: "tool_execution_update", timestamp: 4, toolCallId: "metadata-1", toolName: "bash", content: "released", block: releaseManual });
+	expect(component?.displayMode).toBe("expanded");
+	expect(renderer.getRichBlocks().find((value) => value.id === "metadata-1")).toMatchObject({ currentDisplayMode: "expanded", manualOverride: false });
 });
 
 class FakeTerminal implements Terminal {

@@ -23,6 +23,8 @@ test("mention parser returns token ranges without routing or execution", () => {
 	expect(activeMention(input, 9)?.path).toBe("src/app.ts");
 	expect(parseMentions("open @")).toEqual([{ path: "", raw: "@", start: 5, end: 6 }]);
 	expect(activeMention("open @", 6)?.path).toBe("");
+	expect(activeMention("open @src/app.ts ", 16)).toBeUndefined();
+	expect(activeMention("open @src/app.ts", 16)?.path).toBe("src/app.ts");
 });
 
 test("argument tokenizer handles quotes and escaped spaces", () => {

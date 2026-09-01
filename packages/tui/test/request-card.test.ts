@@ -215,6 +215,17 @@ test("permission card offers Always allow only when the request carries a rememb
 	});
 });
 
+test("App renders the active card shortcuts from the shared focus stack", async () => {
+	const bus = new TestRequestBus();
+	const app = new App({ terminal: new FakeTerminal(), port: idlePort(), requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("shortcuts"));
+	await Bun.sleep(0);
+
+	expect(app.tui.render(120).join("\n")).toContain("Tab next | Enter choose | Esc dismiss");
+	await app.stop();
+});
+
 function permissionRequest(id: string): RequestEnvelopeFor<"permission"> {
 	return {
 		type: "request",
