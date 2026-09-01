@@ -1,3 +1,5 @@
+import type { AnyBlockEnvelope } from "./blocks.ts";
+
 export type SessionRole = "user" | "assistant" | "toolResult";
 
 export type StopReason = "stop" | "length" | "tool_use" | "error" | "aborted" | "deferred";
@@ -64,12 +66,14 @@ export type SessionEvent =
 			toolCallId: string;
 			toolName: string;
 			args: Record<string, unknown>;
+			block?: AnyBlockEnvelope;
 	  })
 	| (EventBase & {
 			type: "tool_execution_update";
 			toolCallId: string;
 			toolName: string;
 			content: string;
+			block?: AnyBlockEnvelope;
 	  })
 	| (EventBase & {
 			type: "tool_execution_end";
@@ -77,6 +81,7 @@ export type SessionEvent =
 			toolName: string;
 			content: string;
 			isError: boolean;
+			block?: AnyBlockEnvelope;
 	  });
 
 export function sessionEvent<T extends SessionEvent>(event: T): T {

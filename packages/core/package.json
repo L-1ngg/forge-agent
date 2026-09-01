@@ -9,6 +9,7 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.84.4",
     "@earendil-works/pi-ai": "0.84.4",
+    "diff": "8.0.4",
     "@myh/protocol": "workspace:*",
     "@myh/tools": "workspace:*"
   },

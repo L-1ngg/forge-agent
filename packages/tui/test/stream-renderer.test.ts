@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { block } from "@myh/protocol";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { App, StreamRenderer } from "../src/index.ts";
 
@@ -63,6 +64,29 @@ test("Ctrl+C stops an idle app", async () => {
 	await app.start();
 	terminal.send("\u0003");
 	await app.waitUntilStopped();
+});
+
+test("streamed block updates reuse the component and respect a manual fold", () => {
+	const renderer = new StreamRenderer();
+	const initial = block(
+		{ id: "exec-1", kind: "execute", lifecycle: "streaming" },
+		{ command: "run", stdout: "one\ntwo\nthree\nfour\nfive" },
+		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
+	);
+	renderer.apply({ type: "tool_execution_start", timestamp: 1, toolCallId: "exec-1", toolName: "bash", args: { command: "run" }, block: initial });
+	const component = renderer.getBlockComponent("exec-1");
+	expect(component).toBeDefined();
+	expect(renderer.toggleBlock("exec-1")).toBe(true);
+	expect(component?.render(80)).toHaveLength(1);
+
+	const update = block(
+		{ id: "exec-1", kind: "execute", lifecycle: "complete" },
+		{ command: "run", stdout: "one\ntwo\nthree\nfour\nfive\nsix" },
+		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
+	);
+	renderer.apply({ type: "tool_execution_end", timestamp: 2, toolCallId: "exec-1", toolName: "bash", content: "done", isError: false, block: update });
+	expect(renderer.getBlockComponent("exec-1")).toBe(component);
+	expect(component?.render(80)).toHaveLength(1);
 });
 
 class FakeTerminal implements Terminal {

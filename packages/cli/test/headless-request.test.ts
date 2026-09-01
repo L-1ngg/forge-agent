@@ -6,6 +6,7 @@ import {
 } from "../src/headless.ts";
 import { RequestBus } from "@myh/core";
 import type { RequestEnvelopeFor, RequestKind } from "@myh/protocol";
+import { block } from "@myh/protocol";
 
 const requests: { [K in RequestKind]: RequestEnvelopeFor<K> } = {
 	permission: {
@@ -79,4 +80,18 @@ test("runHeadless drains a blocking request and returns its deterministic exit c
 		expect(outcome).toMatchObject({ status: "response" });
 		expect(lines).toHaveLength(2);
 	}
+});
+
+test("headless preserves the same structured block envelope consumed by TUI", async () => {
+	const richBlock = block({ id: "exec-1", kind: "execute", lifecycle: "complete" }, { command: "echo ok", stdout: "ok" });
+	const lines: string[] = [];
+	await runHeadless({
+		async *runTurn() {
+			yield { type: "tool_execution_end", timestamp: 1, toolCallId: "exec-1", toolName: "bash", content: "ok", isError: false, block: richBlock };
+		},
+		steer() {},
+		followUp() {},
+		abort() {},
+	}, "block", (line) => lines.push(line));
+	expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ block: richBlock });
 });

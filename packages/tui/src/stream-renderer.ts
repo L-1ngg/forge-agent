@@ -1,9 +1,11 @@
-import type { SessionEvent, SessionMessage } from "@myh/protocol";
+import type { AnyBlockEnvelope, SessionEvent, SessionMessage } from "@myh/protocol";
 import { Container, type Component, Text } from "@earendil-works/pi-tui";
+import { componentForBlock, updateBlockComponent } from "./blocks/index.ts";
 
 interface ContentBlock {
 	kind: "text" | "thinking" | "tool_call";
 	text: string;
+	block?: AnyBlockEnvelope;
 }
 
 function messageText(message: SessionMessage): string {
@@ -20,6 +22,8 @@ export class StreamRenderer extends Container {
 	private readonly blocks = new Map<number, ContentBlock>();
 	private readonly messages: SessionMessage[] = [];
 	private readonly events: SessionEvent[] = [];
+	private readonly richBlocks = new Map<string, AnyBlockEnvelope>();
+	private readonly richComponents = new Map<string, Component>();
 
 	apply(event: SessionEvent): void {
 		this.events.push(event);
@@ -47,6 +51,12 @@ export class StreamRenderer extends Container {
 			return;
 		}
 		if (event.type === "tool_execution_end") {
+			if (event.block) this.richBlocks.set(event.block.id, structuredClone(event.block));
+			this.syncChildren();
+			return;
+		}
+		if (event.type === "tool_execution_start" || event.type === "tool_execution_update") {
+			if (event.block) this.richBlocks.set(event.block.id, structuredClone(event.block));
 			this.syncChildren();
 		}
 	}
@@ -59,12 +69,33 @@ export class StreamRenderer extends Container {
 		return [...this.blocks.entries()].sort(([left], [right]) => left - right).map(([, block]) => ({ ...block }));
 	}
 
+	getRichBlocks(): readonly AnyBlockEnvelope[] {
+		return [...this.richBlocks.values()].map((block) => structuredClone(block));
+	}
+
+	toggleBlock(id: string): boolean {
+		const component = this.richComponents.get(id);
+		if (!component || !("toggle" in component) || typeof component.toggle !== "function") return false;
+		component.toggle();
+		return true;
+	}
+
+	getBlockComponent(id: string): Component | undefined {
+		return this.richComponents.get(id);
+	}
+
 	private syncChildren(): void {
 		this.clear();
 		for (const message of this.messages) this.addChild(new Text(messageText(message), 1, 0));
 		for (const block of this.getOrderedBlocks()) {
 			const prefix = block.kind === "thinking" ? "thinking: " : block.kind === "tool_call" ? "tool: " : "";
 			this.addChild(new Text(`${prefix}${block.text}`, 1, 0));
+		}
+		for (const block of this.getRichBlocks()) {
+			const previous = this.richComponents.get(block.id);
+			const component = previous ? updateBlockComponent(previous, block) : componentForBlock(block);
+			this.richComponents.set(block.id, component);
+			this.addChild(component);
 		}
 	}
 }

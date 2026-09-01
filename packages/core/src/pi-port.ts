@@ -21,8 +21,9 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { SessionContentBlock, SessionEvent, SessionMessage, StopReason } from "@myh/protocol";
+import { block, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason } from "@myh/protocol";
 import type { HarnessTool } from "@myh/tools";
+import { createEditBlockData } from "./diff.ts";
 import { decide, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
@@ -252,12 +253,79 @@ function mapEvent(event: AgentEvent): SessionEvent[] {
 			return message ? [{ type: "message_end", timestamp, message }] : [];
 		}
 		case "tool_execution_start":
-			return [{ type: "tool_execution_start", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, args: event.args as Record<string, unknown> }];
+			const startBlock = startToolBlock(event.toolCallId, event.toolName, event.args, timestamp);
+			return [{
+				type: "tool_execution_start",
+				timestamp,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args as Record<string, unknown>,
+				...(startBlock ? { block: startBlock } : {}),
+			}];
 		case "tool_execution_update":
-			return [{ type: "tool_execution_update", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, content: stringify(event.partialResult) }];
+			const updateBlock = executeToolBlock(event.toolCallId, event.toolName, event.partialResult, "streaming", timestamp);
+			return [{
+				type: "tool_execution_update",
+				timestamp,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				content: stringify(event.partialResult),
+				...(updateBlock ? { block: updateBlock } : {}),
+			}];
 		case "tool_execution_end":
-			return [{ type: "tool_execution_end", timestamp, toolCallId: event.toolCallId, toolName: event.toolName, content: stringify(event.result), isError: event.isError }];
+			const endBlock = executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp);
+			return [{
+				type: "tool_execution_end",
+				timestamp,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				content: stringify(event.result),
+				isError: event.isError,
+				...(endBlock ? { block: endBlock } : {}),
+			}];
 	}
+}
+
+function startToolBlock(toolCallId: string, toolName: string, args: unknown, timestamp: number): BlockEnvelope<"edit" | "execute"> | undefined {
+	const values = objectValue(args);
+	if (toolName === "edit" && typeof values.path === "string" && typeof values.old_text === "string" && typeof values.new_text === "string") {
+		return block(
+			{ id: toolCallId, kind: "edit", lifecycle: "streaming", defaultDisplayMode: "expanded", currentDisplayMode: "expanded", manualOverride: false, colorSlot: "accent_edit", createdAt: timestamp, updatedAt: timestamp },
+			createEditBlockData(values.path, values.old_text, values.new_text),
+			{ defaultDisplayMode: "expanded", respectManualFolds: true },
+		);
+	}
+	if (toolName !== "bash" || typeof values.command !== "string") return undefined;
+	return block(
+		{ id: toolCallId, kind: "execute", lifecycle: "streaming", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false, colorSlot: "accent_execute", createdAt: timestamp, updatedAt: timestamp },
+		{ command: values.command },
+		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
+	);
+}
+
+function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number): BlockEnvelope<"execute"> | undefined {
+	if (toolName !== "bash") return undefined;
+	const wrapper = objectValue(result);
+	const details = objectValue(wrapper.details ?? result);
+	const content = Array.isArray(wrapper.content)
+		? wrapper.content.map((entry) => objectValue(entry).text).filter((entry): entry is string => typeof entry === "string").join("\n")
+		: "";
+	const data: ExecuteBlockData = {
+		command: typeof details.command === "string" ? details.command : "bash",
+		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content ? { stdout: content } : {}),
+		...(typeof details.stderr === "string" ? { stderr: details.stderr } : {}),
+		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
+		...(lifecycle === "failed" ? { isError: true } : {}),
+	};
+	return block(
+		{ id: toolCallId, kind: "execute", lifecycle, defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false, colorSlot: "accent_execute", updatedAt: timestamp },
+		data,
+		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
+	);
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
 function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {

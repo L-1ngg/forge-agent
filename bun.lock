@@ -36,6 +36,7 @@
         "@earendil-works/pi-ai": "0.84.4",
         "@myh/protocol": "workspace:*",
         "@myh/tools": "workspace:*",
+        "diff": "8.0.4",
       },
     },
     "packages/protocol": {

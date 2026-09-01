@@ -1,4 +1,5 @@
 export * from "./app.ts";
+export * from "./blocks/index.ts";
 export * from "./editor.ts";
 export * from "./esc.ts";
 export * from "./focus-stack.ts";
