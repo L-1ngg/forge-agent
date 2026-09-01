@@ -33,6 +33,22 @@ export class FocusStack<T extends FocusCard = FocusCard> {
 		return card;
 	}
 
+	/** Remove a card that reached a terminal outcome outside the focused card. */
+	remove(id: string): T | undefined {
+		const position = this.stack.findIndex((card) => card.id === id);
+		if (position < 0) return undefined;
+		const wasTop = position === this.stack.length - 1;
+		const [card] = this.stack.splice(position, 1);
+		if (!card) return undefined;
+		this.dismissed.push(card);
+		if (wasTop) this.index = 0;
+		else {
+			const count = Math.max(1, Math.floor(this.stack.at(-1)?.focusableCount ?? 1));
+			this.index = Math.min(this.index, count - 1);
+		}
+		return card;
+	}
+
 	top(): T | undefined {
 		return this.stack.at(-1);
 	}

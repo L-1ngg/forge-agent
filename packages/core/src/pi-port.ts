@@ -21,10 +21,10 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage } from "@myh/protocol";
+import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage } from "@myh/protocol";
 import type { HarnessTool } from "@myh/tools";
 import { createEditBlockData } from "./diff.ts";
-import { decide, type PermissionContext } from "./permission/index.ts";
+import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
@@ -378,7 +378,13 @@ export function createPermissionBeforeToolCall(options: PermissionHookOptions): 
 		const result = permissionResultFromOutcome(outcome);
 		if (result.decision === "allow_once") return undefined;
 		if (result.decision === "allow_always") {
-			if (result.scope.tool !== toolCall.name) return { block: true, reason: "Permission scope does not match the requested tool", terminate: true };
+			const expectedScope = permissionScopeForToolCall(toolCall);
+			if (!decision.payload.rememberRule || !options.context.memory || decision.payload.rememberRule !== formatPermissionRule(expectedScope)) {
+				return { block: true, reason: "Always allow is unavailable for this tool call", terminate: true };
+			}
+			if (result.scope.tool !== expectedScope.tool || result.scope.argsPattern !== expectedScope.argsPattern) {
+				return { block: true, reason: "Permission scope differs from the rule shown for this tool call", terminate: true };
+			}
 			options.context.memory?.remember(result.scope);
 			return undefined;
 		}

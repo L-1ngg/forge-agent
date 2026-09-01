@@ -26,3 +26,26 @@ test("Esc pops only the top card", () => {
 	expect(stack.top()?.id).toBe("first");
 	expect(stack.getScrollback().map((card) => card.id)).toEqual(["second"]);
 });
+
+test("a terminal outcome can retire a non-top card without stealing focus", () => {
+	const stack = new FocusStack();
+	stack.push({ id: "first", focusableCount: 2 });
+	stack.push({ id: "second", focusableCount: 3 });
+	stack.handleInput("\t");
+
+	expect(stack.remove("first")?.id).toBe("first");
+	expect(stack.top()?.id).toBe("second");
+	expect(stack.focusIndex).toBe(1);
+	expect(stack.getScrollback().map((card) => card.id)).toEqual(["first"]);
+});
+
+test("retiring the top card resets focus for the newly exposed card", () => {
+	const stack = new FocusStack();
+	stack.push({ id: "first", focusableCount: 3 });
+	stack.push({ id: "second", focusableCount: 3 });
+	stack.handleInput("\t");
+
+	expect(stack.remove("second")?.id).toBe("second");
+	expect(stack.top()?.id).toBe("first");
+	expect(stack.focusIndex).toBe(0);
+});

@@ -57,11 +57,11 @@ export function decide(toolCall: ToolCallBlock, context: PermissionContext = {})
 	if (mode === "accept-edits" && isEditTool(toolCall.name) && !danger) return { kind: "allow", source: "mode" };
 
 	const scope = permissionScope(toolCall);
-	const canRemember = context.rememberable === undefined
-		? !danger
+	const canRemember = context.memory !== undefined && !danger && (context.rememberable === undefined
+		? true
 		: typeof context.rememberable === "function"
 			? context.rememberable(toolCall)
-			: context.rememberable;
+			: context.rememberable);
 	return {
 		kind: "ask",
 		payload: {

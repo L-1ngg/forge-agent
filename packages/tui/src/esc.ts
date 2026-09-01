@@ -32,7 +32,8 @@ export class EscController {
 			return "abort";
 		}
 		if (timestamp <= this.suppressUntil) {
-			this.lastEscAt = timestamp;
+			// A suppressed press must not become the first half of a later rewind.
+			this.lastEscAt = -Infinity;
 			return "noop";
 		}
 		if (timestamp - this.lastEscAt <= this.doublePressMs) {
@@ -45,6 +46,11 @@ export class EscController {
 
 	markCancelled(): void {
 		this.suppressUntil = this.now() + this.suppressRewindMs;
+		this.lastEscAt = -Infinity;
+	}
+
+	/** Clear an idle double-press candidate when a higher-priority layer owns input. */
+	reset(): void {
 		this.lastEscAt = -Infinity;
 	}
 }

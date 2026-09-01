@@ -91,7 +91,9 @@ function isValidResponseResult(kind: RequestKind, result: unknown): boolean {
 				typeof scope === "object" &&
 				scope !== null &&
 				typeof (scope as { tool?: unknown }).tool === "string" &&
-				typeof (scope as { argsPattern?: unknown }).argsPattern === "string"
+				(scope as { tool: string }).tool.length > 0 &&
+				typeof (scope as { argsPattern?: unknown }).argsPattern === "string" &&
+				(scope as { argsPattern: string }).argsPattern.length > 0
 			);
 		}
 		case "cancel_confirm":
@@ -114,6 +116,7 @@ function isValidResponseResult(kind: RequestKind, result: unknown): boolean {
 export class RequestBus {
 	private readonly requestQueue = new AsyncQueue<RequestEnvelopeUnion>();
 	private readonly responseQueue = new AsyncQueue<ResponseEnvelope>();
+	private readonly terminalQueue = new AsyncQueue<RequestOutcome<RequestKind>>();
 	private readonly pending = new Map<string, PendingRequest<RequestKind>>();
 	private readonly settled = new Map<string, RequestOutcome<RequestKind>>();
 	private readonly dropped: DroppedResponse[] = [];
@@ -150,6 +153,11 @@ export class RequestBus {
 		return this.responseQueue;
 	}
 
+	/** Stream of terminal outcomes so clients can retire timed-out cards. */
+	terminals(): AsyncIterable<RequestOutcome<RequestKind>> {
+		return this.terminalQueue;
+	}
+
 	get responseStream(): AsyncIterable<ResponseEnvelope> {
 		return this.responseQueue;
 	}
@@ -181,6 +189,7 @@ export class RequestBus {
 			const id = this.allocateId();
 			const outcome: RequestOutcome<K> = { status: "cancelled", requestId: id, reason: "bus_closed" };
 			this.settled.set(id, outcome as RequestOutcome<RequestKind>);
+			this.terminalQueue.push(outcome as RequestOutcome<RequestKind>);
 			return Promise.resolve(outcome);
 		}
 
@@ -280,6 +289,7 @@ export class RequestBus {
 		for (const [requestId, pending] of [...this.pending.entries()]) this.settleCancelled(requestId, pending, "bus_closed");
 		this.requestQueue.close();
 		this.responseQueue.close();
+		this.terminalQueue.close();
 	}
 
 	isPending(requestId: string): boolean {
@@ -321,6 +331,7 @@ export class RequestBus {
 		if (pending.timer !== undefined) clearTimeout(pending.timer);
 		if (pending.signal && pending.abortListener) pending.signal.removeEventListener("abort", pending.abortListener);
 		this.settled.set(requestId, outcome);
+		this.terminalQueue.push(outcome);
 		pending.resolve(outcome);
 		return true;
 	}

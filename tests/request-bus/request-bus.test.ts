@@ -34,6 +34,8 @@ test("permission allow_always requires a typed authorization scope", async () =>
 	const request = (await bus.requests()[Symbol.asyncIterator]().next()).value as RequestEnvelope<"permission">;
 
 	expect(bus.respond(response(request.id, { decision: "allow_always" }))).toBe(false);
+	expect(bus.respond(response(request.id, { decision: "allow_always", scope: { tool: "", argsPattern: "*.txt" } }))).toBe(false);
+	expect(bus.respond(response(request.id, { decision: "allow_always", scope: { tool: "write", argsPattern: "" } }))).toBe(false);
 	expect(bus.respond(response(request.id, { decision: "allow_always", scope: { tool: "write", argsPattern: "*.txt" } }))).toBe(true);
 	expect(await pending).toEqual({
 		status: "response",
@@ -59,14 +61,17 @@ test("permission allow_always rejects malformed scope fields", async () => {
 
 test("timeout and abort are terminal and permission cancellation maps to deny", async () => {
 	const bus = new RequestBus({ idPrefix: "terminal", timeoutMs: 1_000 });
+	const terminalIterator = bus.terminals()[Symbol.asyncIterator]();
 	const timedOut = bus.ask("permission", permissionPayload, { timeoutMs: 5 });
 	const aborted = bus.ask("permission", { ...permissionPayload, toolCall: { ...permissionPayload.toolCall, id: "call-2" } });
 
 	const timeoutOutcome = await timedOut;
 	expect(timeoutOutcome.status).toBe("timeout");
+	expect((await terminalIterator.next()).value).toEqual(timeoutOutcome);
 	expect(bus.abort()).toBe(1);
 	const abortOutcome = await aborted;
 	expect(abortOutcome).toMatchObject({ status: "cancelled", reason: "aborted" });
+	expect((await terminalIterator.next()).value).toEqual(abortOutcome);
 	expect(permissionResultFromOutcome(abortOutcome)).toMatchObject({ decision: "deny" });
 
 	const before = bus.getTerminal(abortOutcome.requestId);

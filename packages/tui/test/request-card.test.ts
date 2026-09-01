@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { RequestEnvelopeFor, ResponseEnvelope } from "@myh/protocol";
+import type { RequestEnvelopeFor, RequestKind, RequestOutcome, ResponseEnvelope } from "@myh/protocol";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { App, RequestCard, responseForRequestAction } from "../src/index.ts";
 
@@ -52,6 +52,55 @@ test("Esc resolves a blocking card with a conservative terminal response", async
 	await app.stop();
 });
 
+test("a bus timeout retires the card and restores editor focus", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("timeout"));
+	await Bun.sleep(0);
+
+	bus.pushTerminal({ status: "timeout", requestId: "timeout" });
+	await Bun.sleep(0);
+	expect(app.focusStack.size).toBe(0);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["timeout", "dismissed"]]);
+	expect(app.editor.focused).toBe(true);
+	expect(app.tui.render(80).join("\n")).toContain("Status: timeout");
+	await app.stop();
+});
+
+test("a terminal received before its request is replayed when the card arrives", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+
+	bus.pushTerminal({ status: "cancelled", requestId: "early", reason: "aborted" });
+	await Bun.sleep(0);
+	bus.push(permissionRequest("early"));
+	await Bun.sleep(0);
+
+	expect(app.focusStack.size).toBe(0);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["early", "dismissed"]]);
+	expect(app.editor.focused).toBe(true);
+	expect(app.tui.render(80).join("\n")).toContain("Status: cancelled");
+	await app.stop();
+});
+
+test("a response delivered through the terminal stream resolves the card", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+
+	bus.pushTerminal({ status: "response", requestId: "external", result: { decision: "allow_once" } });
+	bus.push(permissionRequest("external"));
+	await Bun.sleep(0);
+
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["external", "resolved"]]);
+	await app.stop();
+});
+
 test("Enter resolves the focused action without advancing the card selection", async () => {
 	const terminal = new FakeTerminal();
 	const bus = new TestRequestBus();
@@ -60,11 +109,71 @@ test("Enter resolves the focused action without advancing the card selection", a
 	bus.push(permissionRequest("selected"));
 	await Bun.sleep(0);
 
+	expect(app.tui.render(80).join("\n")).toContain("> 1. allow_once");
 	terminal.send("\t");
 	expect(app.focusStack.focusIndex).toBe(1);
+	expect(app.tui.render(80).join("\n")).toContain("> 2. deny");
 	terminal.send("\r");
 	expect(bus.responses).toEqual([{ type: "response", id: "selected", result: { decision: "deny", reason: "Denied by user" } }]);
 	await app.stop();
+});
+
+test("App stop does not wait forever for a request stream without close", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new EndlessRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	await Bun.sleep(0);
+
+	await app.stop();
+	expect(bus.returned).toBe(true);
+	await app.waitUntilStopped();
+});
+
+test("App completes stop when closing the request stream rejects its pending read", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new RejectingCloseRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	await Bun.sleep(0);
+
+	await app.stop();
+	await app.waitUntilStopped();
+});
+
+test("App settles waitUntilStopped when TUI teardown throws", async () => {
+	const app = new App({ terminal: new FakeTerminal(), port: idlePort() });
+	const failure = new Error("tui teardown failed");
+	(app.tui as unknown as { stop: () => void }).stop = () => {
+		throw failure;
+	};
+
+	let caught: unknown;
+	try {
+		await app.stop();
+	} catch (error) {
+		caught = error;
+	}
+	expect(caught).toBe(failure);
+	await app.waitUntilStopped();
+});
+
+test("App settles waitUntilStopped when request bus teardown throws", async () => {
+	const bus = new TestRequestBus();
+	const failure = new Error("bus teardown failed");
+	bus.close = () => {
+		throw failure;
+	};
+	const app = new App({ terminal: new FakeTerminal(), port: idlePort(), requestBus: bus });
+
+	let caught: unknown;
+	try {
+		await app.stop();
+	} catch (error) {
+		caught = error;
+	}
+	expect(caught).toBe(failure);
+	await app.waitUntilStopped();
 });
 
 test("question response selects one choice unless multiple is enabled", () => {
@@ -129,6 +238,7 @@ function idlePort() {
 class TestRequestBus {
 	readonly responses: ResponseEnvelope[] = [];
 	private readonly queue = new AsyncRequestQueue();
+	private readonly terminalQueue = new AsyncTerminalQueue();
 
 	requests() {
 		return this.queue;
@@ -143,8 +253,59 @@ class TestRequestBus {
 		return true;
 	}
 
+	terminals() {
+		return this.terminalQueue;
+	}
+
+	pushTerminal(outcome: RequestOutcome<RequestKind>): void {
+		this.terminalQueue.push(outcome);
+	}
+
 	close(): void {
 		this.queue.close();
+		this.terminalQueue.close();
+	}
+}
+
+class EndlessRequestBus {
+	returned = false;
+
+	requests(): AsyncIterable<RequestEnvelopeFor<"permission">> {
+		return {
+			[Symbol.asyncIterator]: () => ({
+				next: () => new Promise(() => undefined),
+				return: async () => {
+					this.returned = true;
+					return { value: undefined, done: true };
+				},
+			}),
+		};
+	}
+
+	respond(): boolean {
+		return true;
+	}
+}
+
+class RejectingCloseRequestBus {
+	private rejectPending?: (error: Error) => void;
+
+	requests(): AsyncIterable<RequestEnvelopeFor<"permission">> {
+		return {
+			[Symbol.asyncIterator]: () => ({
+				next: () => new Promise((_, reject) => {
+					this.rejectPending = reject;
+				}),
+			}),
+		};
+	}
+
+	respond(): boolean {
+		return true;
+	}
+
+	close(): void {
+		this.rejectPending?.(new Error("request stream closed with an error"));
 	}
 }
 
@@ -172,6 +333,34 @@ class AsyncRequestQueue implements AsyncIterable<RequestEnvelopeFor<"permission"
 	}
 
 	[Symbol.asyncIterator](): AsyncIterator<RequestEnvelopeFor<"permission">> {
+		return this;
+	}
+}
+
+class AsyncTerminalQueue implements AsyncIterable<RequestOutcome<RequestKind>>, AsyncIterator<RequestOutcome<RequestKind>> {
+	private readonly values: RequestOutcome<RequestKind>[] = [];
+	private readonly waiters: Array<(result: IteratorResult<RequestOutcome<RequestKind>>) => void> = [];
+	private closed = false;
+
+	push(value: RequestOutcome<RequestKind>): void {
+		const waiter = this.waiters.shift();
+		if (waiter) waiter({ value, done: false });
+		else this.values.push(value);
+	}
+
+	close(): void {
+		this.closed = true;
+		for (const waiter of this.waiters.splice(0)) waiter({ value: undefined, done: true });
+	}
+
+	next(): Promise<IteratorResult<RequestOutcome<RequestKind>>> {
+		const value = this.values.shift();
+		if (value) return Promise.resolve({ value, done: false });
+		if (this.closed) return Promise.resolve({ value: undefined, done: true });
+		return new Promise((resolve) => this.waiters.push(resolve));
+	}
+
+	[Symbol.asyncIterator](): AsyncIterator<RequestOutcome<RequestKind>> {
 		return this;
 	}
 }

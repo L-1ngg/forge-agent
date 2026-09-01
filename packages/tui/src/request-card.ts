@@ -1,4 +1,4 @@
-import { permissionScopeForToolCall, response, type RequestEnvelopeUnion, type ResponseEnvelope } from "@myh/protocol";
+import { permissionScopeForToolCall, response, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope } from "@myh/protocol";
 import { Text, type Component } from "@earendil-works/pi-tui";
 import type { FocusCard } from "./focus-stack.ts";
 
@@ -14,6 +14,8 @@ export interface RequestCardRecord extends FocusCard {
 export class RequestCard implements Component {
 	readonly record: RequestCardRecord;
 	private readonly text: Text;
+	private focusIndex = 0;
+	private isFocused = false;
 
 	constructor(request: RequestEnvelopeUnion) {
 		const actions = requestCardActions(request);
@@ -24,19 +26,48 @@ export class RequestCard implements Component {
 			focusableCount: actions.length,
 			shortcuts: ["Tab next", "Enter choose", "Esc dismiss"],
 		};
-		this.text = new Text(`${renderRequestCardText(request)}\n\n${actions.map((action, index) => `${index + 1}. ${action}`).join("  ")}`, 1, 1);
+		this.text = new Text("", 1, 1);
+		this.refreshText();
+	}
+
+	get focused(): boolean {
+		return this.isFocused;
+	}
+
+	set focused(value: boolean) {
+		if (value === this.isFocused) return;
+		this.isFocused = value;
+		if (this.record.state === "active") this.refreshText();
 	}
 
 	resolve(response: ResponseEnvelope): void {
 		if (response.id !== this.record.id || this.record.state !== "active") return;
 		this.record.state = "resolved";
 		this.record.result = response.result;
+		this.refreshText();
 	}
 
 	dismiss(response?: ResponseEnvelope): void {
 		if (this.record.state !== "active") return;
 		this.record.state = "dismissed";
 		if (response) this.record.result = response.result;
+		this.refreshText();
+	}
+
+	/** Keep the visual selection in lockstep with the shared FocusStack. */
+	setFocusIndex(index: number): void {
+		const count = Math.max(1, this.record.focusableCount ?? 1);
+		const next = Number.isFinite(index) ? Math.max(0, Math.min(count - 1, Math.floor(index))) : 0;
+		if (next === this.focusIndex) return;
+		this.focusIndex = next;
+		if (this.record.state === "active") this.refreshText();
+	}
+
+	terminal(outcome: RequestOutcome<RequestKind>): void {
+		if (this.record.state !== "active" || outcome.requestId !== this.record.id) return;
+		this.record.state = outcome.status === "response" ? "resolved" : "dismissed";
+		this.record.result = outcome;
+		this.refreshText();
 	}
 
 	responseFor(action: RequestCardAction): ResponseEnvelope | undefined {
@@ -50,6 +81,18 @@ export class RequestCard implements Component {
 
 	invalidate(): void {
 		this.text.invalidate();
+	}
+
+	private refreshText(): void {
+		const body = renderRequestCardText(this.record.request);
+		if (this.record.state === "active") {
+			const actions = requestCardActions(this.record.request);
+			this.text.setText(`${body}\n\n${actions.map((action, index) => `${this.isFocused && index === this.focusIndex ? ">" : " "} ${index + 1}. ${action}`).join("  ")}`);
+			return;
+		}
+		const outcome = this.record.result as Partial<RequestOutcome<RequestKind>> | undefined;
+		const status = outcome?.status ?? this.record.state;
+		this.text.setText(`${body}\n\nStatus: ${status}`);
 	}
 }
 

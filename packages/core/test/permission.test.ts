@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createPermissionBeforeToolCall, MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
 import { RequestBus } from "../src/request-bus.ts";
-import { response } from "@myh/protocol";
+import { permissionScopeForToolCall, response } from "@myh/protocol";
 import type { ToolCallBlock } from "@myh/protocol";
 
 const readCall: ToolCallBlock = {
@@ -68,6 +68,15 @@ test("dangerous commands still ask despite remembered or explicit allow rules", 
 		expect(decision.kind).toBe("ask");
 		if (decision.kind === "ask") expect(decision.payload.rememberRule).toBeUndefined();
 	}
+	const explicitlyRememberable = decide(bashCall("rm -rf tmp"), { rememberable: true, memory });
+	expect(explicitlyRememberable.kind).toBe("ask");
+	if (explicitlyRememberable.kind === "ask") expect(explicitlyRememberable.payload.rememberRule).toBeUndefined();
+});
+
+test("Always allow is omitted when no memory store can honor it", () => {
+	const decision = decide(readCall);
+	expect(decision).toMatchObject({ kind: "ask" });
+	if (decision.kind === "ask") expect(decision.payload.rememberRule).toBeUndefined();
 });
 
 test("an unrememberable request does not advertise Always allow", () => {
@@ -84,7 +93,16 @@ test("remembered authorization contains the object scope", () => {
 	expect(decision.kind).toBe("ask");
 });
 
-test("beforeToolCall adapter blocks deny decisions and remembers an allow_always scope", async () => {
+test("remembered scopes treat wildcard characters in argument values literally", () => {
+	const call = { ...writeCall, arguments: { path: "src/*.ts", content: "value?" } };
+	const memory = new MemoryPermissionStore();
+	memory.remember(permissionScopeForToolCall(call));
+	expect(decide(call, { memory })).toEqual({ kind: "allow", source: "remembered" });
+	const different = { ...call, arguments: { path: "src/other.ts", content: "valueX" } };
+	expect(decide(different, { memory }).kind).toBe("ask");
+});
+
+test("beforeToolCall adapter blocks deny decisions and remembers only the scope shown for the call", async () => {
 	const blocked = createPermissionBeforeToolCall({ context: { mode: "deny-all" } });
 	const blockedResult = await blocked({
 		toolCall: { type: "toolCall", id: "call-1", name: "write", arguments: writeCall.arguments },
@@ -102,8 +120,34 @@ test("beforeToolCall adapter blocks deny decisions and remembers an allow_always
 	} as never);
 	const request = (await bus.requests()[Symbol.asyncIterator]().next()).value;
 	expect(request.kind).toBe("permission");
-	bus.respond(response(request.id, { decision: "allow_always", scope: { tool: "write", argsPattern: "*" } }));
+	bus.respond(response(request.id, { decision: "allow_always", scope: permissionScopeForToolCall(writeCall) }));
 	expect(await pending).toBeUndefined();
 	expect(memory.entries()).toHaveLength(1);
 	bus.close();
+
+	const widenedBus = new RequestBus({ idPrefix: "permission-widened", timeoutMs: 1_000 });
+	const widenedMemory = new MemoryPermissionStore();
+	const widenedAdapter = createPermissionBeforeToolCall({ context: { memory: widenedMemory }, requestBus: widenedBus });
+	const widenedPending = widenedAdapter({
+		toolCall: { type: "toolCall", id: "call-3", name: "write", arguments: writeCall.arguments },
+		args: writeCall.arguments,
+	} as never);
+	const widenedRequest = (await widenedBus.requests()[Symbol.asyncIterator]().next()).value;
+	widenedBus.respond(response(widenedRequest.id, { decision: "allow_always", scope: { tool: "write", argsPattern: "*" } }));
+	expect(await widenedPending).toMatchObject({ block: true, terminate: true, reason: expect.stringContaining("differs") });
+	expect(widenedMemory.entries()).toHaveLength(0);
+	widenedBus.close();
+
+	const dangerousBus = new RequestBus({ idPrefix: "permission-dangerous", timeoutMs: 1_000 });
+	const dangerousMemory = new MemoryPermissionStore();
+	const dangerousAdapter = createPermissionBeforeToolCall({ context: { memory: dangerousMemory }, requestBus: dangerousBus });
+	const dangerousPending = dangerousAdapter({
+		toolCall: { type: "toolCall", id: "call-dangerous", name: "bash", arguments: { command: "rm -rf tmp" } },
+		args: { command: "rm -rf tmp" },
+	} as never);
+	const dangerousRequest = (await dangerousBus.requests()[Symbol.asyncIterator]().next()).value;
+	dangerousBus.respond(response(dangerousRequest.id, { decision: "allow_always", scope: permissionScopeForToolCall({ name: "bash", arguments: { command: "rm -rf tmp" } } as never) }));
+	expect(await dangerousPending).toMatchObject({ block: true, terminate: true, reason: expect.stringContaining("unavailable") });
+	expect(dangerousMemory.entries()).toHaveLength(0);
+	dangerousBus.close();
 });

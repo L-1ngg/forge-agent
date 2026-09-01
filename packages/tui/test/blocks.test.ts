@@ -25,6 +25,14 @@ test("execute block preserves the head and tail when truncated", () => {
 	expect(rendered).toContain("lines omitted");
 });
 
+test("execute block supports zero head or tail lines without duplicating output", () => {
+	const headOnly = new ExecuteBlock({ command: "run", stdout: "a\nb\nc", firstLines: 2, lastLines: 0 });
+	expect(headOnly.render(80).join("\n")).toBe("v execute $ run\na\nb\n... 1 lines omitted");
+
+	const tailOnly = new ExecuteBlock({ command: "run", stdout: "a\nb\nc", firstLines: 0, lastLines: 1 });
+	expect(tailOnly.render(80).join("\n")).toBe("v execute $ run\n... 2 lines omitted\nc");
+});
+
 test("edit block renders core hunks and +/- counts without recomputing them", () => {
 	const data = {
 		path: "file.ts",

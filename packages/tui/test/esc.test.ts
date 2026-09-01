@@ -13,3 +13,16 @@ test("Esc prioritizes card pop, then abort, then idle double press", () => {
 	now += 500;
 	expect(esc.press()).toBe("rewind");
 });
+
+test("suppressed Esc presses do not prime a rewind after the suppression window", () => {
+	let now = 1_000;
+	const esc = new EscController({ now: () => now, suppressRewindMs: 1_000, doublePressMs: 800 });
+
+	esc.press({ running: true });
+	now = 1_500;
+	expect(esc.press()).toBe("noop");
+	now = 2_100;
+	expect(esc.press()).toBe("arm");
+	now = 2_500;
+	expect(esc.press()).toBe("rewind");
+});

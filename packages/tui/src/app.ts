@@ -1,4 +1,4 @@
-import type { ContextUsageSnapshot, RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@myh/protocol";
+import type { ContextUsageSnapshot, RequestEnvelopeUnion, RequestKind, RequestOutcome, ResponseEnvelope, SessionEvent } from "@myh/protocol";
 import { Key, VStack, Container, ProcessTerminal, matchesKey, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import { EscController } from "./esc.ts";
 import { createEditor } from "./editor.ts";
@@ -10,6 +10,8 @@ import { RequestCard, requestCardActions, responseForRequestDismiss, type Reques
 import { createInputAutocompleteProvider, type TuiInputCompletionSource } from "./input/autocomplete.ts";
 import { StatusLine, type StatusLineState } from "./status-line.ts";
 import type { SemanticTheme } from "./theme.ts";
+
+const STOPPED: unique symbol = Symbol("app-stopped");
 
 export interface AppOptions {
 	port: TuiAgentPort;
@@ -27,6 +29,7 @@ export interface AppOptions {
 export interface TuiRequestBus {
 	requests(): AsyncIterable<RequestEnvelopeUnion>;
 	respond(response: ResponseEnvelope): boolean;
+	terminals?(): AsyncIterable<RequestOutcome<RequestKind>>;
 	close?(): void;
 }
 
@@ -51,13 +54,22 @@ export class App {
 	private stopped = false;
 	private readonly stoppedPromise: Promise<void>;
 	private resolveStopped!: () => void;
+	private readonly stopSignal: Promise<void>;
+	private resolveStopSignal!: () => void;
 	private readonly esc = new EscController();
 	private readonly blockingCards = new Container();
+	private readonly pendingTerminalOutcomes = new Map<string, RequestOutcome<RequestKind>>();
 	private requestTask?: Promise<void>;
+	private terminalTask?: Promise<void>;
+	private requestIterator: AsyncIterator<RequestEnvelopeUnion> | undefined;
+	private terminalIterator: AsyncIterator<RequestOutcome<RequestKind>> | undefined;
 
 	constructor(private readonly options: AppOptions) {
 		this.stoppedPromise = new Promise((resolve) => {
 			this.resolveStopped = resolve;
+		});
+		this.stopSignal = new Promise((resolve) => {
+			this.resolveStopSignal = resolve;
 		});
 		this.terminal = options.terminal ?? new ProcessTerminal();
 		this.tui = createTuiHost({ terminal: this.terminal, ...(options.host ? { mode: options.host } : {}) });
@@ -92,10 +104,14 @@ export class App {
 		this.tui.setFocus(this.editor);
 		this.tui.addInputListener((data) => {
 			if (this.focusStack.active) {
+				// Card-level Esc/Enter handling is a higher layer than idle rewind;
+				// discard any pending idle double-press state when it owns the key.
+				this.esc.reset();
 				if (matchesKey(data, Key.enter)) {
 					this.respondToFocusedCard();
 				} else {
 					const focusResult = this.focusStack.handleInput(data);
+					if (focusResult.card) this.findCard(focusResult.card.id)?.setFocusIndex(focusResult.index);
 					if (focusResult.action !== "pop") {
 						this.tui.requestRender();
 						return { consume: true };
@@ -132,15 +148,37 @@ export class App {
 
 	async start(): Promise<void> {
 		this.tui.start();
-		if (this.options.requestBus) this.requestTask = this.consumeRequests(this.options.requestBus);
+		if (this.options.requestBus) {
+			this.requestTask = this.consumeRequests(this.options.requestBus);
+			if (this.options.requestBus.terminals) this.terminalTask = this.consumeTerminals(this.options.requestBus);
+		}
 	}
 
 	async stop(): Promise<void> {
 		if (this.stopped) return;
 		this.stopped = true;
-		this.tui.stop();
-		this.options.requestBus?.close?.();
-		this.resolveStopped();
+		let failure: { error: unknown } | undefined;
+		const captureFailure = (action: () => void): void => {
+			try {
+				action();
+			} catch (error) {
+				failure ??= { error };
+			}
+		};
+		// Cleanup is best-effort as a whole: one synchronous teardown failure must
+		// not strand the async consumers or leave waitUntilStopped() unresolved.
+		captureFailure(() => this.tui.stop());
+		captureFailure(() => this.options.requestBus?.close?.());
+		this.closeIterator(this.requestIterator);
+		this.closeIterator(this.terminalIterator);
+		this.resolveStopSignal();
+		try {
+			await Promise.allSettled([this.requestTask, this.terminalTask].filter((task): task is Promise<void> => task !== undefined));
+		} finally {
+			this.pendingTerminalOutcomes.clear();
+			this.resolveStopped();
+		}
+		if (failure) throw failure.error;
 	}
 
 	waitUntilStopped(): Promise<void> {
@@ -161,6 +199,7 @@ export class App {
 			await task;
 		} finally {
 			if (this.runningTask === task) this.runningTask = undefined;
+			this.tui.requestRender();
 		}
 	}
 
@@ -182,14 +221,61 @@ export class App {
 	}
 
 	private async consumeRequests(requestBus: TuiRequestBus): Promise<void> {
-		for await (const request of requestBus.requests()) {
-			if (this.stopped) return;
-			const card = new RequestCard(request);
-			this.blockingCards.addChild(card);
-			this.focusStack.push(card.record);
-			this.tui.setFocus(card);
-			this.tui.requestRender();
+		const iterator = requestBus.requests()[Symbol.asyncIterator]();
+		this.requestIterator = iterator;
+		try {
+			for (;;) {
+				const next = await this.nextWhileRunning(iterator);
+				if (next === STOPPED || next.done || this.stopped) return;
+				const request = next.value;
+				const card = new RequestCard(request);
+				this.blockingCards.addChild(card);
+				this.focusStack.push(card.record);
+				card.setFocusIndex(this.focusStack.focusIndex);
+				const terminal = this.pendingTerminalOutcomes.get(request.id);
+				if (terminal) {
+					this.pendingTerminalOutcomes.delete(request.id);
+					this.retireCard(card, terminal);
+				} else {
+					this.tui.setFocus(card);
+				}
+				this.tui.requestRender();
+			}
+		} finally {
+			if (this.requestIterator === iterator) this.requestIterator = undefined;
 		}
+	}
+
+	private async consumeTerminals(requestBus: TuiRequestBus): Promise<void> {
+		const terminals = requestBus.terminals;
+		if (!terminals) return;
+		const iterator = terminals.call(requestBus)[Symbol.asyncIterator]();
+		this.terminalIterator = iterator;
+		try {
+			for (;;) {
+				const next = await this.nextWhileRunning(iterator);
+				if (next === STOPPED || next.done || this.stopped) return;
+				const outcome = next.value;
+				const card = this.findCard(outcome.requestId);
+				if (!card) {
+					// The request and terminal streams are independent. Keep a terminal
+					// until the request consumer has mounted its card.
+					if (!this.pendingTerminalOutcomes.has(outcome.requestId)) this.pendingTerminalOutcomes.set(outcome.requestId, outcome);
+					continue;
+				}
+				this.retireCard(card, outcome);
+				this.tui.requestRender();
+			}
+		} finally {
+			if (this.terminalIterator === iterator) this.terminalIterator = undefined;
+		}
+	}
+
+	private retireCard(card: RequestCard, outcome: RequestOutcome<RequestKind>): void {
+		if (card.record.state !== "active") return;
+		card.terminal(outcome);
+		const removed = this.focusStack.remove(outcome.requestId);
+		if (removed) this.restoreFocusAfterStackChange();
 	}
 
 	private focusedCard(): RequestCard | undefined {
@@ -224,8 +310,26 @@ export class App {
 
 	private restoreFocusAfterStackChange(): void {
 		const next = this.focusStack.top();
-		if (next) this.tui.setFocus(this.findCard(next.id) ?? this.editor);
+		const nextCard = next ? this.findCard(next.id) : undefined;
+		if (nextCard) {
+			nextCard.setFocusIndex(this.focusStack.focusIndex);
+			this.tui.setFocus(nextCard);
+		}
 		else this.tui.setFocus(this.editor);
+	}
+
+	private async nextWhileRunning<T>(iterator: AsyncIterator<T>): Promise<IteratorResult<T> | typeof STOPPED> {
+		return Promise.race([iterator.next(), this.stopSignal.then((): typeof STOPPED => STOPPED)]);
+	}
+
+	private closeIterator<T>(iterator: AsyncIterator<T> | undefined): void {
+		try {
+			const close = iterator?.return;
+			if (!close) return;
+			void Promise.resolve(close.call(iterator)).catch(() => undefined);
+		} catch {
+			// A best-effort iterator close must not prevent the App from stopping.
+		}
 	}
 
 	private apply(event: SessionEvent): void {

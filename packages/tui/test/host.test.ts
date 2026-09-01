@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Text, type Terminal } from "@earendil-works/pi-tui";
+import { Text, type Component, type Terminal, type ViewportTUI } from "@earendil-works/pi-tui";
 import { TuiHostController, createTuiHost } from "../src/index.ts";
 
 test("main and alt hosts render the same component tree", () => {
@@ -25,6 +25,34 @@ test("host controller preserves mounted components while switching", () => {
 	expect(controller.children).toEqual([component]);
 	expect(controller.screen.render(40).join("\n")).toContain("preserved");
 });
+
+test("host controller preserves an explicit viewport layout root in both directions", () => {
+	const terminal = new FakeTerminal();
+	const controller = new TuiHostController({ terminal, mode: "alt", altScreen: { mouse: false } });
+	const root = new TestComponent("layout root");
+
+	(controller.screen as ViewportTUI).setLayoutRoot(root);
+	expect(controller.children).toEqual([]);
+	expect(controller.screen.render(40).join("\n")).toContain("layout root");
+
+	controller.switchMode("main");
+	expect(controller.children).toEqual([root]);
+	expect(controller.screen.render(40).join("\n")).toContain("layout root");
+
+	controller.switchMode("alt");
+	expect(controller.children).toEqual([]);
+	expect(controller.screen.render(40).join("\n")).toContain("layout root");
+});
+
+class TestComponent implements Component {
+	constructor(private readonly value: string) {}
+
+	render(): string[] {
+		return [this.value];
+	}
+
+	invalidate(): void {}
+}
 
 class FakeTerminal implements Terminal {
 	columns = 80;

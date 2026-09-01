@@ -156,7 +156,8 @@ export class FoldBlock implements Component {
 function trimHeadTail(lines: readonly string[], first: number, last: number): string[] {
 	if (lines.length <= first + last) return [...lines];
 	const omitted = lines.length - first - last;
-	return [...lines.slice(0, first), `... ${omitted} lines omitted`, ...lines.slice(-last)];
+	const tail = last > 0 ? lines.slice(-last) : [];
+	return [...lines.slice(0, first), `... ${omitted} lines omitted`, ...tail];
 }
 
 function normalizeCount(value: number | undefined, fallback: number): number {
