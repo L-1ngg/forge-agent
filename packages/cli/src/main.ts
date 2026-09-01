@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { cwd } from "node:process";
-import { AgentRunner, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
+import { AgentRunner, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
 import { builtinTools } from "@myh/tools";
-import { App } from "@myh/tui";
+import { App, scanFiles } from "@myh/tui";
 import { jsonError, runHeadless } from "./headless.ts";
 
 interface Args {
@@ -96,7 +96,16 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		if (args.json) {
 			return await runHeadless(runner, prompt as string, console.log, { requestBus });
 		}
-		const app = new App({ port: runner, host: config.ui.host, requestBus });
+		const completionSource = createInputCompletionSource({
+			listFiles: (prefix) => scanFiles(workingDirectory, prefix),
+		});
+		const app = new App({
+			port: runner,
+			host: config.ui.host,
+			requestBus,
+			completionSource,
+			getStatus: () => ({ provider, model }),
+		});
 		await app.start();
 		await app.waitUntilStopped();
 		return 0;

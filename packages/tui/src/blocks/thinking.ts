@@ -13,9 +13,21 @@ export class ThinkingBlock extends FoldBlock {
 
 	constructor(options: ThinkingBlockOptions | string) {
 		const normalized = typeof options === "string" ? { markdown: options } : options;
+		const envelope = unwrapEnvelope(normalized.data);
 		const data = unwrapData(normalized.data);
 		const markdown = normalized.markdown ?? normalized.text ?? data?.markdown ?? "";
-		super({ ...normalized, title: "thinking", lines: markdown.split("\n"), defaultDisplayMode: normalized.defaultDisplayMode ?? "truncated", truncatedLines: normalized.truncatedLines ?? 3 });
+		const currentDisplayMode = normalized.currentDisplayMode ?? envelope?.currentDisplayMode;
+		const manualOverride = normalized.manualOverride ?? envelope?.manualOverride;
+		super({
+			...(envelope?.fold ?? {}),
+			...normalized,
+			title: "thinking",
+			lines: markdown.split("\n"),
+			defaultDisplayMode: normalized.defaultDisplayMode ?? envelope?.defaultDisplayMode ?? envelope?.fold.defaultDisplayMode ?? "truncated",
+			...(currentDisplayMode === undefined ? {} : { currentDisplayMode }),
+			...(manualOverride === undefined ? {} : { manualOverride }),
+			truncatedLines: normalized.truncatedLines ?? envelope?.fold.truncatedLines ?? 3,
+		});
 		this.id = normalized.id;
 	}
 
@@ -31,5 +43,9 @@ export class ThinkingBlock extends FoldBlock {
 export const Thinking = ThinkingBlock;
 
 function unwrapData(value: ThinkingBlockData | BlockEnvelope<"thinking"> | undefined): ThinkingBlockData | undefined {
-		return value && "data" in value ? value.data : value;
+	return value && "data" in value ? value.data : value;
+}
+
+function unwrapEnvelope(value: ThinkingBlockData | BlockEnvelope<"thinking"> | undefined): BlockEnvelope<"thinking"> | undefined {
+	return value && "kind" in value && value.kind === "thinking" && "fold" in value ? value : undefined;
 }

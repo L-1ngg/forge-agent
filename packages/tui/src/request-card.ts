@@ -33,8 +33,10 @@ export class RequestCard implements Component {
 		this.record.result = response.result;
 	}
 
-	 dismiss(): void {
-		if (this.record.state === "active") this.record.state = "dismissed";
+	dismiss(response?: ResponseEnvelope): void {
+		if (this.record.state !== "active") return;
+		this.record.state = "dismissed";
+		if (response) this.record.result = response.result;
 	}
 
 	responseFor(action: RequestCardAction): ResponseEnvelope | undefined {
@@ -62,21 +64,43 @@ export function responseForRequestAction(request: RequestEnvelopeUnion, action: 
 			return undefined;
 		}
 		case "cancel_confirm":
-			return response(request.id, { decision: action === "cancel" ? "cancel" : "keep_running" });
+			if (action === "cancel") return response(request.id, { decision: "cancel" });
+			if (action === "confirm") return response(request.id, { decision: "keep_running" });
+			return undefined;
 		case "question":
 			if (action === "cancel") return response(request.id, { decision: "cancel" });
+			if (action !== "confirm") return undefined;
 			if (!request.payload.choices?.length) return response(request.id, { decision: "answer", answers: [] });
 			return response(request.id, {
 				decision: "answer",
 				answers: (request.payload.multiple ? request.payload.choices : request.payload.choices.slice(0, 1)).map((choice) => choice.id),
 			});
 		case "plan_approval":
-			return response(request.id, action === "reject" ? { decision: "reject", feedback: "Rejected by user" } : { decision: "approve" });
+			if (action === "reject") return response(request.id, { decision: "reject", feedback: "Rejected by user" });
+			if (action === "confirm") return response(request.id, { decision: "approve" });
+			return undefined;
 		case "oauth":
-			return response(request.id, { decision: action === "cancel" ? "cancel" : "completed" });
+			if (action === "cancel") return response(request.id, { decision: "cancel" });
+			if (action === "confirm") return response(request.id, { decision: "completed" });
+			return undefined;
 	}
 }
 
+/** Conservative response used when Esc removes a blocking card from focus. */
+export function responseForRequestDismiss(request: RequestEnvelopeUnion): ResponseEnvelope {
+	switch (request.kind) {
+		case "permission":
+			return response(request.id, { decision: "deny", reason: "Dismissed by user" });
+		case "cancel_confirm":
+			return response(request.id, { decision: "cancel" });
+		case "question":
+			return response(request.id, { decision: "cancel" });
+		case "plan_approval":
+			return response(request.id, { decision: "reject", feedback: "Dismissed by user" });
+		case "oauth":
+			return response(request.id, { decision: "cancel" });
+	}
+}
 
 export function requestCardActions(request: RequestEnvelopeUnion): readonly RequestCardAction[] {
 	switch (request.kind) {

@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2 M1 已实现，待 review gate**。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并视为通过。
+个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2 M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding**。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理;AC-14 未实测。
 
 ## 真相源层级
 

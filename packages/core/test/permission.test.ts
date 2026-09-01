@@ -42,6 +42,9 @@ test("permission layers are independently observable and ordered", () => {
 		builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }],
 		mode: "deny-all",
 	});
+	const builtInDeny = decide(readCall, {
+		builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "deny", reason: "built-in denied" }],
+	});
 	const modeDeny = decide(readCall, { mode: "deny-all" });
 	const modeAllow = decide(writeCall, { mode: "accept-edits" });
 
@@ -49,6 +52,7 @@ test("permission layers are independently observable and ordered", () => {
 	expect(ruleDeny).toMatchObject({ kind: "deny", source: "rule" });
 	expect(rememberedAllow).toEqual({ kind: "allow", source: "remembered" });
 	expect(builtInAllow).toEqual({ kind: "allow", source: "built-in" });
+	expect(builtInDeny).toEqual({ kind: "deny", source: "built-in", reason: "built-in denied" });
 	expect(modeDeny).toMatchObject({ kind: "deny", source: "mode" });
 	expect(modeAllow).toEqual({ kind: "allow", source: "mode" });
 });

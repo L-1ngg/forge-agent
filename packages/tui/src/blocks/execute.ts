@@ -15,13 +15,26 @@ export class ExecuteBlock extends FoldBlock {
 
 	constructor(options: ExecuteBlockOptions | string) {
 		const normalized = typeof options === "string" ? { command: options } : options;
+		const envelope = unwrapEnvelope(normalized.data);
 		const data = unwrapData(normalized.data);
 		const command = normalized.command ?? data?.command ?? "";
 		const stdout = normalized.stdout ?? data?.stdout ?? "";
 		const stderr = normalized.stderr ?? data?.stderr ?? "";
 		const status = normalized.exitCode ?? data?.exitCode;
 		const lines = outputLines(stdout, stderr, status);
-		super({ ...normalized, title: `execute $ ${command}`, lines, defaultDisplayMode: normalized.defaultDisplayMode ?? "truncated", firstLines: normalized.firstLines ?? 2, lastLines: normalized.lastLines ?? 3 });
+		const currentDisplayMode = normalized.currentDisplayMode ?? envelope?.currentDisplayMode;
+		const manualOverride = normalized.manualOverride ?? envelope?.manualOverride;
+		super({
+			...(envelope?.fold ?? {}),
+			...normalized,
+			title: `execute $ ${command}`,
+			lines,
+			defaultDisplayMode: normalized.defaultDisplayMode ?? envelope?.defaultDisplayMode ?? envelope?.fold.defaultDisplayMode ?? "truncated",
+			...(currentDisplayMode === undefined ? {} : { currentDisplayMode }),
+			...(manualOverride === undefined ? {} : { manualOverride }),
+			firstLines: normalized.firstLines ?? envelope?.fold.firstLines ?? 2,
+			lastLines: normalized.lastLines ?? envelope?.fold.lastLines ?? 3,
+		});
 		this.id = normalized.id;
 	}
 
@@ -36,6 +49,10 @@ export const Execute = ExecuteBlock;
 
 function unwrapData(value: ExecuteBlockData | BlockEnvelope<"execute"> | undefined): ExecuteBlockData | undefined {
 	return value && "data" in value ? value.data : value;
+}
+
+function unwrapEnvelope(value: ExecuteBlockData | BlockEnvelope<"execute"> | undefined): BlockEnvelope<"execute"> | undefined {
+	return value && "kind" in value && value.kind === "execute" && "fold" in value ? value : undefined;
 }
 
 function outputLines(stdout: string, stderr: string, exitCode: number | undefined): string[] {

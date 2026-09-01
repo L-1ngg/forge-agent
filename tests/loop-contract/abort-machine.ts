@@ -27,7 +27,10 @@ export function stepAbortMachine(state: AbortState, input: AbortInput): AbortSta
 	if (input.type === "abort") {
 		return { ...state, status: "aborted", openToolCalls: new Set() };
 	}
-	if (input.type === "turn_start") return { ...state, status: "running", turnMessages: 0 };
+	if (input.type === "turn_start") {
+		// Tool ids are paired within a turn; a fresh turn starts a fresh set.
+		return { ...state, status: "running", openToolCalls: new Set(), completedToolCalls: new Set(), turnMessages: 0 };
+	}
 	if (state.status !== "running") return state;
 
 	if (input.type === "tool_call") {

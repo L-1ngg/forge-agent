@@ -5,7 +5,7 @@ created: 2026-09-01
 
 # Phase 2 施工图 — TUI 升到 grok 水准 + permission 流水线
 
-> 状态:M1 已实现，待 review gate(2026-09-01)。operator 已确认开工并指示 E1-E3 暂缓实测、视为通过。Owner:operator。
+> 状态:实现中——M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding(2026-09-02)。AC-14 仍未实测；operator 已确认 E1-E3 暂缓实测、按豁免处理。Owner:operator。
 > 对应 [plan.md](../plan.md) §2 Phase 2;设计论证见 [design-rationale.md](../design-rationale.md) A / C.2 / C.4,失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
 > 本文档是 Phase 2 的唯一施工图。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架(entry criteria → milestone → test plan → release criteria → rollback)见 §5 的映射说明。
 
@@ -206,36 +206,36 @@ Phase 2 关闭需要**同时**满足:
 
 **M2 permission**
 
-- [ ] AC-6:`decide()` 表驱动测试:五个层级各能单独否决与放行,层序可被测试证明(交换两层顺序 → 有用例变红)。
-- [ ] AC-7:危险清单命令即使存在匹配的 always-allow 规则**仍然提示**(逐条断言 `rm` / `chmod` / `kill` / `git push`)。
-- [ ] AC-8:「没有任何可记住的规则能阻止再次提示」的场景下,卡片**不出现** Always allow 行(反向用例:构造一个不可记住的调用,断言选项集合)。
-- [ ] AC-9:记住的授权键含被授权对象;仅工具名相同、对象不同的第二次调用**仍然提示**(F.1 ③ 作用域回归测试)。
-- [ ] AC-10:rewrite 层端到端跑通一个入参改写用例(如路径规范化或敏感值脱敏),且 `beforeToolCall` 的 deny 半边独立可测。
+- [x] AC-6:`decide()` 表驱动测试:五个层级各能单独否决与放行,层序可被测试证明(交换两层顺序 → 有用例变红)。
+- [x] AC-7:危险清单命令即使存在匹配的 always-allow 规则**仍然提示**(逐条断言 `rm` / `chmod` / `kill` / `git push`)。
+- [x] AC-8:「没有任何可记住的规则能阻止再次提示」的场景下,卡片**不出现** Always allow 行(反向用例:构造一个不可记住的调用,断言选项集合)。
+- [x] AC-9:记住的授权键含被授权对象;仅工具名相同、对象不同的第二次调用**仍然提示**(F.1 ③ 作用域回归测试)。
+- [x] AC-10:rewrite 层端到端跑通一个入参改写用例(如路径规范化或敏感值脱敏),且 `beforeToolCall` 的 deny 半边独立可测。
 
 **M3 宿主**
 
-- [ ] AC-11:焦点契约测试——录制键序回放,断言 `FocusStack` 状态:`Tab` 不越界、`Esc` 只 pop 一层、pop 后卡片仍在可读区。
-- [ ] AC-12:**四种卡片跑同一套焦点测试**(同一测试参数化四遍全绿),而非各写一套。
-- [ ] AC-13:`ui.host` 在 `alt` / `main` 间切换,Component 树不变(同一棵树在两种宿主下渲染均无异常)。
+- [x] AC-11:焦点契约测试——录制键序回放,断言 `FocusStack` 状态:`Tab` 不越界、`Esc` 只 pop 一层、pop 后卡片仍在可读区。
+- [x] AC-12:**四种卡片跑同一套焦点测试**(同一测试参数化四遍全绿),而非各写一套。
+- [x] AC-13:`ui.host` 在 `alt` / `main` 间切换,Component 树不变(同一棵树在两种宿主下渲染均无异常)。
 - [ ] AC-14:E3 三项在 alt-screen 下的实测结论记录进本文档 §8;若走降级路径,降级方案与代价一并落盘。
 
 **M4 block**
 
-- [ ] AC-15:同一份 block 数据经 TUI 与 headless JSON 两条路输出,语义一致(字段与折叠状态可对齐比较)。
-- [ ] AC-16:`digest()` 满足:输出不含 ANSI、有硬上限、对同一输入幂等;bash 长输出的 digest 与富态展示分别断言。
-- [ ] AC-17:手动折叠后继续流式更新,block **不弹开**(回放录制事件流)。
-- [ ] AC-18:edit block 的 `+N/-M` 与 diff hunk 由 core 给出;UI 侧 grep 不到 diff 计算逻辑。
+- [x] AC-15:同一份 block 数据经 TUI 与 headless JSON 两条路输出,语义一致(字段与折叠状态可对齐比较)。
+- [x] AC-16:`digest()` 满足:输出不含 ANSI、有硬上限、对同一输入幂等;bash 长输出的 digest 与富态展示分别断言。
+- [x] AC-17:手动折叠后继续流式更新,block **不弹开**(回放录制事件流)。
+- [x] AC-18:edit block 的 `+N/-M` 与 diff hunk 由 core 给出;UI 侧 grep 不到 diff 计算逻辑。
 
 **M5 输入**
 
-- [ ] AC-19:`/` 与 `@` 的解析在 `core` 有单测;`tui` 侧不含解析逻辑(grep 断言)。
-- [ ] AC-20:`Enter` 排队与 `Ctrl+Enter` cancel-and-send 行为分别可测,且 cancel-and-send 后草稿被消费、旧 turn 原子终止。
+- [x] AC-19:`/` 与 `@` 的解析在 `core` 有单测;`tui` 侧不含解析逻辑(grep 断言)。
+- [x] AC-20:`Enter` 排队与 `Ctrl+Enter` cancel-and-send 行为分别可测,且 cancel-and-send 后草稿被消费、旧 turn 原子终止。
 
 **M6 status line**
 
-- [ ] AC-21:用量数字来自真相点——构造「上一次调用用量与当前 context 不同」的场景,断言 status line 显示当前值。
-- [ ] AC-22:`cost < $0.005` 时字段隐藏;不可计算字段省略而非显示占位符(逐条断言)。
-- [ ] AC-23:Component 里 grep 不到裸 ANSI 颜色码 / 十六进制色值(色槽表是唯一出处)。
+- [x] AC-21:用量数字来自真相点——构造「上一次调用用量与当前 context 不同」的场景,断言 status line 显示当前值。
+- [x] AC-22:`cost < $0.005` 时字段隐藏;不可计算字段省略而非显示占位符(逐条断言)。
+- [x] AC-23:Component 里 grep 不到裸 ANSI 颜色码 / 十六进制色值(色槽表是唯一出处)。
 
 ### 3.3 测试计划分层
 
@@ -318,3 +318,7 @@ Phase 2 关闭需要**同时**满足:
 - 2026-09-01 M1 自动化验收:`bun run check` 通过;依赖边界、workspace typecheck、45 tests 全绿。`tests/request-bus/request-bus.property.test.ts` 的 fast-check 为 500 runs,覆盖 request 单终态、重复/迟到/未知 response 丢弃和终态吸收;`packages/core/test/session.test.ts` 覆盖 runner abort 取消 pending request、权限取消映射 deny、session 不落半个 turn;`packages/cli/test/headless-request.test.ts` 覆盖五种 kind 的保守应答与退出码 20-24。
 - 2026-09-01 M1 反向验证:`bun test scripts/check-deps.test.ts` 在临时 core fixture 注入 `ui.prompt` / `ui.confirm` / `ui.ask` 与裸 `prompt` / `confirm`,依赖检查按预期报错;当前工作区 `bun run check:deps` 通过。
 - 2026-09-01 M1 协议回归:permission `allow_always` 缺少或错误 `scope.tool` / `scope.argsPattern` 时被丢弃,合法作用域响应通过;对应 `tests/request-bus/request-bus.test.ts` 已纳入完整检查。
+- 2026-09-02 M2-M6 自动化验收:`bun run check` 通过(依赖边界、五包 typecheck、92 tests across 24 files,0 fail);覆盖 permission 决策链 / danger-list / rewrite、FocusStack 与四类卡片、双宿主、block/digest、输入导航、usage truth point 与 status line。
+- 2026-09-02 headless 回归:`bun run test:headless` 退出码 0,输出为逐行合法 JSON 的完整 agent/turn/message 事件流;结构化 block 同时保留在 headless 与 TUI protocol envelope。
+- 2026-09-02 静态门禁:`bun run check:deps`、workspace typecheck、`git diff --check` 均通过;对 `packages/tui` 做 ANSI / 十六进制色值检索未发现裸颜色依赖。新增卡片动作边界回归后,受影响测试 13 pass / 0 fail。
+- 2026-09-02 未运行人工项:E3 的 alt-screen 鼠标滚轮 / OSC 52 / truecolor 实测、卡片焦点手感与滚动复制 checklist、5 天 `ui.host = "alt"` dogfooding;这些按 operator 豁免或发布出口条件保留,未将 AC-14 标为通过。

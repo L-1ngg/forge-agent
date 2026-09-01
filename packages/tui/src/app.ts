@@ -1,12 +1,15 @@
-import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@myh/protocol";
-import { Key, VStack, Container, matchesKey, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
+import type { ContextUsageSnapshot, RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@myh/protocol";
+import { Key, VStack, Container, ProcessTerminal, matchesKey, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import { EscController } from "./esc.ts";
 import { createEditor } from "./editor.ts";
 import { FocusStack } from "./focus-stack.ts";
 import { createTuiHost, type TuiHostMode } from "./host.ts";
 import { TranscriptScrollView } from "./scroll.ts";
 import { StreamRenderer } from "./stream-renderer.ts";
-import { RequestCard, requestCardActions, type RequestCardAction } from "./request-card.ts";
+import { RequestCard, requestCardActions, responseForRequestDismiss, type RequestCardAction } from "./request-card.ts";
+import { createInputAutocompleteProvider, type TuiInputCompletionSource } from "./input/autocomplete.ts";
+import { StatusLine, type StatusLineState } from "./status-line.ts";
+import type { SemanticTheme } from "./theme.ts";
 
 export interface AppOptions {
 	port: TuiAgentPort;
@@ -14,6 +17,11 @@ export interface AppOptions {
 	host?: TuiHostMode;
 	onRewind?: () => void;
 	requestBus?: TuiRequestBus;
+	completionSource?: TuiInputCompletionSource;
+	autocompleteProvider?: AutocompleteProvider;
+	statusLine?: StatusLine;
+	getStatus?: () => StatusLineState;
+	theme?: SemanticTheme;
 }
 
 export interface TuiRequestBus {
@@ -27,6 +35,7 @@ export interface TuiAgentPort {
 	steer(input: string): void;
 	followUp(input: string): void;
 	abort(): void;
+	getUsage?(): ContextUsageSnapshot | undefined;
 }
 
 export class App {
@@ -35,8 +44,10 @@ export class App {
 	readonly renderer: StreamRenderer;
 	readonly transcript: TranscriptScrollView;
 	readonly editor: ReturnType<typeof createEditor>;
+	readonly statusLine: StatusLine;
 	readonly focusStack = new FocusStack();
 	private runningTask: Promise<void> | undefined;
+	private turnCount = 0;
 	private stopped = false;
 	private readonly stoppedPromise: Promise<void>;
 	private resolveStopped!: () => void;
@@ -48,14 +59,32 @@ export class App {
 		this.stoppedPromise = new Promise((resolve) => {
 			this.resolveStopped = resolve;
 		});
-		this.terminal = options.terminal ?? createTuiHost(options.host ? { mode: options.host } : {}).terminal;
+		this.terminal = options.terminal ?? new ProcessTerminal();
 		this.tui = createTuiHost({ terminal: this.terminal, ...(options.host ? { mode: options.host } : {}) });
 		this.renderer = new StreamRenderer();
 		this.transcript = new TranscriptScrollView(this.renderer);
-		this.editor = createEditor(this.tui, (text) => void this.submit(text));
+		this.statusLine = options.statusLine ?? new StatusLine({
+			...(options.theme ? { theme: options.theme } : {}),
+			getState: () => {
+				// Usage from the port is the authoritative context truth point; an
+				// optional status provider may add identity or other non-usage fields.
+				const provided = {
+					...(options.getStatus?.() ?? {}),
+					...(options.port.getUsage?.() ?? {}),
+				} as StatusLineState;
+				return {
+					...provided,
+					running: provided.running ?? (this.runningTask ? 1 : 0),
+					turn: provided.turn ?? this.turnCount,
+				};
+			},
+		});
+		const autocompleteProvider = options.autocompleteProvider ?? (options.completionSource ? createInputAutocompleteProvider(options.completionSource) : undefined);
+		this.editor = createEditor(this.tui, (text) => void this.submit(text), autocompleteProvider ? { autocompleteProvider } : {});
 		const layout = new VStack([
 			{ component: this.transcript, grow: 1, minSize: 1 },
 			{ component: this.blockingCards, basis: "auto", shrink: 0 },
+			{ component: this.statusLine, basis: "auto", shrink: 0 },
 			{ component: this.editor, basis: "auto", shrink: 0 },
 		]);
 		if ("setLayoutRoot" in this.tui && typeof this.tui.setLayoutRoot === "function") this.tui.setLayoutRoot(layout);
@@ -63,11 +92,15 @@ export class App {
 		this.tui.setFocus(this.editor);
 		this.tui.addInputListener((data) => {
 			if (this.focusStack.active) {
-				const focusResult = this.focusStack.handleInput(data);
 				if (matchesKey(data, Key.enter)) {
 					this.respondToFocusedCard();
-				} else if (focusResult.action === "pop") {
-					focusResult.card && this.findCard(focusResult.card.id)?.dismiss();
+				} else {
+					const focusResult = this.focusStack.handleInput(data);
+					if (focusResult.action !== "pop") {
+						this.tui.requestRender();
+						return { consume: true };
+					}
+					if (focusResult.card) this.dismissCard(focusResult.card.id);
 					this.restoreFocusAfterStackChange();
 				}
 				this.tui.requestRender();
@@ -81,7 +114,7 @@ export class App {
 				const action = this.esc.press({ hasFocusedCard: this.focusStack.active, running: this.runningTask !== undefined });
 				if (action === "pop") {
 					const card = this.focusStack.pop();
-					if (card) this.findCard(card.id)?.dismiss();
+					if (card) this.dismissCard(card.id);
 					this.restoreFocusAfterStackChange();
 				}
 				else if (action === "abort") this.options.port.abort();
@@ -121,6 +154,7 @@ export class App {
 			this.options.port.followUp(input);
 			return;
 		}
+		this.turnCount++;
 		const task = this.run(input);
 		this.runningTask = task;
 		try {
@@ -178,6 +212,14 @@ export class App {
 
 	private findCard(id: string): RequestCard | undefined {
 		return this.blockingCards.children.find((child) => child instanceof RequestCard && child.record.id === id) as RequestCard | undefined;
+	}
+
+	private dismissCard(id: string): void {
+		const card = this.findCard(id);
+		if (!card || card.record.state !== "active") return;
+		const cancellation = responseForRequestDismiss(card.record.request);
+		const accepted = this.options.requestBus?.respond(cancellation) ?? false;
+		card.dismiss(accepted ? cancellation : undefined);
 	}
 
 	private restoreFocusAfterStackChange(): void {

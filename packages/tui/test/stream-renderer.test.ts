@@ -50,6 +50,88 @@ test("Esc aborts a streaming turn without clearing the draft", async () => {
 	await app.stop();
 });
 
+test("Enter queues a draft through followUp while a turn is running", async () => {
+	const terminal = new FakeTerminal();
+	let releaseTurn: (() => void) | undefined;
+	const calls: string[] = [];
+	const followUps: string[] = [];
+	const app = new App({
+		terminal,
+		port: {
+			async *runTurn(input: string) {
+				calls.push(input);
+				yield { type: "agent_start", timestamp: calls.length };
+				await new Promise<void>((resolve) => {
+					releaseTurn = resolve;
+				});
+				yield { type: "agent_end", timestamp: calls.length + 10 };
+			},
+			steer() {},
+			followUp(input: string) {
+				followUps.push(input);
+			},
+			abort() {
+				releaseTurn?.();
+			},
+		},
+	});
+	await app.start();
+	app.editor.setText("first");
+	app.editor.handleInput("\r");
+	await Bun.sleep(0);
+	app.editor.setText("queued");
+	app.editor.handleInput("\r");
+	await Bun.sleep(0);
+
+	expect(calls).toEqual(["first"]);
+	expect(followUps).toEqual(["queued"]);
+	expect(app.editor.getText()).toBe("");
+	releaseTurn?.();
+	await Bun.sleep(0);
+	await app.stop();
+});
+
+test("Ctrl+Enter aborts the old turn before consuming the new draft", async () => {
+	const terminal = new FakeTerminal();
+	const calls: string[] = [];
+	let releaseTurn: (() => void) | undefined;
+	let aborts = 0;
+	const app = new App({
+		terminal,
+		port: {
+			async *runTurn(input: string) {
+				calls.push(input);
+				yield { type: "agent_start", timestamp: calls.length };
+				if (calls.length === 1) {
+					await new Promise<void>((resolve) => {
+						releaseTurn = resolve;
+					});
+				}
+				yield { type: "agent_end", timestamp: calls.length + 10 };
+			},
+			steer() {},
+			followUp() {},
+			abort() {
+				aborts++;
+				releaseTurn?.();
+			},
+		},
+	});
+	await app.start();
+	app.editor.setText("first");
+	app.editor.handleInput("\r");
+	await Bun.sleep(0);
+	app.editor.setText("urgent");
+	terminal.send("\u001b[13;5u");
+	await Bun.sleep(0);
+	await Bun.sleep(0);
+
+	expect(aborts).toBe(1);
+	expect(calls).toEqual(["first", "urgent"]);
+	expect(app.editor.getText()).toBe("");
+	await app.stop();
+});
+
 test("Ctrl+C stops an idle app", async () => {
 	const terminal = new FakeTerminal();
 	const app = new App({

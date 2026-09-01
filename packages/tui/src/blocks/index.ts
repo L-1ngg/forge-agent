@@ -21,7 +21,14 @@ export function componentForBlock(block: AnyBlockEnvelope): Component {
 		case "execute":
 			return new ExecuteBlock({ data: block });
 		case "fold":
-			return new FoldBlock({ title: block.data.title, lines: block.data.lines, ...block.fold });
+			return new FoldBlock({
+				title: block.data.title,
+				lines: block.data.lines,
+				...block.fold,
+				...(block.defaultDisplayMode !== undefined ? { defaultDisplayMode: block.defaultDisplayMode } : {}),
+				...(block.currentDisplayMode !== undefined ? { currentDisplayMode: block.currentDisplayMode } : {}),
+				...(block.manualOverride !== undefined ? { manualOverride: block.manualOverride } : {}),
+			});
 	}
 }
 

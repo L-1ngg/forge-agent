@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { block } from "@myh/protocol";
-import { EditBlock, ExecuteBlock, ThinkingBlock } from "../src/index.ts";
+import { EditBlock, ExecuteBlock, ThinkingBlock, componentForBlock } from "../src/index.ts";
 
 test("thinking block keeps a manual fold while streaming content changes", () => {
 	const thinking = new ThinkingBlock({ markdown: "one\ntwo\nthree\nfour" });
@@ -40,4 +40,16 @@ test("edit block renders core hunks and +/- counts without recomputing them", ()
 	expect(rendered).toContain("+1/-1");
 	expect(rendered).toContain("-1 old");
 	expect(rendered).toContain("+1 new");
+});
+
+test("block envelope preserves its initial fold metadata", () => {
+	const envelope = block(
+		{ id: "thinking-1", kind: "thinking", defaultDisplayMode: "expanded", currentDisplayMode: "collapsed", manualOverride: true },
+		{ markdown: "one\ntwo\nthree" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: true },
+	);
+	const thinking = componentForBlock(envelope) as ThinkingBlock;
+	expect(thinking.displayMode).toBe("collapsed");
+	expect(thinking.manualOverride).toBe(true);
+	expect(thinking.render(80)).toHaveLength(1);
 });

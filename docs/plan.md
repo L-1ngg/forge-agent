@@ -1,6 +1,6 @@
 # 个人 Coding Harness — 规划
 
-> 状态:Phase 2 M1 已实现，待 review gate(2026-09-01)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并视为通过;E4 已复核。
+> 状态:Phase 2 M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding(2026-09-02)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理;AC-14 未实测,E4 已复核。
 > **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
 > 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
@@ -134,6 +134,6 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-M1 request 总线已完成自动化验收,当前停在 review gate;E1-E3 的未实测风险由 operator 接受,E4 已通过。review 通过后再开始 M2。
+Phase 2 的 M1-M6 已完成代码与自动化验收;下一步只剩人工 UX checklist、E3/AC-14 的真实终端能力结论与 5 天 `ui.host = "alt"` dogfooding。E1-E3 的未实测风险由 operator 豁免并接受,但不能将 Phase 2 写成 fully closed;`ui.host = "main"` 逃生口仍需在人工验收中确认。
 
 开工时一并 `git init`。

@@ -1,4 +1,4 @@
-import { Editor, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
+import { Editor, type AutocompleteProvider, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 
 const theme: EditorTheme = {
 	borderColor: (value) => value,
@@ -11,8 +11,13 @@ const theme: EditorTheme = {
 	},
 };
 
-export function createEditor(tui: TUI, onSubmit: (text: string) => void): Editor {
+export interface CreateEditorOptions {
+	autocompleteProvider?: AutocompleteProvider;
+}
+
+export function createEditor(tui: TUI, onSubmit: (text: string) => void, options: CreateEditorOptions = {}): Editor {
 	const editor = new Editor(tui, theme, { paddingX: 1 });
 	editor.onSubmit = onSubmit;
+	if (options.autocompleteProvider) editor.setAutocompleteProvider(options.autocompleteProvider);
 	return editor;
 }

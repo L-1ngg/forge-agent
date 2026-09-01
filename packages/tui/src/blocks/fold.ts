@@ -4,6 +4,7 @@ import type { BlockDisplayMode } from "@myh/protocol";
 export interface FoldStateOptions {
 	defaultDisplayMode?: BlockDisplayMode;
 	currentDisplayMode?: BlockDisplayMode;
+	manualOverride?: boolean;
 	respectManualFolds?: boolean;
 }
 
@@ -17,6 +18,7 @@ export class FoldState {
 	constructor(options: FoldStateOptions = {}) {
 		this.defaultMode = options.defaultDisplayMode ?? "expanded";
 		this.currentMode = options.currentDisplayMode ?? this.defaultMode;
+		this.manual = options.manualOverride ?? false;
 		this.respectManualFolds = options.respectManualFolds ?? true;
 	}
 

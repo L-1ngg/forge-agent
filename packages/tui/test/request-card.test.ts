@@ -38,6 +38,35 @@ test("Esc dismisses only the top card and leaves it in readable scrollback", asy
 	await app.stop();
 });
 
+test("Esc resolves a blocking card with a conservative terminal response", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("esc"));
+	await Bun.sleep(0);
+
+	terminal.send("\u001b");
+	expect(bus.responses).toEqual([{ type: "response", id: "esc", result: { decision: "deny", reason: "Dismissed by user" } }]);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["esc", "dismissed"]]);
+	await app.stop();
+});
+
+test("Enter resolves the focused action without advancing the card selection", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("selected"));
+	await Bun.sleep(0);
+
+	terminal.send("\t");
+	expect(app.focusStack.focusIndex).toBe(1);
+	terminal.send("\r");
+	expect(bus.responses).toEqual([{ type: "response", id: "selected", result: { decision: "deny", reason: "Denied by user" } }]);
+	await app.stop();
+});
+
 test("question response selects one choice unless multiple is enabled", () => {
 	const base: RequestEnvelopeFor<"question"> = {
 		type: "request",
@@ -56,6 +85,11 @@ test("question response selects one choice unless multiple is enabled", () => {
 		decision: "answer",
 		answers: ["one", "two"],
 	});
+});
+
+test("request cards reject actions belonging to another request kind", () => {
+	const request = permissionRequest("strict-action");
+	expect(responseForRequestAction(request, "confirm")).toBeUndefined();
 });
 
 test("permission card offers Always allow only when the request carries a remember rule", () => {

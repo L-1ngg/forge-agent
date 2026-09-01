@@ -1,4 +1,5 @@
 import type { SessionEvent, SessionMessage } from "@myh/protocol";
+import type { UsageTruthPoint } from "./usage.ts";
 import type { RequestBus } from "./request-bus.ts";
 import type { SessionStore } from "./session-store.ts";
 
@@ -7,6 +8,7 @@ export interface AgentPort {
 	steer(input: string): void;
 	followUp(input: string): void;
 	abort(): void;
+	getUsage?(): UsageTruthPoint | undefined;
 }
 
 export class AgentRunner {
@@ -53,6 +55,10 @@ export class AgentRunner {
 		if (this.activeTurn) this.activeTurn.aborted = true;
 		this.requestBus?.abort();
 		this.port.abort();
+	}
+
+	getUsage(): UsageTruthPoint | undefined {
+		return this.port.getUsage?.();
 	}
 }
 

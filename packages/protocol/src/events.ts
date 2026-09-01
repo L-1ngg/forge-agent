@@ -1,4 +1,5 @@
 import type { AnyBlockEnvelope } from "./blocks.ts";
+import type { TokenUsage } from "./usage.ts";
 
 export type SessionRole = "user" | "assistant" | "toolResult";
 
@@ -33,13 +34,7 @@ export interface SessionMessage {
 	provider?: string;
 	model?: string;
 	api?: string;
-	usage?: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		totalTokens: number;
-	};
+	usage?: TokenUsage;
 	stopReason?: StopReason;
 	errorMessage?: string;
 }

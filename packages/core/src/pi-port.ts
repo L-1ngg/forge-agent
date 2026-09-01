@@ -21,12 +21,13 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason } from "@myh/protocol";
+import { block, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage } from "@myh/protocol";
 import type { HarnessTool } from "@myh/tools";
 import { createEditBlockData } from "./diff.ts";
 import { decide, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
+import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
 
 export interface PiPortOptions {
 	provider: string;
@@ -164,6 +165,7 @@ function toSessionMessage(message: AgentMessage): SessionMessage | undefined {
 				cacheRead: standard.usage.cacheRead,
 				cacheWrite: standard.usage.cacheWrite,
 				totalTokens: standard.usage.totalTokens,
+				cost: { ...standard.usage.cost },
 			},
 			...(stopReason !== undefined ? { stopReason } : {}),
 			...(standard.errorMessage ? { errorMessage: standard.errorMessage } : {}),
@@ -175,7 +177,7 @@ function toSessionMessage(message: AgentMessage): SessionMessage | undefined {
 	return base;
 }
 
-function zeroUsage() {
+function zeroUsage(): NonNullable<AssistantMessage["usage"]> {
 	return {
 		input: 0,
 		output: 0,
@@ -213,7 +215,7 @@ function fromSessionMessage(message: SessionMessage, model: Model<string>): Mess
 		api: message.api ?? model.api,
 		provider: message.provider ?? model.provider,
 		model: message.model ?? model.id,
-		usage: message.usage ? { ...zeroUsage(), ...message.usage, cost: zeroUsage().cost } : zeroUsage(),
+		usage: message.usage ? mergeUsage(message.usage) : zeroUsage(),
 		stopReason: toPiStopReason(message.stopReason),
 		...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
 		timestamp: message.timestamp,
@@ -222,6 +224,17 @@ function fromSessionMessage(message: SessionMessage, model: Model<string>): Mess
 
 function eventTimestamp(): number {
 	return Date.now();
+}
+
+function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<AssistantMessage["usage"]> {
+	return {
+		input: usage.input,
+		output: usage.output,
+		cacheRead: usage.cacheRead,
+		cacheWrite: usage.cacheWrite,
+		totalTokens: usage.totalTokens,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, ...(usage.cost ?? {}) },
+	};
 }
 
 function mapEvent(event: AgentEvent): SessionEvent[] {
@@ -375,14 +388,34 @@ export function createPermissionBeforeToolCall(options: PermissionHookOptions): 
 
 class PiAgentPort implements AgentPort {
 	private readonly requestBus: RequestBus | undefined;
+	private readonly usage: UsageTracker;
 
 	constructor(private readonly agent: Agent, requestBus?: RequestBus) {
 		this.requestBus = requestBus;
+		this.usage = new UsageTracker({ contextWindow: agent.state.model.contextWindow });
+		this.syncUsageContext();
+
+		// Capture the exact context after pi applies its optional transform and
+		// again at the provider boundary, where the final LLM message list exists.
+		const previousTransform = agent.transformContext;
+		agent.transformContext = async (messages, signal) => {
+			const transformed = previousTransform ? await previousTransform(messages, signal) : messages;
+			this.usage.setContext({ messages: this.usageMessagesFrom(transformed), contextWindow: agent.state.model.contextWindow });
+			return transformed;
+		};
+		const previousStreamFunction = agent.streamFunction;
+		agent.streamFunction = (model, context, options) => {
+			this.usage.setContext({ messages: this.usageMessagesFrom(context.messages), contextWindow: model.contextWindow });
+			return previousStreamFunction(model, context, options);
+		};
 	}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		this.usage.beginTurn();
+		this.syncUsageContext();
 		const queue = new AsyncQueue<SessionEvent>();
 		const unsubscribe = this.agent.subscribe((event) => {
+			this.observeUsage(event);
 			for (const mapped of mapEvent(event)) queue.push(mapped);
 		});
 		let completed = false;
@@ -399,6 +432,7 @@ class PiAgentPort implements AgentPort {
 		} finally {
 			if (!completed) this.agent.abort();
 			unsubscribe();
+			this.usage.endTurn();
 		}
 	}
 
@@ -414,6 +448,48 @@ class PiAgentPort implements AgentPort {
 		this.requestBus?.abort();
 		this.agent.abort();
 	}
+
+	getUsage(): UsageTruthPoint {
+		return this.usage.snapshot();
+	}
+
+	private observeUsage(event: AgentEvent): void {
+		if (event.type === "message_end") {
+			this.syncUsageContext();
+			if (event.message.role === "assistant") {
+				const usage = toTokenUsage(event.message.usage);
+				this.usage.recordUsage(usage);
+			}
+			return;
+		}
+		if (event.type === "tool_execution_end" || event.type === "turn_start") this.syncUsageContext();
+	}
+
+	private syncUsageContext(): void {
+		this.usage.setContext({ messages: this.usageMessages(), contextWindow: this.agent.state.model.contextWindow });
+	}
+
+	private usageMessages(): SessionMessage[] {
+		return this.usageMessagesFrom(this.agent.state.messages);
+	}
+
+	private usageMessagesFrom(messages: readonly AgentMessage[]): SessionMessage[] {
+		return messages.flatMap((message) => {
+			const converted = toSessionMessage(message);
+			return converted ? [converted] : [];
+		});
+	}
+}
+
+function toTokenUsage(usage: AssistantMessage["usage"]): TokenUsage {
+	return {
+		input: usage.input,
+		output: usage.output,
+		cacheRead: usage.cacheRead,
+		cacheWrite: usage.cacheWrite,
+		totalTokens: usage.totalTokens,
+		cost: { ...usage.cost },
+	};
 }
 
 export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {

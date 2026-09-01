@@ -1,6 +1,6 @@
 # my-coding-harness
 
-> 状态:Phase 2 M1 已实现，待 review gate(2026-09-01)。Phase 1 与 Phase 2 E1-E3 按 operator 指示暂缓实测并视为通过;行动项见 [docs/plan.md](docs/plan.md)。
+> 状态:Phase 2 M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding(2026-09-02)。Phase 1 与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理;AC-14 未实测。行动项见 [docs/plan.md](docs/plan.md)。
 
 个人 coding harness:一个自己拥有的 AI 编程助手。技术栈 **TypeScript + Bun**。
 

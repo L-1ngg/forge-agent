@@ -13,9 +13,21 @@ export class EditBlock extends FoldBlock {
 
 	constructor(options: EditBlockOptions | EditBlockData) {
 		const normalized = isEditData(options) ? { data: options } : options;
+		const envelope = unwrapEnvelope(normalized.data);
 		const data = unwrapData(normalized.data);
 		if (!data) throw new Error("EditBlock requires diff hunk data");
-		super({ ...normalized, title: `edit ${normalized.path ?? data.path}`, lines: renderHunks(data.hunks, data.additions, data.removals) });
+		const defaultDisplayMode = normalized.defaultDisplayMode ?? envelope?.defaultDisplayMode;
+		const currentDisplayMode = normalized.currentDisplayMode ?? envelope?.currentDisplayMode;
+		const manualOverride = normalized.manualOverride ?? envelope?.manualOverride;
+		super({
+			...(envelope?.fold ?? {}),
+			...normalized,
+			title: `edit ${normalized.path ?? data.path}`,
+			lines: renderHunks(data.hunks, data.additions, data.removals),
+			...(defaultDisplayMode === undefined ? {} : { defaultDisplayMode }),
+			...(currentDisplayMode === undefined ? {} : { currentDisplayMode }),
+			...(manualOverride === undefined ? {} : { manualOverride }),
+		});
 		this.id = normalized.id;
 	}
 
@@ -45,4 +57,8 @@ function isEditData(value: EditBlockOptions | EditBlockData): value is EditBlock
 
 function unwrapData(value: EditBlockData | BlockEnvelope<"edit"> | undefined): EditBlockData | undefined {
 	return value && "data" in value ? value.data : value;
+}
+
+function unwrapEnvelope(value: EditBlockData | BlockEnvelope<"edit"> | undefined): BlockEnvelope<"edit"> | undefined {
+	return value && "kind" in value && value.kind === "edit" && "fold" in value ? value : undefined;
 }
