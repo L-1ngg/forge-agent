@@ -115,3 +115,18 @@ export function request<TKind extends RequestKind>(
 export function response<TResult>(id: string, result: TResult): ResponseEnvelope<TResult> {
 	return { type: "response", id, result };
 }
+
+/** Canonical permission arguments keep remembered scopes stable across clients. */
+export function serializePermissionArguments(argumentsValue: Record<string, unknown>): string {
+	return JSON.stringify(sortValue(argumentsValue));
+}
+
+export function permissionScopeForToolCall(toolCall: Pick<ToolCallBlock, "name" | "arguments">): PermissionScope {
+	return { tool: toolCall.name, argsPattern: serializePermissionArguments(toolCall.arguments) };
+}
+
+function sortValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(sortValue);
+	if (typeof value !== "object" || value === null) return value;
+	return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, sortValue(entry)]));
+}

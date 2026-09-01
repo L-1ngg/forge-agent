@@ -115,10 +115,19 @@ describe("config", () => {
 		const cwd = join(root, "project");
 		await mkdir(join(home, ".config", "myh"), { recursive: true });
 		await mkdir(join(cwd, ".myh"), { recursive: true });
-		await writeFile(join(home, ".config", "myh", "config.json"), JSON.stringify({ provider: "global", model: "global-model" }));
-		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ model: "project-model" }));
+		await writeFile(join(home, ".config", "myh", "config.json"), JSON.stringify({ provider: "global", model: "global-model", ui: { host: "alt" } }));
+		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ model: "project-model", ui: { host: "main" } }));
 		const config = await loadConfig({ cwd, home, env: { MYH_PROVIDER: "env" } });
-		expect(config).toMatchObject({ provider: "env", model: "project-model" });
+		expect(config).toMatchObject({ provider: "env", model: "project-model", ui: { host: "main" } });
+	});
+
+	test("defaults an invalid ui host to the main-screen escape hatch", async () => {
+		const root = await temporaryDirectory();
+		const home = join(root, "home");
+		const cwd = join(root, "project");
+		await mkdir(join(cwd, ".myh"), { recursive: true });
+		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ ui: { host: "invalid" } }));
+		expect((await loadConfig({ cwd, home, env: {} })).ui.host).toBe("main");
 	});
 
 	test("resolves command and environment secrets", async () => {

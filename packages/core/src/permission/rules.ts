@@ -1,4 +1,4 @@
-import type { PermissionScope, ToolCallBlock } from "@myh/protocol";
+import { permissionScopeForToolCall, serializePermissionArguments, type PermissionScope, type ToolCallBlock } from "@myh/protocol";
 
 export type PermissionRuleEffect = "allow" | "deny";
 
@@ -17,11 +17,11 @@ export interface PermissionRuleMatch {
 
 /** Stable JSON keeps object-key order from changing a remembered scope. */
 export function serializeArguments(argumentsValue: Record<string, unknown>): string {
-	return JSON.stringify(sortValue(argumentsValue));
+	return serializePermissionArguments(argumentsValue);
 }
 
 export function permissionScope(toolCall: Pick<ToolCallBlock, "name" | "arguments">): PermissionScope {
-	return { tool: toolCall.name, argsPattern: serializeArguments(toolCall.arguments) };
+	return permissionScopeForToolCall(toolCall);
 }
 
 export function formatPermissionRule(scope: PermissionScope): string {
@@ -52,10 +52,4 @@ export function globMatches(pattern: string, value: string): boolean {
 
 function escapeRegex(character: string): string {
 	return /[\\^$.[\]|()+{}]/.test(character) ? `\\${character}` : character;
-}
-
-function sortValue(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(sortValue);
-	if (typeof value !== "object" || value === null) return value;
-	return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, sortValue(entry)]));
 }

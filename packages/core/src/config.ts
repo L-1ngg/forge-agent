@@ -3,6 +3,12 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { PermissionMode } from "./permission/decide.ts";
 
+export type TuiHostMode = "main" | "alt";
+
+export interface HarnessUiConfig {
+	host: TuiHostMode;
+}
+
 export interface HarnessConfig {
 	provider?: string;
 	model?: string;
@@ -10,6 +16,7 @@ export interface HarnessConfig {
 	systemPrompt: string;
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	permissionMode: PermissionMode;
+	ui: HarnessUiConfig;
 	sessionPath?: string;
 }
 
@@ -23,6 +30,7 @@ const defaults: HarnessConfig = {
 	systemPrompt: "You are a coding assistant. Work carefully in the current directory and keep responses concise.",
 	thinkingLevel: "medium",
 	permissionMode: "default",
+	ui: { host: "main" },
 };
 
 async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
@@ -41,10 +49,17 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 	const projectPath = join(options.cwd, ".myh", "config.json");
 	const globalConfig = await readConfig(globalPath);
 	const projectConfig = await readConfig(projectPath);
+	const mergedUi = {
+		...defaults.ui,
+		...(globalConfig.ui ?? {}),
+		...(projectConfig.ui ?? {}),
+	};
+	if (mergedUi.host !== "main" && mergedUi.host !== "alt") mergedUi.host = "main";
 	return {
 		...defaults,
 		...globalConfig,
 		...projectConfig,
+		ui: mergedUi,
 		...(env.MYH_PROVIDER ? { provider: env.MYH_PROVIDER } : {}),
 		...(env.MYH_MODEL ? { model: env.MYH_MODEL } : {}),
 		...(env.MYH_API_KEY ? { apiKey: env.MYH_API_KEY } : {}),

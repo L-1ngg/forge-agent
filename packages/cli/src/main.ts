@@ -96,7 +96,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		if (args.json) {
 			return await runHeadless(runner, prompt as string, console.log, { requestBus });
 		}
-		const app = new App({ port: runner });
+		const app = new App({ port: runner, host: config.ui.host, requestBus });
 		await app.start();
 		await app.waitUntilStopped();
 		return 0;
