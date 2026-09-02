@@ -21,8 +21,8 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage } from "@myh/protocol";
-import type { HarnessTool } from "@myh/tools";
+import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage, type ToolCallBlock } from "@myh/protocol";
+import { wrapTool, type HarnessTool, type ToolContext, type ToolInputAuthorizer, type ToolInputRewrite } from "@myh/tools";
 import { createEditBlockData } from "./diff.ts";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
@@ -32,12 +32,19 @@ import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
 export interface PiPortOptions {
 	provider: string;
 	model: string;
+	baseUrl?: string;
 	apiKey?: string;
 	systemPrompt: string;
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	cwd: string;
 	history?: SessionMessage[];
 	tools?: HarnessTool<object, unknown>[];
+	/**
+	 * Rewrite tool input before execution; permission checks observe the rewritten object.
+	 * pi emits `tool_execution_start` before this wrapper runs, so that event can
+	 * retain the model's original args even though policy and execution use the final input.
+	 */
+	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	requestBus?: RequestBus;
 	permission?: PermissionContext;
 }
@@ -53,6 +60,8 @@ export interface PiTestResponse {
 export interface PiTestPortOptions {
 	responses: PiTestResponse[];
 	tools?: HarnessTool<object, unknown>[];
+	/** Rewrite tool input before execution; permission checks observe the rewritten object. */
+	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	cwd?: string;
 	tokensPerSecond?: number;
 	requestBus?: RequestBus;
@@ -354,16 +363,89 @@ function objectValue(value: unknown): Record<string, unknown> {
 	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
-function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {
+interface AdaptToolOptions {
+	rewriteInput?: ToolInputRewrite<object>;
+	authorizeInput?: ToolInputAuthorizer<object>;
+}
+
+function adaptTool(tool: HarnessTool<object, unknown>, cwd: string, options: AdaptToolOptions = {}): AgentTool {
+	const executable = options.rewriteInput || options.authorizeInput
+		? wrapTool(tool, {
+				...(options.rewriteInput ? { rewriteInput: options.rewriteInput } : {}),
+				...(options.authorizeInput ? { authorizeInput: options.authorizeInput } : {}),
+			})
+		: tool;
 	return {
 		name: tool.name,
 		label: tool.label,
 		description: tool.description,
 		parameters: Type.Unsafe(tool.parameters),
-		async execute(_toolCallId, params, signal) {
-			const outcome = await tool.execute(params as object, { cwd, ...(signal ? { signal } : {}) });
+		async execute(toolCallId, params, signal) {
+			const context: ToolContext = { cwd, toolCallId, ...(signal ? { signal } : {}) };
+			const outcome = await executable.execute(params as object, context);
 			if (!outcome.ok) throw new Error(JSON.stringify(outcome.error));
 			return { content: [{ type: "text", text: stringify(outcome.value) }], details: outcome.value };
+		},
+	};
+}
+
+interface AdaptedTools {
+	tools: AgentTool[];
+	prepareToolCall: (toolCall: ToolCallBlock, signal?: AbortSignal) => Promise<ToolCallBlock>;
+	markPreparedInput: (toolCall: ToolCallBlock) => void;
+	clearPreparedInputs: () => void;
+}
+
+function adaptTools(
+	tools: readonly HarnessTool<object, unknown>[],
+	cwd: string,
+	rewrites: Readonly<Record<string, ToolInputRewrite<object>>> | undefined,
+	permission: PermissionHookOptions | undefined,
+): AdaptedTools {
+	const preparedInputs = new Map<string, object>();
+	const preparedAuthorizations = new Set<string>();
+	const rewriteNames = new Set(Object.keys(rewrites ?? {}).filter((name) => tools.some((tool) => tool.name === name)));
+	const prepareToolCall = async (toolCall: ToolCallBlock, signal?: AbortSignal): Promise<ToolCallBlock> => {
+		const rewriteInput = rewriteNames.has(toolCall.name) ? rewrites?.[toolCall.name] : undefined;
+		if (!rewriteInput) return toolCall;
+		const context: ToolContext = { cwd, toolCallId: toolCall.id, ...(signal ? { signal } : {}) };
+		const rewritten = await rewriteInput(toolCall.arguments, context);
+		return { ...toolCall, arguments: rewritten as Record<string, unknown> };
+	};
+	const markPreparedInput = (toolCall: ToolCallBlock): void => {
+		if (!rewriteNames.has(toolCall.name)) return;
+		preparedInputs.set(toolCall.id, structuredClone(toolCall.arguments));
+		preparedAuthorizations.add(toolCall.id);
+	};
+	return {
+		tools: tools.map((tool) => {
+			const rewriteInput = rewriteNames.has(tool.name) ? rewrites?.[tool.name] : undefined;
+			const authorizeInput = rewriteInput && permission
+				? async (input: object, context: ToolContext): Promise<void> => {
+					if (context.toolCallId && preparedAuthorizations.delete(context.toolCallId)) return;
+					await createPermissionInputAuthorizer(tool.name, permission)(input, context);
+				}
+				: undefined;
+			const executionRewrite = rewriteInput
+				? async (input: object, context: ToolContext): Promise<object> => {
+					if (context.toolCallId && preparedInputs.has(context.toolCallId)) {
+						const prepared = preparedInputs.get(context.toolCallId) as object;
+						preparedInputs.delete(context.toolCallId);
+						return prepared;
+					}
+					return rewriteInput(input, context);
+				}
+				: undefined;
+			return adaptTool(tool, cwd, {
+				...(executionRewrite ? { rewriteInput: executionRewrite } : {}),
+				...(authorizeInput ? { authorizeInput } : {}),
+			});
+		}),
+		prepareToolCall,
+		markPreparedInput,
+		clearPreparedInputs: () => {
+			preparedInputs.clear();
+			preparedAuthorizations.clear();
 		},
 	};
 }
@@ -371,46 +453,82 @@ function adaptTool(tool: HarnessTool<object, unknown>, cwd: string): AgentTool {
 export interface PermissionHookOptions {
 	context: PermissionContext;
 	requestBus?: RequestBus;
+	/** Legacy escape hatch for callers that own a separate authorization path. */
+	skipTools?: ReadonlySet<string>;
+	/** Prepare the final tool input before permission is evaluated. */
+	prepareToolCall?: (toolCall: ToolCallBlock, signal?: AbortSignal) => Promise<ToolCallBlock>;
+	/** Retain an authorized final input for the matching tool execution. */
+	markPreparedInput?: (toolCall: ToolCallBlock) => void;
+}
+
+function makeToolCall(id: string, name: string, argumentsValue: unknown): ToolCallBlock {
+	return { type: "tool_call", id, name, arguments: argumentsValue as Record<string, unknown> };
+}
+
+interface PermissionCheckAllowed {
+	allowed: true;
+}
+
+interface PermissionCheckDenied {
+	allowed: false;
+	reason: string;
+}
+
+type PermissionCheck = PermissionCheckAllowed | PermissionCheckDenied;
+
+async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookOptions, signal?: AbortSignal): Promise<PermissionCheck> {
+	const decision = decide(toolCall, options.context);
+	if (decision.kind === "allow") return { allowed: true };
+	if (decision.kind === "deny") return { allowed: false, reason: decision.reason };
+	if (!options.requestBus) return { allowed: false, reason: "Interactive permission request is unavailable" };
+
+	const outcome = await options.requestBus.ask("permission", decision.payload, signal ? { signal } : {});
+	const result = permissionResultFromOutcome(outcome);
+	if (result.decision === "allow_once") return { allowed: true };
+	if (result.decision === "allow_always") {
+		const expectedScope = permissionScopeForToolCall(toolCall);
+		if (!decision.payload.rememberRule || !options.context.memory || decision.payload.rememberRule !== formatPermissionRule(expectedScope)) {
+			return { allowed: false, reason: "Always allow is unavailable for this tool call" };
+		}
+		if (result.scope.tool !== expectedScope.tool || result.scope.argsPattern !== expectedScope.argsPattern) {
+			return { allowed: false, reason: "Permission scope differs from the rule shown for this tool call" };
+		}
+		options.context.memory.remember(result.scope);
+		return { allowed: true };
+	}
+	return { allowed: false, reason: result.reason ?? "Tool execution denied" };
+}
+
+function createPermissionInputAuthorizer(toolName: string, options: PermissionHookOptions): ToolInputAuthorizer<object> {
+	return async (input, context) => {
+		const check = await checkPermission(makeToolCall(context.toolCallId ?? "unknown", toolName, input), options, context.signal);
+		if (!check.allowed) throw new Error(check.reason);
+	};
 }
 
 /** Adapt the pure permission decision to pi's deny-only beforeToolCall hook. */
 export function createPermissionBeforeToolCall(options: PermissionHookOptions): (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined> {
 	return async (context, signal) => {
-		const toolCall = {
-			type: "tool_call" as const,
-			id: context.toolCall.id,
-			name: context.toolCall.name,
-			arguments: (context.args ?? context.toolCall.arguments) as Record<string, unknown>,
-		};
-		const decision = decide(toolCall, options.context);
-		if (decision.kind === "allow") return undefined;
-		if (decision.kind === "deny") return { block: true, reason: decision.reason, terminate: true };
-		if (!options.requestBus) return { block: true, reason: "Interactive permission request is unavailable", terminate: true };
-
-		const outcome = await options.requestBus.ask("permission", decision.payload, signal ? { signal } : {});
-		const result = permissionResultFromOutcome(outcome);
-		if (result.decision === "allow_once") return undefined;
-		if (result.decision === "allow_always") {
-			const expectedScope = permissionScopeForToolCall(toolCall);
-			if (!decision.payload.rememberRule || !options.context.memory || decision.payload.rememberRule !== formatPermissionRule(expectedScope)) {
-				return { block: true, reason: "Always allow is unavailable for this tool call", terminate: true };
-			}
-			if (result.scope.tool !== expectedScope.tool || result.scope.argsPattern !== expectedScope.argsPattern) {
-				return { block: true, reason: "Permission scope differs from the rule shown for this tool call", terminate: true };
-			}
-			options.context.memory?.remember(result.scope);
+		if (options.skipTools?.has(context.toolCall.name)) return undefined;
+		const rawToolCall = makeToolCall(context.toolCall.id, context.toolCall.name, context.args ?? context.toolCall.arguments);
+		const toolCall = options.prepareToolCall ? await options.prepareToolCall(rawToolCall, signal) : rawToolCall;
+		const check = await checkPermission(toolCall, options, signal);
+		if (check.allowed) {
+			options.markPreparedInput?.(toolCall);
 			return undefined;
 		}
-		return { block: true, reason: result.reason ?? "Tool execution denied", terminate: true };
+		return { block: true, reason: check.reason, terminate: true };
 	};
 }
 
 class PiAgentPort implements AgentPort {
 	private readonly requestBus: RequestBus | undefined;
+	private readonly clearPreparedInputs: (() => void) | undefined;
 	private readonly usage: UsageTracker;
 
-	constructor(private readonly agent: Agent, requestBus?: RequestBus) {
+	constructor(private readonly agent: Agent, requestBus?: RequestBus, clearPreparedInputs?: () => void) {
 		this.requestBus = requestBus;
+		this.clearPreparedInputs = clearPreparedInputs;
 		this.usage = new UsageTracker({ contextWindow: agent.state.model.contextWindow });
 		this.syncUsageContext();
 
@@ -452,6 +570,7 @@ class PiAgentPort implements AgentPort {
 		} finally {
 			if (!completed) this.agent.abort();
 			unsubscribe();
+			this.clearPreparedInputs?.();
 			toolCommands.clear();
 			this.usage.endTurn();
 		}
@@ -518,27 +637,29 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 	const apiKey = options.apiKey;
 	if (apiKey) await credentials.modify(options.provider, async () => ({ type: "api_key", key: apiKey }));
 	const models = builtinModels({ credentials });
-	const model = models.getModel(options.provider, options.model);
-	if (!model) throw new Error(`Unknown model ${options.provider}/${options.model}`);
+	const catalogModel = models.getModel(options.provider, options.model);
+	if (!catalogModel) throw new Error(`Unknown model ${options.provider}/${options.model}`);
+	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
+	const permissionOptions: PermissionHookOptions | undefined = options.permission
+		? { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }
+		: undefined;
+	const adaptedTools = adaptTools(options.tools ?? [], options.cwd, options.toolInputRewrites, permissionOptions);
+	if (permissionOptions) {
+		permissionOptions.prepareToolCall = adaptedTools.prepareToolCall;
+		permissionOptions.markPreparedInput = adaptedTools.markPreparedInput;
+	}
 	const agent = new Agent({
 		streamFn: models.streamSimple.bind(models),
 		initialState: {
 			systemPrompt: options.systemPrompt,
 			model,
 			thinkingLevel: options.thinkingLevel,
-			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd)),
+			tools: adaptedTools.tools,
 			messages: (options.history ?? []).map((message) => fromSessionMessage(message, model)),
 		},
-		...(options.permission
-			? {
-					beforeToolCall: createPermissionBeforeToolCall({
-						context: options.permission,
-						...(options.requestBus ? { requestBus: options.requestBus } : {}),
-					}),
-				}
-			: {}),
+		...(permissionOptions ? { beforeToolCall: createPermissionBeforeToolCall(permissionOptions) } : {}),
 	});
-	return new PiAgentPort(agent, options.requestBus);
+	return new PiAgentPort(agent, options.requestBus, adaptedTools.clearPreparedInputs);
 }
 
 function lastUserText(messages: Message[]): string {
@@ -575,22 +696,23 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 	);
 	const models = createModels();
 	models.setProvider(faux.provider);
+	const permissionOptions: PermissionHookOptions | undefined = options.permission
+		? { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }
+		: undefined;
+	const adaptedTools = adaptTools(options.tools ?? [], options.cwd ?? process.cwd(), options.toolInputRewrites, permissionOptions);
+	if (permissionOptions) {
+		permissionOptions.prepareToolCall = adaptedTools.prepareToolCall;
+		permissionOptions.markPreparedInput = adaptedTools.markPreparedInput;
+	}
 	const agent = new Agent({
 		streamFn: models.streamSimple.bind(models),
 		initialState: {
 			systemPrompt: "pi contract test",
 			model: faux.getModel(),
 			thinkingLevel: "off",
-			tools: (options.tools ?? []).map((tool) => adaptTool(tool, options.cwd ?? process.cwd())),
+			tools: adaptedTools.tools,
 		},
-		...(options.permission
-			? {
-					beforeToolCall: createPermissionBeforeToolCall({
-						context: options.permission,
-						...(options.requestBus ? { requestBus: options.requestBus } : {}),
-					}),
-				}
-			: {}),
+		...(permissionOptions ? { beforeToolCall: createPermissionBeforeToolCall(permissionOptions) } : {}),
 	});
-	return new PiAgentPort(agent, options.requestBus);
+	return new PiAgentPort(agent, options.requestBus, adaptedTools.clearPreparedInputs);
 }

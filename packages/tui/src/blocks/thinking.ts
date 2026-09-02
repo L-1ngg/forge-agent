@@ -5,6 +5,8 @@ export interface ThinkingBlockOptions extends Omit<FoldBlockOptions, "title" | "
 	id?: string;
 	text?: string;
 	markdown?: string;
+	/** Header text override, e.g. the "Thought for Xs" summary of a finished message. */
+	title?: string;
 	data?: ThinkingBlockData | BlockEnvelope<"thinking">;
 }
 
@@ -21,12 +23,13 @@ export class ThinkingBlock extends FoldBlock {
 		super({
 			...(envelope?.fold ?? {}),
 			...normalized,
-			title: "thinking",
+			title: normalized.title ?? "thinking",
 			lines: markdown.split("\n"),
 			defaultDisplayMode: normalized.defaultDisplayMode ?? envelope?.defaultDisplayMode ?? envelope?.fold.defaultDisplayMode ?? "truncated",
 			...(currentDisplayMode === undefined ? {} : { currentDisplayMode }),
 			...(manualOverride === undefined ? {} : { manualOverride }),
 			truncatedLines: normalized.truncatedLines ?? envelope?.fold.truncatedLines ?? 3,
+			colorSlot: normalized.colorSlot ?? envelope?.colorSlot ?? "accent_thinking",
 		});
 		this.id = normalized.id;
 	}
@@ -37,6 +40,14 @@ export class ThinkingBlock extends FoldBlock {
 
 	updateText(markdown: string): void {
 		this.setText(markdown);
+	}
+
+	protected override indicator(): string {
+		return this.fold.displayMode === "collapsed" ? "◆" : "v";
+	}
+
+	protected override decorateBodyLine(line: string): string {
+		return this.theme.muted(line);
 	}
 }
 

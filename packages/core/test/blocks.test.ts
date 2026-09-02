@@ -17,6 +17,19 @@ test("core computes line hunks and aggregate edit counts", () => {
 	]);
 });
 
+test("core ignores diff's no-newline diagnostic instead of shifting hunk line numbers", () => {
+	const data = createEditBlockData("src/demo.ts", "first\nold", "first\nnew\nadded");
+
+	expect(data.hunks).toHaveLength(1);
+	expect(data.hunks[0]?.lines).toEqual([
+		{ type: "context", content: "first", oldLine: 1, newLine: 1 },
+		{ type: "remove", content: "old", oldLine: 2 },
+		{ type: "add", content: "new", newLine: 2 },
+		{ type: "add", content: "added", newLine: 3 },
+	]);
+	expect(data.hunks[0]?.lines.some((line) => line.content.includes("No newline"))).toBe(false);
+});
+
 test("digest strips terminal sequences, has a hard limit, and is stable", () => {
 	const value: BlockEnvelope<"execute"> = block(
 		{ id: "exec-1", kind: "execute", lifecycle: "complete" },

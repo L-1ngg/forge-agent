@@ -1,5 +1,6 @@
 import { Text, type Component } from "@earendil-works/pi-tui";
 import type { AnyBlockEnvelope } from "@myh/protocol";
+import type { SemanticTheme } from "../theme.ts";
 import { EditBlock } from "./edit.ts";
 import { ExecuteBlock } from "./execute.ts";
 import { FoldBlock } from "./fold.ts";
@@ -10,16 +11,17 @@ export * from "./execute.ts";
 export * from "./fold.ts";
 export * from "./thinking.ts";
 
-export function componentForBlock(block: AnyBlockEnvelope): Component {
+export function componentForBlock(block: AnyBlockEnvelope, theme?: SemanticTheme): Component {
+	const themed = theme === undefined ? {} : { theme };
 	switch (block.kind) {
 		case "text":
 			return new Text(block.data.text, 1, 0);
 		case "thinking":
-			return new ThinkingBlock({ data: block });
+			return new ThinkingBlock({ data: block, ...themed });
 		case "edit":
-			return new EditBlock(block);
+			return new EditBlock({ data: block, ...themed });
 		case "execute":
-			return new ExecuteBlock({ data: block });
+			return new ExecuteBlock({ data: block, ...themed });
 		case "fold":
 			return new FoldBlock({
 				title: block.data.title,
@@ -28,6 +30,8 @@ export function componentForBlock(block: AnyBlockEnvelope): Component {
 				...(block.defaultDisplayMode !== undefined ? { defaultDisplayMode: block.defaultDisplayMode } : {}),
 				...(block.currentDisplayMode !== undefined ? { currentDisplayMode: block.currentDisplayMode } : {}),
 				...(block.manualOverride !== undefined ? { manualOverride: block.manualOverride } : {}),
+				...(block.colorSlot !== undefined ? { colorSlot: block.colorSlot } : {}),
+				...themed,
 			});
 	}
 }

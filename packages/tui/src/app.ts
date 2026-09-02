@@ -1,15 +1,16 @@
 import type { ContextUsageSnapshot, RequestEnvelopeUnion, RequestKind, RequestOutcome, ResponseEnvelope, SessionEvent } from "@myh/protocol";
-import { Key, VStack, Container, ProcessTerminal, matchesKey, truncateToWidth, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
+import { Key, Loader, VStack, Container, ProcessTerminal, matchesKey, truncateToWidth, type AutocompleteProvider, type Component, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import { EscController } from "./esc.ts";
 import { createEditor } from "./editor.ts";
 import { FocusStack } from "./focus-stack.ts";
+import { HeaderBar } from "./header.ts";
 import { createTuiHost, type TuiHostMode } from "./host.ts";
 import { TranscriptScrollView } from "./scroll.ts";
 import { StreamRenderer } from "./stream-renderer.ts";
 import { RequestCard, requestCardActions, responseForRequestDismiss, type RequestCardAction } from "./request-card.ts";
 import { createInputAutocompleteProvider, type TuiInputCompletionSource } from "./input/autocomplete.ts";
 import { StatusLine, type StatusLineState } from "./status-line.ts";
-import type { SemanticTheme } from "./theme.ts";
+import { defaultTheme, type SemanticTheme } from "./theme.ts";
 
 const STOPPED: unique symbol = Symbol("app-stopped");
 
@@ -24,6 +25,9 @@ export interface AppOptions {
 	statusLine?: StatusLine;
 	getStatus?: () => StatusLineState;
 	theme?: SemanticTheme;
+	/** Working directory shown in the header bar; the header stays hidden without it. */
+	cwd?: string;
+	homeDir?: string;
 }
 
 export interface TuiRequestBus {
@@ -48,6 +52,7 @@ export class App {
 	readonly transcript: TranscriptScrollView;
 	readonly editor: ReturnType<typeof createEditor>;
 	readonly statusLine: StatusLine;
+	readonly header: HeaderBar;
 	readonly focusStack = new FocusStack();
 	private runningTask: Promise<void> | undefined;
 	private turnCount = 0;
@@ -58,6 +63,9 @@ export class App {
 	private resolveStopSignal!: () => void;
 	private readonly esc = new EscController();
 	private readonly blockingCards = new Container();
+	private readonly completedCards = new Container();
+	private readonly transcriptContent = new Container();
+	private readonly workingIndicator: WorkingIndicator;
 	private readonly shortcutsBar: Component;
 	private readonly pendingTerminalOutcomes = new Map<string, RequestOutcome<RequestKind>>();
 	private requestTask?: Promise<void>;
@@ -74,14 +82,23 @@ export class App {
 		});
 		this.terminal = options.terminal ?? new ProcessTerminal();
 		this.tui = createTuiHost({ terminal: this.terminal, ...(options.host ? { mode: options.host } : {}) });
-		this.renderer = new StreamRenderer();
-		this.transcript = new TranscriptScrollView(this.renderer);
+		const theme = options.theme ?? defaultTheme;
+		this.renderer = new StreamRenderer({ theme });
+		this.transcriptContent.addChild(this.renderer);
+		this.transcriptContent.addChild(this.completedCards);
+		this.transcript = new TranscriptScrollView(this.transcriptContent, { clipToViewport: this.tui.mode === "regular" });
+		this.header = new HeaderBar({
+			...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
+			...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+			getUsage: () => options.port.getUsage?.(),
+			theme,
+		});
 		this.statusLine = options.statusLine ?? new StatusLine({
-			...(options.theme ? { theme: options.theme } : {}),
+			theme,
 			getState: () => {
-				// Usage from the port is the authoritative context truth point; an
-				// optional status provider may add identity or other non-usage fields.
-				const provided = {
+				// Context metrics live in the header; the status line keeps the rest.
+				// Usage from the port is the authoritative truth point for both.
+				const { contextTokens: _tokens, contextWindow: _window, contextEstimated: _estimated, ...provided } = {
 					...(options.getStatus?.() ?? {}),
 					...(options.port.getUsage?.() ?? {}),
 				} as StatusLineState;
@@ -94,14 +111,20 @@ export class App {
 		});
 		this.shortcutsBar = new FocusShortcutsBar(this.focusStack);
 		const autocompleteProvider = options.autocompleteProvider ?? (options.completionSource ? createInputAutocompleteProvider(options.completionSource) : undefined);
-		this.editor = createEditor(this.tui, (text) => void this.submit(text), autocompleteProvider ? { autocompleteProvider } : {});
-		const layout = new VStack([
-			{ component: this.transcript, grow: 1, minSize: 1 },
-			{ component: this.blockingCards, basis: "auto", shrink: 0 },
-			{ component: this.statusLine, basis: "auto", shrink: 0 },
-			{ component: this.shortcutsBar, basis: "auto", shrink: 0 },
-			{ component: this.editor, basis: "auto", shrink: 0 },
-		]);
+		this.editor = createEditor(this.tui, (text) => void this.submit(text), { ...(autocompleteProvider ? { autocompleteProvider } : {}), theme });
+		this.workingIndicator = new WorkingIndicator(new Loader(this.tui, (value) => theme.activity(value), (value) => theme.muted(value), "Working…"));
+		const footer = [this.blockingCards, this.workingIndicator, this.statusLine, this.shortcutsBar, this.editor] as const;
+		const layout = this.tui.mode === "regular"
+			? new MainScreenLayout(this.terminal, this.header, this.transcript, footer)
+			: new VStack([
+					{ component: this.header, basis: "auto", shrink: 0 },
+					{ component: this.transcript, grow: 1, minSize: 1 },
+					{ component: this.blockingCards, basis: "auto", shrink: 0 },
+					{ component: this.workingIndicator, basis: "auto", shrink: 0 },
+					{ component: this.statusLine, basis: "auto", shrink: 0 },
+					{ component: this.shortcutsBar, basis: "auto", shrink: 0 },
+					{ component: this.editor, basis: "auto", shrink: 0 },
+				]);
 		if ("setLayoutRoot" in this.tui && typeof this.tui.setLayoutRoot === "function") this.tui.setLayoutRoot(layout);
 		else this.tui.addChild(layout);
 		this.tui.setFocus(this.editor);
@@ -124,6 +147,21 @@ export class App {
 				}
 				this.tui.requestRender();
 				return { consume: true };
+			}
+			if (matchesKey(data, Key.ctrl("o"))) {
+				const id = this.renderer.latestFoldableBlockId();
+				if (id !== undefined && this.renderer.toggleBlock(id)) this.tui.requestRender();
+				return { consume: true };
+			}
+			// TuiAltScreen owns these bindings itself. The regular host has no
+			// viewport router, so route page navigation to our application scroll.
+			if (this.tui.mode === "regular") {
+				const scrollDelta = matchesKey(data, Key.pageUp) ? -this.scrollPageSize() : matchesKey(data, Key.pageDown) ? this.scrollPageSize() : 0;
+				if (scrollDelta !== 0) {
+					this.transcript.scrollLines(scrollDelta);
+					this.tui.requestRender();
+					return { consume: true };
+				}
 			}
 			if (matchesKey(data, Key.ctrl("enter"))) {
 				void this.cancelAndSend();
@@ -170,6 +208,7 @@ export class App {
 		};
 		// Cleanup is best-effort as a whole: one synchronous teardown failure must
 		// not strand the async consumers or leave waitUntilStopped() unresolved.
+		captureFailure(() => this.workingIndicator.stop());
 		captureFailure(() => this.tui.stop());
 		captureFailure(() => this.options.requestBus?.close?.());
 		this.closeIterator(this.requestIterator);
@@ -198,10 +237,12 @@ export class App {
 		this.turnCount++;
 		const task = this.run(input);
 		this.runningTask = task;
+		this.workingIndicator.start();
 		try {
 			await task;
 		} finally {
 			if (this.runningTask === task) this.runningTask = undefined;
+			this.workingIndicator.stop();
 			this.tui.requestRender();
 		}
 	}
@@ -278,6 +319,7 @@ export class App {
 		if (card.record.state !== "active") return;
 		card.terminal(outcome);
 		const removed = this.focusStack.remove(outcome.requestId);
+		this.archiveCard(card);
 		if (removed) this.restoreFocusAfterStackChange();
 	}
 
@@ -296,11 +338,16 @@ export class App {
 		if (!response || !this.options.requestBus.respond(response)) return;
 		card.resolve(response);
 		this.focusStack.pop();
+		this.archiveCard(card);
 		this.restoreFocusAfterStackChange();
 	}
 
 	private findCard(id: string): RequestCard | undefined {
-		return this.blockingCards.children.find((child) => child instanceof RequestCard && child.record.id === id) as RequestCard | undefined;
+		for (const container of [this.blockingCards, this.completedCards]) {
+			const card = container.children.find((child) => child instanceof RequestCard && child.record.id === id) as RequestCard | undefined;
+			if (card) return card;
+		}
+		return undefined;
 	}
 
 	private dismissCard(id: string): void {
@@ -309,6 +356,12 @@ export class App {
 		const cancellation = responseForRequestDismiss(card.record.request);
 		const accepted = this.options.requestBus?.respond(cancellation) ?? false;
 		card.dismiss(accepted ? cancellation : undefined);
+		this.archiveCard(card);
+	}
+
+	private archiveCard(card: RequestCard): void {
+		this.blockingCards.removeChild(card);
+		if (!this.completedCards.children.includes(card)) this.completedCards.addChild(card);
 	}
 
 	private restoreFocusAfterStackChange(): void {
@@ -339,6 +392,10 @@ export class App {
 		this.renderer.apply(event);
 		this.tui.requestRender();
 	}
+
+	private scrollPageSize(): number {
+		return Math.max(1, this.terminal.rows - 2);
+	}
 }
 
 /** Dynamic hint row whose source is the current focus owner, never a card copy. */
@@ -353,4 +410,53 @@ class FocusShortcutsBar implements Component {
 	}
 
 	invalidate(): void {}
+}
+
+/** Spinner row shown only while a turn is running. */
+class WorkingIndicator implements Component {
+	private active = false;
+
+	constructor(private readonly loader: Loader) {}
+
+	start(): void {
+		this.active = true;
+		this.loader.start();
+	}
+
+	stop(): void {
+		this.active = false;
+		this.loader.stop();
+	}
+
+	render(width: number): string[] {
+		return this.active ? this.loader.render(width) : [];
+	}
+
+	invalidate(): void {}
+}
+
+/**
+ * TuiMainScreen renders a component tree intrinsically and has no layout pass.
+ * Keep the footer visible while giving the transcript the remaining rows.
+ */
+class MainScreenLayout implements Component {
+	constructor(
+		private readonly terminal: Terminal,
+		private readonly header: HeaderBar,
+		private readonly transcript: TranscriptScrollView,
+		private readonly footer: readonly Component[],
+	) {}
+
+	render(width: number): string[] {
+		const headerLines = this.header.render(width);
+		const footerLines = this.footer.flatMap((component) => component.render(width));
+		this.transcript.setViewportHeight(Math.max(1, this.terminal.rows - headerLines.length - footerLines.length));
+		return [...headerLines, ...this.transcript.render(width), ...footerLines];
+	}
+
+	invalidate(): void {
+		this.header.invalidate();
+		this.transcript.invalidate();
+		for (const component of this.footer) component.invalidate();
+	}
 }

@@ -9,6 +9,8 @@ export interface ObjectSchema {
 
 export interface ToolContext {
 	cwd: string;
+	/** Present when the tool is invoked through the agent adapter. */
+	toolCallId?: string;
 	env?: Record<string, string | undefined>;
 	signal?: AbortSignal;
 }

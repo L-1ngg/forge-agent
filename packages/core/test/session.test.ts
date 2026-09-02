@@ -116,9 +116,9 @@ describe("config", () => {
 		await mkdir(join(home, ".config", "myh"), { recursive: true });
 		await mkdir(join(cwd, ".myh"), { recursive: true });
 		await writeFile(join(home, ".config", "myh", "config.json"), JSON.stringify({ provider: "global", model: "global-model", ui: { host: "alt" } }));
-		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ model: "project-model", ui: { host: "main" } }));
+		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } }));
 		const config = await loadConfig({ cwd, home, env: { MYH_PROVIDER: "env" } });
-		expect(config).toMatchObject({ provider: "env", model: "project-model", ui: { host: "main" } });
+		expect(config).toMatchObject({ provider: "env", model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } });
 	});
 
 	test("defaults an invalid ui host to the main-screen escape hatch", async () => {

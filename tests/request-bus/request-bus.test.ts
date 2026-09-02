@@ -81,6 +81,19 @@ test("timeout and abort are terminal and permission cancellation maps to deny", 
 	bus.close();
 });
 
+test("null timeout keeps an interactive request pending until an explicit response", async () => {
+	const bus = new RequestBus({ idPrefix: "interactive", timeoutMs: null });
+	const pending = bus.ask("permission", permissionPayload);
+	const request = (await bus.requests()[Symbol.asyncIterator]().next()).value as RequestEnvelope<"permission">;
+
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	expect(bus.pendingCount).toBe(1);
+	expect(bus.getTerminal(request.id)).toBeUndefined();
+	bus.respond(response(request.id, { decision: "allow_once" }));
+	expect(await pending).toMatchObject({ status: "response", result: { decision: "allow_once" } });
+	bus.close();
+});
+
 test("unknown and malformed responses are dropped without changing pending state", async () => {
 	const drops: string[] = [];
 	const bus = new RequestBus({ idPrefix: "drop", timeoutMs: 1_000, onDrop: (record) => drops.push(record.reason) });

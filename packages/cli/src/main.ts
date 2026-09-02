@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { homedir } from "node:os";
 import { cwd } from "node:process";
 import { AgentRunner, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
 import { builtinTools } from "@myh/tools";
@@ -73,7 +74,9 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 	const store = await SessionStore.open(sessionPath, workingDirectory);
 
 	try {
-		const requestBus = new RequestBus();
+		// Headless runs retain the bounded default; interactive users answer on their
+		// own time and are cancelled explicitly by abort/exit instead.
+		const requestBus = new RequestBus(args.json ? {} : { timeoutMs: null });
 		const permission: PermissionContext = {
 			mode: config.permissionMode,
 			memory: new MemoryPermissionStore(),
@@ -83,6 +86,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		const port = await portFactory({
 			provider,
 			model,
+			...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
 			...(apiKey ? { apiKey } : {}),
 			systemPrompt: config.systemPrompt,
 			thinkingLevel: config.thinkingLevel,
@@ -105,6 +109,8 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			requestBus,
 			completionSource,
 			getStatus: () => ({ provider, model }),
+			cwd: workingDirectory,
+			homeDir: homedir(),
 		});
 		await app.start();
 		await app.waitUntilStopped();

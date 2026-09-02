@@ -101,6 +101,14 @@ function normalizedFocusableCount(value: number | undefined): number {
 	return Math.max(1, Math.floor(value));
 }
 
+function formatArguments(value: Record<string, unknown>): string {
+	try {
+		return JSON.stringify(value, null, 2) ?? String(value);
+	} catch {
+		return String(value);
+	}
+}
+
 export function responseForRequestAction(request: RequestEnvelopeUnion, action: RequestCardAction): ResponseEnvelope | undefined {
 	switch (request.kind) {
 		case "permission": {
@@ -167,8 +175,15 @@ export function requestCardActions(request: RequestEnvelopeUnion): readonly Requ
 
 export function renderRequestCardText(request: RequestEnvelopeUnion): string {
 	switch (request.kind) {
-		case "permission":
-			return [`Permission: ${request.payload.toolCall.name}`, request.payload.reason, request.payload.rememberRule].filter(Boolean).join("\n");
+		case "permission": {
+			const argumentsText = formatArguments(request.payload.toolCall.arguments);
+			return [
+				`Permission: ${request.payload.toolCall.name}`,
+				`Arguments:\n${argumentsText}`,
+				request.payload.reason,
+				request.payload.rememberRule,
+			].filter(Boolean).join("\n");
+		}
 		case "cancel_confirm":
 			return [`Cancel: ${request.payload.action}`, request.payload.consequence].filter(Boolean).join("\n");
 		case "question":

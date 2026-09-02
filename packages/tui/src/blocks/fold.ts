@@ -1,5 +1,6 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import type { BlockDisplayMode, BlockFoldConfig, BlockMetadata } from "@myh/protocol";
+import { identityTheme, themeColor, type SemanticTheme } from "../theme.ts";
 
 export interface FoldStateOptions {
 	defaultDisplayMode?: BlockDisplayMode;
@@ -86,6 +87,9 @@ export interface FoldBlockOptions extends FoldStateOptions {
 	truncatedLines?: number;
 	firstLines?: number;
 	lastLines?: number;
+	theme?: SemanticTheme;
+	/** Protocol color slot name; unknown names fall back to no color. */
+	colorSlot?: string;
 }
 
 /** Shared presentation shell; specialized blocks only provide body lines. */
@@ -96,6 +100,8 @@ export class FoldBlock implements Component {
 	protected truncatedLines: number;
 	protected firstLines: number | undefined;
 	protected lastLines: number | undefined;
+	protected readonly theme: SemanticTheme;
+	private readonly colorSlot: string | undefined;
 
 	constructor(options: FoldBlockOptions) {
 		this.title = options.title;
@@ -104,6 +110,8 @@ export class FoldBlock implements Component {
 		this.firstLines = normalizeOptionalCount(options.firstLines);
 		this.lastLines = normalizeOptionalCount(options.lastLines);
 		this.fold = new FoldState(options);
+		this.theme = options.theme ?? identityTheme;
+		this.colorSlot = options.colorSlot;
 	}
 
 	get displayMode(): BlockDisplayMode {
@@ -156,9 +164,9 @@ export class FoldBlock implements Component {
 
 	render(width: number): string[] {
 		const safeWidth = Math.max(1, Math.floor(width));
-		const lines = [`${this.indicator()} ${this.title}`];
+		const lines = [this.decorateHeader(`${this.indicator()} ${this.title}`)];
 		if (this.fold.displayMode === "collapsed") return lines.map((line) => truncateToWidth(line, safeWidth));
-		const body = this.visibleLines();
+		const body = this.visibleLines().map((line) => this.decorateBodyLine(line));
 		return lines.concat(body).map((line) => truncateToWidth(line, safeWidth));
 	}
 
@@ -166,6 +174,14 @@ export class FoldBlock implements Component {
 
 	protected indicator(): string {
 		return this.fold.displayMode === "collapsed" ? ">" : "v";
+	}
+
+	protected decorateHeader(line: string): string {
+		return themeColor(this.theme, this.colorSlot)?.(line) ?? line;
+	}
+
+	protected decorateBodyLine(line: string): string {
+		return line;
 	}
 
 	protected visibleLines(): string[] {

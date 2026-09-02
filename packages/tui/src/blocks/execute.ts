@@ -34,6 +34,7 @@ export class ExecuteBlock extends FoldBlock {
 			...(manualOverride === undefined ? {} : { manualOverride }),
 			firstLines: normalized.firstLines ?? envelope?.fold.firstLines ?? 2,
 			lastLines: normalized.lastLines ?? envelope?.fold.lastLines ?? 3,
+			colorSlot: normalized.colorSlot ?? envelope?.colorSlot ?? "accent_execute",
 		});
 		this.id = normalized.id;
 	}

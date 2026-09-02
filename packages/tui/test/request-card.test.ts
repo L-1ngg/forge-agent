@@ -69,6 +69,24 @@ test("a bus timeout retires the card and restores editor focus", async () => {
 	await app.stop();
 });
 
+test("completed cards leave the fixed blocking region but remain in the transcript", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+
+	bus.push(permissionRequest("archive"));
+	await Bun.sleep(0);
+	terminal.send("\r");
+	await Bun.sleep(0);
+
+	const internal = app as unknown as { blockingCards: { children: unknown[] }; completedCards: { children: unknown[] } };
+	expect(internal.blockingCards.children).toHaveLength(0);
+	expect(internal.completedCards.children).toHaveLength(1);
+	expect(app.tui.render(120).join("\n")).toContain("Status: resolved");
+	await app.stop();
+});
+
 test("a terminal received before its request is replayed when the card arrives", async () => {
 	const terminal = new FakeTerminal();
 	const bus = new TestRequestBus();
@@ -213,6 +231,22 @@ test("permission card offers Always allow only when the request carries a rememb
 		decision: "allow_always",
 		scope: { tool: "write", argsPattern: '{"content":"value","path":"file.ts"}' },
 	});
+});
+
+test("permission card renders the exact tool arguments before asking for approval", () => {
+	const request: RequestEnvelopeFor<"permission"> = {
+		type: "request",
+		id: "dangerous-visible",
+		kind: "permission",
+		payload: {
+			toolCall: { type: "tool_call", id: "call-dangerous-visible", name: "bash", arguments: { command: "rm -rf ./tmp" } },
+			reason: "This command can delete data",
+		},
+	};
+
+	const rendered = new RequestCard(request).render(120).join("\n");
+	expect(rendered).toContain('"command": "rm -rf ./tmp"');
+	expect(rendered).toContain("This command can delete data");
 });
 
 test("App renders the active card shortcuts from the shared focus stack", async () => {

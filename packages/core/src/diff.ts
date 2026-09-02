@@ -28,6 +28,9 @@ function toProtocolHunk(hunk: { oldStart: number; oldLines: number; newStart: nu
 	let additions = 0;
 	let removals = 0;
 	for (const raw of hunk.lines) {
+		// `diff` represents a missing final newline as a diagnostic pseudo-line.
+		// It is not part of either file and must not consume a line number.
+		if (raw === "\\ No newline at end of file") continue;
 		const marker = raw[0];
 		const content = raw.slice(1);
 		if (marker === "+") {

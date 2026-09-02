@@ -19,7 +19,8 @@ export interface DroppedResponse {
 }
 
 export interface RequestBusOptions {
-	timeoutMs?: number;
+	/** Set to null for a user-facing request that waits until answered or cancelled. */
+	timeoutMs?: number | null;
 	idPrefix?: string;
 	idFactory?: (sequence: number, prefix: string) => string;
 	now?: () => number;
@@ -27,7 +28,7 @@ export interface RequestBusOptions {
 }
 
 export interface AskOptions {
-	timeoutMs?: number;
+	timeoutMs?: number | null;
 	signal?: AbortSignal;
 }
 
@@ -120,7 +121,7 @@ export class RequestBus {
 	private readonly pending = new Map<string, PendingRequest<RequestKind>>();
 	private readonly settled = new Map<string, RequestOutcome<RequestKind>>();
 	private readonly dropped: DroppedResponse[] = [];
-	private readonly timeoutMs: number;
+	private readonly timeoutMs: number | null;
 	private readonly idPrefix: string;
 	private readonly idFactory: (sequence: number, prefix: string) => string;
 	private readonly now: () => number;
@@ -130,8 +131,8 @@ export class RequestBus {
 	private closed = false;
 
 	constructor(options: RequestBusOptions = {}) {
-		this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-		if (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 0) throw new Error("Request bus timeoutMs must be a non-negative finite number");
+		this.timeoutMs = options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs;
+		if (this.timeoutMs !== null && (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 0)) throw new Error("Request bus timeoutMs must be a non-negative finite number or null");
 		this.idNamespace = crypto.randomUUID();
 		this.idPrefix = options.idPrefix ?? "r";
 		this.idFactory = options.idFactory ?? ((sequence, prefix) => `${prefix}-${this.idNamespace}-${sequence}`);
@@ -183,8 +184,8 @@ export class RequestBus {
 	 * Cancellation and timeout resolve as explicit outcomes rather than hanging.
 	 */
 	ask<K extends RequestKind>(kind: K, payload: RequestPayloadByKind[K], options: AskOptions = {}): Promise<RequestOutcome<K>> {
-		const timeoutMs = options.timeoutMs ?? this.timeoutMs;
-		if (!Number.isFinite(timeoutMs) || timeoutMs < 0) throw new RangeError("Request timeoutMs must be a non-negative finite number");
+		const timeoutMs = options.timeoutMs === undefined ? this.timeoutMs : options.timeoutMs;
+		if (timeoutMs !== null && (!Number.isFinite(timeoutMs) || timeoutMs < 0)) throw new RangeError("Request timeoutMs must be a non-negative finite number or null");
 		if (this.closed) {
 			const id = this.allocateId();
 			const outcome: RequestOutcome<K> = { status: "cancelled", requestId: id, reason: "bus_closed" };
@@ -203,7 +204,7 @@ export class RequestBus {
 				this.settleCancelled(id, pending, "aborted");
 				return;
 			}
-			pending.timer = setTimeout(() => this.settleTimeout(id, pending), timeoutMs);
+			if (timeoutMs !== null) pending.timer = setTimeout(() => this.settleTimeout(id, pending), timeoutMs);
 
 			if (options.signal) {
 				pending.signal = options.signal;

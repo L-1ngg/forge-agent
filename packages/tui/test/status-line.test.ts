@@ -22,7 +22,7 @@ test("semantic theme slots are the only styling hooks used by the component", ()
 	expect(formatStatusLine({ contextTokens: 4, costUsd: 0.001 })).toBe("ctx 4");
 });
 
-test("App treats port usage as the status truth point", async () => {
+test("App header shows the port usage truth point while the status line omits context", async () => {
 	const app = new App({
 		terminal: new FakeTerminal(),
 		port: {
@@ -34,7 +34,8 @@ test("App treats port usage as the status truth point", async () => {
 		},
 		getStatus: () => ({ contextTokens: 88, contextWindow: 100, model: "stale-model" }),
 	});
-	expect(app.statusLine.render(120).join("\n")).toContain("ctx 12/100 (12%)");
+	expect(app.header.render(120).join("\n")).toContain("12 / 100");
+	expect(app.statusLine.render(120).join("\n")).not.toContain("ctx");
 	expect(app.statusLine.render(120).join("\n")).toContain("stale-model");
 	await app.stop();
 });

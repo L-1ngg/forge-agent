@@ -12,6 +12,7 @@ export interface HarnessUiConfig {
 export interface HarnessConfig {
 	provider?: string;
 	model?: string;
+	baseUrl?: string;
 	apiKey?: string;
 	systemPrompt: string;
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
