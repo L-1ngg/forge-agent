@@ -109,7 +109,7 @@ test("keeps an edit result summary alongside its diff projection", () => {
 	expect(rendered).toContain("replacements: 1");
 });
 
-test("keeps a fallback preview for tool calls that have no structured block", () => {
+test("keeps a fallback preview for executed tool calls that have no structured block", () => {
 	const renderer = new StreamRenderer();
 	const message = {
 		role: "assistant" as const,
@@ -118,7 +118,20 @@ test("keeps a fallback preview for tool calls that have no structured block", ()
 	};
 	renderer.apply({ type: "message_start", timestamp: 1, message });
 	renderer.apply({ type: "message_end", timestamp: 2, message });
+	renderer.apply({ type: "tool_execution_start", timestamp: 3, toolCallId: "read-call", toolName: "read", args: { path: "README.md" } });
 	expect(renderer.render(120).join("\n")).toContain('read({"path":"README.md"})');
+});
+
+test("suppresses the raw-args marker for calls that never executed", () => {
+	const renderer = new StreamRenderer();
+	const message = {
+		role: "assistant" as const,
+		content: [{ type: "tool_call" as const, id: "denied-call", name: "bash", arguments: { command: "rm -rf tmp" } }],
+		timestamp: 1,
+	};
+	renderer.apply({ type: "message_start", timestamp: 1, message });
+	renderer.apply({ type: "message_end", timestamp: 2, message });
+	expect(renderer.render(120).join("\n")).not.toContain("rm -rf tmp");
 });
 
 test("Esc aborts a streaming turn without clearing the draft", async () => {

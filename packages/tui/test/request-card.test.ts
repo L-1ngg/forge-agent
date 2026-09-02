@@ -65,7 +65,7 @@ test("a bus timeout retires the card and restores editor focus", async () => {
 	expect(app.focusStack.size).toBe(0);
 	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["timeout", "dismissed"]]);
 	expect(app.editor.focused).toBe(true);
-	expect(app.tui.render(80).join("\n")).toContain("Status: timeout");
+	expect(app.tui.render(80).join("\n")).toContain("timed out");
 	await app.stop();
 });
 
@@ -80,10 +80,9 @@ test("completed cards leave the fixed blocking region but remain in the transcri
 	terminal.send("\r");
 	await Bun.sleep(0);
 
-	const internal = app as unknown as { blockingCards: { children: unknown[] }; completedCards: { children: unknown[] } };
+	const internal = app as unknown as { blockingCards: { children: unknown[] } };
 	expect(internal.blockingCards.children).toHaveLength(0);
-	expect(internal.completedCards.children).toHaveLength(1);
-	expect(app.tui.render(120).join("\n")).toContain("Status: resolved");
+	expect(app.tui.render(120).join("\n")).toContain("Permission: write file.ts — allow_once");
 	await app.stop();
 });
 
@@ -101,7 +100,7 @@ test("a terminal received before its request is replayed when the card arrives",
 	expect(app.focusStack.size).toBe(0);
 	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["early", "dismissed"]]);
 	expect(app.editor.focused).toBe(true);
-	expect(app.tui.render(80).join("\n")).toContain("Status: cancelled");
+	expect(app.tui.render(80).join("\n")).toContain("cancelled");
 	await app.stop();
 });
 
@@ -245,7 +244,7 @@ test("permission card renders the exact tool arguments before asking for approva
 	};
 
 	const rendered = new RequestCard(request).render(120).join("\n");
-	expect(rendered).toContain('"command": "rm -rf ./tmp"');
+	expect(rendered).toContain("bash rm -rf ./tmp");
 	expect(rendered).toContain("This command can delete data");
 });
 

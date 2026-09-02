@@ -334,10 +334,11 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 	const content = Array.isArray(wrapper.content)
 		? wrapper.content.map((entry) => objectValue(entry).text).filter((entry): entry is string => typeof entry === "string").join("\n")
 		: "";
+	const structuredError = lifecycle === "failed" ? readableToolError(content) : undefined;
 	const data: ExecuteBlockData = {
 		command: typeof details.command === "string" ? details.command : fallbackCommand ?? "bash",
-		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content ? { stdout: content } : {}),
-		...(typeof details.stderr === "string" ? { stderr: details.stderr } : {}),
+		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content && structuredError === undefined ? { stdout: content } : {}),
+		...(typeof details.stderr === "string" ? { stderr: details.stderr } : structuredError !== undefined ? { stderr: structuredError } : {}),
 		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
 		...(lifecycle === "failed" ? { isError: true } : {}),
 	};
@@ -361,6 +362,16 @@ function toolCommandFrom(commands: Map<string, string>, toolCallId: string, args
 
 function objectValue(value: unknown): Record<string, unknown> {
 	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+/** myh tools throw structured errors; show the human message instead of raw JSON. */
+function readableToolError(content: string): string | undefined {
+	try {
+		const value = objectValue(JSON.parse(content));
+		return typeof value.error_code === "string" && typeof value.message === "string" ? value.message : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 interface AdaptToolOptions {

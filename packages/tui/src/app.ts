@@ -7,7 +7,7 @@ import { HeaderBar } from "./header.ts";
 import { createTuiHost, type TuiHostMode } from "./host.ts";
 import { TranscriptScrollView } from "./scroll.ts";
 import { StreamRenderer } from "./stream-renderer.ts";
-import { RequestCard, requestCardActions, responseForRequestDismiss, type RequestCardAction } from "./request-card.ts";
+import { RequestCard, archivedCardLine, requestCardActions, responseForRequestDismiss, type RequestCardAction } from "./request-card.ts";
 import { createInputAutocompleteProvider, type TuiInputCompletionSource } from "./input/autocomplete.ts";
 import { StatusLine, type StatusLineState } from "./status-line.ts";
 import { defaultTheme, type SemanticTheme } from "./theme.ts";
@@ -63,7 +63,6 @@ export class App {
 	private resolveStopSignal!: () => void;
 	private readonly esc = new EscController();
 	private readonly blockingCards = new Container();
-	private readonly completedCards = new Container();
 	private readonly transcriptContent = new Container();
 	private readonly workingIndicator: WorkingIndicator;
 	private readonly shortcutsBar: Component;
@@ -85,7 +84,6 @@ export class App {
 		const theme = options.theme ?? defaultTheme;
 		this.renderer = new StreamRenderer({ theme });
 		this.transcriptContent.addChild(this.renderer);
-		this.transcriptContent.addChild(this.completedCards);
 		this.transcript = new TranscriptScrollView(this.transcriptContent, { clipToViewport: this.tui.mode === "regular" });
 		this.header = new HeaderBar({
 			...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
@@ -343,11 +341,7 @@ export class App {
 	}
 
 	private findCard(id: string): RequestCard | undefined {
-		for (const container of [this.blockingCards, this.completedCards]) {
-			const card = container.children.find((child) => child instanceof RequestCard && child.record.id === id) as RequestCard | undefined;
-			if (card) return card;
-		}
-		return undefined;
+		return this.blockingCards.children.find((child) => child instanceof RequestCard && child.record.id === id) as RequestCard | undefined;
 	}
 
 	private dismissCard(id: string): void {
@@ -359,9 +353,10 @@ export class App {
 		this.archiveCard(card);
 	}
 
+	/** The card leaves the fixed region; a one-line outcome stays in the transcript timeline. */
 	private archiveCard(card: RequestCard): void {
 		this.blockingCards.removeChild(card);
-		if (!this.completedCards.children.includes(card)) this.completedCards.addChild(card);
+		this.renderer.addNotice(archivedCardLine(card.record));
 	}
 
 	private restoreFocusAfterStackChange(): void {

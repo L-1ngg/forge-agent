@@ -61,6 +61,7 @@ export class StreamRenderer extends Container {
 	private readonly richBlocks = new Map<string, AnyBlockEnvelope>();
 	private readonly richComponents = new Map<string, Component>();
 	private readonly thinkingIndex = new Map<string, ThinkingBlock>();
+	private readonly executedToolCallIds = new Set<string>();
 	private readonly theme: SemanticTheme;
 	private readonly markdownTheme: MarkdownTheme;
 	private readonly formatTime: TimeFormatter;
@@ -125,14 +126,22 @@ export class StreamRenderer extends Container {
 			return;
 		}
 		if (event.type === "tool_execution_end") {
+			this.executedToolCallIds.add(event.toolCallId);
 			this.updateRichBlock(event.block);
 			this.syncChildren();
 			return;
 		}
 		if (event.type === "tool_execution_start" || event.type === "tool_execution_update") {
+			this.executedToolCallIds.add(event.toolCallId);
 			this.updateRichBlock(event.block);
 			this.syncChildren();
 		}
+	}
+
+	/** Append a muted one-line notice at the current end of the transcript. */
+	addNotice(text: string): void {
+		this.timeline.push({ kind: "footer", text });
+		this.syncChildren();
 	}
 
 	getEvents(): SessionEvent[] {
@@ -261,6 +270,9 @@ export class StreamRenderer extends Container {
 				if (component) this.addChild(component);
 				continue;
 			}
+			// A call that never reached execution (denied, cancelled) left its
+			// record in the card notice; a second raw-args marker adds nothing.
+			if (!this.executedToolCallIds.has(block.id)) continue;
 			this.addChild(new Text(this.theme.muted(`${block.name}(${safeJson(block.arguments)})`), 1, 0));
 		}
 	}
@@ -268,7 +280,7 @@ export class StreamRenderer extends Container {
 	private thinkingComponent(record: MessageRecord, contentIndex: number, markdown: string): ThinkingBlock {
 		const existing = record.thinkingComponents.get(contentIndex);
 		const duration = record.thinkingDuration.get(contentIndex);
-		const title = duration === undefined ? "Thought" : `Thought for ${formatDurationMs(duration)}`;
+		const title = duration === undefined || duration < 100 ? "Thought" : `Thought for ${formatDurationMs(duration)}`;
 		if (existing) {
 			existing.setText(markdown);
 			existing.setTitle(title);

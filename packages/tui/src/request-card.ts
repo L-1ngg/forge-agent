@@ -96,17 +96,52 @@ export class RequestCard implements Component {
 	}
 }
 
-function normalizedFocusableCount(value: number | undefined): number {
-	if (value === undefined || !Number.isFinite(value) || value < 1) return 1;
-	return Math.max(1, Math.floor(value));
+/** Compact one-line form of a tool call: the command for bash, the path for file tools. */
+export function summarizeToolCall(toolCall: { name: string; arguments: Record<string, unknown> }): string {
+	const args = toolCall.arguments;
+	if (toolCall.name === "bash" && typeof args.command === "string") return `bash ${args.command}`;
+	if ((toolCall.name === "write" || toolCall.name === "edit" || toolCall.name === "read") && typeof args.path === "string") return `${toolCall.name} ${args.path}`;
+	return `${toolCall.name} ${formatArgumentsCompact(args)}`;
 }
 
-function formatArguments(value: Record<string, unknown>): string {
+function formatArgumentsCompact(value: Record<string, unknown>): string {
 	try {
-		return JSON.stringify(value, null, 2) ?? String(value);
+		return JSON.stringify(value) ?? String(value);
 	} catch {
 		return String(value);
 	}
+}
+
+/** One-line transcript record for a card that has left the blocking region. */
+export function archivedCardLine(record: RequestCardRecord): string {
+	const status = archivedStatus(record);
+	switch (record.request.kind) {
+		case "permission":
+			return `Permission: ${summarizeToolCall(record.request.payload.toolCall)} — ${status}`;
+		case "cancel_confirm":
+			return `Cancel: ${record.request.payload.action} — ${status}`;
+		case "question":
+			return `Question: ${record.request.payload.prompt} — ${status}`;
+		case "plan_approval":
+			return `Plan approval — ${status}`;
+		case "oauth":
+			return `OAuth: ${record.request.payload.provider} — ${status}`;
+	}
+}
+
+function archivedStatus(record: RequestCardRecord): string {
+	// result holds either a bare response result (user action) or a terminal outcome.
+	const result = record.result as { decision?: unknown; status?: unknown; result?: { decision?: unknown } } | undefined;
+	if (typeof result?.decision === "string") return result.decision;
+	if (result?.status === "response" && typeof result.result?.decision === "string") return result.result.decision;
+	if (result?.status === "timeout") return "timed out";
+	if (result?.status === "cancelled") return "cancelled";
+	return record.state;
+}
+
+function normalizedFocusableCount(value: number | undefined): number {
+	if (value === undefined || !Number.isFinite(value) || value < 1) return 1;
+	return Math.max(1, Math.floor(value));
 }
 
 export function responseForRequestAction(request: RequestEnvelopeUnion, action: RequestCardAction): ResponseEnvelope | undefined {
@@ -176,10 +211,9 @@ export function requestCardActions(request: RequestEnvelopeUnion): readonly Requ
 export function renderRequestCardText(request: RequestEnvelopeUnion): string {
 	switch (request.kind) {
 		case "permission": {
-			const argumentsText = formatArguments(request.payload.toolCall.arguments);
 			return [
 				`Permission: ${request.payload.toolCall.name}`,
-				`Arguments:\n${argumentsText}`,
+				summarizeToolCall(request.payload.toolCall),
 				request.payload.reason,
 				request.payload.rememberRule,
 			].filter(Boolean).join("\n");

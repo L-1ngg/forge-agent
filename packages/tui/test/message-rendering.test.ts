@@ -152,6 +152,23 @@ test("assistant text carries a right-aligned timestamp on its first line", () =>
 	expect(plain.trimEnd().endsWith("3:18 PM")).toBe(true);
 });
 
+test("thinking shorter than 100ms shows no fake precision", () => {
+	const renderer = new StreamRenderer({ theme: markerTheme });
+	const started: SessionMessage = { role: "assistant", content: [], timestamp: 2000 };
+	renderer.apply({ type: "message_start", timestamp: 10, message: started });
+	renderer.apply({ type: "message_delta", timestamp: 10, contentIndex: 0, contentType: "thinking", delta: "fast" });
+	const finished: SessionMessage = {
+		role: "assistant",
+		content: [{ type: "thinking", thinking: "fast" }],
+		timestamp: 2000,
+	};
+	renderer.apply({ type: "message_end", timestamp: 60, message: finished });
+
+	const rendered = renderer.render(80).join("\n");
+	expect(rendered).toContain("◆ Thought");
+	expect(rendered).not.toContain("Thought for");
+});
+
 test("formatDurationMs matches the compact seconds style", () => {
 	expect(formatDurationMs(2700)).toBe("2.7s");
 	expect(formatDurationMs(13_100)).toBe("13s");

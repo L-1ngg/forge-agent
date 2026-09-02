@@ -12,6 +12,7 @@ export interface ExecuteBlockOptions extends Omit<FoldBlockOptions, "title" | "l
 
 export class ExecuteBlock extends FoldBlock {
 	readonly id: string | undefined;
+	private isError = false;
 
 	constructor(options: ExecuteBlockOptions | string) {
 		const normalized = typeof options === "string" ? { command: options } : options;
@@ -37,12 +38,18 @@ export class ExecuteBlock extends FoldBlock {
 			colorSlot: normalized.colorSlot ?? envelope?.colorSlot ?? "accent_execute",
 		});
 		this.id = normalized.id;
+		this.isError = data?.isError ?? false;
 	}
 
-	setOutput(output: Pick<ExecuteBlockData, "command" | "stdout" | "stderr" | "exitCode">): void {
+	setOutput(output: Pick<ExecuteBlockData, "command" | "stdout" | "stderr" | "exitCode" | "isError">): void {
 		this.title = `execute $ ${output.command}`;
+		this.isError = output.isError ?? false;
 		const lines = outputLines(output.stdout ?? "", output.stderr ?? "", output.exitCode);
 		this.setLines(lines);
+	}
+
+	protected override decorateHeader(line: string): string {
+		return this.isError ? this.theme.error(line) : super.decorateHeader(line);
 	}
 }
 
