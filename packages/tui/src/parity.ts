@@ -59,3 +59,14 @@ export function frameFromDump(dump: FrameDump): TerminalFrame {
 export function dumpHash(frame: TerminalFrame): string {
 	return hashDump(dumpFrame(frame));
 }
+
+export interface WrappedDump {
+	scenario?: string;
+	environment?: ReferenceEnvironment;
+	frame: FrameDump;
+}
+
+export function unwrapDump(value: unknown): WrappedDump {
+	if (typeof value === "object" && value !== null && "frame" in value) return value as WrappedDump;
+	return { frame: value as FrameDump };
+}

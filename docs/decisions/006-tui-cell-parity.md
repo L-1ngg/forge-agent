@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # ADR-006: TUI 视觉出口升级为锁定环境内逐 cell 零差异
 
-> 状态:已批准(2026-09-04,operator 指示;同日先批准 [ADR-005](./005-tui-own-compositor.md),本 ADR 修订其决策 1)
+> 状态:已批准(2026-09-04)。reference 获取路径被 [ADR-007](./007-no-compile-grok-reference.md) 修订:不再编译 grok-build;cell 回归改为 in-repo golden。决策 2/3(自有 compositor、PNG 非硬门禁)仍有效。
 > 参与者:operator(发起与拍板)、Grok(起草)
 
 ## 背景

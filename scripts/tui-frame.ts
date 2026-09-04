@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 import { readFile, writeFile } from "node:fs/promises";
 import { dumpFrame, type FrameDump } from "../packages/tui/src/frame.ts";
-import { compareDumps, type ReferenceEnvironment } from "../packages/tui/src/parity.ts";
+import { compareDumps, unwrapDump, type ReferenceEnvironment } from "../packages/tui/src/parity.ts";
+import { paintScenario, SCENARIOS } from "../packages/tui/src/scenarios.ts";
 import { App, type AppPort, type AppRequestBus } from "../packages/tui/src/app.ts";
 
 interface Args {
-	command: "dump" | "compare";
+	command: "dump" | "compare" | "dump-scenarios";
 	out?: string;
 	expected?: string;
 	actual?: string;
@@ -14,7 +15,9 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
 	const command = argv[0];
-	if (command !== "dump" && command !== "compare") throw new Error("usage: tui-frame dump --out FILE | tui-frame compare EXPECTED ACTUAL [--manifest FILE]");
+	if (command !== "dump" && command !== "compare" && command !== "dump-scenarios") {
+		throw new Error("usage: tui-frame dump --out FILE | tui-frame dump-scenarios --out DIR | tui-frame compare EXPECTED ACTUAL [--manifest FILE]");
+	}
 	const args: Args = { command };
 	for (let index = 1; index < argv.length; index++) {
 		const value = argv[index]!;
@@ -71,9 +74,35 @@ async function dumpIdle(out: string): Promise<void> {
 	console.log(`wrote ${out} (${dump.columns}x${dump.rows})`);
 }
 
+async function dumpScenarios(outDir: string): Promise<void> {
+	const { mkdir } = await import("node:fs/promises");
+	await mkdir(outDir, { recursive: true });
+	for (const spec of SCENARIOS) {
+		const frame = paintScenario(spec);
+		const wrapped = {
+			scenario: spec.name,
+			environment: {
+				crateCommit: "myh",
+				harnessPatchHash: "candidate",
+				rustc: "bun",
+				columns: spec.columns,
+				rows: spec.rows,
+				theme: "GrokNight",
+				tick: 0,
+				fixtureHash: spec.name,
+				timezone: "UTC",
+			},
+			frame,
+		};
+		const path = `${outDir}/${spec.name}.json`;
+		await writeFile(path, `${JSON.stringify(wrapped)}\n`);
+		console.log(`wrote ${path}`);
+	}
+}
+
 async function compare(expectedPath: string, actualPath: string, manifestPath?: string): Promise<number> {
-	const expected = JSON.parse(await readFile(expectedPath, "utf8")) as FrameDump;
-	const actual = JSON.parse(await readFile(actualPath, "utf8")) as FrameDump;
+	const expectedWrapped = unwrapDump(JSON.parse(await readFile(expectedPath, "utf8")));
+	const actualWrapped = unwrapDump(JSON.parse(await readFile(actualPath, "utf8")));
 	let expectedEnv: ReferenceEnvironment | undefined;
 	let actualEnv: ReferenceEnvironment | undefined;
 	if (manifestPath) {
@@ -81,7 +110,7 @@ async function compare(expectedPath: string, actualPath: string, manifestPath?: 
 		expectedEnv = manifest.expected;
 		actualEnv = manifest.actual;
 	}
-	const verdict = compareDumps(expected, actual, expectedEnv, actualEnv);
+	const verdict = compareDumps(expectedWrapped.frame, actualWrapped.frame, expectedEnv, actualEnv);
 	console.log(JSON.stringify(verdict));
 	return verdict.status === "equal" ? 0 : 1;
 }
@@ -90,6 +119,9 @@ const args = parseArgs(Bun.argv.slice(2));
 if (args.command === "dump") {
 	if (!args.out) throw new Error("dump requires --out");
 	process.exit(await dumpIdle(args.out).then(() => 0));
+} else if (args.command === "dump-scenarios") {
+	if (!args.out) throw new Error("dump-scenarios requires --out");
+	process.exit(await dumpScenarios(args.out).then(() => 0));
 } else {
 	if (!args.expected || !args.actual) throw new Error("compare requires EXPECTED ACTUAL");
 	process.exit(await compare(args.expected, args.actual, args.manifest));

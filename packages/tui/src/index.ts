@@ -14,6 +14,7 @@ export * from "./parity.ts";
 export * from "./picker.ts";
 export * from "./request-card.ts";
 export * from "./scan-files.ts";
+export * from "./scenarios.ts";
 export * from "./scroll.ts";
 export * from "./status-line.ts";
 export * from "./theme.ts";
