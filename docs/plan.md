@@ -134,4 +134,4 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-[ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md) 已由 operator 2026-09-04 批准;同日 [ADR-006](./decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异。B0 已合入(`6bac43d`,pi-tui 移除,安全快照 `580943e`)。下一步:B1 host + TerminalFrame;B6 reference capture spike 与 B1 并行。
+[ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md) 已由 operator 2026-09-04 批准;同日 [ADR-006](./decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异。B0-B5 已合入(pi-tui 移除、自有 compositor、layout/editor/composer、typed transcript、request cards、输入面)。B6 cell-parity harness 已落地(`scripts/tui-frame.ts`,AC-48/50);AC-49 仍待用路径 A 从 grok-build `bc7f02e` 采集 canonical reference dumps。

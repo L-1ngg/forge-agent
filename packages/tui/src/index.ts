@@ -10,6 +10,7 @@ export * from "./input-router.ts";
 export * from "./keys.ts";
 export * from "./layout.ts";
 export * from "./markdown.ts";
+export * from "./parity.ts";
 export * from "./picker.ts";
 export * from "./request-card.ts";
 export * from "./scan-files.ts";

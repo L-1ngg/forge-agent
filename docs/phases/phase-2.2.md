@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # Phase 2.2 施工图 — 自有 TerminalFrame TUI
 
-> 状态:已批准,实现中(2026-09-04 operator 批准;批准前审查补入两条:B0 前置安全快照、B4 前 interim request 策略)。同日:[ADR-006](../decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异,新增 B6 与 AC-48/49/50。B0 已合入(`6bac43d`)。Owner:operator。
+> 状态:已批准,B0-B5 已合入,B6 harness 已落地、grok-build reference dump 尚未采集(2026-09-04)。Owner:operator。
 > 决策:[ADR-005](../decisions/005-tui-own-compositor.md)(决策 1 由 ADR-006 修订)。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
 
