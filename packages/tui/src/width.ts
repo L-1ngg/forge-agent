@@ -116,3 +116,35 @@ export function truncateToWidth(text: string, maxWidth: number): string {
 	}
 	return result;
 }
+
+/** Greedy word-aware wrap: break at spaces when possible, never split a wide grapheme. */
+export function wrapText(text: string, width: number): string[] {
+	if (width <= 0) return [""];
+	const out: string[] = [];
+	for (const logical of text.split("\n")) {
+		let line = "";
+		let lineWidth = 0;
+		let lastSpace = -1; // index into `line` (string offset) of the last breakable space
+		for (const grapheme of graphemes(logical)) {
+			const w = graphemeWidth(grapheme);
+			if (w > 0 && lineWidth + w > width) {
+				if (lastSpace > 0) {
+					out.push(line.slice(0, lastSpace));
+					line = line.slice(lastSpace + 1) + grapheme;
+					lineWidth = visibleWidth(line);
+				} else {
+					out.push(line);
+					line = grapheme;
+					lineWidth = w;
+				}
+				lastSpace = -1;
+				continue;
+			}
+			if (grapheme === " ") lastSpace = line.length;
+			line += grapheme;
+			lineWidth += w;
+		}
+		out.push(line);
+	}
+	return out;
+}
