@@ -5,8 +5,8 @@ created: 2026-09-04
 
 # Phase 2.2 施工图 — 自有 TerminalFrame TUI
 
-> 状态:已批准,实现中(2026-09-04 operator 批准;批准前审查补入两条:B0 前置安全快照、B4 前 interim request 策略)。Owner:operator。
-> 决策:[ADR-005](../decisions/005-tui-own-compositor.md)。operator 选择 1A / 2A / 3A。
+> 状态:已批准,实现中(2026-09-04 operator 批准;批准前审查补入两条:B0 前置安全快照、B4 前 interim request 策略)。同日:[ADR-006](../decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异,新增 B6 与 AC-48/49/50。B0 已合入(`6bac43d`)。Owner:operator。
+> 决策:[ADR-005](../decisions/005-tui-own-compositor.md)(决策 1 由 ADR-006 修订)。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
 
 ---
@@ -15,7 +15,7 @@ created: 2026-09-04
 
 在 `pi-tui` 的 `Component.render(): string[]` 上改造 grok 式 UX,效果不好。行导向 widget 树无法干净表达 typed entry、整块 chrome、预先算好的 row budget,以及 card 替换 composer slot。继续打补丁只会让 projector / FrameComposer / Component 三套模型并存。
 
-本轮删掉现有 TUI 实现,按 grok 的信息架构自写 cell compositor。视觉靠齐 grok,但**不以** locked environment 下的 cell/PNG 零差异为出口。`protocol`、request bus、permission、tools、`pi-ai` / `pi-agent-core` 不动。
+本轮删掉现有 TUI 实现,按 grok 的信息架构自写 cell compositor。视觉出口按 [ADR-006](../decisions/006-tui-cell-parity.md):锁定参考环境内逐 cell 零差异,PNG 为辅证。`protocol`、request bus、permission、tools、`pi-ai` / `pi-agent-core` 不动。
 
 对应 [plan.md](../plan.md) §0 决策 2 的推翻与 §2 Phase 2 的 TUI 返工。
 
@@ -224,6 +224,26 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 
 **回退**:功能开关或 revert 本批文件;host 默认值可单独改回。
 
+### B6 — reference capture + cell parity 门禁
+
+> 开工时机:reference capture 的 spike 与 B1 并行;harness 紧随 B1 的 `TerminalFrame`;parity 门禁自 B2 起对每个视觉区域增量生效。
+
+**路径**:`scripts/tui-frame.ts`(按新 compositor 重写)、`packages/tui/test/fixtures/reference/**`、`packages/tui/src/frame.ts`(序列化 / diff 出口)
+
+**内容**:
+
+- spike:确认 reference 获取路径——直接 PTY 驱动 grok-build 进入 canonical states,或借其内部渲染测试产 cell dump;结论回填本批后再全面施工。
+- locked reference environment manifest:终端/版本/字体+hash/尺寸/TERM/COLORTERM/locale/固定时钟;不一致返回 `environment-mismatch`。
+- canonical scenarios 的 reference cell dump + ANSI 流 + PNG(辅证)落盘为不可变 fixture,带 artifact hash;同一 fixture 重跑 hash 一致才可入库。
+- parity harness:myh `TerminalFrame` 序列化后与 reference dump 逐 cell diff;B2-B5 每个视觉批次新增区域时同步补 scenario。
+- 时间、cursor blink、动画 phase、随机输入在 capture 中关闭或固定。
+
+**tradeoff**:环境工程与 fixture 维护是长期成本;换来视觉验收脱离观感循环。B0 删掉的旧 harness 不恢复,仅作 git 历史参考。
+
+**验收**:AC-48、AC-49、AC-50。
+
+**回退**:harness 与 fixture 独立成目录,revert 不影响 B1-B5 功能;若 grok-build 无法被干净驱动,回 spike 结论找次优 capture 路径,不放宽 AC 字段。
+
 ## Acceptance Criteria
 
 出口条件:
@@ -235,8 +255,8 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 
 明确**不**作为出口条件:
 
-- 与 grok-build 的 cell/PNG 零差异(原 AC-38/39)
-- locked reference environment / 跨终端像素一致
+- 跨 terminal/font/DPI 环境的像素一致(环境不一致标 `environment-mismatch`)
+- PNG/RGBA 零差异作硬门禁(ADR-006:PNG 为辅证落盘)
 - `ui.host = "main"` 的独立 inline 实现
 - dashboard / peek / team / Minimal / mouse selection / vim / animated rail
 - 完整 CommonMark、undo 栈、kitty keyboard
@@ -248,6 +268,9 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 - [ ] AC-45:editor 在 40/80 列对 ASCII 与 CJK 提交原文、光标不落在宽字符中央。
 - [ ] AC-46:`start` 后正常退出、Ctrl+C、以及 host 绘制函数抛错时,终端都离开 alt-screen 并恢复 raw mode。
 - [ ] AC-47:B0 起根依赖不再包含 `@earendil-works/pi-tui`;`pi-ai` / `pi-agent-core` 仍 exact pin。
+- [ ] AC-48:每个 canonical scenario 有不可变 reference environment/artifact manifest;manifest 不一致时 harness 明确返回 `environment-mismatch`;同一 fixture 重跑 frame hash 一致(时间、cursor blink、动画 phase、随机性已固定)。
+- [ ] AC-49:locked reference environment 中,myh `TerminalFrame` 与 grok-build reference cell dump 逐 cell 零差异(grapheme、width/continuation、foreground、background、全部 attributes、cursor);覆盖 gap 调研 §6.2 canonical scenarios 与 §6.3 逐区域字段。
+- [ ] AC-50:parity 反向验证——人为改 1 个 cell,对应 scenario 测试必须变红;不得以跳过区域、后处理或放宽比较字段通过。
 
 ### 继承并必须在新测试下重测
 
@@ -255,7 +278,7 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 
 来自 Phase 2 的 TUI 行为:AC-11、AC-12、AC-15、AC-17、AC-19、AC-20、AC-21、AC-22、AC-23;AC-14 只要求重新记录,不要求本轮实测通过。
 
-退役:Phase 2 AC-13(同一 Component 树在两种 pi-tui 宿主下);Phase 2.1 AC-37..AC-42(reference environment 与 zero-diff)。
+退役:Phase 2 AC-13(同一 Component 树在两种 pi-tui 宿主下);Phase 2.1 AC-39(PNG 硬门禁,降为辅证)与 AC-42(以 pi-tui 为前提的 compositor 条件条款,底座已自有)。Phase 2.1 AC-37/38/40/41 的语义由 AC-48/49/50 在自有 compositor 上接手。
 
 ## Test plan
 
@@ -265,6 +288,7 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 | 契约 | `App` options / `scanFiles` 仍能被 cli typecheck | `bun run --filter @myh/cli typecheck` |
 | 反向 | 人为加 `pi-tui` import;park 时 `respond()`;layout 让 card 与 composer 同时占 slot;改 1 cell | 各 batch 本地注入后撤销 |
 | 人工 | 真实终端:输入、滚动、折叠、permission park 循环、退出恢复 | B5;一张截图不算 |
+| parity | canonical scenario 的 reference cell dump 与 myh frame 逐 cell diff;`environment-mismatch` 路径;改 1 cell 变红 | B6 起,`bun test packages/tui/test` + `scripts/tui-frame.ts` |
 
 每个 batch 至少:
 
@@ -295,6 +319,7 @@ bun run check
 | projector 丢内容 | revert B3 | 允许旧视觉,不允许丢事件 |
 | park 卡住 request | revert B4 | UI 异常时 deny/cancel,绝不默认 allow |
 | 真实终端能力不足 | 记入 AC-14 降级 | 不把未测写成通过 |
+| grok-build 无法被干净驱动出 canonical states | B6 spike 先行,找次优 capture 路径 | 不放宽 cell 比较字段,不拿观感冒充通过 |
 
 各 batch 不改 session schema。B0 是唯一大删,必须单独先合。
 
@@ -313,6 +338,7 @@ bun run check
 6. B4 才改变 Esc=park;B0-B3 无 card 时不涉及该行为变更。
 7. welcome 与完整 markdown 放 B5,不阻塞 B2 日常输入骨架。
 8. B4 之前 request 由保守应答兜底(permission→deny 等),不因 UI 未就位而悬挂;B0 开工前先提交安全快照。(2026-09-04 批准审查后补入,operator 确认)
+9. 视觉出口 = 锁定参考环境内逐 cell 零差异,PNG 为辅证,跨终端不承诺像素一致。(2026-09-04 operator 指示,见 [ADR-006](../decisions/006-tui-cell-parity.md))
 
 ## Dependencies
 

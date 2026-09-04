@@ -5,7 +5,7 @@ created: 2026-09-02
 
 # grok-build TUI 差距调研
 
-> 状态:调研完成(2026-09-02)。其中「保留 pi-tui、以 pixel parity 为出口」的建议已被 operator 2026-09-04 的 1A/2A/3A 推翻,见 [ADR-005](../decisions/005-tui-own-compositor.md);投影模型与 grok 信息架构的诊断仍有效。
+> 状态:调研完成(2026-09-02)。「保留 pi-tui」的建议已被 [ADR-005](../decisions/005-tui-own-compositor.md) 推翻;「以 pixel parity 为出口」经 [ADR-006](../decisions/006-tui-cell-parity.md) 以锁定环境逐 cell 零差异的口径恢复(PNG 降为辅证)。投影模型与 grok 信息架构的诊断仍有效;§6 规格恢复为施工依据,其中 PNG 零差异不再是硬门禁。
 > 上游快照:[`xai-org/grok-build@bc7f02e`](https://github.com/xai-org/grok-build/tree/bc7f02eddd3d84085849dc19ed216f11c23b0571),根目录 `SOURCE_REV=d5a0335a47221e8c9519936cb693e9b6450227ec`,`xai-grok-pager` 版本 `1.0.12`。
 > 本地代码基线:`d1e06319783051a55f7de97aa60dd831159a4a13`;工作区已有未提交文档和截图不属于本次改动。通用架构调研见 [grok-build.md](./grok-build.md),本文件只回答当前 TUI 为什么仍有明显差距、怎样在受控参考环境内做到 pixel parity,以及 Rust 设计应怎样转译到 TypeScript。
 

@@ -5,7 +5,7 @@ created: 2026-09-02
 
 # Phase 2.1 施工图 — grok-build TUI pixel parity
 
-> 状态:已中止(2026-09-04)。operator 选择 1A/2A/3A:放弃 pixel parity 出口与 pi-tui 改造路径,改由 [phase-2.2.md](./phase-2.2.md) 接手。本文保留为历史施工图,AC-38/AC-39 未关闭不得改写成通过。[phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图。
+> 状态:已中止(2026-09-04)。operator 选择 1A/2A/3A:放弃 pi-tui 改造路径,改由 [phase-2.2.md](./phase-2.2.md) 接手。本文保留为历史施工图,AC-38/AC-39 未关闭不得改写成通过。同日 [ADR-006](../decisions/006-tui-cell-parity.md):AC-37/38/40/41 的 cell 口径语义由 phase-2.2 AC-48/49/50 接手;AC-39 的 PNG 硬门禁不恢复。[phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图。
 > 输入:[grok-build TUI 差距调研](../research/grok-build-tui-gap.md);通用设计背景见 [grok-build.md](../research/grok-build.md) 和 [design-rationale.md](../design-rationale.md)。
 
 ---

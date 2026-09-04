@@ -1,6 +1,6 @@
 # 个人 Coding Harness — 规划
 
-> 状态:Phase 2.2 自有 TerminalFrame TUI 已批准,B0-B5 施工中(2026-09-04)。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,改由 [phases/phase-2.2.md](./phases/phase-2.2.md) 接手。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理,AC-14 未实测,E4 已复核。
+> 状态:Phase 2.2 施工中(2026-09-04):B0 已合入(pi-tui 移除,`6bac43d`),B1-B5 + B6 待施工;视觉出口经 [ADR-006](./decisions/006-tui-cell-parity.md) 升级为锁定环境逐 cell 零差异。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,改由 [phases/phase-2.2.md](./phases/phase-2.2.md) 接手。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理,AC-14 未实测,E4 已复核。
 > **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
 > 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
@@ -20,7 +20,7 @@
 四条决策:
 
 1. **agent loop 用 pi 的生成器层,现在不自研。** `pi-agent-core` 是四层且成熟度不同:`pi-ai` 永久依赖、`agentLoop()` 现在用、`harness/` 积木单取、`AgentHarness` 是空壳。→ A、C.1
-2. **TUI 自有 cell compositor,不再依赖 `pi-tui`。** UX 借 grok 的信息架构与交互契约,不以 pixel parity 为出口。历史论证 C.2 保留,施工约束见 [ADR-005](./decisions/005-tui-own-compositor.md)(已批准)。
+2. **TUI 自有 cell compositor,不再依赖 `pi-tui`。** UX 借 grok 的信息架构与交互契约;视觉出口为锁定参考环境内逐 cell 零差异([ADR-006](./decisions/006-tui-cell-parity.md)),跨终端不作像素承诺。历史论证 C.2 保留,施工约束见 [ADR-005](./decisions/005-tui-own-compositor.md)(已批准)。
 3. **team 用文件实现 clowder 的语义,in-process 多 `Agent` 实例。** 语义值得抄,Redis / A2A / web UI 不要。→ C.3
 4. **core 与 UI 以协议隔离,现在就做。** 成本几天,不做则以后是重写。→ C.4
 
@@ -134,4 +134,4 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-[ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md) 已由 operator 2026-09-04 批准。当前批次:B0 清空 `packages/tui` 并去掉 `pi-tui`(开工前安全快照 `580943e` 已提交,B0 单独成批),随后按施工图推进 B1-B5。
+[ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md) 已由 operator 2026-09-04 批准;同日 [ADR-006](./decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异。B0 已合入(`6bac43d`,pi-tui 移除,安全快照 `580943e`)。下一步:B1 host + TerminalFrame;B6 reference capture spike 与 B1 并行。
