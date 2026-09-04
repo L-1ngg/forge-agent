@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # ADR-005: TUI 自有 TerminalFrame compositor,移除 pi-tui
 
-> 状态:草稿(2026-09-04,待 operator 确认)
+> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7;批准审查补入 phase-2.2 的 B0 前置安全快照与 interim request 策略)
 > 参与者:operator(发起,选择 1A/2A/3A)、Grok(起草)
 
 ## 背景

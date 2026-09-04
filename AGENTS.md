@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2.2 自有 TerminalFrame TUI 设计中,待 operator 确认**。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,施工真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md) 与 [docs/decisions/005-tui-own-compositor.md](docs/decisions/005-tui-own-compositor.md)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,AC-14 未实测。
+个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2.2 自有 TerminalFrame TUI 已批准,B0-B5 施工中**。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,施工真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md) 与 [docs/decisions/005-tui-own-compositor.md](docs/decisions/005-tui-own-compositor.md)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,AC-14 未实测。
 
 ## 真相源层级
 

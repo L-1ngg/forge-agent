@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # Phase 2.2 施工图 — 自有 TerminalFrame TUI
 
-> 状态:草稿(2026-09-04,待 operator 确认)。Owner:operator。
+> 状态:已批准,实现中(2026-09-04 operator 批准;批准前审查补入两条:B0 前置安全快照、B4 前 interim request 策略)。Owner:operator。
 > 决策:[ADR-005](../decisions/005-tui-own-compositor.md)。operator 选择 1A / 2A / 3A。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
 
@@ -112,13 +112,15 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 
 **内容**:
 
+- 前置(批准审查补充):开工前把当前工作区整体提交为安全快照(已落实为 commit `580943e`),否则删除不可逆、下方回退行的 revert 无从谈起。
 - 删除 `packages/tui/src` 与 `packages/tui/test` 里全部现有实现和测试。
 - 删除 pixel-parity harness:`scripts/tui-frame.ts`、对应 test、`tui:frame` script。
 - 去掉 `@earendil-works/pi-tui` 依赖(根与 `packages/tui`)。
 - `check-deps.ts`:tui 允许集 = `@myh/protocol` + `node:`。
-- 重建最小导出:`App`(CLI 用到的 options)、`scanFiles`(保留 Bun.Glob 同步扫描,不依赖任何 TUI 框架)。
+- 重建最小导出:`App`(CLI 用到的 options)、`scanFiles`(从 `input/file-picker.ts` 抽取到不 import pi-tui 的模块;保留 Bun.Glob 同步扫描)。
 - stub `App.start()`:进入 raw mode + alt-screen,Ctrl+C / `q` 调用 `stop()` 并恢复终端。不跑 turn,不画 grok chrome。
 - `host` / `showWelcome` 等 option 接受但不实现。
+- interim request 策略(批准审查补充):stub 订阅 `requestBus.requests()`,对五种 kind 一律返回保守结果(permission→deny、question/oauth/cancel_confirm→cancel、plan_approval→reject),直到 B4 由 card 接管。消灭 B0-B3 无 UI 响应导致的 request 悬挂;与 Rollback 表「UI 异常时 deny/cancel」同一保守侧。
 
 **tradeoff**:交互模式在 B0-B2 期间几乎不能用。换来的是依赖图立刻干净,后续批次不再跟旧 Component 共存。headless 不受影响。
 
@@ -158,6 +160,7 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 - header / status 诚实性沿用 Phase 2 M6:未知省略、`cost < $0.005` 隐藏、running 只活在 status。
 - shortcuts 从 `KeyOwner` 生成,窄屏保 pinned 退出路径。
 - `App` 接上 layout:空 transcript 时仍可输入。`port.runTurn` 尚未投影到 typed entry,B2 可以把 turn 事件忽略或先做成 notice 行。
+- turn 产生的 request 仍由 B0 的保守应答兜底;B2 不实现 card。
 
 **tradeoff**:editor 从零写,行为不会等于 pi-tui `Editor`。换来的是光标与 wrap 直接落在 cell 上,不再绕 `CURSOR_MARKER`。欢迎页推迟到 B5。
 
@@ -194,6 +197,7 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 - `Esc` 在 card 上的最后一阶是 park,不是 deny。显式 action 才 `respond()`。
 - parked 后 `Tab` / `Space` 返回 card;此时 `Esc` 不穿透 abort。
 - 迟到 / 总线终态仍归档卡片,走保守侧 deny/cancel。
+- 移除 B0 的保守应答循环,card 成为 request 的唯一响应者。
 
 **tradeoff**:放弃「Esc 永远等于否决」。这是本轮唯一用户可感知的交互相对 Phase 2 默认 dismiss 的变化,单独成批。
 
@@ -308,6 +312,7 @@ bun run check
 5. editor / 宽度 / 按键 / markdown 均自写,不新增 npm TUI 依赖。
 6. B4 才改变 Esc=park;B0-B3 无 card 时不涉及该行为变更。
 7. welcome 与完整 markdown 放 B5,不阻塞 B2 日常输入骨架。
+8. B4 之前 request 由保守应答兜底(permission→deny 等),不因 UI 未就位而悬挂;B0 开工前先提交安全快照。(2026-09-04 批准审查后补入,operator 确认)
 
 ## Dependencies
 
