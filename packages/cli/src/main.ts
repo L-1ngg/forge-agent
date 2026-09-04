@@ -111,6 +111,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			getStatus: () => ({ provider, model }),
 			cwd: workingDirectory,
 			homeDir: homedir(),
+			showWelcome: true,
 		});
 		await app.start();
 		await app.waitUntilStopped();

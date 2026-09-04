@@ -1,6 +1,7 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import type { BlockDisplayMode, BlockFoldConfig, BlockMetadata } from "@myh/protocol";
+import type { BlockDisplayMode, BlockFoldConfig, BlockLifecycle, BlockMetadata } from "@myh/protocol";
 import { identityTheme, themeColor, type SemanticTheme } from "../theme.ts";
+import type { EntryRow } from "../transcript/types.ts";
 
 export interface FoldStateOptions {
 	defaultDisplayMode?: BlockDisplayMode;
@@ -83,6 +84,7 @@ export const FoldController = FoldState;
 
 export interface FoldBlockOptions extends FoldStateOptions {
 	title: string;
+	lifecycle?: BlockLifecycle;
 	lines?: readonly string[];
 	truncatedLines?: number;
 	firstLines?: number;
@@ -164,16 +166,22 @@ export class FoldBlock implements Component {
 
 	render(width: number): string[] {
 		const safeWidth = Math.max(1, Math.floor(width));
-		const lines = [this.decorateHeader(`${this.indicator()} ${this.title}`)];
-		if (this.fold.displayMode === "collapsed") return lines.map((line) => truncateToWidth(line, safeWidth));
-		const body = this.visibleLines().map((line) => this.decorateBodyLine(line));
-		return lines.concat(body).map((line) => truncateToWidth(line, safeWidth));
+		return this.renderEntryRows(safeWidth).map((row) => truncateToWidth(row.text, safeWidth));
+	}
+
+	/** Body-only rows for EntryShell; the shared shell owns bullets and rails. */
+	renderEntryRows(_width: number): readonly EntryRow[] {
+		const rows: EntryRow[] = [{ text: this.decorateHeader(this.title) }];
+		if (this.fold.displayMode === "collapsed") return rows;
+		return rows.concat(this.visibleLines().map((line) => ({ text: this.decorateBodyLine(line) })));
 	}
 
 	invalidate(): void {}
 
 	protected indicator(): string {
-		return this.fold.displayMode === "collapsed" ? ">" : "v";
+		// Fold affordances are rendered by the scrollback interaction layer in
+		// grok-build; they are not part of the block's text header.
+		return "";
 	}
 
 	protected decorateHeader(line: string): string {
@@ -186,17 +194,25 @@ export class FoldBlock implements Component {
 
 	protected visibleLines(): string[] {
 		if (this.fold.displayMode === "expanded") return [...this.lines];
-		if (this.firstLines !== undefined || this.lastLines !== undefined) return trimHeadTail(this.lines, this.firstLines ?? 0, this.lastLines ?? 0);
+		if (this.firstLines !== undefined || this.lastLines !== undefined) {
+			return trimHeadTail(this.lines, this.firstLines ?? 0, this.lastLines ?? 0, (omitted) => this.formatTruncationMarker(omitted, "head-tail"));
+		}
 		if (this.lines.length <= this.truncatedLines) return [...this.lines];
-		return [...this.lines.slice(0, this.truncatedLines), `... ${this.lines.length - this.truncatedLines} more lines`];
+		const omitted = this.lines.length - this.truncatedLines;
+		return [...this.lines.slice(0, this.truncatedLines), this.formatTruncationMarker(omitted, "tail")];
+	}
+
+	/** Kind renderers can adopt the upstream marker without owning fold policy. */
+	protected formatTruncationMarker(omitted: number, mode: "tail" | "head-tail"): string {
+		return mode === "tail" ? `... ${omitted} more lines` : `... ${omitted} lines omitted`;
 	}
 }
 
-function trimHeadTail(lines: readonly string[], first: number, last: number): string[] {
+function trimHeadTail(lines: readonly string[], first: number, last: number, marker: (omitted: number) => string): string[] {
 	if (lines.length <= first + last) return [...lines];
 	const omitted = lines.length - first - last;
 	const tail = last > 0 ? lines.slice(-last) : [];
-	return [...lines.slice(0, first), `... ${omitted} lines omitted`, ...tail];
+	return [...lines.slice(0, first), marker(omitted), ...tail];
 }
 
 function normalizeCount(value: number | undefined, fallback: number): number {

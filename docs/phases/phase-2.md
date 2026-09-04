@@ -5,9 +5,9 @@ created: 2026-09-01
 
 # Phase 2 施工图 — TUI 升到 grok 水准 + permission 流水线
 
-> 状态:实现中——M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding(2026-09-02)。AC-14 仍未实测；operator 已确认 E1-E3 暂缓实测、按豁免处理。Owner:operator。
-> 对应 [plan.md](../plan.md) §2 Phase 2;设计论证见 [design-rationale.md](../design-rationale.md) A / C.2 / C.4,失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
-> 本文档是 Phase 2 的唯一施工图。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架(entry criteria → milestone → test plan → release criteria → rollback)见 §5 的映射说明。
+> 状态:M1-M6 代码与自动化验收已完成;原人工 UX 验收先后由 [phase-2.1.md](./phase-2.1.md)(已中止)与 [phase-2.2.md](./phase-2.2.md)(当前,待确认)接管。AC-14 仍未实测;operator 已确认 E1-E3 暂缓实测、按豁免处理。Owner:operator。
+> 对应 [plan.md](../plan.md) §2 Phase 2;设计论证见 [design-rationale.md](../design-rationale.md) A / C.4,TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md)。失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
+> 本文档是 Phase 2 M1-M6 的历史施工图;TUI 重写以 [phase-2.2.md](./phase-2.2.md) 为当前施工真相源。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架见 [SOP.md](../SOP.md),本 Phase 实例见 §5。
 
 ---
 
@@ -264,9 +264,9 @@ Phase 2 关闭需要**同时**满足:
 
 ## 5. 大厂流程的采用与裁剪
 
-参考的是流程**骨架**,不是流程**编制**。单人项目照搬多团队机制只会产出没人读的仪式文档。逐条落法:
+骨架与裁剪原则见 [SOP.md](../SOP.md)。下表是 **Phase 2 的实例**,不重定义骨架。
 
-| 大厂环节 | 本项目怎么做 | 裁剪掉什么、为什么 |
+| 大厂环节 | Phase 2 怎么做 | 本 Phase 裁掉什么、为什么 |
 |---|---|---|
 | Design doc + cross-team review | 本文件;重大取舍进 ADR([SOP.md](../SOP.md) 改动分级「大」) | 不开评审会、不做多方签字。operator 是唯一 reviewer |
 | Entry criteria gate | §0 四条硬门禁,未过不许开工 | 不做立项审批 / 资源评审 |
@@ -280,7 +280,7 @@ Phase 2 关闭需要**同时**满足:
 | Rollback plan | §6 | 不做数据迁移回滚——无 schema 变更 |
 | Post-mortem | [lessons.md](../lessons.md) LL-XXX 三门禁 | 已有机制,不另立流程 |
 
-一句话总结裁剪原则:**保留能说「不」的环节(门禁、AC、CI、flag),裁掉只能说「记录在案」的环节(估点、签字、指标看板)。** 与 [design-rationale D](../design-rationale.md) 对 clowder predicate DSL 的判断同源——一条规则一个家,且选那个能说「不」的家。
+裁剪原则以 [SOP.md](../SOP.md) 为准,此处不复述。与 [design-rationale D](../design-rationale.md) 对 clowder predicate DSL 的判断同源——一条规则一个家,且选那个能说「不」的家。
 
 ---
 
@@ -323,3 +323,6 @@ Phase 2 关闭需要**同时**满足:
 - 2026-09-02 静态门禁:`bun run check:deps`、workspace typecheck、`git diff --check` 均通过;对 `packages/tui` 做 ANSI / 十六进制色值检索未发现裸颜色依赖。新增卡片动作边界回归后,受影响测试 13 pass / 0 fail。
 - 2026-09-02 Phase 2 回归收口:重新运行的 `bun run check` 为 113 pass / 0 fail;新增 permission deny precedence、streamed fold metadata、failed execute command provenance 回归均通过。`bun run test:headless`、`bun run check:deps`、`git diff --check` 继续通过。
 - 2026-09-02 未运行人工项:E3 的 alt-screen 鼠标滚轮 / OSC 52 / truecolor 实测、卡片焦点手感与滚动复制 checklist、5 天 `ui.host = "alt"` dogfooding;这些按 operator 豁免或发布出口条件保留,未将 AC-14 标为通过。
+- 2026-09-02 review 修复收口:diff 忽略无尾换行诊断行;permission card 展示完整工具参数;已完成卡片移出固定 blocking 区并保留在 transcript;rich block 按 assistant 内容位置渲染且去除重复 tool-call / tool-result 文本;regular host 的 transcript viewport、PageUp/PageDown 与 Ctrl+O 已接线。rewrite 工具现由 `toolInputRewrites` 接入 `core` adapter,改写后的参数才进入 permission `decide()` 与底层执行;新增 payload / deny / `allow_once` / `allow_always` integration 回归。
+- 2026-09-02 rewrite 接缝说明:pi 0.84.4 在 `beforeToolCall` 前发出 `tool_execution_start`,因此该事件的 `args` 仍可能是模型原始入参;最终授权与底层工具执行均以 wrapper 改写后的对象为准,未把展示事件误作执行真相。
+- 2026-09-02 review 验证:`bun run check` 通过(129 pass / 0 fail,25 files);属性测试的 expect 计数随随机样本变化,不作为稳定指标。`MYH_API_KEY=test bun run test:headless` 通过并输出逐行合法 JSON;`bun run check:deps` 与 `git diff --check` 通过。人工终端 UX、E3、AC-14 与 5 天 dogfooding 仍未实测,不计为通过。

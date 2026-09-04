@@ -12,7 +12,7 @@
 | [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |
 | [research/](research/) | 固定源码快照的上游/专题深度调研(**冷层**,不是已批准 ADR) |
 | [cat-cafe.md](cat-cafe.md) | cat-cafe-tutorials 失效模式附录(带证据标签) |
-| [SOP.md](SOP.md) | 开发协作流程:工作规则、改动分级、验证纪律、review 交接 |
+| [SOP.md](SOP.md) | 开发协作流程:工作规则、改动分级、流程骨架、裁剪原则、验证纪律、review 交接 |
 | [lessons.md](lessons.md) | 教训库(LL-XXX),入库有质量门禁 |
 | [decisions/](decisions/) | ADR:已定决策,防重新争论 |
 | [templates/](templates/) | ADR / feature doc / review request 模板 |

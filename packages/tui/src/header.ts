@@ -49,14 +49,23 @@ export class HeaderBar implements Component {
 	}
 }
 
-function abbreviateHome(cwd: string, homeDir: string | undefined): string {
+export function abbreviateHome(cwd: string, homeDir: string | undefined): string {
 	if (homeDir && (cwd === homeDir || cwd.startsWith(`${homeDir}/`))) return `~${cwd.slice(homeDir.length)}`;
 	return cwd;
 }
 
-/** Compact token counts, e.g. "13K" / "1.0M". */
+/**
+ * Match grok-build's compact token formatter.
+ *
+ * The first decimal bucket intentionally rounds (`9_960 -> 10.0K`), while
+ * values at 10K and above use whole thousands. This keeps the display within
+ * four cells without dropping useful precision near the bucket boundary.
+ */
 export function formatCompact(value: number): string {
-	if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-	if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-	return `${Math.floor(value)}`;
+	const normalized = Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+	if (normalized < 1_000) return `${normalized}`;
+	if (normalized < 10_000) return `${(normalized / 1_000).toFixed(1)}K`;
+	if (normalized < 1_000_000) return `${Math.floor(normalized / 1_000)}K`;
+	if (normalized < 10_000_000) return `${(normalized / 1_000_000).toFixed(1)}M`;
+	return `${Math.floor(normalized / 1_000_000)}M`;
 }

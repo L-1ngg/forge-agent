@@ -60,7 +60,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (packageName === "tools" && specifier === "@myh/core") {
 					violations.push(`${displayPath} must not import @myh/core`);
 				}
-				if (packageName === "tui" && !specifier.startsWith(".") && !["@myh/protocol", "@earendil-works/pi-tui"].includes(specifier)) {
+				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && !["@myh/protocol", "@earendil-works/pi-tui"].includes(specifier)) {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (

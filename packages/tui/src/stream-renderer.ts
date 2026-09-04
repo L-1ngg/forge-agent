@@ -1,194 +1,138 @@
-import type { AnyBlockEnvelope, SessionEvent, SessionMessage } from "@myh/protocol";
-import { Container, Markdown, Spacer, type Component, type MarkdownTheme, Text } from "@earendil-works/pi-tui";
+import type { AnyBlockEnvelope, SessionEvent } from "@myh/protocol";
+import { Container, Markdown, type Component, type MarkdownTheme, Text } from "@earendil-works/pi-tui";
 import { componentForBlock, updateBlockComponent } from "./blocks/index.ts";
 import { FoldBlock } from "./blocks/fold.ts";
 import { ThinkingBlock } from "./blocks/thinking.ts";
-import { UserMessageCard, formatDurationMs, formatTimeHHMM, withRightStamp, type TimeFormatter } from "./blocks/message.ts";
+import { formatDurationMs, formatTimeHHMM, type TimeFormatter } from "./blocks/message.ts";
 import { identityTheme, markdownThemeFromSlots, type SemanticTheme } from "./theme.ts";
+import { EntryShell } from "./transcript/entry-shell.ts";
+import type { EntryChrome, TranscriptEntry } from "./transcript/types.ts";
+import { TranscriptProjector, thinkingEntryId, type StreamedContentBlock } from "./transcript/projector.ts";
 
-interface ContentBlock {
-	kind: "text" | "thinking" | "tool_call";
-	text: string;
-}
-
-interface MessageRecord {
-	seq: number;
-	message: SessionMessage;
-	streamingBlocks: Map<number, ContentBlock>;
-	/** First-delta timestamp per thinking contentIndex, for the "Thought for Xs" summary. */
-	thinkingStart: Map<number, number>;
-	thinkingDuration: Map<number, number>;
-	thinkingComponents: Map<number, ThinkingBlock>;
-}
-
-type TimelineEntry =
-	| { kind: "message"; record: MessageRecord }
-	| { kind: "rich"; id: string }
-	| { kind: "footer"; text: string };
+export type ContentBlock = StreamedContentBlock;
 
 export interface StreamRendererOptions {
 	theme?: SemanticTheme;
 	formatTime?: TimeFormatter;
+	/** Effective compact mode. A callback keeps transcript chrome in sync with resize. */
+	compact?: boolean | (() => boolean);
 }
 
-/** One blank line between transcript entries; a shared instance is stateless. */
-const ENTRY_SPACER = new Spacer(1);
-
-function streamedMessageText(record: MessageRecord): string {
-	const streamed = [...record.streamingBlocks.entries()]
-		.sort(([left], [right]) => left - right)
-		.map(([, block]) => block)
-		.map((block) => {
-			const prefix = block.kind === "thinking" ? "thinking: " : block.kind === "tool_call" ? "tool: " : "";
-			return `${prefix}${block.text}`;
-		});
-	return streamed.join("\n");
+export interface StreamRendererEntrySpan {
+	entryId: string;
+	start: number;
+	height: number;
+	logicalLineStarts: readonly number[];
+	lastContentRow: number;
 }
 
-function safeJson(value: unknown): string {
-	try {
-		return JSON.stringify(value) ?? String(value);
-	} catch {
-		return String(value);
-	}
-}
-
+/**
+ * Component projection over one canonical TranscriptProjector. The projector
+ * owns event order and identity; this class owns only reusable pi-tui bodies,
+ * shells and fold state.
+ */
 export class StreamRenderer extends Container {
-	private readonly blocks = new Map<number, ContentBlock>();
-	private readonly messages: MessageRecord[] = [];
-	private readonly timeline: TimelineEntry[] = [];
-	private readonly events: SessionEvent[] = [];
-	private readonly richBlocks = new Map<string, AnyBlockEnvelope>();
+	private readonly projector = new TranscriptProjector();
 	private readonly richComponents = new Map<string, Component>();
+	private readonly entryShells = new Map<string, EntryShell>();
 	private readonly thinkingIndex = new Map<string, ThinkingBlock>();
-	private readonly executedToolCallIds = new Set<string>();
+	private readonly thinkingFoldToEntry = new Map<string, string>();
 	private readonly theme: SemanticTheme;
 	private readonly markdownTheme: MarkdownTheme;
 	private readonly formatTime: TimeFormatter;
-	private messageSeq = 0;
-	private turnStartedAt: number | undefined;
-	private activeMessage: MessageRecord | undefined;
+	private readonly compact: () => boolean;
+	private visibleEntryIds: string[] = [];
 
 	constructor(options: StreamRendererOptions = {}) {
 		super();
 		this.theme = options.theme ?? identityTheme;
 		this.markdownTheme = markdownThemeFromSlots(this.theme);
 		this.formatTime = options.formatTime ?? formatTimeHHMM;
+		this.compact = typeof options.compact === "function" ? options.compact : () => options.compact === true;
 	}
 
 	apply(event: SessionEvent): void {
-		this.events.push(event);
-		if (event.type === "turn_start") {
-			this.turnStartedAt = event.timestamp;
-			return;
-		}
-		if (event.type === "turn_end") {
-			const startedAt = this.turnStartedAt;
-			this.turnStartedAt = undefined;
-			if (startedAt !== undefined && event.timestamp >= startedAt) {
-				this.timeline.push({ kind: "footer", text: `Worked for ${formatDurationMs(event.timestamp - startedAt)}` });
-				this.syncChildren();
-			}
-			return;
-		}
-		if (event.type === "message_start") {
-			if (event.message.role === "assistant") this.blocks.clear();
-			const record = this.createRecord(event.message);
-			this.activeMessage = record;
-			this.syncChildren();
-			return;
-		}
-		if (event.type === "message_end") {
-			let record = this.activeMessage;
-			if (!record || record.message.role !== event.message.role) {
-				const current = this.messages.at(-1);
-				if (current?.message.role === event.message.role) record = current;
-			}
-			if (!record) record = this.createRecord(event.message);
-			record.message = structuredClone(event.message);
-			record.streamingBlocks.clear();
-			for (const [index, startedAt] of record.thinkingStart) {
-				if (!record.thinkingDuration.has(index) && event.timestamp >= startedAt) record.thinkingDuration.set(index, event.timestamp - startedAt);
-			}
-			if (this.activeMessage === record) this.activeMessage = undefined;
-			if (event.message.role === "assistant") this.blocks.clear();
-			this.syncChildren();
-			return;
-		}
-		if (event.type === "message_delta") {
-			const record = this.activeMessage ?? this.createImplicitMessage(event.timestamp);
-			const current = this.blocks.get(event.contentIndex) ?? { kind: event.contentType, text: "" };
-			current.text += event.delta;
-			this.blocks.set(event.contentIndex, current);
-			record.streamingBlocks.set(event.contentIndex, current);
-			if (event.contentType === "thinking" && !record.thinkingStart.has(event.contentIndex)) record.thinkingStart.set(event.contentIndex, event.timestamp);
-			this.syncChildren();
-			return;
-		}
-		if (event.type === "tool_execution_end") {
-			this.executedToolCallIds.add(event.toolCallId);
-			this.updateRichBlock(event.block);
-			this.syncChildren();
-			return;
-		}
-		if (event.type === "tool_execution_start" || event.type === "tool_execution_update") {
-			this.executedToolCallIds.add(event.toolCallId);
-			this.updateRichBlock(event.block);
-			this.syncChildren();
-		}
+		this.projector.apply(event);
+		this.syncChildren();
 	}
 
 	/** Append a muted one-line notice at the current end of the transcript. */
 	addNotice(text: string): void {
-		this.timeline.push({ kind: "footer", text });
+		this.projector.addNotice(text);
 		this.syncChildren();
 	}
 
 	getEvents(): SessionEvent[] {
-		return structuredClone(this.events);
+		return this.projector.getEvents();
 	}
 
 	getOrderedBlocks(): readonly ContentBlock[] {
-		return [...this.blocks.entries()].sort(([left], [right]) => left - right).map(([, block]) => ({ ...block }));
+		return this.projector.getOrderedBlocks();
 	}
 
 	getRichBlocks(): readonly AnyBlockEnvelope[] {
-		return [...this.richBlocks.values()].map((block) => structuredClone(block));
+		return this.projector.getTools().flatMap((tool) => tool.block === undefined ? [] : [structuredClone(tool.block)]);
+	}
+
+	getEntries(): TranscriptEntry[] {
+		return this.projector.getEntries();
+	}
+
+	/** Stable UI-local entry identities in the current paint order. */
+	getEntryIds(): readonly string[] {
+		return [...this.visibleEntryIds];
+	}
+
+	/** Exact top-level row spans for scroll anchoring at the supplied width. */
+	getEntrySpans(width: number): readonly StreamRendererEntrySpan[] {
+		const spans: StreamRendererEntrySpan[] = [];
+		let start = 0;
+		for (const entryId of this.visibleEntryIds) {
+			const shell = this.entryShells.get(entryId);
+			if (!shell) continue;
+			const height = shell.render(width).length;
+			const anchorRows = shell.getAnchorRows(width);
+			spans.push({ entryId, start, height, ...anchorRows });
+			start += height;
+		}
+		return spans;
+	}
+
+	/** Expose the canonical projection for integration/golden tests. */
+	getProjector(): TranscriptProjector {
+		return this.projector;
 	}
 
 	toggleBlock(id: string): boolean {
-		const component = this.richComponents.get(id);
+		const canonicalId = this.thinkingFoldToEntry.get(id) ?? id;
+		const component = this.richComponents.get(id) ?? this.thinkingIndex.get(id) ?? this.thinkingIndex.get(canonicalId);
 		if (component instanceof FoldBlock) {
 			component.toggle();
-			const block = this.richBlocks.get(id);
-			if (block) {
-				block.currentDisplayMode = component.displayMode;
-				block.manualOverride = component.manualOverride;
-			}
-			return true;
-		}
-		const thinking = this.thinkingIndex.get(id);
-		if (thinking) {
-			thinking.toggle();
+			this.projector.setEntryDisplayState(canonicalId, component.displayMode, component.manualOverride);
+			this.syncChildren();
 			return true;
 		}
 		return false;
 	}
 
 	getBlockComponent(id: string): Component | undefined {
-		return this.richComponents.get(id);
+		const canonicalId = this.thinkingFoldToEntry.get(id) ?? id;
+		return this.richComponents.get(id) ?? this.thinkingIndex.get(id) ?? this.thinkingIndex.get(canonicalId);
 	}
 
 	/** Return the newest structured block that can be manually folded. */
 	latestFoldableBlockId(): string | undefined {
-		for (const entry of [...this.timeline].reverse()) {
-			if (entry.kind === "rich") {
-				if (this.richComponents.get(entry.id) instanceof FoldBlock) return entry.id;
+		for (const entry of [...this.projector.getEntries()].reverse()) {
+			if (entry.kind === "thinking") {
+				const foldId = this.thinkingFoldToEntry.get(entry.id) ?? this.foldIdForThinkingEntry(entry.id);
+				const component = this.getBlockComponent(foldId);
+				if (component instanceof FoldBlock) return foldId;
 				continue;
 			}
-			if (entry.kind !== "message") continue;
-			const thinkingIds = [...entry.record.thinkingComponents.keys()].reverse();
-			if (thinkingIds.length > 0) return `thinking-${entry.record.seq}-${thinkingIds[0]}`;
+			if (entry.kind === "execute" || entry.kind === "edit") {
+				const component = this.richComponents.get(entry.block.id);
+				if (component instanceof FoldBlock) return entry.block.id;
+			}
 		}
 		return undefined;
 	}
@@ -198,151 +142,136 @@ export class StreamRenderer extends Container {
 		return id === undefined ? false : this.toggleBlock(id);
 	}
 
+	clear(): void {
+		this.projector.clear();
+		this.richComponents.clear();
+		this.entryShells.clear();
+		this.thinkingIndex.clear();
+		this.thinkingFoldToEntry.clear();
+		this.visibleEntryIds = [];
+		super.clear();
+	}
+
 	private syncChildren(): void {
-		this.clear();
-		let firstEntry = true;
-		for (const entry of this.timeline) {
-			if (!firstEntry) this.addChild(ENTRY_SPACER);
-			firstEntry = false;
-			if (entry.kind === "footer") {
-				this.addChild(new Text(this.theme.muted(entry.text), 1, 0));
-				continue;
+		const nextChildren: Component[] = [];
+		for (const entry of this.projector.getEntries()) {
+			const component = this.componentForEntry(entry);
+			if (component) nextChildren.push(component);
+		}
+		this.clearChildrenOnly();
+		for (const child of nextChildren) this.addChild(child);
+		this.visibleEntryIds = nextChildren
+			.filter((child): child is EntryShell => child instanceof EntryShell && child.id !== undefined)
+			.map((child) => child.id as string);
+	}
+
+	private clearChildrenOnly(): void {
+		const children = [...this.children];
+		for (const child of children) this.removeChild(child);
+	}
+
+	private componentForEntry(entry: TranscriptEntry): EntryShell | undefined {
+		switch (entry.kind) {
+			case "user":
+				return this.messageShell(entry.id, entry.text, this.formatTime(entry.timestamp ?? 0), { surface: "surface", showPrefix: true, vpadTop: this.compact() ? 0 : 1, vpadBottom: this.compact() ? 0 : 1 });
+			case "assistant": {
+				const body = new Markdown(entry.markdown, 0, 0, this.markdownTheme);
+				return this.messageShell(entry.id, body, entry.timestamp === undefined ? undefined : this.formatTime(entry.timestamp), {});
 			}
-			if (entry.kind === "message") {
-				this.addMessageChildren(entry.record);
-				continue;
+			case "thinking": {
+				const component = this.thinkingComponent(entry.id, entry);
+				return this.messageShell(entry.id, component, undefined, this.thinkingChrome(component, entry.block.lifecycle === "streaming"));
 			}
-			// A block anchored to an assistant tool_call is emitted at that call's
-			// position by addMessageChildren. Do not append a second copy here.
-			if (this.hasAssistantToolCall(entry.id)) continue;
-			const component = this.syncRichComponent(entry.id);
-			if (component) this.addChild(component);
+			case "execute":
+			case "edit": {
+				const component = this.syncRichComponent(entry.block);
+				return this.messageShell(entry.id, component, undefined, this.richChrome(entry.block, component));
+			}
+			case "notice":
+				return this.messageShell(entry.id, new Text(this.theme[entry.tone](entry.text), 0, 0), undefined, { collapsed: true });
 		}
 	}
 
-	private addMessageChildren(record: MessageRecord): void {
-		if (record.streamingBlocks.size > 0) {
-			const text = streamedMessageText(record);
-			if (text) this.addChild(new Text(text, 1, 0));
-			return;
-		}
-
-		if (record.message.role === "user") {
-			const text = record.message.content
-				.filter((block) => block.type === "text")
-				.map((block) => block.text)
-				.join("\n");
-			if (text) this.addChild(new UserMessageCard(text, record.message.timestamp, this.theme, this.formatTime));
-			return;
-		}
-
-		// An execute projection already carries stdout/stderr, so its protocol
-		// tool-result fallback would duplicate the same output. Edit projections
-		// only carry the diff and must keep their result summary visible.
-		if (record.message.role === "toolResult") {
-			if (record.message.toolCallId && this.richBlocks.get(record.message.toolCallId)?.kind === "execute") return;
-			const text = record.message.content
-				.map((block) => (block.type === "text" ? block.text : ""))
-				.filter(Boolean)
-				.join("\n");
-			if (text) this.addChild(new Text(this.theme.muted(text), 1, 0));
-			return;
-		}
-
-		let stamped = false;
-		for (const [index, block] of record.message.content.entries()) {
-			if (block.type === "text") {
-				if (!block.text) continue;
-				let component: Component = new Markdown(block.text, 1, 0, this.markdownTheme);
-				if (!stamped) {
-					component = withRightStamp(component, record.message.timestamp, this.theme, this.formatTime);
-					stamped = true;
-				}
-				this.addChild(component);
-				continue;
-			}
-			if (block.type === "thinking") {
-				this.addChild(this.thinkingComponent(record, index, block.thinking));
-				continue;
-			}
-			if (this.richBlocks.has(block.id)) {
-				const component = this.syncRichComponent(block.id);
-				if (component) this.addChild(component);
-				continue;
-			}
-			// A call that never reached execution (denied, cancelled) left its
-			// record in the card notice; a second raw-args marker adds nothing.
-			if (!this.executedToolCallIds.has(block.id)) continue;
-			this.addChild(new Text(this.theme.muted(`${block.name}(${safeJson(block.arguments)})`), 1, 0));
-		}
-	}
-
-	private thinkingComponent(record: MessageRecord, contentIndex: number, markdown: string): ThinkingBlock {
-		const existing = record.thinkingComponents.get(contentIndex);
-		const duration = record.thinkingDuration.get(contentIndex);
-		const title = duration === undefined || duration < 100 ? "Thought" : `Thought for ${formatDurationMs(duration)}`;
+	private messageShell(id: string, value: string | Component, timestamp: string | undefined, overrides: Partial<EntryChrome>): EntryShell {
+		const chrome: EntryChrome = {
+			vpadTop: 0,
+			vpadBottom: 0,
+			...(timestamp === undefined ? {} : { timestamp }),
+			...overrides,
+		};
+		const existing = this.entryShells.get(id);
 		if (existing) {
-			existing.setText(markdown);
+			existing.setBody(typeof value === "string" ? undefined : value);
+			existing.setText(typeof value === "string" ? value : undefined);
+			existing.setChrome(chrome);
+			return existing;
+		}
+		const shell = new EntryShell({ id, theme: this.theme, ...(typeof value === "string" ? { text: value } : { body: value }), chrome });
+		this.entryShells.set(id, shell);
+		return shell;
+	}
+
+	private thinkingComponent(id: string, entry: Extract<TranscriptEntry, { kind: "thinking" }>): ThinkingBlock {
+		this.foldIdForThinkingEntry(id);
+		const existing = this.thinkingIndex.get(id);
+		const markdown = entry.block.kind === "thinking" ? entry.block.data.markdown : "";
+		const duration = entry.durationMs;
+		const title = entry.block.lifecycle === "streaming" ? "Thinking…" : duration === undefined || duration < 100 ? "Thought" : `Thought for ${formatDurationMs(duration)}`;
+		if (existing) {
+			existing.setLines(markdown.split("\n"), entry.block.lifecycle === "streaming" ? "expanded" : "collapsed");
 			existing.setTitle(title);
 			return existing;
 		}
-		const component = new ThinkingBlock({
-			markdown,
-			title,
-			defaultDisplayMode: "collapsed",
-			theme: this.theme,
-		});
-		record.thinkingComponents.set(contentIndex, component);
-		this.thinkingIndex.set(`thinking-${record.seq}-${contentIndex}`, component);
+		const component = new ThinkingBlock({ data: entry.block.kind === "thinking" ? entry.block : { markdown }, title, theme: this.theme });
+		this.thinkingIndex.set(id, component);
 		return component;
 	}
 
-	private syncRichComponent(id: string): Component | undefined {
-		const block = this.richBlocks.get(id);
-		if (!block) return undefined;
+	private foldIdForThinkingEntry(entryId: string): string {
+		const message = this.projector.getMessageForEntry(entryId);
+		const content = message?.content.find((value) => value.entry.id === entryId);
+		const foldId = message === undefined || content === undefined ? entryId : thinkingEntryId(message.seq, content.index);
+		this.thinkingFoldToEntry.set(foldId, entryId);
+		return foldId;
+	}
+
+	private syncRichComponent(block: AnyBlockEnvelope): Component {
 		const previous = this.richComponents.get(block.id);
 		const component = previous ? updateBlockComponent(previous, block) : componentForBlock(block, this.theme);
 		this.richComponents.set(block.id, component);
-		if (component instanceof FoldBlock) {
-			// The component is the local source of truth for a manual fold. Keep
-			// the serialized projection aligned so headless/TUI state can compare.
-			block.currentDisplayMode = component.displayMode;
-			block.manualOverride = component.manualOverride;
-			this.richBlocks.set(block.id, block);
-		}
 		return component;
 	}
 
-	private hasAssistantToolCall(id: string): boolean {
-		return this.messages.some((record) => record.message.role === "assistant" && record.message.content.some((block) => block.type === "tool_call" && block.id === id));
+	private thinkingChrome(component: ThinkingBlock, streaming: boolean): Partial<EntryChrome> {
+		const collapsed = component.displayMode === "collapsed";
+		return { collapsed, contentPrefix: "◆ ", contentPrefixTone: collapsed ? "muted" : streaming ? "dim" : "accent_tool", ...(collapsed ? {} : { rail: "dim" as const }) };
 	}
 
-	private createRecord(message: SessionMessage): MessageRecord {
-		const record: MessageRecord = {
-			seq: this.messageSeq++,
-			message: structuredClone(message),
-			streamingBlocks: new Map(),
-			thinkingStart: new Map(),
-			thinkingDuration: new Map(),
-			thinkingComponents: new Map(),
-		};
-		this.messages.push(record);
-		this.timeline.push({ kind: "message", record });
-		return record;
+	private richChrome(block: AnyBlockEnvelope, component: Component): Partial<EntryChrome> {
+		const collapsed = component instanceof FoldBlock && component.displayMode === "collapsed";
+		return { collapsed, contentPrefix: "◆ ", contentPrefixTone: this.richBulletTone(block, collapsed), ...this.richRail(block) };
 	}
 
-	private createImplicitMessage(timestamp: number): MessageRecord {
-		const record = this.createRecord({ role: "assistant", content: [], timestamp });
-		this.activeMessage = record;
-		return record;
+	private richBulletTone(block: AnyBlockEnvelope, collapsed: boolean): NonNullable<EntryChrome["contentPrefixTone"]> {
+		if (block.kind === "execute") {
+			if (block.lifecycle === "failed" || block.data.isError) return "accent_error";
+			return block.lifecycle === "streaming" ? "accent_running" : "accent_success";
+		}
+		if (block.kind === "edit" && block.lifecycle === "failed") return "accent_error";
+		if (block.kind === "thinking") return collapsed ? "muted" : block.lifecycle === "streaming" ? "dim" : "accent_tool";
+		return collapsed ? "muted" : "accent_tool";
 	}
 
-	private updateRichBlock(block: AnyBlockEnvelope | undefined): void {
-		if (!block) return;
-		const copy = structuredClone(block);
-		this.richBlocks.set(copy.id, copy);
-		if (!this.timeline.some((entry) => entry.kind === "rich" && entry.id === copy.id)) this.timeline.push({ kind: "rich", id: copy.id });
+	private richRail(block: AnyBlockEnvelope): Pick<EntryChrome, "rail"> | Record<string, never> {
+		if (block.kind === "thinking") return { rail: "dim" };
+		if (block.kind === "execute") {
+			if (block.lifecycle === "failed" || block.data.isError) return { rail: "accent_error" };
+			return { rail: block.lifecycle === "streaming" ? "accent_running" : "accent_success" };
+		}
+		if (block.kind === "edit") return {};
+		return { rail: "accent_tool" };
 	}
+
 }
 
 export class RendererComponent implements Component {

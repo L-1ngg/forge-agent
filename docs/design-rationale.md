@@ -211,6 +211,8 @@ MCP 本身不要(单进程 + 自持 tool-call 循环,它那两件事都不存在
 
 ### C.2 TUI:pi-tui 原语 + grok 的 UX 概念
 
+> 2026-09-04:operator 选择推翻本节「建在 pi-tui 上」的结论,见 [ADR-005](./decisions/005-tui-own-compositor.md)。下文保留为历史论证,不再作为施工约束。产品目标仍是 grok 的信息架构与交互;渲染底座改为自有 `TerminalFrame` compositor。
+
 `pi-tui` 里没有 UX,只有渲染原语。它给的全部东西:
 
 ```ts
@@ -404,6 +406,7 @@ TUI 那一步的改动量是把 bus 的实现从函数调用换成 socket,协议
 
 - 供应商 wire 协议(`pi-ai` 那一层)
 - TUI 差分渲染器
+  - 2026-09-04 例外:[ADR-005](./decisions/005-tui-own-compositor.md) 决定本仓库自写 `packages/tui` 的 cell compositor(含差分 paint)。本条其余含义不变:不重写 `pi-ai`,不把 compositor 做成可复用框架。
 - Rust 重写
 - **`AgentHarness` 那一层的编排器接口** —— 不实现别人的空壳;自己的编排照自己的形状写
 

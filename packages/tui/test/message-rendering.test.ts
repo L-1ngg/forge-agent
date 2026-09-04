@@ -25,7 +25,9 @@ test("user message renders as a full-width surface card with ❯ and right-align
 	renderer.apply({ type: "message_start", timestamp: 1, message });
 	renderer.apply({ type: "message_end", timestamp: 2, message });
 
-	const line = renderer.render(80)[0] ?? "";
+	const lines = renderer.render(80);
+	const line = lines.find((value) => stripTerminalSequences(value).includes("❯ hello")) ?? "";
+	expect(lines[0]).toContain(SURFACE);
 	expect(line).toContain(SURFACE);
 	expect(line).toContain(`${MUTED}3:18 PM\u001b[39m`);
 	const plain = stripTerminalSequences(line);
@@ -37,8 +39,8 @@ test("standalone UserMessageCard aligns the timestamp at the right edge", () => 
 	const card = new UserMessageCard("hello", 1000, markerTheme, fixedTime);
 	const plain = stripTerminalSequences(card.render(40)[0] ?? "");
 	expect(plain).toContain("❯ hello");
-	// 40 columns: "❯ hello" with 1-cell margins, stamp right-aligned with 1-cell margin.
-	expect(plain.indexOf("3:18 PM")).toBe(40 - "3:18 PM".length - 1);
+	// 40 columns: the upstream block keeps a two-cell right padding gutter.
+	expect(plain.indexOf("3:18 PM")).toBe(40 - "3:18 PM".length - 2);
 });
 
 test("finished thinking collapses to a one-line summary with duration", () => {
@@ -59,9 +61,11 @@ test("finished thinking collapses to a one-line summary with duration", () => {
 	renderer.apply({ type: "message_end", timestamp: 2710, message: finished });
 
 	const rendered = renderer.render(80).join("\n");
-	expect(rendered).toContain(`${THINKING}◆ Thought for 2.7s\u001b[39m`);
-	expect(rendered).not.toContain("thinking: reason");
-	expect(rendered).toContain("answer");
+	const plain = stripTerminalSequences(rendered);
+	expect(plain).toContain("◆ Thought for 2.7s");
+	expect(rendered).toContain(`${MUTED}◆ `);
+	expect(plain).not.toContain("thinking: reason");
+	expect(plain).toContain("answer");
 });
 
 test("thinking without streamed deltas shows no fabricated duration", () => {
@@ -75,8 +79,9 @@ test("thinking without streamed deltas shows no fabricated duration", () => {
 	renderer.apply({ type: "message_end", timestamp: 2, message });
 
 	const rendered = renderer.render(80).join("\n");
-	expect(rendered).toContain("◆ Thought");
-	expect(rendered).not.toContain("Thought for");
+	const plain = stripTerminalSequences(rendered);
+	expect(plain).toContain("◆ Thought");
+	expect(plain).not.toContain("Thought for");
 });
 
 test("Ctrl+O target includes a message thinking block and toggles it open", () => {
@@ -106,7 +111,7 @@ test("turn end appends a muted Worked-for footer", () => {
 	expect(rendered).toContain(`${MUTED}Worked for 13s\u001b[39m`);
 });
 
-test("entries are separated by one blank line", () => {
+test("user entries use their upstream top and bottom vpad without a synthetic spacer", () => {
 	const renderer = new StreamRenderer();
 	renderer.apply({ type: "message_start", timestamp: 1, message: userMessage("first", 1) });
 	renderer.apply({ type: "message_end", timestamp: 2, message: userMessage("first", 1) });
@@ -116,8 +121,9 @@ test("entries are separated by one blank line", () => {
 	const lines = renderer.render(80);
 	const firstIndex = lines.findIndex((line) => line.includes("first"));
 	const secondIndex = lines.findIndex((line) => line.includes("second"));
-	expect(secondIndex - firstIndex).toBe(2);
-	expect(lines[firstIndex + 1]).toBe("");
+	expect(secondIndex - firstIndex).toBe(3);
+	expect(stripTerminalSequences(lines[firstIndex + 1] ?? "").trim()).toBe("");
+	expect(stripTerminalSequences(lines[firstIndex + 2] ?? "").trim()).toBe("");
 });
 
 test("identity theme keeps transcripts free of ANSI by default", () => {
@@ -165,8 +171,9 @@ test("thinking shorter than 100ms shows no fake precision", () => {
 	renderer.apply({ type: "message_end", timestamp: 60, message: finished });
 
 	const rendered = renderer.render(80).join("\n");
-	expect(rendered).toContain("◆ Thought");
-	expect(rendered).not.toContain("Thought for");
+	const plain = stripTerminalSequences(rendered);
+	expect(plain).toContain("◆ Thought");
+	expect(plain).not.toContain("Thought for");
 });
 
 test("formatDurationMs matches the compact seconds style", () => {

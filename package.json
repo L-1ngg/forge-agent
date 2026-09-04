@@ -10,8 +10,9 @@
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun test",
-    "test:headless": "bun scripts/test-headless.ts",
-    "check:deps": "bun scripts/check-deps.ts",
+		"test:headless": "bun scripts/test-headless.ts",
+		"tui:frame": "bun scripts/tui-frame.ts",
+		"check:deps": "bun scripts/check-deps.ts",
     "check": "bun run check:deps && bun run typecheck && bun test"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import type { RequestEnvelopeFor, RequestKind, RequestOutcome, ResponseEnvelope } from "@myh/protocol";
-import type { Terminal } from "@earendil-works/pi-tui";
-import { App, RequestCard, responseForRequestAction } from "../src/index.ts";
+import { block, type RequestEnvelopeFor, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope } from "@myh/protocol";
+import { stripTerminalSequences, visibleWidth, type Terminal } from "@earendil-works/pi-tui";
+import { App, RequestCard, createSemanticTheme, frameFromLines, responseForRequestAction } from "../src/index.ts";
 
 test("App consumes a blocking request and returns the focused card response", async () => {
 	const terminal = new FakeTerminal();
@@ -22,7 +22,7 @@ test("App consumes a blocking request and returns the focused card response", as
 	await app.stop();
 });
 
-test("Esc dismisses only the top card and leaves it in readable scrollback", async () => {
+test("Esc parks only the top card and leaves the request pending", async () => {
 	const terminal = new FakeTerminal();
 	const bus = new TestRequestBus();
 	const app = new App({ terminal, port: idlePort(), requestBus: bus });
@@ -33,12 +33,13 @@ test("Esc dismisses only the top card and leaves it in readable scrollback", asy
 
 	terminal.send("\u001b");
 	expect(app.focusStack.top()?.id).toBe("first");
-	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["second", "dismissed"]]);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["second", "parked"]]);
+	expect(bus.responses).toEqual([]);
 	expect(app.tui.render(80).join("\n")).toContain("Permission: write");
 	await app.stop();
 });
 
-test("Esc resolves a blocking card with a conservative terminal response", async () => {
+test("Esc parks a blocking card without responding and Tab resumes it", async () => {
 	const terminal = new FakeTerminal();
 	const bus = new TestRequestBus();
 	const app = new App({ terminal, port: idlePort(), requestBus: bus });
@@ -47,8 +48,81 @@ test("Esc resolves a blocking card with a conservative terminal response", async
 	await Bun.sleep(0);
 
 	terminal.send("\u001b");
-	expect(bus.responses).toEqual([{ type: "response", id: "esc", result: { decision: "deny", reason: "Dismissed by user" } }]);
-	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["esc", "dismissed"]]);
+	expect(bus.responses).toEqual([]);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["esc", "parked"]]);
+	expect(app.tui.render(80).join("\n")).not.toContain("(parked)");
+	terminal.send("\t");
+	expect(app.focusStack.top()?.id).toBe("esc");
+	expect(app.focusStack.getScrollback()).toEqual([]);
+	expect(bus.responses).toEqual([]);
+	await app.stop();
+});
+
+test("parked card owns the key route until it is resumed", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	let submitted = false;
+	const app = new App({ terminal, port: { ...idlePort(), followUp() {}, steer() {}, abort() {}, runTurn: async function* () { submitted = true; } }, requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("parked-owner"));
+	await Bun.sleep(0);
+	terminal.send("\u001b");
+	terminal.send("\r");
+	expect(submitted).toBe(false);
+	expect(bus.responses).toEqual([]);
+	terminal.send(" ");
+	expect(app.focusStack.top()?.id).toBe("parked-owner");
+	await app.stop();
+});
+
+test("parked card leaves scrollback navigation and fold controls reachable", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	app.renderer.apply({
+		type: "tool_execution_end",
+		timestamp: 1,
+		toolCallId: "parked-fold",
+		toolName: "bash",
+		content: "done",
+		isError: false,
+		block: block({ id: "parked-fold", kind: "execute", lifecycle: "complete" }, { command: "run", stdout: "one\ntwo" }, { defaultDisplayMode: "expanded" }),
+	});
+	let moved = 0;
+	const originalScroll = app.transcript.scrollLines.bind(app.transcript);
+	(app.transcript as unknown as { scrollLines: (lines: number) => void }).scrollLines = (lines) => {
+		moved += lines;
+		originalScroll(lines);
+	};
+	await app.start();
+	bus.push(permissionRequest("parked-navigation"));
+	await Bun.sleep(0);
+	terminal.send("\u001b");
+
+	terminal.send("\u001b[5~");
+	expect(moved).toBeLessThan(0);
+	terminal.send("\u000f");
+	expect(app.renderer.getRichBlocks().find((value) => value.id === "parked-fold")).toMatchObject({ manualOverride: true, currentDisplayMode: "collapsed" });
+	terminal.send("hello");
+	terminal.send("\r");
+	expect(bus.responses).toEqual([]);
+	await app.stop();
+});
+
+test("a terminal outcome retires a parked card", async () => {
+	const terminal = new FakeTerminal();
+	const bus = new TestRequestBus();
+	const app = new App({ terminal, port: idlePort(), requestBus: bus });
+	await app.start();
+	bus.push(permissionRequest("parked-timeout"));
+	await Bun.sleep(0);
+	terminal.send("\u001b");
+
+	bus.pushTerminal({ status: "timeout", requestId: "parked-timeout" });
+	await Bun.sleep(0);
+	expect(app.focusStack.hasParked).toBe(false);
+	expect(app.focusStack.getScrollback().map((card) => [card.id, (card as { state?: string }).state])).toEqual([["parked-timeout", "dismissed"]]);
+	expect(app.tui.render(80).join("\n")).toContain("timed out");
 	await app.stop();
 });
 
@@ -126,10 +200,10 @@ test("Enter resolves the focused action without advancing the card selection", a
 	bus.push(permissionRequest("selected"));
 	await Bun.sleep(0);
 
-	expect(app.tui.render(80).join("\n")).toContain("> 1. allow_once");
+	expect(stripTerminalSequences(app.tui.render(80).join("\n"))).toContain("1 (●) Yes, allow once");
 	terminal.send("\t");
 	expect(app.focusStack.focusIndex).toBe(1);
-	expect(app.tui.render(80).join("\n")).toContain("> 2. deny");
+	expect(stripTerminalSequences(app.tui.render(80).join("\n"))).toContain("2 (●) No, reject");
 	terminal.send("\r");
 	expect(bus.responses).toEqual([{ type: "response", id: "selected", result: { decision: "deny", reason: "Denied by user" } }]);
 	await app.stop();
@@ -248,16 +322,101 @@ test("permission card renders the exact tool arguments before asking for approva
 	expect(rendered).toContain("This command can delete data");
 });
 
-test("App renders the active card shortcuts from the shared focus stack", async () => {
+test("themed request cards paint a stable rail, inset, and full-width surface on every row", () => {
+	const theme = createSemanticTheme();
+	const card = new RequestCard(permissionRequest("cell-geometry"), theme);
+	card.focused = true;
+	const lines = card.render(40);
+	const frame = frameFromLines(lines, 40, lines.length);
+	for (const [rowIndex, line] of lines.entries()) {
+		expect(visibleWidth(stripTerminalSequences(line))).toBe(40);
+		expect(frame.cells[rowIndex]?.[0]?.grapheme).toBe("┃");
+		expect(frame.cells[rowIndex]?.[0]?.background).toMatchObject({ kind: "rgb" });
+		expect([36, 54]).toContain(frame.cells[rowIndex]?.[0]?.background && "r" in frame.cells[rowIndex][0]!.background ? frame.cells[rowIndex][0]!.background.r : -1);
+	}
+	expect(stripTerminalSequences(lines[1] ?? "").indexOf("Permission")).toBe(3);
+});
+
+test("request-card action selection changes only the action surface color", () => {
+	const theme = createSemanticTheme();
+	const card = new RequestCard(permissionRequest("cell-selection"), theme);
+	card.focused = true;
+	const first = frameFromLines(card.render(40), 40, card.render(40).length);
+	card.setFocusIndex(1);
+	const second = frameFromLines(card.render(40), 40, card.render(40).length);
+	const isFocusedRow = (row: typeof first.cells[number] | undefined): boolean => row?.[0]?.background?.kind === "rgb" && "r" in row[0].background && row[0].background.r === 54;
+	const firstAction = first.cells.findIndex(isFocusedRow);
+	const secondAction = second.cells.findIndex(isFocusedRow);
+	expect(firstAction).toBeGreaterThanOrEqual(0);
+	expect(secondAction).toBeGreaterThan(firstAction);
+	for (const index of [0, 1, 2, 3]) expect(first.cells[index]).toEqual(second.cells[index]);
+});
+
+test("height-aware request cards keep title and action tail without changing row geometry", () => {
+	const card = new RequestCard(permissionRequest("height-geometry"), createSemanticTheme());
+	for (const height of [1, 2, 3, 4, 8, 12]) {
+		const lines = card.renderForHeight(40, height);
+		expect(lines).toHaveLength(Math.min(height, card.render(40).length));
+		for (const line of lines) expect(visibleWidth(stripTerminalSequences(line))).toBe(40);
+		if (height >= 2) expect(lines.some((line) => stripTerminalSequences(line).includes("Permission"))).toBe(true);
+		if (height >= 1) expect(stripTerminalSequences(lines.at(-1) ?? "")).toMatch(/\d\s/);
+	}
+});
+
+test("App renders owner-derived shortcuts for active and parked cards", async () => {
 	const bus = new TestRequestBus();
 	const app = new App({ terminal: new FakeTerminal(), port: idlePort(), requestBus: bus });
 	await app.start();
 	bus.push(permissionRequest("shortcuts"));
 	await Bun.sleep(0);
 
-	expect(app.tui.render(120).join("\n")).toContain("Tab next | Enter choose | Esc dismiss");
+	const active = app.tui.render(120).join("\n");
+	expect(active).toContain("Tab");
+	expect(active).toContain("choose");
+	expect(active).toContain("Esc");
+	expect(active).toContain("scrollback");
+	(app.terminal as FakeTerminal).send("\u001b");
+	const parked = app.tui.render(120).join("\n");
+	expect(parked).toContain("Tab/Space");
+	expect(parked).toContain("permission");
 	await app.stop();
 });
+
+test("all request kinds remain actionable and respond once at short terminal heights", async () => {
+	for (const rows of [8, 12, 16]) {
+		for (const { request, parkedLabel } of requestFixtures()) {
+			const terminal = new FakeTerminal(40, rows);
+			const bus = new TestRequestBus();
+			const app = new App({ terminal, port: idlePort(), requestBus: bus });
+			app.editor.setText("hidden composer draft");
+			await app.start();
+			bus.push(request);
+			await Bun.sleep(0);
+
+			const focused = app.tui.render(40).join("\n");
+			expect(focused).toContain("1 ");
+			expect(focused).toContain("Esc");
+			expect(focused).toContain("scrollback");
+			expect(focused).not.toContain("hidden composer draft");
+
+			terminal.send("\u001b");
+			const parked = app.tui.render(40).join("\n");
+			expect(bus.responses).toHaveLength(0);
+			expect(parked).toContain("1 ");
+			expect(parked).toContain("Tab/Space");
+			expect(parked).toContain(parkedLabel);
+			terminal.send("\r");
+			expect(bus.responses).toHaveLength(0);
+
+			terminal.send("\t");
+			terminal.send("\r");
+			terminal.send("\r");
+			expect(bus.responses).toHaveLength(1);
+			expect(bus.responses[0]?.id).toBe(request.id);
+			await app.stop();
+		}
+	}
+}, 20_000);
 
 function permissionRequest(id: string): RequestEnvelopeFor<"permission"> {
 	return {
@@ -268,6 +427,32 @@ function permissionRequest(id: string): RequestEnvelopeFor<"permission"> {
 			toolCall: { type: "tool_call", id: `call-${id}`, name: "write", arguments: { path: "file.ts", content: "value" } },
 		},
 	};
+}
+
+function requestFixtures(): Array<{ request: RequestEnvelopeUnion; parkedLabel: string }> {
+	const detail = "detail one\ndetail two\ndetail three\ndetail four\ndetail five\ndetail six";
+	return [
+		{
+			request: { ...permissionRequest("short-permission"), payload: { ...permissionRequest("short-permission").payload, reason: detail } },
+			parkedLabel: "permission",
+		},
+		{
+			request: { type: "request", id: "short-question", kind: "question", payload: { prompt: `Choose one\n${detail}`, choices: [{ id: "one", label: "One" }] } },
+			parkedLabel: "question",
+		},
+		{
+			request: { type: "request", id: "short-cancel", kind: "cancel_confirm", payload: { action: "cancel current turn", consequence: detail } },
+			parkedLabel: "cancel turn",
+		},
+		{
+			request: { type: "request", id: "short-plan", kind: "plan_approval", payload: { plan: detail } },
+			parkedLabel: "plan approval",
+		},
+		{
+			request: { type: "request", id: "short-oauth", kind: "oauth", payload: { provider: "GitHub", authorizationUrl: "https://example.test/oauth", instructions: detail } },
+			parkedLabel: "oauth",
+		},
+	];
 }
 
 function idlePort() {
@@ -288,7 +473,7 @@ class TestRequestBus {
 		return this.queue;
 	}
 
-	push(request: RequestEnvelopeFor<"permission">): void {
+	push(request: RequestEnvelopeUnion): void {
 		this.queue.push(request);
 	}
 
@@ -353,12 +538,12 @@ class RejectingCloseRequestBus {
 	}
 }
 
-class AsyncRequestQueue implements AsyncIterable<RequestEnvelopeFor<"permission">>, AsyncIterator<RequestEnvelopeFor<"permission">> {
-	private readonly values: RequestEnvelopeFor<"permission">[] = [];
-	private readonly waiters: Array<(result: IteratorResult<RequestEnvelopeFor<"permission">>) => void> = [];
+class AsyncRequestQueue implements AsyncIterable<RequestEnvelopeUnion>, AsyncIterator<RequestEnvelopeUnion> {
+	private readonly values: RequestEnvelopeUnion[] = [];
+	private readonly waiters: Array<(result: IteratorResult<RequestEnvelopeUnion>) => void> = [];
 	private closed = false;
 
-	push(value: RequestEnvelopeFor<"permission">): void {
+	push(value: RequestEnvelopeUnion): void {
 		const waiter = this.waiters.shift();
 		if (waiter) waiter({ value, done: false });
 		else this.values.push(value);
@@ -369,14 +554,14 @@ class AsyncRequestQueue implements AsyncIterable<RequestEnvelopeFor<"permission"
 		for (const waiter of this.waiters.splice(0)) waiter({ value: undefined, done: true });
 	}
 
-	next(): Promise<IteratorResult<RequestEnvelopeFor<"permission">>> {
+	next(): Promise<IteratorResult<RequestEnvelopeUnion>> {
 		const value = this.values.shift();
 		if (value) return Promise.resolve({ value, done: false });
 		if (this.closed) return Promise.resolve({ value: undefined, done: true });
 		return new Promise((resolve) => this.waiters.push(resolve));
 	}
 
-	[Symbol.asyncIterator](): AsyncIterator<RequestEnvelopeFor<"permission">> {
+	[Symbol.asyncIterator](): AsyncIterator<RequestEnvelopeUnion> {
 		return this;
 	}
 }
@@ -410,8 +595,7 @@ class AsyncTerminalQueue implements AsyncIterable<RequestOutcome<RequestKind>>, 
 }
 
 class FakeTerminal implements Terminal {
-	columns = 80;
-	rows = 24;
+	constructor(public columns = 80, public rows = 24) {}
 	kittyProtocolActive = false;
 	private input?: (data: string) => void;
 

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { block } from "@myh/protocol";
+import { block, type SessionEvent } from "@myh/protocol";
 import type { Terminal } from "@earendil-works/pi-tui";
-import { App, StreamRenderer } from "../src/index.ts";
+import { App, StreamRenderer, createSemanticTheme, frameFromLines } from "../src/index.ts";
 import { FoldBlock } from "../src/blocks/fold.ts";
 
 test("groups streamed deltas by contentIndex even when they arrive out of order", () => {
@@ -15,6 +15,116 @@ test("groups streamed deltas by contentIndex even when they arrive out of order"
 		{ kind: "thinking", text: "reason" },
 		{ kind: "tool_call", text: "}{" },
 	]);
+});
+
+test("streaming text keeps one entry id through message_end", () => {
+	const renderer = new StreamRenderer();
+	renderer.apply({ type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } });
+	renderer.apply({ type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: "partial" });
+	const streamingIds = renderer.getEntryIds();
+	expect(streamingIds).toEqual(["message-0-content-0"]);
+
+	renderer.apply({ type: "message_end", timestamp: 3, message: { role: "assistant", content: [{ type: "text", text: "partial final" }], timestamp: 1 } });
+	expect(renderer.getEntryIds()).toEqual(streamingIds);
+	expect(renderer.render(80).join("\n")).toContain("partial final");
+});
+
+test("thinking placeholder keeps its shell id and manual fold across completion", () => {
+	const renderer = new StreamRenderer();
+	renderer.apply({ type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } });
+	renderer.apply({ type: "message_delta", timestamp: 2, contentIndex: 1, contentType: "thinking", delta: "reasoning" });
+	const streamingIds = renderer.getEntryIds();
+	expect(streamingIds).toEqual(["message-0-content-1"]);
+	const foldId = renderer.latestFoldableBlockId();
+	expect(foldId).toBe("thinking-0-1");
+	expect(renderer.toggleBlock(foldId as string)).toBe(true);
+
+	renderer.apply({ type: "message_end", timestamp: 3, message: { role: "assistant", content: [{ type: "text", text: "" }, { type: "thinking", thinking: "reasoning complete" }], timestamp: 1 } });
+	expect(renderer.getEntryIds()).toEqual(streamingIds);
+	expect(renderer.getBlockComponent(foldId as string)?.render(80)).toHaveLength(1);
+});
+
+test("tool placeholder keeps its entry id when the structured execution arrives", () => {
+	const renderer = new StreamRenderer();
+	const assistant = { role: "assistant" as const, content: [{ type: "tool_call" as const, id: "call-stable", name: "bash", arguments: { command: "run" } }], timestamp: 1 };
+	renderer.apply({ type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } });
+	renderer.apply({ type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "tool_call", delta: "{}" });
+	const placeholderIds = renderer.getEntryIds();
+	expect(placeholderIds).toEqual(["message-0-content-0"]);
+	renderer.apply({ type: "message_end", timestamp: 3, message: assistant });
+	renderer.apply({
+		type: "tool_execution_end",
+		timestamp: 4,
+		toolCallId: "call-stable",
+		toolName: "bash",
+		content: "done",
+		isError: false,
+		block: block({ id: "call-stable", kind: "execute", lifecycle: "complete" }, { command: "run", stdout: "done" }, { defaultDisplayMode: "expanded" }),
+	});
+	expect(renderer.getEntryIds()).toEqual(placeholderIds);
+});
+
+test("renderer stays aligned with its projector through anomalous streaming and tool reconciliation", () => {
+	const renderer = new StreamRenderer();
+	const apply = (event: SessionEvent): void => {
+		renderer.apply(event);
+		expect(renderer.getEntryIds()).toEqual(renderer.getProjector().getEntryIds());
+	};
+	const assistant = {
+		role: "assistant" as const,
+		content: [
+			{ type: "thinking" as const, thinking: "reason" },
+			{ type: "text" as const, text: "answer" },
+			{ type: "tool_call" as const, id: "exec-integrated", name: "bash", arguments: { command: "run" } },
+		],
+		timestamp: 1,
+	};
+	const execute = block(
+		{ id: "exec-integrated", kind: "execute", lifecycle: "streaming", currentDisplayMode: "expanded", manualOverride: false },
+		{ command: "run", stdout: "working" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: true },
+	);
+
+	apply({ type: "message_delta", timestamp: 1, contentIndex: 1, contentType: "text", delta: "answer" });
+	const deltaIds = renderer.getEntryIds();
+	apply({ type: "message_start", timestamp: 2, message: { role: "assistant", content: [], timestamp: 1 } });
+	expect(renderer.getEntryIds()).toEqual(deltaIds);
+	expect(renderer.getProjector().getMessages()).toHaveLength(1);
+	apply({ type: "tool_execution_start", timestamp: 3, toolCallId: execute.id, toolName: "bash", args: { command: "run" }, block: execute });
+	expect(renderer.toggleBlock(execute.id)).toBe(true);
+	apply({ type: "message_delta", timestamp: 4, contentIndex: 0, contentType: "thinking", delta: "reason" });
+	apply({ type: "message_end", timestamp: 5, message: assistant });
+	expect(renderer.getEntryIds()).toEqual(["message-0-content-0", "message-0-content-1", "message-0-content-2"]);
+	expect(renderer.getProjector().getEntry("message-0-content-2")).toMatchObject({ kind: "execute", block: { id: execute.id, currentDisplayMode: "collapsed", manualOverride: true } });
+	apply({ type: "message_end", timestamp: 5, message: assistant });
+	expect(renderer.getProjector().getMessages()).toHaveLength(1);
+	apply({ type: "message_start", timestamp: 5, message: assistant });
+	apply({ type: "message_end", timestamp: 5, message: assistant });
+	expect(renderer.getProjector().getMessages()).toHaveLength(1);
+
+	const executeUpdate = block(
+		{ id: execute.id, kind: "execute", lifecycle: "complete", currentDisplayMode: "expanded", manualOverride: false },
+		{ command: "run", stdout: "finished" },
+		{ defaultDisplayMode: "expanded", respectManualFolds: true },
+	);
+	apply({ type: "tool_execution_end", timestamp: 6, toolCallId: execute.id, toolName: "bash", content: "finished", isError: false, block: executeUpdate });
+	expect(renderer.getRichBlocks().find((value) => value.id === execute.id)).toMatchObject({ currentDisplayMode: "collapsed", manualOverride: true });
+	expect(renderer.toggleBlock(execute.id)).toBe(true);
+	const executeResult = { role: "toolResult" as const, toolCallId: execute.id, toolName: "bash", content: [{ type: "text" as const, text: "finished" }], timestamp: 6 };
+	apply({ type: "message_start", timestamp: 6, message: executeResult });
+	apply({ type: "message_end", timestamp: 7, message: executeResult });
+	expect(renderer.render(120).join("\n").match(/finished/g)?.length).toBe(1);
+
+	const edit = block(
+		{ id: "edit-integrated", kind: "edit", lifecycle: "complete", currentDisplayMode: "expanded" },
+		{ path: "file.ts", hunks: [], additions: 1, removals: 0 },
+		{ defaultDisplayMode: "expanded" },
+	);
+	apply({ type: "tool_execution_end", timestamp: 8, toolCallId: edit.id, toolName: "edit", content: "replacement summary", isError: false, block: edit });
+	const editResult = { role: "toolResult" as const, toolCallId: edit.id, toolName: "edit", content: [{ type: "text" as const, text: "replacement summary" }], timestamp: 8 };
+	apply({ type: "message_start", timestamp: 8, message: editResult });
+	apply({ type: "message_end", timestamp: 9, message: editResult });
+	expect(renderer.render(120).join("\n")).toContain("replacement summary");
 });
 
 test("renders tool calls once, suppresses projected tool results, and keeps stream order", () => {
@@ -55,8 +165,8 @@ test("renders tool calls once, suppresses projected tool results, and keeps stre
 
 	const rendered = renderer.render(120).join("\n");
 	expect(rendered.indexOf("before")).toBeGreaterThanOrEqual(0);
-	expect(rendered.indexOf("v execute $ run")).toBeGreaterThan(rendered.indexOf("before"));
-	expect(rendered.indexOf("between")).toBeGreaterThan(rendered.indexOf("v execute $ run"));
+	expect(rendered.indexOf("Run run")).toBeGreaterThan(rendered.indexOf("before"));
+	expect(rendered.indexOf("between")).toBeGreaterThan(rendered.indexOf("Run run"));
 	expect(rendered.indexOf("after")).toBeGreaterThan(rendered.indexOf("between"));
 	expect(rendered).not.toContain('bash({"command":"run"})');
 	expect(rendered.match(/done/g)?.length).toBe(1);
@@ -105,7 +215,7 @@ test("keeps an edit result summary alongside its diff projection", () => {
 	renderer.apply({ type: "message_end", timestamp: 3, message: result });
 
 	const rendered = renderer.render(120).join("\n");
-	expect(rendered).toContain("edit file.ts");
+	expect(rendered).toContain("Edit file.ts");
 	expect(rendered).toContain("replacements: 1");
 });
 
@@ -308,7 +418,7 @@ test("streamed block updates apply new fold metadata without reopening a manual 
 	);
 	renderer.apply({ type: "tool_execution_end", timestamp: 2, toolCallId: "metadata-1", toolName: "bash", content: "done", isError: false, block: update });
 	expect(renderer.getBlockComponent("metadata-1")).toBe(component);
-	expect(component?.render(80).join("\n")).toContain("lines omitted");
+	expect(component?.render(80).join("\n")).toContain("… +3 lines");
 
 	renderer.toggleBlock("metadata-1");
 	const folded = renderer.getRichBlocks().find((value) => value.id === "metadata-1");
@@ -331,6 +441,73 @@ test("streamed block updates apply new fold metadata without reopening a manual 
 	renderer.apply({ type: "tool_execution_update", timestamp: 4, toolCallId: "metadata-1", toolName: "bash", content: "released", block: releaseManual });
 	expect(component?.displayMode).toBe("expanded");
 	expect(renderer.getRichBlocks().find((value) => value.id === "metadata-1")).toMatchObject({ currentDisplayMode: "expanded", manualOverride: false });
+});
+
+test("execute rail and bullet cells follow lifecycle colors", () => {
+	const lifecycleColors = {
+		streaming: { kind: "rgb" as const, r: 1, g: 2, b: 3 },
+		complete: { kind: "rgb" as const, r: 4, g: 5, b: 6 },
+		failed: { kind: "rgb" as const, r: 7, g: 8, b: 9 },
+	};
+	const theme = createSemanticTheme({
+		accent_running: (value) => `\u001b[38;2;1;2;3m${value}\u001b[39m`,
+		accent_success: (value) => `\u001b[38;2;4;5;6m${value}\u001b[39m`,
+		accent_error: (value) => `\u001b[38;2;7;8;9m${value}\u001b[39m`,
+	});
+	for (const lifecycle of ["streaming", "complete", "failed"] as const) {
+		const renderer = new StreamRenderer({ theme });
+		const rich = block(
+			{ id: `exec-${lifecycle}`, kind: "execute", lifecycle },
+			{ command: "run", stdout: "done", isError: lifecycle === "failed" },
+			{ defaultDisplayMode: "expanded" },
+		);
+		if (lifecycle === "streaming") {
+			renderer.apply({
+				type: "tool_execution_start",
+				timestamp: 1,
+				toolCallId: rich.id,
+				toolName: "bash",
+				args: { command: "run" },
+				block: rich,
+			});
+		} else {
+			renderer.apply({
+				type: "tool_execution_end",
+				timestamp: 1,
+				toolCallId: rich.id,
+				toolName: "bash",
+				content: "done",
+				isError: lifecycle === "failed",
+				block: rich,
+			});
+		}
+		const frame = frameFromLines(renderer.render(30), 30);
+		expect(frame.cells[0]?.[0]).toMatchObject({ grapheme: "┃", foreground: lifecycleColors[lifecycle] });
+		expect(frame.cells[0]?.[3]).toMatchObject({ grapheme: "◆", foreground: lifecycleColors[lifecycle] });
+	}
+});
+
+test("toggleBlock keeps shell rail chrome synchronized with the fold state", () => {
+	const renderer = new StreamRenderer();
+	const rich = block(
+		{ id: "chrome-toggle", kind: "execute", lifecycle: "complete" },
+		{ command: "run", stdout: "one\ntwo" },
+		{ defaultDisplayMode: "expanded" },
+	);
+	renderer.apply({ type: "tool_execution_end", timestamp: 1, toolCallId: rich.id, toolName: "bash", content: "done", isError: false, block: rich });
+	const expanded = frameFromLines(renderer.render(30), 30);
+	expect(expanded.cells[0]?.[0]?.grapheme).toBe("┃");
+	expect(expanded.cells[0]?.[3]?.grapheme).toBe("◆");
+
+	expect(renderer.toggleBlock(rich.id)).toBe(true);
+	expect(renderer.getRichBlocks().find((value) => value.id === rich.id)).toMatchObject({ currentDisplayMode: "collapsed", manualOverride: true });
+	const collapsed = frameFromLines(renderer.render(30), 30);
+	expect(collapsed.cells[0]?.[0]?.grapheme).toBe(" ");
+	expect(collapsed.cells[0]?.[3]?.grapheme).toBe("◆");
+
+	expect(renderer.toggleBlock(rich.id)).toBe(true);
+	const reopened = frameFromLines(renderer.render(30), 30);
+	expect(reopened.cells[0]?.[0]?.grapheme).toBe("┃");
 });
 
 test("Ctrl+O toggles the latest structured block through the App input route", async () => {

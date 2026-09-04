@@ -19,3 +19,17 @@ test("dependency check rejects a direct UI blocking call", async () => {
 		await rm(rootPath, { recursive: true, force: true });
 	}
 });
+
+test("dependency check allows Node built-ins in the TUI package", async () => {
+	const rootPath = await mkdtemp(join(tmpdir(), "myh-deps-node-"));
+	try {
+		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
+			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
+		}
+		await writeFile(join(rootPath, "packages", "tui", "src", "builtin.ts"), 'import { createHash } from "node:crypto";\nvoid createHash;\n');
+		expect(await findViolations(new URL(`file://${rootPath}/`))).toEqual([]);
+	} finally {
+		await rm(rootPath, { recursive: true, force: true });
+	}
+});

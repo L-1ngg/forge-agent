@@ -5,7 +5,7 @@ created: 2026-09-01
 
 # ADR-004: 单进程架构 + 协议隔离
 
-> 状态:已批准(2026-09-01,operator 发起;起草于 2026-08-31,编号后补故日期晚于内容)
+> 状态:已批准(2026-09-01,operator 发起;起草于 2026-08-31,编号后补故日期晚于内容)。依赖条款中「tui 只 import protocol 与 pi-tui」被 [005](./005-tui-own-compositor.md) 修正;单进程 + 协议隔离本身仍有效。
 > 参与者:operator(发起)、Grok(分析)
 
 ## 背景
@@ -19,7 +19,7 @@ clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了�
 **核心与界面逻辑分离,物理同进程。**
 
 1. `protocol` 包定义 `SessionEvent` 联合类型与 `RequestEnvelope`/`ResponseEnvelope` 信封,作为核心与界面之间的唯一通信协议。Phase 1 已落地。
-2. `core` 不 import `tui`,`tui` 只 import `protocol` 与 `pi-tui`;CI 用 `check-deps.ts` 强制。Phase 1 已落地。
+2. `core` 不 import `tui`,`tui` 只 import `protocol`(及 `node:` 内置)。Phase 1 落地时允许集曾含 `pi-tui`;该例外由 [ADR-005](./005-tui-own-compositor.md) 收回。CI 用 `check-deps.ts` 强制。
 3. headless 模式(`--json`)作为边界腐烂探测器,持续证明 core 没有 UI 泄漏。Phase 1 已落地。
 4. 多 agent 协作(Phase 2.5)同样 in-process:一个进程里 N 个 `Agent` 实例,靠 async 并发。
 

@@ -31,9 +31,13 @@ test("header stays hidden when there is nothing to show", () => {
 
 test("formatCompact uses K/M suffixes", () => {
 	expect(formatCompact(12)).toBe("12");
+	expect(formatCompact(1_200)).toBe("1.2K");
+	expect(formatCompact(9_960)).toBe("10.0K");
+	expect(formatCompact(9_940)).toBe("9.9K");
 	expect(formatCompact(13_000)).toBe("13K");
 	expect(formatCompact(1_000_000)).toBe("1.0M");
 	expect(formatCompact(2_500_000)).toBe("2.5M");
+	expect(formatCompact(12_000_000)).toBe("12M");
 });
 
 test("working indicator appears while a turn runs and clears after it", async () => {
@@ -65,6 +69,36 @@ test("working indicator appears while a turn runs and clears after it", async ()
 	await Bun.sleep(0);
 	await Bun.sleep(0);
 	expect(app.tui.render(80).join("\n")).not.toContain("Working…");
+	await app.stop();
+});
+
+test("App routes a long draft through the height-aware composer slot", async () => {
+	const terminal = new FakeTerminal();
+	terminal.columns = 40;
+	terminal.rows = 8;
+	const app = new App({
+		terminal,
+		port: {
+			async *runTurn() {},
+			steer() {},
+			followUp() {},
+			abort() {},
+		},
+	});
+	await app.start();
+	app.editor.setText("one\ntwo\nthree\nfour\nfive");
+	const short = app.tui.render(40).map(stripTerminalSequences);
+	expect(short).toHaveLength(8);
+	expect(short[3]).toMatch(/^ ╭─+╮ $/);
+	expect(short.some((line) => line.includes("four"))).toBe(true);
+	expect(short.some((line) => line.includes("five"))).toBe(true);
+	expect(short.at(-1)).toContain("Enter:send");
+
+	terminal.rows = 16;
+	const taller = app.tui.render(40).map(stripTerminalSequences);
+	expect(taller).toHaveLength(16);
+	expect(taller.at(-1)).toContain("Enter:send");
+	expect(taller.some((line) => line.includes("one"))).toBe(true);
 	await app.stop();
 });
 

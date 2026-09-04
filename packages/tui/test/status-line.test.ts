@@ -22,6 +22,12 @@ test("semantic theme slots are the only styling hooks used by the component", ()
 	expect(formatStatusLine({ contextTokens: 4, costUsd: 0.001 })).toBe("ctx 4");
 });
 
+test("idle zero counters do not create a status row", () => {
+	const line = new StatusLine({ state: { running: 0, turn: 0 } });
+	expect(line.render(80)).toEqual([]);
+	expect(formatStatusLine({ running: 0, turn: 0 })).toBe("");
+});
+
 test("App header shows the port usage truth point while the status line omits context", async () => {
 	const app = new App({
 		terminal: new FakeTerminal(),

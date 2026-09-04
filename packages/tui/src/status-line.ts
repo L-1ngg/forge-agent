@@ -1,4 +1,4 @@
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { ContextUsageSnapshot } from "@myh/protocol";
 import { defaultTheme, type SemanticTheme } from "./theme.ts";
 
@@ -18,6 +18,15 @@ export interface StatusLineOptions {
 	theme?: SemanticTheme;
 }
 
+export interface StatusSegment {
+	text: string;
+	styled: string;
+	/** Keeps the segment's semantic color independent from dock composition. */
+	tone: "context" | "activity" | "cost" | "status" | "muted";
+}
+
+export const STATUS_SEGMENT_SEPARATOR = " │ ";
+
 /** Format only metrics that are known at this render point. */
 export function formatStatusLine(state: StatusLineState = {}, width?: number): string {
 	const segments: string[] = [];
@@ -27,13 +36,15 @@ export function formatStatusLine(state: StatusLineState = {}, width?: number): s
 		const marker = state.contextEstimated ? "~" : "";
 		segments.push(contextWindow === undefined ? `ctx ${marker}${formatNumber(contextTokens)}` : `ctx ${marker}${formatNumber(contextTokens)}/${formatNumber(contextWindow)} (${Math.min(100, (contextTokens / contextWindow) * 100).toFixed(0)}%)`);
 	}
-	if (state.running !== undefined && finiteNonNegative(state.running) !== undefined) segments.push(`running ${Math.floor(state.running)}`);
+	const running = finitePositive(state.running);
+	if (running !== undefined) segments.push(`running ${Math.floor(running)}`);
 	const cost = finiteNonNegative(state.costUsd ?? state.cost);
 	if (cost !== undefined && cost >= MIN_DISPLAYED_COST_USD) segments.push(`$${cost.toFixed(3)}`);
 	if (state.provider) segments.push(state.model ? `${state.provider}/${state.model}` : state.provider);
 	else if (state.model) segments.push(state.model);
-	if (state.turn !== undefined && finiteNonNegative(state.turn) !== undefined) segments.push(`turn ${Math.floor(state.turn)}`);
-	const result = segments.join(" | ");
+	const turn = finitePositive(state.turn);
+	if (turn !== undefined) segments.push(`turn ${Math.floor(turn)}`);
+	const result = segments.join(STATUS_SEGMENT_SEPARATOR);
 	return width === undefined ? result : truncateToWidth(result, Math.max(0, Math.floor(width)));
 }
 
@@ -63,18 +74,37 @@ export class StatusLine implements Component {
 		return { ...this.currentState() };
 	}
 
+	/** Return independently styled segments for the agent-view status dock. */
+	renderSegments(width?: number): StatusSegment[] {
+		const state = this.currentState();
+		const segments: StatusSegment[] = [];
+		const context = formatContext(state);
+		if (context) segments.push({ text: context, styled: this.theme.context(context), tone: "context" });
+		const running = finitePositive(state.running);
+		if (running !== undefined) {
+			const text = `running ${Math.floor(running)}`;
+			segments.push({ text, styled: this.theme.activity(text), tone: "activity" });
+		}
+		const cost = finiteNonNegative(state.costUsd ?? state.cost);
+		if (cost !== undefined && cost >= MIN_DISPLAYED_COST_USD) {
+			const text = `$${cost.toFixed(3)}`;
+			segments.push({ text, styled: this.theme.cost(text), tone: "cost" });
+		}
+		const identity = state.provider ? (state.model ? `${state.provider}/${state.model}` : state.provider) : state.model;
+		if (identity) segments.push({ text: identity, styled: this.theme.status(identity), tone: "status" });
+		const turn = finitePositive(state.turn);
+		if (turn !== undefined) {
+			const text = `turn ${Math.floor(turn)}`;
+			segments.push({ text, styled: this.theme.muted(text), tone: "muted" });
+		}
+		if (width === undefined) return segments;
+		return fitStatusSegments(segments, width);
+	}
+
 	render(width: number): string[] {
 		const state = this.currentState();
-		const segments: string[] = [];
-		const context = formatContext(state);
-		if (context) segments.push(this.theme.context(context));
-		if (state.running !== undefined && finiteNonNegative(state.running) !== undefined) segments.push(this.theme.activity(`running ${Math.floor(state.running)}`));
-		const cost = finiteNonNegative(state.costUsd ?? state.cost);
-		if (cost !== undefined && cost >= MIN_DISPLAYED_COST_USD) segments.push(this.theme.cost(`$${cost.toFixed(3)}`));
-		const identity = state.provider ? (state.model ? `${state.provider}/${state.model}` : state.provider) : state.model;
-		if (identity) segments.push(this.theme.status(identity));
-		if (state.turn !== undefined && finiteNonNegative(state.turn) !== undefined) segments.push(this.theme.muted(`turn ${Math.floor(state.turn)}`));
-		const line = truncateToWidth(segments.join(" | "), Math.max(0, Math.floor(width)));
+		const segments = this.renderSegments(width);
+		const line = segments.map((segment) => segment.styled).join(STATUS_SEGMENT_SEPARATOR);
 		return line ? [line] : [];
 	}
 
@@ -105,4 +135,22 @@ function finiteNonNegative(value: number | undefined): number | undefined {
 
 function finitePositive(value: number | undefined): number | undefined {
 	return value !== undefined && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function fitStatusSegments(segments: readonly StatusSegment[], width: number): StatusSegment[] {
+	const safeWidth = Math.max(0, Math.floor(width));
+	if (safeWidth === 0) return [];
+	const fitted: StatusSegment[] = [];
+	let used = 0;
+	for (const segment of segments) {
+		const separator = fitted.length === 0 ? 0 : visibleWidth(STATUS_SEGMENT_SEPARATOR);
+		if (used + separator + visibleWidth(segment.text) > safeWidth) break;
+		fitted.push(segment);
+		used += separator + visibleWidth(segment.text);
+	}
+	if (fitted.length > 0) return fitted;
+	const first = segments[0];
+	if (!first) return [];
+	const text = truncateToWidth(stripTerminalSequences(first.styled), safeWidth, "…", true);
+	return text ? [{ ...first, text: stripTerminalSequences(text), styled: first.tone === "context" ? text : text }] : [];
 }

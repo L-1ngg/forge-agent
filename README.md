@@ -24,7 +24,7 @@ bun install --frozen-lockfile
 MYH_PROVIDER=provider-id MYH_MODEL=model-id MYH_API_KEY=secret bun run myh
 ```
 
-也可以在 `.myh/config.json` 配置 `provider`、`model` 与 `apiKey`;`apiKey` 支持 `"$ENV_VAR"` 和 `"!command"`。Headless 模式:
+也可以在 `.myh/config.json` 配置 `provider`、`model`、可选的 `baseUrl` 与 `apiKey`;`apiKey` 支持 `"$ENV_VAR"` 和 `"!command"`。`baseUrl` 用于把内置 provider 指向兼容代理。Headless 模式:
 
 ```bash
 bun run myh -- -p "read package.json and summarize it" --json

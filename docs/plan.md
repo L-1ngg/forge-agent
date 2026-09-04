@@ -1,6 +1,6 @@
 # 个人 Coding Harness — 规划
 
-> 状态:Phase 2 M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding(2026-09-02)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理;AC-14 未实测,E4 已复核。
+> 状态:Phase 2.2 自有 TerminalFrame TUI 设计中,待 operator 确认(2026-09-04)。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,改由 [phases/phase-2.2.md](./phases/phase-2.2.md) 接手。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理,AC-14 未实测,E4 已复核。
 > **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
 > 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
@@ -13,14 +13,14 @@
 
 | 来源 | 提供 | 采用方式 |
 |---|---|---|
-| **pi** | 多供应商抽象、agent loop、TUI 渲染原语、harness 积木 | 作为 npm 依赖,**分层取用**(→ A) |
+| **pi** | 多供应商抽象、agent loop、harness 积木 | 作为 npm 依赖,**分层取用**(→ A)。不再取用 `pi-tui`(→ [ADR-005](./decisions/005-tui-own-compositor.md)) |
 | **grok-build** | TUI 的交互设计与信息架构 | 只借设计(Rust,UX 不受版权保护) |
 | **clowder-ai** | 团队协作语义、记忆、压缩恢复 | 只借机制,不引依赖 |
 
 四条决策:
 
 1. **agent loop 用 pi 的生成器层,现在不自研。** `pi-agent-core` 是四层且成熟度不同:`pi-ai` 永久依赖、`agentLoop()` 现在用、`harness/` 积木单取、`AgentHarness` 是空壳。→ A、C.1
-2. **TUI 建在 `pi-tui` 原语上,UX 概念全部自写成 Component。** pi-tui 只有渲染没有 UX;grok 的每个设计对应一个类。→ C.2
+2. **TUI 自有 cell compositor,不再依赖 `pi-tui`。** UX 借 grok 的信息架构与交互契约,不以 pixel parity 为出口。历史论证 C.2 保留,施工约束见 [ADR-005](./decisions/005-tui-own-compositor.md)(草稿,待确认)。
 3. **team 用文件实现 clowder 的语义,in-process 多 `Agent` 实例。** 语义值得抄,Redis / A2A / web UI 不要。→ C.3
 4. **core 与 UI 以协议隔离,现在就做。** 成本几天,不做则以后是重写。→ C.4
 
@@ -36,9 +36,9 @@ my-coding-harness/
 │   ├── protocol/   # 事件 union + request/response 类型。零依赖
 │   ├── core/       # 编排:agent 调度、team、session store、config、context 装配
 │   ├── tools/      # read / write / edit / bash / grep + 自有工具
-│   ├── tui/        # shell:block / card / dashboard,建在 pi-tui 上
+│   ├── tui/        # shell:TerminalFrame compositor + grok IA,零外部 TUI 依赖
 │   └── cli/        # 入口:interactive / -p print / --json
-└── (deps) @earendil-works/pi-ai  pi-agent-core  pi-tui    [exact pinned]
+└── (deps) @earendil-works/pi-ai  pi-agent-core    [exact pinned]
 ```
 
 ### 依赖方向
@@ -52,7 +52,7 @@ protocol  ←  core  ←  cli  →  tui  →  protocol
 三条铁律,靠 CI 检查而非自觉:
 
 - `core` 的 `package.json` 里永远不出现 `tui`
-- `tui` 只认 `protocol`,不 import `core` 的内部类型
+- `tui` 只认 `protocol` 与 `node:`,不 import `core` 的内部类型,也不依赖 `pi-tui` 或其它 TUI 框架
 - `cli` 是唯一把两侧接起来的地方
 
 ### 与 pi 的接缝
@@ -73,7 +73,7 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 
 剩余发布前人工验收:真实终端/tmux 下滚轮、OSC 52、truecolor,以及完整二维 dashboard 的焦点、resize 与持续 streaming 交互。
 
-**Plan B**(概率已降低,保留):只用 `pi-ai`(无 native 依赖),TUI 自己在 Bun 上写。
+**Plan B**(已升格为 Phase 2.2 正路径,待 ADR-005 确认):TUI 自己在 Bun 上写 cell compositor;继续只用 `pi-ai` / `pi-agent-core`,不引 `pi-tui`。
 
 ### Phase 1 — 每天能用
 
@@ -92,11 +92,11 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 
 ### Phase 2 — TUI 升级到 grok 水准
 
-> 施工图(里程碑 / tradeoff / 验收)见 [phases/phase-2.md](./phases/phase-2.md);此处只留行动项。
+> M1-M6 原施工图见 [phases/phase-2.md](./phases/phase-2.md);pixel parity 返工已中止,见 [phases/phase-2.1.md](./phases/phase-2.1.md);当前 TUI 重写见 [phases/phase-2.2.md](./phases/phase-2.2.md)。
 
-- 切 `TuiAltScreen`
+- 自有 alt-screen + `TerminalFrame` compositor(Phase 2.2)
 - block 模型 + 折叠 + inline diff
-- `FocusStack` + blocking card 契约
+- `FocusStack` + blocking card 契约(card `Esc` = park)
 - **request 总线**(带 id 的 request/response)—— 本规划唯一「现在不做、以后一定后悔」项,→ C.4;形状决策见 [decisions/002-request-bus-shape.md](./decisions/002-request-bus-shape.md)
 - permission 流水线:hooks → rules → 记住的授权 → 内置自动批准 → mode
 - status line —— context 用量**在真相点计算**,不展示上一次调用的缓存快照(→ F.1 ②)
@@ -134,6 +134,6 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-Phase 2 的 M1-M6 已完成代码与自动化验收;下一步只剩人工 UX checklist、E3/AC-14 的真实终端能力结论与 5 天 `ui.host = "alt"` dogfooding。E1-E3 的未实测风险由 operator 豁免并接受,但不能将 Phase 2 写成 fully closed;`ui.host = "main"` 逃生口仍需在人工验收中确认。
+operator 已选 1A/2A/3A。下一步是确认 [ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md),然后 B0 清空 `packages/tui` 并去掉 `pi-tui`。确认前不删代码。
 
 开工时一并 `git init`。

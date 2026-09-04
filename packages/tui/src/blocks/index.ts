@@ -50,6 +50,7 @@ export function updateBlockComponent(component: Component, block: AnyBlockEnvelo
 	}
 	if (block.kind === "execute" && component instanceof ExecuteBlock) {
 		component.setOutput(block.data);
+		component.setLifecycle(block.lifecycle);
 		component.applyEnvelopeMetadata(block, block.fold);
 		return component;
 	}

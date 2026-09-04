@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2 M1-M6 代码与自动化验收已完成，待人工 UX 验收与 5 天 dogfooding**。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理;AC-14 未实测。
+个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2.2 自有 TerminalFrame TUI 设计中,待 operator 确认**。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,施工真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md) 与 [docs/decisions/005-tui-own-compositor.md](docs/decisions/005-tui-own-compositor.md)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,AC-14 未实测。
 
 ## 真相源层级
 
@@ -21,7 +21,7 @@
 
 ## 工作规则
 
-详见 [docs/SOP.md](docs/SOP.md)「工作规则」。摘要:方向 > 速度;最小改动;证据说话(报告 Ran / Not run / Why / Risk);引用 cat-cafe 结论连证据标签一起引;单一真相源,发现矛盾先指出;状态行同步。
+详见 [docs/SOP.md](docs/SOP.md)。摘要:方向 > 速度;最小改动;证据说话(报告 Ran / Not run / Why / Risk);中/大走流程骨架(Entry → Design → Batches → Verify → Release → Rollback → Learn);保留能说「不」的环节,裁掉仪式;引用 cat-cafe 结论连证据标签一起引;单一真相源,发现矛盾先指出;状态行同步。
 
 ## 写文档时
 

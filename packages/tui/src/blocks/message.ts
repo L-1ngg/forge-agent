@@ -1,5 +1,6 @@
-import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import { identityTheme, type SemanticTheme } from "../theme.ts";
+import { computeEntryLayout } from "../transcript/layout.ts";
 
 export type TimeFormatter = (timestamp: number) => string;
 
@@ -40,13 +41,20 @@ export class UserMessageCard implements Component {
 	render(width: number): string[] {
 		const safeWidth = Math.max(1, Math.floor(width));
 		const stamp = this.timestamp === undefined ? "" : this.formatTime(this.timestamp);
-		return this.text.split("\n").map((line, index) => {
-			let content = ` ${index === 0 ? "❯" : " "} ${line}`;
-			if (index === 0 && stamp) {
-				const pad = Math.max(1, safeWidth - visibleWidth(content) - visibleWidth(stamp) - 1);
-				content = `${content}${" ".repeat(pad)}${this.theme.muted(stamp)}`;
-			}
-			return this.theme.surface(truncateToWidth(content, safeWidth, "", true));
+		const layout = computeEntryLayout(safeWidth, { timestamp: stamp, showPrefix: true });
+		const bodyWidth = Math.max(1, layout.contentWidth - 2);
+		const wrapped = this.text.split("\n").flatMap((line) => wrapTextWithAnsi(line, bodyWidth));
+		const rows = wrapped.length > 0 ? wrapped : [""];
+		return rows.map((line, index) => {
+			const prefix = index === 0 ? "❯ " : "  ";
+			const text = truncateToWidth(`${prefix}${line}`, layout.contentWidth, "", false);
+			const timestampText = index === 0 && layout.timestampWidth > 0 ? stamp : "";
+			const timestampSegment = timestampText
+				? `${" ".repeat(Math.max(0, layout.timestampWidth - visibleWidth(timestampText)))}${this.theme.muted(timestampText)}`
+				: " ".repeat(layout.timestampWidth);
+			const content = `${text}${" ".repeat(Math.max(0, layout.contentWidth - visibleWidth(text)))}${timestampSegment}`;
+			const lineWithChrome = `${" "}${" ".repeat(layout.leftPadding)}${content}${" ".repeat(layout.rightPadding)}`;
+			return this.theme.surface(truncateToWidth(lineWithChrome, safeWidth, "", true));
 		});
 	}
 
