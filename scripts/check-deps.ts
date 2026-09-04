@@ -36,7 +36,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			violations.push("packages/tools/package.json must not depend on @myh/core");
 		}
 		if (packageName === "tui") {
-			const allowed = new Set(["@myh/protocol", "@earendil-works/pi-tui"]);
+			const allowed = new Set(["@myh/protocol"]);
 			for (const dependency of dependencies) {
 				if (!allowed.has(dependency)) violations.push(`packages/tui/package.json has forbidden dependency ${dependency}`);
 			}
@@ -60,7 +60,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (packageName === "tools" && specifier === "@myh/core") {
 					violations.push(`${displayPath} must not import @myh/core`);
 				}
-				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && !["@myh/protocol", "@earendil-works/pi-tui"].includes(specifier)) {
+				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@myh/protocol") {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (

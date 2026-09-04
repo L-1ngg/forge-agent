@@ -11,14 +11,12 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun test",
 		"test:headless": "bun scripts/test-headless.ts",
-		"tui:frame": "bun scripts/tui-frame.ts",
 		"check:deps": "bun scripts/check-deps.ts",
     "check": "bun run check:deps && bun run typecheck && bun test"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.84.4",
-    "@earendil-works/pi-ai": "0.84.4",
-    "@earendil-works/pi-tui": "0.84.4"
+    "@earendil-works/pi-ai": "0.84.4"
   },
   "devDependencies": {
     "@types/bun": "1.3.12",
