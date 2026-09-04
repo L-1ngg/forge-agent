@@ -238,11 +238,20 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 - parity harness:myh `TerminalFrame` 序列化后与 reference dump 逐 cell diff;B2-B5 每个视觉批次新增区域时同步补 scenario。
 - 时间、cursor blink、动画 phase、随机输入在 capture 中关闭或固定。
 
+**spike 结论(2026-09-04 回填,已验证)**:走路径 A(headless buffer harness),放弃 PTY 驱动。
+
+- 上游 pinned commit `bc7f02e` 克隆于 `~/dev/grok-build-spike`,`cargo check -p xai-grok-pager` 在本机通过(rust 1.94.0;需 protoc——build.rs 经 dotslash 找 `bin/protoc`,本机无 dotslash,用独立 protoc 29.3 放 PATH 即可,已留在 `~/dev/grok-build-spike/protoc/`)。
+- 上游测试直接构造 `ratatui::Buffer::empty(Rect)` 渲染,不经真实终端(锚点:`src/scrollback/text_selection.rs` 各测试、`entry_renderer.rs:905` mod tests、`views/agent.rs:1155` mod tests)。ratatui 固定 0.29.0。
+- 渲染入口公开:`AgentViewLayout::compute`(纯布局,`views/agent.rs:172`)、`EntryRenderer::new(entry, theme)`(`entry_renderer.rs:66`);动画用 `with_tick(u64)` 固定 phase,时间戳是 entry 数据——canonical states 可在代码里确定性地构造,不需要网络/API key。
+- harness 形态:vendored copy 内加一个自有 bin target(patch 由本仓库存放并计入 manifest),构造 canonical states → 渲染进 Buffer → 逐 cell 序列化(symbol / fg / bg / modifier / skip→continuation)为 JSON,schema 对齐 `packages/tui/src/frame.ts` 的 `FrameDump`。
+- cell 层 manifest 真正相关的字段:crate commit、harness patch hash、rust toolchain、cols/rows、theme 配置、tick、fixture 输入 hash;终端/字体/DPI 只影响 PNG 辅证层。
+- 环境教训:本机 `/tmp` 是 5.9G tmpfs,Rust workspace 构建会撑爆;构建目录一律放 home 文件系统。
+
 **tradeoff**:环境工程与 fixture 维护是长期成本;换来视觉验收脱离观感循环。B0 删掉的旧 harness 不恢复,仅作 git 历史参考。
 
 **验收**:AC-48、AC-49、AC-50。
 
-**回退**:harness 与 fixture 独立成目录,revert 不影响 B1-B5 功能;若 grok-build 无法被干净驱动,回 spike 结论找次优 capture 路径,不放宽 AC 字段。
+**回退**:harness 与 fixture 独立成目录,revert 不影响 B1-B5 功能;reference 获取路径已经 spike 验证(见上),若施工中发现状态构造不可行,回 spike 找次优路径,不放宽 AC 字段。
 
 ## Acceptance Criteria
 
