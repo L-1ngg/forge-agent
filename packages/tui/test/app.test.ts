@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { request, type RequestEnvelopeUnion, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
+import { block, request, type RequestEnvelopeUnion, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
 import { App, computeScreenLayout, frameToText, type AppPort, type AppRequestBus } from "../src/index.ts";
 import { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } from "../src/ansi.ts";
 import type { HostInput, HostOutput } from "../src/host.ts";
@@ -118,18 +118,48 @@ test("q is draft text now; the composer chrome is painted", async () => {
 });
 
 test("submit echoes the user and paints the assistant reply", async () => {
+	const userMessage = { role: "user" as const, content: [{ type: "text" as const, text: "hi" }], timestamp: 1000 };
+	const assistantDone = { role: "assistant" as const, content: [{ type: "text" as const, text: "Hello back" }], timestamp: 2000 };
 	const port = fakePort([
-		{ type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } },
-		{ type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: "Hello" },
-		{ type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: " back" },
-		{ type: "turn_end", timestamp: 4, stopReason: "stop" },
+		{ type: "turn_start", timestamp: 900 },
+		{ type: "message_start", timestamp: 1000, message: userMessage },
+		{ type: "message_end", timestamp: 1001, message: userMessage },
+		{ type: "message_start", timestamp: 2000, message: { role: "assistant", content: [], timestamp: 2000 } },
+		{ type: "message_delta", timestamp: 2001, contentIndex: 0, contentType: "text", delta: "Hello" },
+		{ type: "message_delta", timestamp: 2002, contentIndex: 0, contentType: "text", delta: " back" },
+		{ type: "message_end", timestamp: 2003, message: assistantDone },
+		{ type: "turn_end", timestamp: 3000, stopReason: "stop" },
 	]);
 	const { app, input } = createApp({ port });
 	await app.start();
 	input.emit(Buffer.from("hi"));
 	input.emit(Buffer.from("\r"));
 	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Hello back"));
-	expect(frameToText(app.composeFrameForTest())).toContain("❯ hi");
+	const text = frameToText(app.composeFrameForTest());
+	expect(text).toContain("❯ hi"); // user band from the event stream
+	expect(text).toContain("Worked for 2.1s"); // turn notice from the projector
+	await app.stop();
+});
+
+test("ctrl+o folds the latest foldable entry", async () => {
+	const executeBlock = block(
+		{ id: "call-1", kind: "execute", lifecycle: "complete", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false },
+		{ command: "ls", stdout: "1\n2\n3\n4\n5\n6\n7\n8\n", exitCode: 0 },
+		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3 },
+	);
+	const port = fakePort([
+		{ type: "tool_execution_start", timestamp: 1, toolCallId: "call-1", toolName: "bash", args: { command: "ls" }, block: executeBlock },
+		{ type: "turn_end", timestamp: 2, stopReason: "stop" },
+	]);
+	const { app, input } = createApp({ port });
+	await app.start();
+	input.emit(Buffer.from("go"));
+	input.emit(Buffer.from("\r"));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Run ls"));
+	expect(frameToText(app.composeFrameForTest())).toContain("… +3 lines"); // truncated by default
+	input.emit(Buffer.from([0x0f])); // ctrl+o
+	expect(frameToText(app.composeFrameForTest())).toContain("Run ls");
+	expect(frameToText(app.composeFrameForTest())).not.toContain("… +3 lines"); // collapsed to header
 	await app.stop();
 });
 

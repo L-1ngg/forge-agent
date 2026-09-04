@@ -1,6 +1,6 @@
-import { response, type RequestEnvelopeUnion, type RequestKind, type ResponseResultByKind, type SessionEvent } from "@myh/protocol";
+import { response, type RequestEnvelopeUnion, type RequestKind, type ResponseResultByKind, type SessionEvent, type TokenUsage } from "@myh/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
-import { createFrame, defaultStyle, fillRect, writeText, type CellStyle, type TerminalFrame } from "./frame.ts";
+import { createFrame, type TerminalFrame } from "./frame.ts";
 import { computeScreenLayout, layoutOffsets } from "./layout.ts";
 import {
 	backspace,
@@ -22,7 +22,10 @@ import { buildStatusSegments, paintStatus } from "./status-line.ts";
 import { paintShortcuts, type ShortcutHint } from "./dock.ts";
 import { createTheme, type Theme } from "./theme.ts";
 import { isCtrlC, type Key } from "./keys.ts";
-import { wrapText } from "./width.ts";
+import { TranscriptProjector } from "./transcript/projector.ts";
+import { presentEntry } from "./transcript/present.ts";
+import { computeEntryLayout, entryHeight, paintEntry } from "./transcript/entry-shell.ts";
+import { ScrollState, type EntrySpan } from "./scroll.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -55,30 +58,30 @@ export interface AppOptions {
 	env?: NodeJS.ProcessEnv;
 }
 
-type TranscriptTone = "user" | "assistant" | "notice" | "error";
-
-interface TranscriptEntry {
-	text: string;
-	tone: TranscriptTone;
-}
-
 const SHORTCUTS_IDLE: readonly ShortcutHint[] = [
 	{ keys: ["enter"], label: "send" },
+	{ keys: ["ctrl+o"], label: "fold" },
+	{ keys: ["pgup/pgdn"], label: "scroll" },
 	{ keys: ["ctrl+c"], label: "quit", pinned: true },
 ];
-const SHORTCUTS_RUNNING: readonly ShortcutHint[] = [{ keys: ["ctrl+c"], label: "quit", pinned: true }];
+const SHORTCUTS_RUNNING: readonly ShortcutHint[] = [
+	{ keys: ["pgup/pgdn"], label: "scroll" },
+	{ keys: ["ctrl+c"], label: "quit", pinned: true },
+];
 
 /**
- * Phase 2.2 B2: input skeleton on the own compositor. Turn events render as
- * plain transcript lines until B3 lands the typed-entry projector; request
- * envelopes keep the B0 conservative responder until B4 lands cards.
+ * Phase 2.2 B3: typed transcript entries with stable identity projected from
+ * session events, painted through the shared entry shell. Request envelopes
+ * keep the B0 conservative responder until B4 lands cards.
  */
 export class App {
 	private readonly host: Host;
 	private readonly theme: Theme;
 	private readonly draft: EditorState = createEditor();
-	private readonly entries: TranscriptEntry[] = [];
+	private readonly projector = new TranscriptProjector();
+	private readonly scroll = new ScrollState();
 	private running = false;
+	private lastUsage: TokenUsage | undefined;
 	private started = false;
 	private stoppedPromise: Promise<void> | undefined;
 	private resolveStopped: (() => void) | undefined;
@@ -121,6 +124,11 @@ export class App {
 			void this.stop();
 			return;
 		}
+		if (key.type === "ctrl" && key.key === "o") {
+			this.toggleLatestFoldable();
+			this.repaint();
+			return;
+		}
 		switch (key.type) {
 			case "char":
 				insertText(this.draft, key.text);
@@ -147,8 +155,14 @@ export class App {
 			case "end":
 				moveEnd(this.draft);
 				break;
+			case "pageUp":
+				this.scrollPage(1);
+				break;
+			case "pageDown":
+				this.scrollPage(-1);
+				break;
 			default:
-				return; // escape/tab/unknown have no binding in B2
+				return; // escape/tab/unknown have no binding in B3
 		}
 		this.repaint();
 	}
@@ -160,7 +174,6 @@ export class App {
 			return;
 		}
 		const input = submitEditor(this.draft);
-		this.entries.push({ text: `❯ ${input}`, tone: "user" });
 		void this.runTurn(input);
 		this.repaint();
 	}
@@ -171,7 +184,7 @@ export class App {
 		try {
 			for await (const event of this.options.port.runTurn(input)) this.handleEvent(event);
 		} catch (error) {
-			this.entries.push({ text: error instanceof Error ? error.message : String(error), tone: "error" });
+			this.projector.addNotice(error instanceof Error ? error.message : String(error));
 		} finally {
 			this.running = false;
 			this.repaint();
@@ -179,38 +192,58 @@ export class App {
 	}
 
 	private handleEvent(event: SessionEvent): void {
-		switch (event.type) {
-			case "message_delta":
-				if (event.contentType === "text") this.appendAssistant(event.delta);
-				break;
-			case "message_end":
-				if (event.message.errorMessage) this.entries.push({ text: event.message.errorMessage, tone: "error" });
-				break;
-			case "tool_execution_start":
-				this.entries.push({ text: `▶ ${event.toolName}`, tone: "notice" });
-				break;
-			case "tool_execution_end":
-				if (event.isError) this.entries.push({ text: `✗ ${event.toolName} failed`, tone: "error" });
-				break;
-			case "turn_end":
-				if (event.stopReason === "error" || event.stopReason === "aborted") this.entries.push({ text: `turn ${event.stopReason}`, tone: "error" });
-				break;
-			default:
-				break;
-		}
+		if (event.type === "message_end" && event.message.usage) this.lastUsage = event.message.usage;
+		this.projector.apply(event);
+		if (event.type === "turn_end" && (event.stopReason === "error" || event.stopReason === "aborted")) this.projector.addNotice(`turn ${event.stopReason}`);
 		this.repaint();
 	}
 
-	private appendAssistant(delta: string): void {
-		const last = this.entries.at(-1);
-		if (last && last.tone === "assistant") last.text += delta;
-		else this.entries.push({ text: delta, tone: "assistant" });
+	/** Fold toggle targets the latest foldable entry (thinking/execute/edit). */
+	private toggleLatestFoldable(): void {
+		const foldable = this.projector.getEntries().filter((entry) => entry.kind === "thinking" || entry.kind === "execute" || entry.kind === "edit");
+		const last = foldable.at(-1);
+		if (!last) return;
+		const current = last.block.currentDisplayMode ?? last.block.defaultDisplayMode ?? last.block.fold.defaultDisplayMode ?? "expanded";
+		const next = current === "collapsed" ? "expanded" : "collapsed";
+		this.projector.setEntryDisplayState(last.id, next, true);
+	}
+
+	private scrollPage(direction: 1 | -1): void {
+		const { totalRows, viewportHeight } = this.transcriptMetrics();
+		this.scroll.pageBy(direction, viewportHeight, Math.max(0, totalRows - viewportHeight));
+	}
+
+	private transcriptMetrics(): { totalRows: number; viewportHeight: number; spans: EntrySpan[] } {
+		const columns = this.host.columns;
+		const rows = this.host.rows;
+		const segments = this.statusSegments();
+		const composerLines = Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
+		const plan = computeScreenLayout({ columns, rows, composerLines, hasStatus: segments.length > 0 });
+		const presentations = this.presentations(columns);
+		let start = 0;
+		const spans: EntrySpan[] = presentations.map((presentation) => {
+			const height = entryHeight(presentation.presentation);
+			const span = { entryId: presentation.id, start, height };
+			start += height;
+			return span;
+		});
+		return { totalRows: start, viewportHeight: plan.transcript.height, spans };
+	}
+
+	private presentations(columns: number) {
+		return this.projector.getEntries().map((entry) => {
+			const hasTimestamp = entry.kind === "user" || entry.kind === "assistant";
+			const layout = computeEntryLayout(columns, hasTimestamp ? "0:00 PM" : undefined);
+			return { id: entry.id, presentation: presentEntry(entry, layout.contentWidth, this.theme) };
+		});
 	}
 
 	private statusSegments(): string[] {
 		const status = this.options.getStatus?.();
+		const cost = this.lastUsage?.cost?.total;
 		return buildStatusSegments({
 			...(status ?? {}),
+			...(cost !== undefined ? { cost } : {}),
 			...(this.running ? { activity: "working" } : {}),
 		});
 	}
@@ -233,8 +266,10 @@ export class App {
 		const composerLines = Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
 		const plan = computeScreenLayout({ columns, rows, composerLines, hasStatus: segments.length > 0 });
 		const offsets = layoutOffsets(plan);
-		if (plan.header.height === 1) paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir }, this.theme);
-		paintTranscript(frame, offsets.transcript, plan.transcript.height, this.entries, this.theme);
+		if (plan.header.height === 1) {
+			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(this.lastUsage ? { contextLabel: formatTokens(this.lastUsage.totalTokens) } : {}) }, this.theme);
+		}
+		this.paintTranscriptRegion(frame, offsets.transcript, plan.transcript.height);
 		paintComposer({
 			frame,
 			x: 0,
@@ -250,6 +285,27 @@ export class App {
 		if (plan.status.height === 1) paintStatus(frame, offsets.status, segments, this.theme);
 		if (plan.shortcuts.height === 1) paintShortcuts(frame, offsets.shortcuts, this.running ? SHORTCUTS_RUNNING : SHORTCUTS_IDLE, this.theme);
 		return frame;
+	}
+
+	private paintTranscriptRegion(frame: TerminalFrame, top: number, height: number): void {
+		if (height <= 0) return;
+		const presentations = this.presentations(frame.columns);
+		let start = 0;
+		const spans: EntrySpan[] = presentations.map((presentation) => {
+			const span = { entryId: presentation.id, start, height: entryHeight(presentation.presentation) };
+			start += span.height;
+			return span;
+		});
+		const totalRows = start;
+		this.scroll.captureAnchor(spans, totalRows, height);
+		this.scroll.restoreAnchor(spans, totalRows, height);
+		const maxOffset = Math.max(0, totalRows - height);
+		if (this.scroll.offset > maxOffset) this.scroll.scrollBy(0, maxOffset);
+		const windowTop = Math.max(0, totalRows - height - Math.min(this.scroll.offset, maxOffset));
+		for (const [index, span] of spans.entries()) {
+			if (span.start + span.height <= windowTop || span.start >= windowTop + height) continue;
+			paintEntry(frame, top + (span.start - windowTop), presentations[index]!.presentation, this.theme);
+		}
 	}
 
 	/**
@@ -286,33 +342,9 @@ function conservativeResultFor(kind: RequestKind): ResponseResultByKind[RequestK
 	}
 }
 
-function toneStyle(tone: TranscriptTone, theme: Theme): CellStyle {
-	const base = defaultStyle();
-	switch (tone) {
-		case "user":
-			return { ...base, foreground: theme.color("accent_user"), background: theme.color("surface") };
-		case "assistant":
-			return { ...base, foreground: theme.color("status") };
-		case "notice":
-			return { ...base, foreground: theme.color("muted") };
-		case "error":
-			return { ...base, foreground: theme.color("error") };
-	}
-}
-
-/** Paint transcript entries bottom-aligned in the transcript region. */
-export function paintTranscript(frame: TerminalFrame, top: number, height: number, entries: readonly TranscriptEntry[], theme: Theme): void {
-	if (height <= 0 || top >= frame.rows) return;
-	const rows: { text: string; tone: TranscriptTone }[] = [];
-	for (const entry of entries) {
-		for (const line of wrapText(entry.text, Math.max(1, frame.columns - 2))) rows.push({ text: line, tone: entry.tone });
-	}
-	const visible = rows.slice(-height);
-	let y = top + height - visible.length;
-	for (const row of visible) {
-		const style = toneStyle(row.tone, theme);
-		if (row.tone === "user") fillRect(frame, 0, y, frame.columns, 1, style);
-		writeText(frame, 1, y, row.text, style);
-		y++;
-	}
+/** Compact token totals for the header (13K / 1.0M style). */
+export function formatTokens(total: number): string {
+	if (total >= 1_000_000) return `${(total / 1_000_000).toFixed(1)}M`;
+	if (total >= 1_000) return `${Math.round(total / 1_000)}K`;
+	return String(total);
 }
