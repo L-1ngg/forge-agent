@@ -24,6 +24,34 @@ export function isEditorEmpty(state: EditorState): boolean {
 	return state.lines.length === 1 && state.lines[0] === "";
 }
 
+/** String offset of the cursor (UTF-16 code units, matching JS string indices). */
+export function editorCursorOffset(state: EditorState): number {
+	let offset = 0;
+	for (let line = 0; line < state.cursorLine; line++) offset += (state.lines[line]?.length ?? 0) + 1;
+	offset += lineGraphemes(state, state.cursorLine).slice(0, state.cursorColumn).join("").length;
+	return offset;
+}
+
+/** Replace the buffer and place the cursor at a string offset. */
+export function replaceEditor(state: EditorState, text: string, cursorOffset: number): void {
+	const normalized = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+	state.lines = normalized.length === 0 ? [""] : normalized.split("\n");
+	const bounded = Math.max(0, Math.min(normalized.length, Math.floor(cursorOffset)));
+	let remaining = bounded;
+	state.cursorLine = 0;
+	for (let line = 0; line < state.lines.length; line++) {
+		const length = state.lines[line]!.length;
+		if (remaining <= length) {
+			state.cursorLine = line;
+			state.cursorColumn = graphemes(state.lines[line]!.slice(0, remaining)).length;
+			return;
+		}
+		remaining -= length + 1;
+	}
+	state.cursorLine = state.lines.length - 1;
+	state.cursorColumn = lineGraphemes(state, state.cursorLine).length;
+}
+
 function lineGraphemes(state: EditorState, line: number): string[] {
 	return graphemes(state.lines[line] ?? "");
 }

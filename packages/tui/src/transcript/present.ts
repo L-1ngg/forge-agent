@@ -2,6 +2,7 @@ import type { AnyBlockEnvelope, BlockDisplayMode, EditBlockData, ExecuteBlockDat
 import { defaultStyle, type CellStyle, type TerminalColor } from "../frame.ts";
 import type { Theme } from "../theme.ts";
 import { visibleWidth, wrapText } from "../width.ts";
+import { renderMarkdown } from "../markdown.ts";
 import { trimHeadTail, trimTail } from "./fold.ts";
 import type { EntryChromeSpec, EntryRow, TranscriptEntry } from "./types.ts";
 
@@ -69,24 +70,8 @@ function presentUser(entry: TranscriptEntry & { kind: "user" }, contentWidth: nu
 	};
 }
 
-/** Minimal markdown: paragraphs wrap; fenced code keeps verbatim lines on a surface band. Full markdown lands in B5. */
 function presentAssistant(entry: TranscriptEntry & { kind: "assistant" }, contentWidth: number, theme: Theme): EntryPresentation {
-	const text = fg(theme, "status");
-	const code = fg(theme, "status", false, theme.color("dark_surface"));
-	const rows: EntryRow[] = [];
-	let inFence = false;
-	for (const line of entry.markdown.split("\n")) {
-		if (line.trimStart().startsWith("```")) {
-			inFence = !inFence;
-			continue;
-		}
-		if (inFence) {
-			rows.push(row(line, code, theme.color("dark_surface")));
-			continue;
-		}
-		for (const wrapped of wrapText(line, contentWidth)) rows.push(row(wrapped, text));
-	}
-	if (rows.length === 0) rows.push(row("", text));
+	const rows = renderMarkdown(entry.markdown, contentWidth, theme);
 	return {
 		rows,
 		chrome: { timestamp: formatTimestamp(entry.timestamp), vpadTop: 0, vpadBottom: 1, collapsed: false },

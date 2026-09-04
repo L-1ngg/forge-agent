@@ -1,10 +1,12 @@
-import { type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type TokenUsage } from "@myh/protocol";
+import { type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type TokenUsage } from "@myh/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, type TerminalFrame } from "./frame.ts";
 import { computeScreenLayout, layoutOffsets } from "./layout.ts";
 import {
 	backspace,
 	createEditor,
+	editorCursorOffset,
+	editorText,
 	insertText,
 	isEditorEmpty,
 	moveDown,
@@ -13,6 +15,7 @@ import {
 	moveLeft,
 	moveRight,
 	moveUp,
+	replaceEditor,
 	submitEditor,
 	type EditorState,
 } from "./editor.ts";
@@ -36,6 +39,8 @@ import {
 	requestCardActions,
 	type RequestCardRecord,
 } from "./request-card.ts";
+import { paintWelcome } from "./welcome.ts";
+import { paintPicker, pickerHeight, type PickerState } from "./picker.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -52,13 +57,18 @@ export interface AppPort {
 	abort?(): void;
 }
 
+/** Structural view of core's InputCompletionSource; parsing stays in core. */
+export interface AppCompletionSource {
+	getSuggestions(input: string, cursor: number): InputCompletionSuggestions | null | Promise<InputCompletionSuggestions | null>;
+	applyCompletion(input: string, cursor: number, item: InputCompletionItem, prefix: string): { input: string; cursor: number };
+}
+
 export interface AppOptions {
 	port: AppPort;
 	/** Part of the frozen CLI contract; every mode enters alt-screen until B5. */
 	host: AppHostMode;
 	requestBus: AppRequestBus;
-	/** Part of the frozen CLI contract; unused until the B5 input surfaces. */
-	completionSource?: unknown;
+	completionSource?: AppCompletionSource | undefined;
 	getStatus?: () => { provider: string; model: string };
 	cwd: string;
 	homeDir: string;
@@ -84,6 +94,8 @@ export class App {
 	private readonly focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
+	private queued: string | undefined;
+	private picker: PickerState | undefined;
 	private lastUsage: TokenUsage | undefined;
 	private started = false;
 	private stoppedPromise: Promise<void> | undefined;
@@ -193,6 +205,11 @@ export class App {
 	}
 
 	private handleComposerKey(key: Key): void {
+		if (this.picker && this.handlePickerKey(key)) return;
+		if (key.type === "ctrlEnter") {
+			this.cancelAndSend();
+			return;
+		}
 		if (key.type === "escape") {
 			if (nextEscStep(this.routerState()) === "abort_turn") this.options.port.abort?.();
 			this.repaint();
@@ -237,7 +254,60 @@ export class App {
 			default:
 				return;
 		}
+		this.refreshSuggestions();
 		this.repaint();
+	}
+
+	private handlePickerKey(key: Key): boolean {
+		const picker = this.picker;
+		if (!picker) return false;
+		if (key.type === "escape") {
+			this.picker = undefined;
+			this.repaint();
+			return true;
+		}
+		if (key.type === "tab" || (key.type === "arrow" && key.direction === "down")) {
+			picker.index = (picker.index + 1) % picker.items.length;
+			this.repaint();
+			return true;
+		}
+		if (key.type === "shiftTab" || (key.type === "arrow" && key.direction === "up")) {
+			picker.index = (picker.index - 1 + picker.items.length) % picker.items.length;
+			this.repaint();
+			return true;
+		}
+		if (key.type === "enter") {
+			this.applyPicker();
+			return true;
+		}
+		return false;
+	}
+
+	private applyPicker(): void {
+		const picker = this.picker;
+		const source = this.options.completionSource;
+		const item = picker?.items[picker.index];
+		if (!picker || !source || !item) return;
+		const applied = source.applyCompletion(editorText(this.draft), editorCursorOffset(this.draft), item, picker.prefix);
+		replaceEditor(this.draft, applied.input, applied.cursor);
+		this.picker = undefined;
+		this.refreshSuggestions();
+		this.repaint();
+	}
+
+	private refreshSuggestions(): void {
+		const source = this.options.completionSource;
+		if (!source) {
+			this.picker = undefined;
+			return;
+		}
+		const input = editorText(this.draft);
+		const cursor = editorCursorOffset(this.draft);
+		void Promise.resolve(source.getSuggestions(input, cursor)).then((result) => {
+			if (!this.started) return;
+			this.picker = result && result.items.length > 0 ? { items: result.items, prefix: result.prefix, index: 0 } : undefined;
+			this.repaint();
+		});
 	}
 
 	private chooseAction(index: number): void {
@@ -256,14 +326,56 @@ export class App {
 	}
 
 	private submit(): void {
-		if (this.running) return; // Enter-queueing lands in B5 (AC-20)
 		if (isEditorEmpty(this.draft)) {
 			this.repaint();
 			return;
 		}
 		const input = submitEditor(this.draft);
+		this.picker = undefined;
+		if (this.dispatchCommand(input)) {
+			this.repaint();
+			return;
+		}
+		if (this.running) {
+			this.queued = input;
+			this.repaint();
+			return;
+		}
 		void this.runTurn(input);
 		this.repaint();
+	}
+
+	private cancelAndSend(): void {
+		if (isEditorEmpty(this.draft) && !this.running) return;
+		const input = isEditorEmpty(this.draft) ? undefined : submitEditor(this.draft);
+		this.picker = undefined;
+		if (this.running) {
+			this.queued = input;
+			this.options.port.abort?.();
+			this.repaint();
+			return;
+		}
+		if (input) {
+			if (this.dispatchCommand(input)) this.repaint();
+			else void this.runTurn(input);
+		}
+	}
+
+	private dispatchCommand(input: string): boolean {
+		const command = input.trim();
+		if (command === "/quit" || command === "/exit") {
+			void this.stop();
+			return true;
+		}
+		if (command === "/clear") {
+			this.projector.clear();
+			return true;
+		}
+		if (command === "/help") {
+			this.projector.addNotice("/help · /clear · /quit · @file to mention");
+			return true;
+		}
+		return false;
 	}
 
 	private async runTurn(input: string): Promise<void> {
@@ -275,7 +387,10 @@ export class App {
 			this.projector.addNotice(error instanceof Error ? error.message : String(error));
 		} finally {
 			this.running = false;
-			this.repaint();
+			const next = this.queued;
+			this.queued = undefined;
+			if (next) void this.runTurn(next);
+			else this.repaint();
 		}
 	}
 
@@ -330,7 +445,7 @@ export class App {
 		return buildStatusSegments({
 			...(status ?? {}),
 			...(cost !== undefined ? { cost } : {}),
-			...(this.running ? { activity: "working" } : {}),
+			...(this.running ? { activity: this.queued ? "queued" : "working" } : {}),
 		});
 	}
 
@@ -363,7 +478,16 @@ export class App {
 		if (plan.header.height === 1) {
 			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(this.lastUsage ? { contextLabel: formatTokens(this.lastUsage.totalTokens) } : {}) }, this.theme);
 		}
-		this.paintTranscriptRegion(frame, offsets.transcript, plan.transcript.height);
+		const entries = this.projector.getEntries();
+		if ((this.options.showWelcome ?? false) && entries.length === 0 && plan.transcript.height > 0 && !this.picker) {
+			paintWelcome(frame, offsets.transcript, plan.transcript.height, { cwd: this.options.cwd, homeDir: this.options.homeDir, model: this.options.getStatus?.().model }, this.theme);
+		} else {
+			this.paintTranscriptRegion(frame, offsets.transcript, plan.transcript.height);
+		}
+		if (this.picker && plan.interactive.owner === "composer") {
+			const height = pickerHeight(this.picker.items.length, Math.min(8, plan.transcript.height));
+			paintPicker(frame, offsets.transcript + plan.transcript.height - height, height, this.picker, this.theme);
+		}
 		const card = this.visibleCard();
 		if (plan.interactive.owner === "card" && card) {
 			paintRequestCard({

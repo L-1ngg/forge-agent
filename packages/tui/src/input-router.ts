@@ -55,7 +55,8 @@ export function shortcutRoutes(state: InputRouterState): readonly ShortcutRoute[
 	}
 	if (owner === "composer") {
 		return [
-			{ keys: ["enter"], label: "send" },
+			{ keys: ["enter"], label: state.running ? "queue" : "send" },
+			{ keys: ["ctrl+enter"], label: "send now" },
 			{ keys: ["ctrl+o"], label: "fold" },
 			{ keys: ["pgup/pgdn"], label: "scroll" },
 			{ keys: ["ctrl+c"], label: "quit", pinned: true },

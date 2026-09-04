@@ -121,13 +121,13 @@ describe("config", () => {
 		expect(config).toMatchObject({ provider: "env", model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } });
 	});
 
-	test("defaults an invalid ui host to the main-screen escape hatch", async () => {
+	test("defaults an invalid ui host to alt-screen (inline host is deferred)", async () => {
 		const root = await temporaryDirectory();
 		const home = join(root, "home");
 		const cwd = join(root, "project");
 		await mkdir(join(cwd, ".myh"), { recursive: true });
 		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ ui: { host: "invalid" } }));
-		expect((await loadConfig({ cwd, home, env: {} })).ui.host).toBe("main");
+		expect((await loadConfig({ cwd, home, env: {} })).ui.host).toBe("alt");
 	});
 
 	test("resolves command and environment secrets", async () => {

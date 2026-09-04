@@ -101,6 +101,11 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			return await runHeadless(runner, prompt as string, console.log, { requestBus });
 		}
 		const completionSource = createInputCompletionSource({
+			commands: [
+				{ name: "help", description: "Show commands" },
+				{ name: "clear", description: "Clear the transcript" },
+				{ name: "quit", description: "Exit" },
+			],
 			listFiles: (prefix) => scanFiles(workingDirectory, prefix),
 		});
 		const app = new App({

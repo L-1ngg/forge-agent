@@ -31,7 +31,7 @@ const defaults: HarnessConfig = {
 	systemPrompt: "You are a coding assistant. Work carefully in the current directory and keep responses concise.",
 	thinkingLevel: "medium",
 	permissionMode: "default",
-	ui: { host: "main" },
+	ui: { host: "alt" }, // inline/main host is deferred; "main" is accepted but aliases to alt at runtime
 };
 
 async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
@@ -55,7 +55,7 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 		...(globalConfig.ui ?? {}),
 		...(projectConfig.ui ?? {}),
 	};
-	if (mergedUi.host !== "main" && mergedUi.host !== "alt") mergedUi.host = "main";
+	if (mergedUi.host !== "main" && mergedUi.host !== "alt") mergedUi.host = "alt";
 	return {
 		...defaults,
 		...globalConfig,

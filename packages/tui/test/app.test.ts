@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { block, request, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
-import { App, computeScreenLayout, frameToText, type AppPort, type AppRequestBus } from "../src/index.ts";
+import { App, computeScreenLayout, frameToText, type AppCompletionSource, type AppPort, type AppRequestBus } from "../src/index.ts";
 import { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } from "../src/ansi.ts";
 import type { HostInput, HostOutput } from "../src/host.ts";
 
@@ -97,7 +97,7 @@ function fakePort(events: SessionEvent[]): AppPort {
 	};
 }
 
-function createApp(options: { port?: AppPort; bus?: FakeBus } = {}) {
+function createApp(options: { port?: AppPort; bus?: FakeBus; completionSource?: AppCompletionSource; showWelcome?: boolean } = {}) {
 	const input = new FakeInput();
 	const output = new FakeOutput();
 	const bus = options.bus ?? new FakeBus();
@@ -110,6 +110,8 @@ function createApp(options: { port?: AppPort; bus?: FakeBus } = {}) {
 		getStatus: () => ({ provider: "faux", model: "faux-1" }),
 		stdin: input,
 		stdout: output,
+		...(options.completionSource ? { completionSource: options.completionSource } : {}),
+		...(options.showWelcome ? { showWelcome: true } : {}),
 	});
 	return { app, input, output, bus };
 }
@@ -284,6 +286,61 @@ test("a late bus terminal archives the card without a second respond()", async (
 	await waitFor(() => frameToText(app.composeFrameForTest()).includes("cancelled"));
 	expect(bus.responses).toEqual([]);
 	expect(frameToText(app.composeFrameForTest())).toContain("╭");
+	await app.stop();
+});
+
+test("welcome is painted on an empty transcript when requested", async () => {
+	const { app } = createApp({ showWelcome: true });
+	await app.start();
+	expect(frameToText(app.composeFrameForTest())).toContain("Type a message to start");
+	await app.stop();
+});
+
+test("slash suggestions come from the completion source, not a tui parser", async () => {
+	const source: AppCompletionSource = {
+		getSuggestions() {
+			return { items: [{ value: "help", label: "/help", description: "Show commands" }], prefix: "/" };
+		},
+		applyCompletion() {
+			return { input: "/help ", cursor: 6 };
+		},
+	};
+	const { app, input } = createApp({ completionSource: source });
+	await app.start();
+	input.emit(Buffer.from("/"));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("/help"));
+	input.emit(Buffer.from("\r")); // applies, does not submit
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("❯ /help"));
+	await app.stop();
+});
+
+test("Enter queues while a turn is running; Ctrl+Enter aborts and sends", async () => {
+	const calls: string[] = [];
+	let release: (() => void) | undefined;
+	const port: AppPort = {
+		async *runTurn(input: string) {
+			calls.push(input);
+			yield { type: "turn_start", timestamp: 1 };
+			if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+			yield { type: "turn_end", timestamp: 2, stopReason: calls.length === 1 ? "aborted" : "stop" };
+		},
+		abort() {
+			release?.();
+		},
+	};
+	const { app, input } = createApp({ port });
+	await app.start();
+	input.emit(Buffer.from("first"));
+	input.emit(Buffer.from("\r"));
+	await waitFor(() => calls.length === 1);
+	input.emit(Buffer.from("second"));
+	input.emit(Buffer.from("\r")); // queue
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("queued") || frameToText(app.composeFrameForTest()).includes("working"));
+	input.emit(Buffer.from("third"));
+	input.emit(Buffer.from("\x1b[13;5u")); // ctrl+enter: abort and send third
+	await waitFor(() => calls.includes("third"));
+	expect(calls[0]).toBe("first");
+	expect(calls.at(-1)).toBe("third");
 	await app.stop();
 });
 
