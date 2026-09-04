@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { block, request, type RequestEnvelopeUnion, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
+import { block, request, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
 import { App, computeScreenLayout, frameToText, type AppPort, type AppRequestBus } from "../src/index.ts";
 import { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } from "../src/ansi.ts";
 import type { HostInput, HostOutput } from "../src/host.ts";
@@ -41,11 +41,18 @@ class FakeOutput implements HostOutput {
 class FakeBus implements AppRequestBus {
 	readonly responses: ResponseEnvelope[] = [];
 	private readonly envelopes: RequestEnvelopeUnion[] = [];
+	private readonly terminalOutcomes: RequestOutcome<RequestKind>[] = [];
 	private notify: (() => void) | undefined;
+	private notifyTerminal: (() => void) | undefined;
 
 	push(envelope: RequestEnvelopeUnion): void {
 		this.envelopes.push(envelope);
 		this.notify?.();
+	}
+
+	pushTerminal(outcome: RequestOutcome<RequestKind>): void {
+		this.terminalOutcomes.push(outcome);
+		this.notifyTerminal?.();
 	}
 
 	respond(value: unknown): boolean {
@@ -62,6 +69,20 @@ class FakeBus implements AppRequestBus {
 			} else {
 				await new Promise<void>((resolve) => {
 					this.notify = resolve;
+				});
+			}
+		}
+	}
+
+	async *terminals(): AsyncIterable<RequestOutcome<RequestKind>> {
+		let index = 0;
+		for (;;) {
+			if (index < this.terminalOutcomes.length) {
+				yield this.terminalOutcomes[index]!;
+				index++;
+			} else {
+				await new Promise<void>((resolve) => {
+					this.notifyTerminal = resolve;
 				});
 			}
 		}
@@ -182,33 +203,87 @@ test("bracketed paste inserts newlines without submitting", async () => {
 	expect(text).toContain("line1");
 	expect(text).toContain("line2");
 	// nothing was submitted: the transcript rows above the composer stay blank
-	const plan = computeScreenLayout({ columns: 80, rows: 24, composerLines: 2, hasStatus: true });
+	const plan = computeScreenLayout({ columns: 80, rows: 24, interactiveLines: 2, hasStatus: true });
 	const transcriptLines = text.split("\n").slice(1, 1 + plan.transcript.height);
 	expect(transcriptLines.every((line) => line.trim() === "")).toBe(true);
 	await app.stop();
 });
 
-test("permission request gets the conservative deny while no request UI exists", async () => {
+test("a permission card replaces the composer and only answers on an explicit action", async () => {
 	const bus = new FakeBus();
-	const { app } = createApp({ bus });
+	const { app, input } = createApp({ bus });
 	await app.start();
 	bus.push(request("r-1", "permission", { toolCall: { type: "tool_call", id: "t-1", name: "bash", arguments: { command: "ls" } } }));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Permission: bash"));
+	const withCard = frameToText(app.composeFrameForTest());
+	expect(withCard).toContain("Yes, proceed");
+	expect(withCard).not.toContain("╭"); // composer is not painted in the same slot
+	expect(bus.responses).toEqual([]);
+	input.emit(Buffer.from("\r")); // Enter chooses the focused allow_once
 	await waitFor(() => bus.responses.length === 1);
-	expect(bus.responses[0]).toEqual({
-		type: "response",
-		id: "r-1",
-		result: { decision: "deny", reason: "interactive request UI is being rebuilt (phase 2.2 B0-B3)" },
-	});
+	expect(bus.responses[0]).toEqual({ type: "response", id: "r-1", result: { decision: "allow_once" } });
+	expect(frameToText(app.composeFrameForTest())).toContain("╭"); // composer returns
 	await app.stop();
 });
 
-test("question request gets the conservative cancel while no request UI exists", async () => {
+test("AC-33: Esc parks a card without calling respond(); Tab resumes it", async () => {
+	const bus = new FakeBus();
+	const { app, input } = createApp({ bus });
+	await app.start();
+	bus.push(request("r-park", "permission", { toolCall: { type: "tool_call", id: "t-1", name: "bash", arguments: { command: "ls" } } }));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Permission: bash"));
+	input.emit(Buffer.from("\x1b"));
+	await new Promise((resolve) => setTimeout(resolve, 30)); // escape delay
+	expect(bus.responses).toEqual([]); // park must not answer
+	expect(frameToText(app.composeFrameForTest())).toContain("Permission: bash"); // still painted
+	expect(frameToText(app.composeFrameForTest())).toContain("permission"); // shortcuts show the return route
+	input.emit(Buffer.from("\t"));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("esc"));
+	input.emit(Buffer.from("2")); // digit chooses deny
+	await waitFor(() => bus.responses.length === 1);
+	expect(bus.responses[0]).toMatchObject({ id: "r-park", result: { decision: "deny" } });
+	await app.stop();
+});
+
+test("AC-34: parked Esc does not abort the turn", async () => {
+	let aborted = 0;
+	const port: AppPort = {
+		async *runTurn() {
+			yield { type: "turn_start", timestamp: 1 };
+			await new Promise<void>(() => {}); // hang until abort
+		},
+		abort() {
+			aborted++;
+		},
+	};
+	const bus = new FakeBus();
+	const { app, input } = createApp({ port, bus });
+	await app.start();
+	input.emit(Buffer.from("go"));
+	input.emit(Buffer.from("\r"));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("working") || true);
+	bus.push(request("r-esc", "question", { prompt: "pick one" }));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Question"));
+	input.emit(Buffer.from("\x1b"));
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	expect(aborted).toBe(0);
+	input.emit(Buffer.from("\x1b")); // parked: still no abort
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	expect(aborted).toBe(0);
+	expect(bus.responses).toEqual([]);
+	await app.stop();
+});
+
+test("a late bus terminal archives the card without a second respond()", async () => {
 	const bus = new FakeBus();
 	const { app } = createApp({ bus });
 	await app.start();
-	bus.push(request("r-2", "question", { prompt: "pick one" }));
-	await waitFor(() => bus.responses.length === 1);
-	expect(bus.responses[0]).toEqual({ type: "response", id: "r-2", result: { decision: "cancel" } });
+	bus.push(request("r-late", "oauth", { provider: "xai", authorizationUrl: "https://example.test" }));
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("OAuth: xai"));
+	bus.pushTerminal({ status: "cancelled", requestId: "r-late", reason: "aborted" });
+	await waitFor(() => frameToText(app.composeFrameForTest()).includes("cancelled"));
+	expect(bus.responses).toEqual([]);
+	expect(frameToText(app.composeFrameForTest())).toContain("╭");
 	await app.stop();
 });
 

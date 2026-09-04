@@ -1,4 +1,4 @@
-import { response, type RequestEnvelopeUnion, type RequestKind, type ResponseResultByKind, type SessionEvent, type TokenUsage } from "@myh/protocol";
+import { type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type TokenUsage } from "@myh/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, type TerminalFrame } from "./frame.ts";
 import { computeScreenLayout, layoutOffsets } from "./layout.ts";
@@ -26,6 +26,16 @@ import { TranscriptProjector } from "./transcript/projector.ts";
 import { presentEntry } from "./transcript/present.ts";
 import { computeEntryLayout, entryHeight, paintEntry } from "./transcript/entry-shell.ts";
 import { ScrollState, type EntrySpan } from "./scroll.ts";
+import { FocusStack } from "./focus-stack.ts";
+import { nextEscStep, resolveKeyOwner, shortcutRoutes, type InputRouterState } from "./input-router.ts";
+import {
+	RequestCard,
+	archivedCardLine,
+	cardDesiredHeight,
+	paintRequestCard,
+	requestCardActions,
+	type RequestCardRecord,
+} from "./request-card.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -33,11 +43,13 @@ export type AppHostMode = "main" | "alt";
 export interface AppRequestBus {
 	requests(): AsyncIterable<RequestEnvelopeUnion>;
 	respond(response: unknown): boolean;
+	terminals(): AsyncIterable<RequestOutcome<RequestKind>>;
 }
 
 /** Structural view of the core agent port; AgentRunner satisfies this. */
 export interface AppPort {
 	runTurn(input: string): AsyncIterable<SessionEvent>;
+	abort?(): void;
 }
 
 export interface AppOptions {
@@ -58,21 +70,10 @@ export interface AppOptions {
 	env?: NodeJS.ProcessEnv;
 }
 
-const SHORTCUTS_IDLE: readonly ShortcutHint[] = [
-	{ keys: ["enter"], label: "send" },
-	{ keys: ["ctrl+o"], label: "fold" },
-	{ keys: ["pgup/pgdn"], label: "scroll" },
-	{ keys: ["ctrl+c"], label: "quit", pinned: true },
-];
-const SHORTCUTS_RUNNING: readonly ShortcutHint[] = [
-	{ keys: ["pgup/pgdn"], label: "scroll" },
-	{ keys: ["ctrl+c"], label: "quit", pinned: true },
-];
-
 /**
- * Phase 2.2 B3: typed transcript entries with stable identity projected from
- * session events, painted through the shared entry shell. Request envelopes
- * keep the B0 conservative responder until B4 lands cards.
+ * Phase 2.2 B4: blocking request cards replace the composer slot. Esc parks
+ * (does not answer). Tab/Space resume a parked card. Explicit action is the
+ * only path that calls respond().
  */
 export class App {
 	private readonly host: Host;
@@ -80,6 +81,8 @@ export class App {
 	private readonly draft: EditorState = createEditor();
 	private readonly projector = new TranscriptProjector();
 	private readonly scroll = new ScrollState();
+	private readonly focus = new FocusStack<RequestCardRecord>();
+	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
 	private lastUsage: TokenUsage | undefined;
 	private started = false;
@@ -105,7 +108,8 @@ export class App {
 		});
 		this.host.start();
 		this.repaint();
-		void this.respondConservatively();
+		void this.consumeRequests();
+		void this.consumeTerminals();
 	}
 
 	async stop(): Promise<void> {
@@ -119,9 +123,79 @@ export class App {
 		return this.stoppedPromise;
 	}
 
+	private routerState(): InputRouterState {
+		const top = this.focus.top();
+		const parked = this.focus.parkedTop();
+		return {
+			cardFocused: this.focus.active,
+			cardParked: !this.focus.active && this.focus.hasParked,
+			cardKind: (top ?? parked)?.request.kind,
+			editorFocused: true,
+			running: this.running,
+		};
+	}
+
+	private visibleCard(): RequestCard | undefined {
+		const record = this.focus.top() ?? this.focus.parkedTop();
+		return record ? this.cards.get(record.id) : undefined;
+	}
+
 	private handleKey(key: Key): void {
 		if (isCtrlC(key)) {
 			void this.stop();
+			return;
+		}
+		const owner = resolveKeyOwner(this.routerState());
+		if (owner === "card") {
+			this.handleCardKey(key);
+			return;
+		}
+		if (owner === "scrollback") {
+			this.handleScrollbackKey(key);
+			return;
+		}
+		this.handleComposerKey(key);
+	}
+
+	private handleCardKey(key: Key): void {
+		const result = this.focus.handleKey(key);
+		if (result.action === "park" && result.card) {
+			this.cards.get(result.card.id)?.park();
+			this.repaint();
+			return;
+		}
+		if (result.action === "focus_next" || result.action === "focus_previous") {
+			this.repaint();
+			return;
+		}
+		if (key.type === "enter") {
+			this.chooseAction(this.focus.focusIndex);
+			return;
+		}
+		if (key.type === "char" && /^[1-9]$/.test(key.text)) {
+			this.chooseAction(Number(key.text) - 1);
+			return;
+		}
+	}
+
+	private handleScrollbackKey(key: Key): void {
+		const result = this.focus.handleKey(key);
+		if (result.action === "resume" && result.card) {
+			this.cards.get(result.card.id)?.resume();
+			this.repaint();
+			return;
+		}
+		if (key.type === "escape") return; // parked: Esc must not abort (AC-34)
+		if (key.type === "pageUp") this.scrollPage(1);
+		else if (key.type === "pageDown") this.scrollPage(-1);
+		else if (key.type === "ctrl" && key.key === "o") this.toggleLatestFoldable();
+		this.repaint();
+	}
+
+	private handleComposerKey(key: Key): void {
+		if (key.type === "escape") {
+			if (nextEscStep(this.routerState()) === "abort_turn") this.options.port.abort?.();
+			this.repaint();
 			return;
 		}
 		if (key.type === "ctrl" && key.key === "o") {
@@ -134,7 +208,6 @@ export class App {
 				insertText(this.draft, key.text);
 				break;
 			case "paste":
-				// Bracketed paste inserts verbatim; pasted newlines never submit.
 				insertText(this.draft, key.text);
 				break;
 			case "enter":
@@ -162,8 +235,23 @@ export class App {
 				this.scrollPage(-1);
 				break;
 			default:
-				return; // escape/tab/unknown have no binding in B3
+				return;
 		}
+		this.repaint();
+	}
+
+	private chooseAction(index: number): void {
+		const record = this.focus.top();
+		const card = record ? this.cards.get(record.id) : undefined;
+		if (!card) return;
+		const action = requestCardActions(card.record.request)[index];
+		if (!action) return;
+		const envelope = card.responseFor(action);
+		if (!envelope) return;
+		this.requestBus.respond(envelope);
+		card.markResolved(envelope.result);
+		this.focus.remove(card.record.id);
+		this.projector.addNotice(archivedCardLine(card.record));
 		this.repaint();
 	}
 
@@ -198,7 +286,6 @@ export class App {
 		this.repaint();
 	}
 
-	/** Fold toggle targets the latest foldable entry (thinking/execute/edit). */
 	private toggleLatestFoldable(): void {
 		const foldable = this.projector.getEntries().filter((entry) => entry.kind === "thinking" || entry.kind === "execute" || entry.kind === "edit");
 		const last = foldable.at(-1);
@@ -217,8 +304,7 @@ export class App {
 		const columns = this.host.columns;
 		const rows = this.host.rows;
 		const segments = this.statusSegments();
-		const composerLines = Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
-		const plan = computeScreenLayout({ columns, rows, composerLines, hasStatus: segments.length > 0 });
+		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const presentations = this.presentations(columns);
 		let start = 0;
 		const spans: EntrySpan[] = presentations.map((presentation) => {
@@ -248,6 +334,15 @@ export class App {
 		});
 	}
 
+	private layoutPlan(columns: number, rows: number, hasStatus: boolean) {
+		const card = this.visibleCard();
+		const interactiveOwner = card ? ("card" as const) : ("composer" as const);
+		const interactiveLines = card
+			? Math.max(1, cardDesiredHeight(card.record.request, columns, this.theme) - 2)
+			: Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
+		return computeScreenLayout({ columns, rows, interactiveLines, hasStatus, interactiveOwner });
+	}
+
 	private repaint(): void {
 		if (!this.started) return;
 		this.host.paint(this.composeFrame());
@@ -263,27 +358,43 @@ export class App {
 		const rows = this.host.rows;
 		const frame = createFrame(columns, rows);
 		const segments = this.statusSegments();
-		const composerLines = Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
-		const plan = computeScreenLayout({ columns, rows, composerLines, hasStatus: segments.length > 0 });
+		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const offsets = layoutOffsets(plan);
 		if (plan.header.height === 1) {
 			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(this.lastUsage ? { contextLabel: formatTokens(this.lastUsage.totalTokens) } : {}) }, this.theme);
 		}
 		this.paintTranscriptRegion(frame, offsets.transcript, plan.transcript.height);
-		paintComposer({
-			frame,
-			x: 0,
-			y: offsets.interactive,
-			width: columns,
-			height: plan.interactive.height,
-			draft: this.draft,
-			theme: this.theme,
-			caption: this.options.getStatus?.().model,
-			placeholder: "Type a message",
-			compact: plan.compact,
-		});
+		const card = this.visibleCard();
+		if (plan.interactive.owner === "card" && card) {
+			paintRequestCard({
+				frame,
+				y: offsets.interactive,
+				height: plan.interactive.height,
+				card,
+				focusIndex: this.focus.active ? this.focus.focusIndex : 0,
+				focused: this.focus.active,
+				theme: this.theme,
+			});
+		} else {
+			paintComposer({
+				frame,
+				x: 0,
+				y: offsets.interactive,
+				width: columns,
+				height: plan.interactive.height,
+				draft: this.draft,
+				theme: this.theme,
+				caption: this.options.getStatus?.().model,
+				placeholder: "Type a message",
+				compact: plan.compact,
+			});
+		}
 		if (plan.status.height === 1) paintStatus(frame, offsets.status, segments, this.theme);
-		if (plan.shortcuts.height === 1) paintShortcuts(frame, offsets.shortcuts, this.running ? SHORTCUTS_RUNNING : SHORTCUTS_IDLE, this.theme);
+		if (plan.shortcuts.height === 1) {
+			const routes = shortcutRoutes(this.routerState());
+			const hints: ShortcutHint[] = routes.map((route) => ({ keys: route.keys, label: route.label, ...(route.pinned ? { pinned: true } : {}) }));
+			paintShortcuts(frame, offsets.shortcuts, hints, this.theme);
+		}
 		return frame;
 	}
 
@@ -308,37 +419,39 @@ export class App {
 		}
 	}
 
-	/**
-	 * Interim responder (phase 2.2 B0-B3): until request cards land in B4,
-	 * every request gets the conservative deny/cancel side so a turn can
-	 * never hang on a UI that does not exist yet.
-	 */
-	private async respondConservatively(): Promise<void> {
+	private async consumeRequests(): Promise<void> {
 		try {
 			for await (const envelope of this.requestBus.requests()) {
 				if (!this.started) return;
-				this.requestBus.respond(response(envelope.id, conservativeResultFor(envelope.kind)));
+				const card = new RequestCard(envelope);
+				this.cards.set(envelope.id, card);
+				this.focus.push(card.record);
+				this.repaint();
 			}
 		} catch {
 			// A closing bus ends the loop; stop() owns terminal restoration.
 		}
 	}
 
+	private async consumeTerminals(): Promise<void> {
+		try {
+			for await (const outcome of this.requestBus.terminals()) {
+				if (!this.started) return;
+				const card = this.cards.get(outcome.requestId);
+				if (!card) continue;
+				if (card.record.state === "resolved") continue;
+				card.terminal(outcome);
+				this.focus.remove(outcome.requestId);
+				this.projector.addNotice(archivedCardLine(card.record));
+				this.repaint();
+			}
+		} catch {
+			// Closing bus.
+		}
+	}
+
 	private get requestBus(): AppRequestBus {
 		return this.options.requestBus;
-	}
-}
-
-function conservativeResultFor(kind: RequestKind): ResponseResultByKind[RequestKind] {
-	switch (kind) {
-		case "permission":
-			return { decision: "deny", reason: "interactive request UI is being rebuilt (phase 2.2 B0-B3)" };
-		case "plan_approval":
-			return { decision: "reject", feedback: "interactive request UI is being rebuilt (phase 2.2 B0-B3)" };
-		case "cancel_confirm":
-		case "question":
-		case "oauth":
-			return { decision: "cancel" };
 	}
 }
 

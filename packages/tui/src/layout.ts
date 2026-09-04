@@ -6,10 +6,12 @@
 export interface ScreenLayoutInput {
 	columns: number;
 	rows: number;
-	/** Desired composer content lines (wrapped draft), >= 1. */
-	composerLines: number;
+	/** Desired content lines for the interactive slot (wrapped draft or card body), >= 1. */
+	interactiveLines: number;
 	/** Any known status segment; running keeps the row alive. */
 	hasStatus: boolean;
+	/** Card replaces the composer slot when a blocking request is visible. */
+	interactiveOwner?: "composer" | "card";
 }
 
 export interface ScreenLayoutPlan {
@@ -34,8 +36,9 @@ export function computeScreenLayout(input: ScreenLayoutInput): ScreenLayoutPlan 
 	let header: 0 | 1 = tiny ? 0 : 1;
 	let status: 0 | 1 = input.hasStatus ? 1 : 0;
 	let shortcuts: 0 | 1 = 1;
-	let interactive = Math.min(Math.max(input.composerLines + COMPOSER_CHROME_ROWS, INTERACTIVE_MIN), composerCap);
-	const owner: "composer" | "card" = "composer";
+	const chromeRows = (input.interactiveOwner ?? "composer") === "composer" ? COMPOSER_CHROME_ROWS : 0;
+	let interactive = Math.min(Math.max(input.interactiveLines + chromeRows, INTERACTIVE_MIN), composerCap);
+	const owner: "composer" | "card" = input.interactiveOwner ?? "composer";
 
 	let transcript = rows - header - status - shortcuts - interactive;
 	if (transcript < TRANSCRIPT_FLOOR && header === 1) {

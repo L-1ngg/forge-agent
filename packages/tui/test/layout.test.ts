@@ -10,8 +10,8 @@ function sum(plan: ScreenLayoutPlan): number {
 test("layout stays non-negative and within the viewport at every locked size", () => {
 	for (const rows of ROWS) {
 		for (const hasStatus of [false, true]) {
-			for (const composerLines of [1, 3, 9]) {
-				const plan = computeScreenLayout({ columns: 80, rows, composerLines, hasStatus });
+			for (const interactiveLines of [1, 3, 9]) {
+				const plan = computeScreenLayout({ columns: 80, rows, interactiveLines, hasStatus });
 				expect(plan.header.height).toBeGreaterThanOrEqual(0);
 				expect(plan.transcript.height).toBeGreaterThanOrEqual(0);
 				expect(plan.interactive.height).toBeGreaterThanOrEqual(1);
@@ -24,34 +24,41 @@ test("layout stays non-negative and within the viewport at every locked size", (
 });
 
 test("interactive slot and shortcuts survive even the shortest locked size", () => {
-	const plan = computeScreenLayout({ columns: 40, rows: 8, composerLines: 1, hasStatus: true });
+	const plan = computeScreenLayout({ columns: 40, rows: 8, interactiveLines: 1, hasStatus: true });
 	expect(plan.interactive.height).toBeGreaterThanOrEqual(3);
 	expect(plan.shortcuts.height).toBe(1);
 	expect(plan.transcript.height).toBeGreaterThanOrEqual(1);
 });
 
 test("header hides at rows<=16 and status yields before the transcript floor", () => {
-	expect(computeScreenLayout({ columns: 80, rows: 16, composerLines: 1, hasStatus: true }).header.height).toBe(0);
-	const tall = computeScreenLayout({ columns: 80, rows: 24, composerLines: 1, hasStatus: true });
+	expect(computeScreenLayout({ columns: 80, rows: 16, interactiveLines: 1, hasStatus: true }).header.height).toBe(0);
+	const tall = computeScreenLayout({ columns: 80, rows: 24, interactiveLines: 1, hasStatus: true });
 	expect(tall.header.height).toBe(1);
 	expect(tall.status.height).toBe(1);
 	// transcript floor of 5 wins over the status row when space is tight
-	const tight = computeScreenLayout({ columns: 80, rows: 10, composerLines: 3, hasStatus: true });
+	const tight = computeScreenLayout({ columns: 80, rows: 10, interactiveLines: 3, hasStatus: true });
 	expect(tight.status.height).toBe(0);
 	expect(tight.transcript.height).toBeGreaterThanOrEqual(1);
 });
 
 test("compact flag flips at rows<=20 and caps composer growth", () => {
-	expect(computeScreenLayout({ columns: 80, rows: 20, composerLines: 1, hasStatus: false }).compact).toBe(true);
-	expect(computeScreenLayout({ columns: 80, rows: 21, composerLines: 1, hasStatus: false }).compact).toBe(false);
-	const compact = computeScreenLayout({ columns: 80, rows: 20, composerLines: 20, hasStatus: false });
+	expect(computeScreenLayout({ columns: 80, rows: 20, interactiveLines: 1, hasStatus: false }).compact).toBe(true);
+	expect(computeScreenLayout({ columns: 80, rows: 21, interactiveLines: 1, hasStatus: false }).compact).toBe(false);
+	const compact = computeScreenLayout({ columns: 80, rows: 20, interactiveLines: 20, hasStatus: false });
 	expect(compact.interactive.height).toBeLessThanOrEqual(5);
-	const tall = computeScreenLayout({ columns: 80, rows: 40, composerLines: 20, hasStatus: false });
+	const tall = computeScreenLayout({ columns: 80, rows: 40, interactiveLines: 20, hasStatus: false });
 	expect(tall.interactive.height).toBeLessThanOrEqual(8);
 });
 
+test("a card-owned slot never shares the interactive region with the composer", () => {
+	const plan = computeScreenLayout({ columns: 80, rows: 24, interactiveLines: 6, hasStatus: true, interactiveOwner: "card" });
+	expect(plan.interactive.owner).toBe("card");
+	expect(plan.interactive.height).toBeGreaterThanOrEqual(3);
+	expect(plan.shortcuts.height).toBe(1);
+});
+
 test("offsets place regions top to bottom without overlap", () => {
-	const plan = computeScreenLayout({ columns: 80, rows: 24, composerLines: 1, hasStatus: true });
+	const plan = computeScreenLayout({ columns: 80, rows: 24, interactiveLines: 1, hasStatus: true });
 	const offsets = layoutOffsets(plan);
 	expect(offsets.header).toBe(0);
 	expect(offsets.transcript).toBe(plan.header.height);
