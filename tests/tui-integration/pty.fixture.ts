@@ -26,13 +26,19 @@ const app = new App({
 });
 const snapshots = new Map<string, ReturnType<typeof dumpFrame>>();
 let snapshotName = 0;
-const capture = () => snapshots.set(`frame-${snapshotName++}`, dumpFrame(app.composeFrameForTest()));
-process.on("SIGUSR1", capture);
+// IPC keeps frame sampling on the event loop instead of a native signal callback.
+const capture = (message: unknown) => {
+	if (message !== "capture") return;
+	snapshots.set(`frame-${snapshotName++}`, dumpFrame(app.composeFrameForTest()));
+	process.send?.("captured");
+};
+process.on("message", capture);
 try {
 	await app.start();
 	await app.waitUntilStopped();
 } finally {
 	await agent.dispose();
 }
-process.off("SIGUSR1", capture);
+process.off("message", capture);
+if (process.connected) process.disconnect();
 await Bun.write(`${directory}/result.json`, JSON.stringify({ raw: process.stdin.isRaw, frames: [...snapshots.values()], pending: bus.pendingCount }));

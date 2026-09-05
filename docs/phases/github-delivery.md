@@ -52,3 +52,9 @@ created: 2026-09-06
 - Not run:远程双平台与草稿归档验证待本批提交后执行。
 - Why:GitHub 必须先加载已推送 workflow 才能执行远程验证。
 - Risk:手动发布是源码草稿,不发布 npm、二进制或稳定 API。
+
+### 双平台差异修复
+
+- 首次远程 `601ad6c` 的 Ubuntu 通过,macOS 295 pass / 2 fail([run 33983065360](https://github.com/L-1ngg/forge-agent/actions/runs/33983065360)):shell 返回 `/private/var` 真实路径,PTY 测试的原生信号采样期间出现 Bun 1.3.12 bus error。
+- 对应处理:工作目录断言比较 `realpath`;测试 frame 采样改为 IPC 请求/确认,保留真实 PTY、resize 信号、粘贴、权限和 Ctrl+C 的全部出口断言。运行代码不变,远程重新验证后再关闭门禁。
+- 非法版本的远程反向验证已拒绝输入,verify/publish 均 skipped([run 33983090631](https://github.com/L-1ngg/forge-agent/actions/runs/33983090631)),未创建 Release。

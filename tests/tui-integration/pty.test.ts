@@ -7,9 +7,13 @@ test("PTY: paste, permission park, resize, execute and Ctrl+C restore the termin
 	const directory = await mkdtemp(join(tmpdir(), "forge-agent-pty-"));
 	await writeFile(join(directory, "file.txt"), "before");
 	let output = "";
+	let captures = 0;
 	const decoder = new TextDecoder();
 	const terminal = new Bun.Terminal({ cols: 80, rows: 24, data(_terminal, data) { output += decoder.decode(data, { stream: true }); } });
-	const child = Bun.spawn(["bun", "tests/tui-integration/pty.fixture.ts"], { terminal, env: { ...process.env, FORGE_AGENT_PTY_DIRECTORY: directory } });
+	const child = Bun.spawn(["bun", "tests/tui-integration/pty.fixture.ts"], {
+		terminal, env: { ...process.env, FORGE_AGENT_PTY_DIRECTORY: directory },
+		ipc(message) { if (message === "captured") captures++; },
+	});
 	const waitFor = async (condition: () => boolean | Promise<boolean>) => {
 		for (let attempt = 0; attempt < 500; attempt++) {
 			if (await condition()) return;
@@ -32,13 +36,13 @@ test("PTY: paste, permission park, resize, execute and Ctrl+C restore the termin
 		terminal.write("\x1b");
 		await Bun.sleep(50);
 		expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before");
-		child.kill("SIGUSR1");
-		await Bun.sleep(20);
+		child.send("capture");
+		await waitFor(() => captures === 1);
 		terminal.resize(40, 12);
 		child.kill("SIGWINCH");
 		await Bun.sleep(50);
-		child.kill("SIGUSR1");
-		await Bun.sleep(20);
+		child.send("capture");
+		await waitFor(() => captures === 2);
 		terminal.write("\t\r");
 		await waitFor(async () => (await readFile(join(directory, "session.jsonl"), "utf8")).includes("EDIT_COMPLETE"));
 		expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("after");

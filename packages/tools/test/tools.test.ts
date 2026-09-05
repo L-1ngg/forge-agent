@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bashTool, editTool, readTool, writeTool } from "../src/index.ts";
@@ -114,7 +114,7 @@ describe("bash", () => {
 		const cwd = await temporaryDirectory();
 		const result = await bashTool.execute({ command: "pwd" }, { cwd });
 		expect(result).toMatchObject({ ok: true, value: { exitCode: 0, truncated: false } });
-		if (result.ok) expect(result.value.stdout.trim()).toBe(cwd);
+		if (result.ok) expect(await realpath(result.value.stdout.trim())).toBe(await realpath(cwd));
 	});
 
 	test.each([
