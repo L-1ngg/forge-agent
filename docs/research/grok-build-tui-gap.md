@@ -5,9 +5,9 @@ created: 2026-09-02
 
 # grok-build TUI 差距调研
 
-> 状态:调研完成(2026-09-02)。「保留 pi-tui」的建议已被 [ADR-005](../decisions/005-tui-own-compositor.md) 推翻;「以 pixel parity 为出口」经 [ADR-006](../decisions/006-tui-cell-parity.md) 以锁定环境逐 cell 零差异的口径恢复(PNG 降为辅证)。投影模型与 grok 信息架构的诊断仍有效;§6 规格恢复为施工依据,其中 PNG 零差异不再是硬门禁。
+> 状态:历史调研(2026-09-02;适用范围核对于 2026-09-06)。「保留 pi-tui」由 [ADR-005](../decisions/005-tui-own-compositor.md) 推翻;[ADR-006](../decisions/006-tui-cell-parity.md) 的逐 cell 比较又由 [ADR-007](../decisions/007-no-compile-grok-reference.md) 收敛为 in-repo cell golden,不编译 grok-build,PNG 仅作辅证。§6 保留设计依据,验收以 [Phase 2.2](../phases/phase-2.2.md) 为准;旧 Phase 2.5 Team 规划由 [ADR-008](../decisions/008-general-agent-positioning.md) 取代,输入行为以 [ADR-010](../decisions/010-input-ownership-and-interruption.md) 为准。
 > 上游快照:[`xai-org/grok-build@bc7f02e`](https://github.com/xai-org/grok-build/tree/bc7f02eddd3d84085849dc19ed216f11c23b0571),根目录 `SOURCE_REV=d5a0335a47221e8c9519936cb693e9b6450227ec`,`xai-grok-pager` 版本 `1.0.12`。
-> 本地代码基线:`d1e06319783051a55f7de97aa60dd831159a4a13`;工作区已有未提交文档和截图不属于本次改动。通用架构调研见 [grok-build.md](./grok-build.md),本文件只回答当前 TUI 为什么仍有明显差距、怎样在受控参考环境内做到 pixel parity,以及 Rust 设计应怎样转译到 TypeScript。
+> 本地代码基线:`d1e06319783051a55f7de97aa60dd831159a4a13`。通用架构调研见 [grok-build.md](./grok-build.md);下文「当前」均指调研时基线,用于解释当时的 TUI 差距与 Rust 设计转译方案。
 
 ---
 
@@ -54,7 +54,7 @@ grok-build 先把每段内容定义成有 identity、lifecycle、display mode �
 - entry 的共享 chrome、折叠、streaming 生命周期和 timestamp。
 - agent view 的垂直 layout、短终端降级、prompt/status/shortcuts dock。
 - blocking card 的 key owner、`EscStep` 和 parked state。
-- 工作区现有 `grokbuild.png` 与 `myh.png` 的视觉对照。
+- 历史截图曾用于视觉对照,现已从工作区移除。
 - 当前 `packages/tui/src` 和现有 Bun tests 的实现证据。
 
 ### 2.2 不纳入范围
@@ -67,14 +67,14 @@ grok-build 先把每段内容定义成有 identity、lifecycle、display mode �
 
 ### 2.3 证据等级
 
-本报告使用三类证据:
+本报告调研时使用以下证据;当前验收口径以上述 ADR-007 为准:
 
 | 证据 | 用途 | 限制 |
 |---|---|---|
 | 固定 commit 源码与上游 tests | 判断真实状态机和布局约束 | 只代表上述快照 |
-| 本地源码 `d1e0631` | 判断当前实现边界和缺口 | 工作区后续修改可能使行号漂移 |
-| 本地截图与 render probe | 判断视觉结果和窄屏行为 | 当前截图尺寸不同,只能作为定性 baseline,不能直接做 pixel diff |
-| 锁定参考环境下的 PTY/cell/PNG capture | 作为 pixel parity 的唯一验收证据 | 在参考环境未锁定前不得把截图差异解释为实现差异 |
+| 本地源码 `d1e0631` | 判断当时实现边界和缺口 | 不代表后续自有 compositor 实现 |
+| 当时的本地截图与 render probe | 判断视觉结果和窄屏行为 | 截图尺寸不同,仅作定性 baseline;旧图片已从工作区移除 |
+| 锁定参考环境下的 PTY/cell/PNG capture | 当时提出的 pixel parity 验收方案 | 已由 ADR-007 的 in-repo golden 口径取代,未据此声明上游运行时对照通过 |
 
 ## 3. grok-build 实际怎么做
 
@@ -189,11 +189,11 @@ status line 使用结构化 segments,分隔符是 ` │ `;cost `<0.005` 隐藏,�
 
 ### 4.2 源码证据
 
-当前 `StreamRenderer` 的 active message 只要存在 streamed blocks,就走 `streamedMessageText()` + `Text`;到 `message_end` 才改用 `Markdown`、`ThinkingBlock` 和 rich components。见 [`stream-renderer.ts`](../../packages/tui/src/stream-renderer.ts) 的 `addMessageChildren()`。
+基线 `d1e0631` 的 `StreamRenderer` 在 active message 存在 streamed blocks 时走 `streamedMessageText()` + `Text`,到 `message_end` 才改用 `Markdown`、`ThinkingBlock` 和 rich components。历史路径为 `packages/tui/src/stream-renderer.ts` 的 `addMessageChildren()`;该文件已随 TUI 重写移除。
 
-当前 `FoldBlock.render()` 只返回 `header + body` 字符串数组。它无法表达跨整个 block 高度的 rail、padding fill、background band 或 timestamp gutter。见 [`fold.ts`](../../packages/tui/src/blocks/fold.ts)。
+基线 `d1e0631` 的 `FoldBlock.render()` 只返回 `header + body` 字符串数组,无法表达跨整个 block 高度的 rail、padding fill、background band 或 timestamp gutter。历史路径为 `packages/tui/src/blocks/fold.ts`,已随 TUI 重写移除。
 
-当前 `UserMessageCard` 给单行 prompt 拼 timestamp 后再截整行;它不 wrap 原文,也不先 reserve timestamp。见 [`message.ts`](../../packages/tui/src/blocks/message.ts)。
+基线 `d1e0631` 的 `UserMessageCard` 给单行 prompt 拼 timestamp 后再截整行,不 wrap 原文,也不先 reserve timestamp。历史路径为 `packages/tui/src/blocks/message.ts`,已随 TUI 重写移除。
 
 当前 `App` 的 fixed footer 是五个独立组件顺序叠加;alt host 使用静态 `VStack`,main host 只用 `terminal.rows - header - footer` 算 transcript 高度。见 [`app.ts`](../../packages/tui/src/app.ts)。
 
@@ -212,7 +212,7 @@ status line 使用结构化 segments,分隔符是 ` │ `;cost `<0.005` 隐藏,�
 
 同一 probe 还出现 execute body 后连续两个空行:一个来自 stdout 尾换行,一个来自全局 entry spacer。它说明 spacing 不能继续由“每两个 timeline entry 中间固定插一行”单独决定。
 
-这些数字只作为改写前 baseline。工作区现有两张截图也不能直接做 pixel diff:`grokbuild.png` 是 `2493x619`,`myh.png` 是 `2560x1390`,窗口像素尺寸和终端 rows 均不一致。它们只证明当前观感存在显著差距;真正验收必须先锁定参考环境,再在相同像素尺寸、columns/rows 和状态下重新采集 grok-build reference 与 myh candidate。
+这些数字只作为改写前 baseline。历史截图的窗口像素尺寸和终端 rows 不一致,不能直接做 pixel diff,且现已移除。真正验收必须锁定参考环境,再在相同 columns/rows 和状态下使用当前 golden 与人工验收结果。
 
 ## 5. Rust 概念到 TypeScript 的转译
 

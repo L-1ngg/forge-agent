@@ -6,7 +6,7 @@ created: 2026-09-01
 # Peer agent team 与 TUI 表达调研
 
 > 状态:已调研(2026-09-01)
-> 目的:给 Phase 2.5 的设计评审与施工图提供源码证据。本文提出的是建议契约,不是已批准 ADR;与 [plan.md](../plan.md)、[design-rationale.md](../design-rationale.md) 冲突时,应先由 operator 定案。
+> 原始目的:给旧 Phase 2.5 提供源码证据。适用范围核对(2026-09-06):[ADR-008](../decisions/008-general-agent-positioning.md) 已将 Team 编排划归外部项目,本研究的 teammate/board/delivery 建议不再是本仓库行动项。pi-tui 探针仅代表当时版本,现有 TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md);单 Agent 接入与输入契约见 [SDK 指南](../sdk.md)。
 
 ## 1. 结论
 

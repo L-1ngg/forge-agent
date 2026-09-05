@@ -7,6 +7,7 @@ created: 2026-09-01
 
 > 状态:已调研(2026-09-01)
 > 快照:[`zts212653/clowder-ai@090626a`](https://github.com/zts212653/clowder-ai/tree/090626a538d59e2b6ce3c3ba9b205b57d958fcdd)。本文区分上游 `approved` 目标架构、固定 commit 的当前实现和本项目建议;建议不是已批准 ADR。
+> 适用范围(2026-09-06):下文 Team/board/delivery 是历史建议,编排现归外部项目,见 [ADR-008](../decisions/008-general-agent-positioning.md)。本项目已采用的单次 invocation 输入与取消契约以 [ADR-010](../decisions/010-input-ownership-and-interruption.md) 为准,不能直接套用上游的 durable queue 承诺。
 
 ## 1. 结论
 

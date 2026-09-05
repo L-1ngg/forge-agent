@@ -8,6 +8,8 @@
 | 文档 | 职责 |
 |---|---|
 | [plan.md](plan.md) | 规划 + 行动项(**热层**:只放当前要做的) |
+| [sdk.md](sdk.md) | 仓库内 Bun SDK 接入、存储、输入归属与生命周期契约 |
+| [phases/owned-core.md](phases/owned-core.md)、[phases/sdk.md](phases/sdk.md) | 自研内核与 SDK 的施工、自动化证据及未验收边界 |
 | [phases/](phases/) | 各 Phase 施工图:路径 / tradeoff / 验收(**温层**) |
 | [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |
 | [research/](research/) | 固定源码快照的上游/专题深度调研(**冷层**,不是已批准 ADR) |
@@ -22,7 +24,7 @@
 | 位置 | 内容 | 命名 |
 |---|---|---|
 | `docs/decisions/` | 架构决策记录(ADR) | `NNN-slug.md`,三位数字递增,不重排不复用 |
-| `docs/phases/` | 各 Phase 施工图 | `phase-{N}.md`,N 含小数段(如 `phase-2.5.md`) |
+| `docs/phases/` | 阶段或功能施工图 | 历史阶段用 `phase-{N}.md`;当前按主题命名(如 `owned-core.md`、`sdk.md`),不另建一套数字路线 |
 | `docs/research/` | 固定快照的源码调研、可迁移结论与未决问题 | `{topic}.md` |
 | `docs/templates/` | 文档模板 | `{type}.md` |
 | `review-notes/`(仓库根) | 跨 session 的 review 交接信 | `YYYY-MM-DD-{topic}-review-request.md` |
@@ -36,7 +38,7 @@
 
 - 数量无界 + 单独引用(decisions/、research/、review-notes/)→ 文件夹,一文一件。
 - 整体消费 + 条目短(lessons.md)→ 单文件;拆分触发条件:条目多到无法整体阅读(参考:clowder 102 条 / 1944 行仍是单文件)。
-- 数量有界(phase-*.md,路线图上共 6 个 phase:0 / 1 / 2 / 2.5 / 3 / 4)→ 原本平铺;**触发条件已于 2026-09-01 命中**(第二份 phase 施工图 phase-2.md 出现),已升格 `docs/phases/`。
+- 施工图统一放在 `docs/phases/`:2026-09-01 因第二份施工图出现而从平铺目录迁入。阶段编号保留历史含义,后续路线以 `plan.md` 为准。
 
 ## 元信息约定
 
@@ -55,7 +57,7 @@ created: 2026-08-31
 ## 生命周期
 
 - **热层** —— plan.md:完成的行动项移除,不堆积。
-- **温层** —— `phases/phase-*.md` 施工图:Phase 进行中是唯一施工图;Phase 结束后保留,状态行标 `已完成`。
+- **温层** —— `phases/*.md` 施工图:维护对应阶段的施工契约与验证证据;结束后保留,状态行区分已完成、已中止和待交付审核。
 - **冷层** —— design-rationale / decisions / research / lessons / review-notes:永久保留,只追加不移除。
 
 ## 有意不采用

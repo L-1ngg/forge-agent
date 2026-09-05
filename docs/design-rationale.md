@@ -1,12 +1,13 @@
 # 设计论证 — 综合分析与探测证据
 
-> [plan.md](./plan.md) 的支撑材料。行动项不在这里。
+> [plan.md](./plan.md) 的支撑材料。行动项不在这里。2026-09-05 起当前定位以 [ADR-008](decisions/008-general-agent-positioning.md) 为准:单 Agent 内核与 SDK、独立应用、派生定制并存;本文旧 Team 与阶段安排仅作历史论证。
 
 ---
 
 ## A. pi-agent-core 四层实读
 
 > 本节基于 `pi-agent-core@0.84.4` 的 `.d.ts` / `dist` 实读(2026-08-31),不是文档推测。
+> 采用方向已由 [ADR-009](decisions/009-self-owned-agent-core.md) 修订:当前使用自研 ExecutionCore 并保留 pi-ai。下文上游事实与旧采用判断保留为历史依据,不代表当前仍依赖 pi-agent-core。
 
 `pi-agent-core` 不是「极简内核」,是四层,成熟度差一个量级。整包吞或整包拒都是错的。
 
@@ -82,6 +83,8 @@ async prompt(_input, _images) { return this.unavailable("prompt"); }
 
 ## B. 借用矩阵
 
+> 历史选型矩阵:下文「取用」指立项建议。当前只保留 pi-ai 模型适配,自有 TUI 与 ExecutionCore 分别由 ADR-005/009 落地;Team 边界按 ADR-008。实际包职责见 [README 架构](../README.md#架构)。
+
 ### 可复用性判定
 
 | | 许可 | 能直接用代码吗 | 判定 |
@@ -153,7 +156,7 @@ pi 的 `pi-ai` / `pi-agent-core` / `pi-tui` / `pi-coding-agent` 各 43 个版本
 
 ### 从 cat-cafe 取(工具设计规则,→ F.5)
 
-MCP 本身不要(单进程 + 自持 tool-call 循环,它那两件事都不存在),但那份研究报告里**与协议无关**的部分是纯收益,直接进 `packages/tools`:
+历史 coding 场景下未采用 MCP;按 ADR-008,外部工具接入应按场景重新评估,本轮不实现 MCP,但那份研究报告里**与协议无关**的部分是纯收益,直接进 `packages/tools`:
 
 - 能 `enum` 就别自由文本;能分类型就别混 `string`;`additionalProperties: false`;必填字段尽量少,但一旦必填就别留模糊空间
 - 自测法:「把 schema 字段描述删掉只留类型,如果工具立刻变难用,说明描述本来就不够结构化」
@@ -167,7 +170,7 @@ MCP 本身不要(单进程 + 自持 tool-call 循环,它那两件事都不存在
 
 ### C.1 内核:pi 的生成器层 + 自持状态
 
-> 施工收窄:当前按 [Phase 1 ④](./phases/phase-1.md) 使用 `Agent` 类并镜像事件到自有 session store;下文生成器方案保留为调度冲突时的逃生口,不是当前实现层级。
+> 历史代码按 [Phase 1 ④](./phases/phase-1.md) 使用 `Agent` 类并镜像事件到自有 session store。现已按 [ADR-009](decisions/009-self-owned-agent-core.md) 切换自研执行内核。下文生成器选择与“何时才自研”的门槛保留为被取代的历史论证;首版以保持已有能力为准,验证见 [施工图](phases/owned-core.md)。
 
 采用 A 表的第 2 层,而且是生成器那一层。三个理由:
 
@@ -248,6 +251,8 @@ grok 大部分设计天然行导向——block、card 都是流式往下堆,直�
 
 ### C.3 Team:clowder 的语义,文件的实现
 
+> 历史方案:内置 Team 方向由 ADR-008 取代。下文不再是本项目行动项,也不约束外部 multi-agent 项目的部署与实现;单 Agent 实例隔离仍需 SDK 验证。
+
 #### subagent ≠ teammate
 
 | | subagent(pi / Claude Code 模型) | teammate(clowder 模型) |
@@ -312,7 +317,9 @@ dashboard 因此白拿——它监督的不是远端进程,就是内存里那几
 
 ### C.4 协议边界与未来演进
 
-现状:只会 TUI,未来可能向 web UI / 客户端演进。
+> 当前状态(2026-09-06):自研内核与宿主可装配的 SDK 已提交,CLI 消费同一接入层,见 [SDK 指南](sdk.md)。协议隔离继续有效,服务 API 后续另定;下文是早期设计论证,不代表已实现或冻结的传输方案。
+
+立项时的出发点:先交付 CLI/TUI,保留向 web UI / 客户端演进的边界。
 
 因此**现在只做一件事**:让 `core` 完全不知道 UI 存在,让 UI 只消费一条事件流。成本几乎为零,以后补则是重写。**除此之外所有为 web 做的准备一律不做。**
 
@@ -322,7 +329,7 @@ dashboard 因此白拿——它监督的不是远端进程,就是内存里那几
 
 #### 现在就要做的三件事
 
-**① `protocol` 包 + 单向依赖 + CI 检查** —— 见 plan.md §1。
+**① `protocol` 包 + 单向依赖 + CI 检查** —— 当前结构见 [README 架构](../README.md#架构)。
 
 **② 阻塞式交互必须是带 id 的 request/response —— 最高风险项**
 
@@ -383,7 +390,7 @@ TUI 那一步的改动量是把 bus 的实现从函数调用换成 socket,协议
 
 ## D. 明确不做
 
-写下来是为了以后不手软。
+本节记录立项时的排除项。SDK 已交付,服务 API 与通用扩展按 [plan.md](plan.md) 单独设计;下文针对单人 CLI 的「永远不需要」不能约束外部宿主或后续已批准方向。
 
 ### 来自 clowder
 
@@ -412,11 +419,13 @@ TUI 那一步的改动量是把 bus 的实现从函数调用换成 socket,协议
 - Rust 重写
 - **`AgentHarness` 那一层的编排器接口** —— 不实现别人的空壳;自己的编排照自己的形状写
 
-> agent loop **不在这张表上**。它是「现在不做」而非「永久不做」——触发条件与前置测试见 C.1。上面四条是放弃,loop 是延后,区别要守住。
+> agent loop 的旧延后判断已由 [ADR-009](decisions/009-self-owned-agent-core.md) 取代,自研 ExecutionCore 的实现与验证见 [owned-core.md](phases/owned-core.md)。
 
 ---
 
 ## E. 风险与未核实项
+
+> 以下为立项时风险清单,上游版本、旧 Phase 2.5 与 pi-tui 相关项不代表当前待办。当前内核/SDK 未测项分别见 [owned-core.md](phases/owned-core.md) 与 [sdk.md](phases/sdk.md);长期任务与通用能力评估见 [plan.md](plan.md)。
 
 | 风险 | 处置 |
 |---|---|

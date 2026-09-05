@@ -24,8 +24,8 @@ created: 2026-08-31
 
 1. **AGENTS.md 单入口 + CLAUDE.md 指针** —— clowder 按模型分角色(AGENTS / CLAUDE / GEMINI 三份角色卡);本项目单 operator,收敛为一个入口,其它工具入口只做指针,防漂移。
 2. **docs/README.md 索引 + 命名 / 元信息约定** —— 对应 clowder ADR-011 元数据契约,取最小集(`doc_kind` + `created`),不上全套 frontmatter CI。
-3. **docs/decisions/ ADR 目录** —— `NNN-slug.md`,三位编号不重排不复用,本文件即 001。**历史决策不回填**:plan.md §0 四条决策与原附录文档(现 [design-rationale.md](../design-rationale.md))已有出处和证据,原地保留,ADR 从本文件起算。
-4. **docs/lessons.md 教训库** —— LL-XXX 七槽位 + 入库门禁,与 plan.md F.3 三门禁对齐。
+3. **docs/decisions/ ADR 目录** —— `NNN-slug.md`,三位编号不重排不复用,本文件即 001。**历史决策不回填**:立项时 plan.md §0 四条决策与原附录文档已有出处,ADR 从本文件起算。旧计划可从 Git 历史追溯,设计论证保存在 [design-rationale.md](../design-rationale.md)。
+4. **docs/lessons.md 教训库** —— LL-XXX 七槽位 + 入库门禁,与 [cat-cafe.md F.3](../cat-cafe.md#f3-skill-与记忆三处净增量) 三门禁对齐。
 5. **review-notes/ 交接信** —— `YYYY-MM-DD-{topic}-review-request.md`,原话引用 + verdict 绑定 SHA;轻量评审不落盘。
 6. **docs/SOP.md** —— 改动分级、验证纪律(Ran / Not run / Why / Risk)、「文档领路,代码跟随」。
 7. **docs/templates/** —— ADR / feature doc / review request 三个模板。格式即契约:状态行与 `- [ ] AC-` checkbox 保持稳定,为未来机器解析留口。

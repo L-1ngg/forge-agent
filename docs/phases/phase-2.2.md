@@ -8,6 +8,7 @@ created: 2026-09-04
 > 状态:已完成(2026-09-05),operator 已验收当前 TUI 并确认阶段关闭;体验与其余优化按后续要求另开。B6 为 in-repo golden(ADR-007,不再编译 grok-build)。Owner:operator。
 > 决策:[ADR-005](../decisions/005-tui-own-compositor.md)(决策 1 由 ADR-006 修订;reference 路径由 [ADR-007](../decisions/007-no-compile-grok-reference.md) 再修订)。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
+> 后续变更:内核替换见 [ADR-009](../decisions/009-self-owned-agent-core.md),SDK 与输入队列/停止修复见 [SDK 施工图](sdk.md) 和 [ADR-010](../decisions/010-input-ownership-and-interruption.md)。本文保留阶段关闭时的范围与证据,不作为当前 SDK 或取消契约。
 
 ---
 
@@ -23,7 +24,7 @@ operator 于 2026-09-05 确认:"这阶段先这样吧，我验收了tui勉强实
 
 本轮删掉现有 TUI 实现,按 grok 的信息架构自写 cell compositor。视觉回归按 [ADR-007](../decisions/007-no-compile-grok-reference.md):in-repo golden FrameDump + grok 几何不变量,不编译 grok-build。PNG 为辅证。`protocol`、request bus、permission、tools、`pi-ai` / `pi-agent-core` 不动。
 
-对应 [plan.md](../plan.md) §0 决策 2 的推翻与 §2 Phase 2 的 TUI 返工。
+对应立项时规划中的 TUI 返工,决策沿革以 ADR-005/006/007 为准;当前行动项见 [plan.md](../plan.md)。
 
 ## Entry Criteria
 

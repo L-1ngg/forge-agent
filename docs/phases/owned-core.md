@@ -1,6 +1,6 @@
 # 自研执行内核施工图
 
-> 状态:实现中(2026-09-05)。review 的三项修复及 ADR-010 输入归属修复已通过自动化回归,完整内核验收仍待完成;本批落实 [ADR-009](../decisions/009-self-owned-agent-core.md),不重开 Phase 2.2。
+> 状态:代码已提交、自动化回归通过,完整内核验收待完成(2026-09-06)。内核替换为 `d2519aa`,SDK 与 ADR-010 修复为 `04db82b`;本批落实 [ADR-009](../decisions/009-self-owned-agent-core.md),不重开 Phase 2.2。
 
 ## Entry
 
@@ -16,8 +16,8 @@
 - `length` 消息中的工具调用全部生成失败结果,不进入改写、授权或执行;结果序列化异常也作为单项工具失败收集,整批完成前不结束调用或释放实例。
 - 仅当非空工具批次的所有结果都要求 `terminate` 时停止自动工具循环;混合允许/拒绝批次继续交给模型处理。停止工具循环后仍按顺序处理已排队的 steering 和 follow-up。
 - steering 在工具批次后、下一次模型请求前进入上下文;follow-up 在当前循环结束后按 FIFO 继续。按 [ADR-010](../decisions/010-input-ownership-and-interruption.md),队列只属于活动执行,结束时同步关闭接收并结算未处理确认。取消清空内核队列并恢复调用前上下文,宿主依据确认恢复未处理草稿;SDK 提交开始后不承诺撤销存储。具体契约及验收见 [SDK 施工图](sdk.md)。
-- `AgentRunner` 继续负责完整调用的原子持久化;提前关闭迭代器必须等待运行清理。供应商 continuation 字段原样保留。
-- 不引入永久双引擎、Run/Step、预算、检查点、SDK 公共接口、Team 或 TUI 美化。
+- `AgentRunner` 负责完整调用的提交边界;提前关闭迭代器必须等待运行清理。存储适配器负责写入原子性,JSONL 不保证断电或部分写入故障的事务性;提交开始后的取消按 ADR-010 等待结算。供应商 continuation 字段原样保留。
+- 内核替换批次不引入永久双引擎、Run/Step、预算、检查点、SDK 公共接口、Team 或 TUI 美化;后续 SDK 批次单独见 [SDK 施工图](sdk.md)。
 
 ## Batches
 
@@ -31,10 +31,10 @@
 
 反向验证:新增权限等待取消终态测试在旧内核失败(错误终态而非 aborted),替换后必须通过;依赖门禁 fixture 注入旧内核包与导入,必须拒绝。
 
-- [ ] 自研路径通过全部执行契约与取消/隔离测试。
-- [ ] 依赖门禁、typecheck、完整测试与 frozen install 通过。
+- [x] 自研路径通过已有执行契约与取消/隔离自动化测试(AC-CORE-01..06,见下方证据映射)。
+- [x] 依赖门禁、typecheck、完整测试与 frozen install 通过(AC-CORE-08,提交快照 `04db82b`)。
 - [ ] 受控真实 provider 文本和工具循环验证,记录未测范围。
-- [ ] 状态文档与实际实现一致,后续路线不冒充已交付。
+- [x] 状态文档已按当前实现核对,后续路线与未测项单列(2026-09-06 文档整理)。
 
 本次 review 修复验收:
 
@@ -44,9 +44,23 @@
 
 ## Rollback
 
-不更改会话格式或配置格式。提交前由 operator 审核差异,之后以独立提交作为回退点;本轮不自动创建提交。若回退需整体恢复执行适配、依赖和 lockfile,保留 pi-ai Responses 补丁,不通过运行期开关长期维持双引擎。
+不更改会话格式或配置格式。`d2519aa` 是内核替换回退点,`04db82b` 是后续 SDK 与输入契约变更;回退内核前需处理 SDK 对它的依赖。回退需整体恢复执行适配、依赖和 lockfile,保留 pi-ai Responses 补丁,不通过运行期开关长期维持双引擎。
 
 ## Evidence
+
+### 当前证据映射
+
+| 原始出口 | 自动化证据与剩余边界 |
+|---|---|
+| AC-CORE-01/02 | `tests/loop-contract/`、`packages/core/test/pi-port.test.ts`、`packages/core/test/permission.test.ts`:stop reason、并行工具收尾、改写后授权与拒绝 |
+| AC-CORE-03/04 | `packages/core/test/sdk.test.ts`、`input-ownership.test.ts`、loop-contract:取消、提前关闭、并发拒绝、FIFO 与输入确认 |
+| AC-CORE-05/06 | `session.test.ts`、`provider-replay.test.ts`、`sdk-integration.test.ts`、CLI 与 PTY:完整提交、签名恢复、实例隔离和退出行为 |
+| AC-CORE-07 | 自研路径属性测试、故障注入、本地 HTTP 与真实 PTY 已通过;SDK 最小远程烟测记录见 SDK 施工图,完整真实多轮工具/session/取消验收仍未完成 |
+| AC-CORE-08 | `04db82b` 独立提交快照 frozen install、依赖门禁、五包 typecheck 与 290 个测试通过;保留 pi-ai Responses 补丁 |
+
+2026-09-06 提交验证细节见 [SDK Evidence](sdk.md#adr-010-修复)。本次文档整理不重跑模型或工具测试,也不将已有自动化结论扩展成人工交付验收。
+
+### 内核替换 review 历史记录
 
 - Ran:替换前 `bun run check`,240 pass / 0 fail。本次 review 修复先增加 6 个回归用例,修复前 focused 测试为 7 pass / 5 fail,失败分别命中截断调用、序列化收尾、混合权限和两类队列,全拒绝无队列的对照用例通过。
 - Ran:修复后 `bun test tests/loop-contract packages/core/test`,64 pass / 0 fail;最终 `bun run check`,依赖门禁、全部包 typecheck 通过,255 pass / 0 fail(含 PTY、HTTP replay、Responses 终态与 usage);`git diff --check` 通过。

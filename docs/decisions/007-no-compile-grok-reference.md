@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # ADR-007: 视觉回归不再编译 grok-build 取 reference
 
-> 状态:已批准(2026-09-04,operator 指示「编译成本太高,换一个方案」)
+> 状态:已批准(2026-09-04,operator 指示「编译成本太高,换一个方案」)。2026-09-06 核对:当前工作区不保留旧对照截图,不改变 cell 回归与 PNG 非硬门禁的验收口径。
 > 修订:[ADR-006](./006-tui-cell-parity.md) 的 reference 获取路径与 AC-49 口径;cell 层验收与 PNG 辅证条款仍有效。
 
 ## 背景
@@ -23,7 +23,7 @@ ADR-006 把视觉出口定为锁定环境内、myh `TerminalFrame` 与 grok-buil
 1. **禁止把编译或运行 grok-build 当作 CI / `bun run check` 的前置。** `scripts/grok-capture/` 删除,不再维护。
 2. **cell 回归的参考答案改为本仓库锁定的 FrameDump golden**(由 `paintScenario` / `tui-frame dump-scenarios` 生成并 check-in)。同一 fixture 重跑 hash 必须一致;改 1 cell 必须变红。这锁的是**我们自己的输出不漂**,不是 grok 二进制。
 3. **与 grok 的对齐改为规格不变量**,从 grok 源码与其单测转写,不跑其进程。至少锁定:rail 列宽 1、左右 padding 2、content 起点列 3、collapsed 去 rail 字形但留列、timestamp 整留 10 列或整藏。
-4. **ADR-006 的「与 grok-build 运行时 dump 零差异」不再是出口条件。** 产品目标仍是 grok 的信息架构与交互;视觉靠齐以规格 + golden + 人工对照 `grokbuild.png` 为准。PNG 仍不作硬门禁。
+4. **ADR-006 的「与 grok-build 运行时 dump 零差异」不再是出口条件。** 产品目标仍是 grok 的信息架构与交互;视觉靠齐以规格、in-repo golden 与人工验收为准。当前不保留旧 PNG 对照资产;今后人工截图仍可作辅证,不作为硬门禁。
 
 ## 被否方案
 

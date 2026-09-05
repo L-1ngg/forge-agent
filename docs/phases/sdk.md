@@ -5,11 +5,11 @@ created: 2026-09-05
 
 # 通用内核与 SDK 边界
 
-> 状态:代码与自动化验证完成(2026-09-05),包含 ADR-010 输入归属与取消修复,待 operator 交付审核。接入说明见 [SDK](../sdk.md)。
+> 状态:代码与自动化验证完成,已提交 `04db82b`(2026-09-06),包含 ADR-010 输入归属与取消修复;人工交付审核仍待确认。接入说明见 [SDK](../sdk.md)。
 
 ## Why
 
-落实 [plan.md](../plan.md) 第二批。目前 CLI 自行装配 SessionStore、RequestBus、权限与 pi-port,AgentRunner 直接依赖具体 JSONL 存储。外部宿主需要重复这套装配,也没有明确的释放与失败后复用契约。
+落实通用 Agent 路线的第二批。立项时 CLI 自行装配 SessionStore、RequestBus、权限与 pi-port,AgentRunner 直接依赖具体 JSONL 存储。外部宿主需要重复这套装配,也没有明确的释放与失败后复用契约。
 
 保留自研 ExecutionCore,不增加第二套执行逻辑。SDK 是单 Agent 的宿主接入层,不是 Team 编排器或服务框架。上位决策为 ADR-008 与 ADR-009。
 
@@ -29,7 +29,7 @@ created: 2026-09-05
 
 路径:新增 `packages/core/src/agent.ts`,显式导出 `@myh/core/sdk`,不立即删除现有仓库内部导出。
 
-拟定接口名称与语义:
+接口名称与语义:
 
 - `createAgent(options): Promise<Agent>`:显式传入 provider/model、已解析凭据、systemPrompt、cwd、工具和权限配置;不隐式加载配置文件、环境变量引用或执行 secret command。
 - `runTurn(input): AgentTurn`:仍为单消费者 `AsyncIterable<SessionEvent>`,附带只读 `id: symbol`,同实例一次只运行一个 invocation;同时运行直接拒绝。
@@ -114,6 +114,7 @@ CLI 保留参数解析、配置/secret 加载、JSONL 选择与 UI 装配,改用
 
 ### ADR-010 修复
 
+- 提交验证(2026-09-06):`04db82b`,tree `25b6aaf7c09393abac4c44519abbaed6df2a8eff`;在独立暂存快照执行 `bun install --frozen-lockfile`、`bun run check`(290 pass / 0 fail)及示例/PTY fixture 的严格 TypeScript 检查,均通过。未重跑远程供应商请求。
 - Ran:`bun run check`,290 pass / 0 fail,50 个文件;AC-SDK-02/04/05/06 重新验证。干预返回类型贯通内核、runner、模型适配器与 SDK;headless 只依赖其实际消费的 runTurn 接口。
 - Ran:核心/SDK 新增 11 个用例,包含 seed 91004 / 40 runs 的交错属性测试;TUI 新增 6 个用例并加强既有 Ctrl+Enter 断言。真实 PTY 新增 4 条慢存储路径,覆盖提交成功、普通停止、指定替换和提交失败。
 - Ran:先补测试再修复,旧实现 SDK 目标测试 3 fail、TUI 目标测试 4 fail。详细用例、边界与未测项见 [ADR-010 验证](../decisions/010-input-ownership-and-interruption.md#本轮验证)。
@@ -131,4 +132,4 @@ CLI 保留参数解析、配置/secret 加载、JSONL 选择与 UI 装配,改用
 - Ran:由宿主显式加载当前凭据传给 embedded-agent 示例,xAI/grok-4.6 返回 SDK_EMBEDDED_OK;仅提供无副作用 marker 工具,空内存历史,不输出凭据或读取项目内容作为模型输入。
 - Not run:跨供应商远程矩阵、长期任务、断电与文件系统部分写入故障、Node.js 兼容和包发布。
 - Why:本批限于 Bun 宿主接入与生命周期,真实烟测不替代长任务可靠性验收。
-- Risk:宿主工具取消需配合 AbortSignal;存储故障后的实际提交状态需宿主核对,JSONL 无断电事务保证。尚未提交 commit 或获得交付人工验收。
+- Risk:宿主工具取消需配合 AbortSignal;存储故障后的实际提交状态需宿主核对,JSONL 无断电事务保证。此历史记录产生时尚未提交;后续提交证据见上节,不据此补记人工验收通过。

@@ -5,9 +5,9 @@ created: 2026-09-01
 
 # Phase 2 施工图 — TUI 升到 grok 水准 + permission 流水线
 
-> 状态:M1-M6 代码与自动化验收已完成;原人工 UX 验收先后由 [phase-2.1.md](./phase-2.1.md)(已中止)与 [phase-2.2.md](./phase-2.2.md)(当前,已批准,施工中)接管。AC-14 仍未实测;operator 已确认 E1-E3 暂缓实测、按豁免处理。Owner:operator。
-> 对应 [plan.md](../plan.md) §2 Phase 2;设计论证见 [design-rationale.md](../design-rationale.md) A / C.4,TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md)。失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
-> 本文档是 Phase 2 M1-M6 的历史施工图;TUI 重写以 [phase-2.2.md](./phase-2.2.md) 为当前施工真相源。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架见 [SOP.md](../SOP.md),本 Phase 实例见 §5。
+> 状态:M1-M6 代码与自动化验收已完成;后续 TUI 重写与阶段关闭见 [phase-2.2.md](./phase-2.2.md)。AC-14 仍未实测;operator 已确认 E1-E3 暂缓实测、按豁免处理。2026-09-06 核对。Owner:operator。
+> 历史设计论证见 [design-rationale.md](../design-rationale.md) A / C.4,TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md)。失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
+> 本文档是 Phase 2 M1-M6 的历史施工图;当前 SDK 与输入契约见 [SDK 施工图](sdk.md)。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架见 [SOP.md](../SOP.md),本 Phase 实例见 §5。
 
 ---
 

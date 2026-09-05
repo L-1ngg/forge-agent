@@ -6,7 +6,9 @@ created: 2026-09-01
 # earendil-works/pi 深度调研
 
 > 状态:已调研(2026-09-01)
-> 快照:[`earendil-works/pi@853a80d`](https://github.com/earendil-works/pi/tree/853a80d26c90a14c1886f0ebb8ffaae133ca2185),本文涉及的 package 均为 `0.84.4`。本项目当前 exact 安装 `@earendil-works/pi-ai@0.84.4`、`@earendil-works/pi-agent-core@0.84.4`、`@earendil-works/pi-tui@0.84.4`。
+> 快照:[`earendil-works/pi@853a80d`](https://github.com/earendil-works/pi/tree/853a80d26c90a14c1886f0ebb8ffaae133ca2185),本文涉及的 package 均为 `0.84.4`。调研时本项目 exact 安装 `@earendil-works/pi-ai@0.84.4`、`@earendil-works/pi-agent-core@0.84.4`、`@earendil-works/pi-tui@0.84.4`。
+
+> 当前采用边界(2026-09-06):上述依赖是历史快照,不是当前清单。TUI 已由 ADR-005/007 改为自有 compositor;[ADR-009](../decisions/009-self-owned-agent-core.md) 已落地自研 ExecutionCore,模型流保留 pi-ai,不再依赖 pi-agent-core。Team 归外部项目,见 [ADR-008](../decisions/008-general-agent-positioning.md);当前宿主接口见 [SDK 指南](../sdk.md)。下文采用建议仅作历史依据。
 
 ## 1. 一句话结论
 

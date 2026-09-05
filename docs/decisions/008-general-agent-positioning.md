@@ -5,18 +5,18 @@ created: 2026-09-05
 
 # ADR-008: 通用单 Agent 与分层复用
 
-> 状态:已批准(2026-09-05,operator 确认定位与架构路线)。决策 2 的 pi Agent/不重写 loop 条款由 [ADR-009](009-self-owned-agent-core.md) 取代,其余定位决策保留。
+> 状态:已批准(2026-09-05,operator 确认定位与架构路线)。决策 2 的 pi Agent/不重写 loop 条款由 [ADR-009](009-self-owned-agent-core.md) 取代,其余定位决策保留。2026-09-06 核对:实现与验收状态以 [自研内核](../phases/owned-core.md)、[SDK 施工图](../phases/sdk.md) 为准。
 
 ## 背景
 
 operator 要求本项目成为可运行的通用 agent,同时为已有应用提供内核与接口,或作为外部 multi-agent 项目中的单个 agent。采用类似 pi 的组织方式:既能分层依赖,也能派生修改完整项目,而非只能依赖 SDK 或只能 fork。
 
-当前 `core` 已能接收工具、提示词与历史消息,不依赖 TUI;但包仍为仓库内私有包,`AgentRunner` 直接绑定本地 JSONL `SessionStore`,默认配置与 CLI 工具装配仍面向 coding。目标 SDK 尚未交付。
+立项时 `core` 已能接收工具、提示词与历史消息,不依赖 TUI;但 `AgentRunner` 直接绑定本地 JSONL `SessionStore`,默认配置与 CLI 工具装配仍面向 coding,SDK 尚未实现。这是本决策的历史背景,不是当前代码状态。
 
 ## 决策
 
 1. **定位:**可独立运行、可分层复用、可派生定制的通用单 Agent 项目。完整 CLI/TUI、可嵌入内核/SDK、fork 定制三种方式并存。Coding 是已有能力,资料调研与报告是首个非 coding 验证场景。
-2. **底座(经 ADR-009 修订):**沿用 TypeScript + Bun、现有五包结构、`pi-ai` 和自有 compositor;执行内核改为自研,替换 `pi-agent-core`。当前代码仍使用 pi `Agent`,替换尚未实现。
+2. **底座(经 ADR-009 修订):**沿用 TypeScript + Bun、现有五包结构、`pi-ai` 和自有 compositor;执行内核改为自研,替换 `pi-agent-core`。实现与未验收边界见对应施工图。
 3. **单 Agent 边界:**负责执行、会话、上下文、工具、权限、取消与事件输出。支持多个实例互不串状态是 SDK 目标,不等于内置协作。Team 调度、消息路由、任务板、dashboard 归外部 multi-agent 项目;内置子 Agent 编排不进入当前路线。
 4. **分层复用:**SDK 提供创建、执行、观察、干预和释放 agent 的接入能力。宿主能装配工具、提示词、会话存储与权限交互,无需启动 TUI。独立 CLI/TUI 使用同一内核与公开接入层,不另建执行链路。
 5. **能力扩展:**工具承担执行,Skills 承担任务方法,知识源提供领域信息。具体业务不写死在公共内核;不预先建设通用 RAG 平台。MCP 是否作为外部工具接入方式留待具体需求评估,不由旧 coding 场景下的否决结论一概排除。
@@ -37,7 +37,7 @@ operator 要求本项目成为可运行的通用 agent,同时为已有应用提�
 - [plan.md](../plan.md) 按自研执行内核、通用内核/SDK、能力扩展与调研、长任务可靠性、服务 API 与分发推进;每批实现前另定施工图。
 - [ADR-004](004-single-process-protocol-isolation.md) 的协议隔离继续有效,内置 Team 与外部部署约束由本文取代;旧 Team 论证保留为历史参考。
 - fork 可以修改公共实现,但上游修复不会自动同步。接口和发布策略需在 SDK 阶段确定,不承诺所有派生版本兼容。
-- 本轮仅同步文档,不修改代码、依赖、公共类型、仓库名、`myh` 命令、包名或本机配置;不更新全局记忆、不自动提交。
+- 初次定位讨论仅同步文档;后续内核与 SDK 按各自施工图授权实施。仓库名、`myh` 命令与包名不因定位改变而更名。
 - [Phase 2.2](../phases/phase-2.2.md) 不重开,已知未测项仍保留;旧阶段验收不是通用 agent 验收。
 
 ## 后续验收方向

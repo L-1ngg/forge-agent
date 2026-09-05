@@ -7,6 +7,7 @@ created: 2026-09-01
 
 > 状态:已调研(2026-09-01)
 > 快照:[`xai-org/grok-build@bc7f02e`](https://github.com/xai-org/grok-build/tree/bc7f02eddd3d84085849dc19ed216f11c23b0571),根目录 `SOURCE_REV=d5a0335a47221e8c9519936cb693e9b6450227ec`,`xai-grok-pager` 版本 `1.0.12`。
+> 适用范围(2026-09-06):下文采用建议保留为研究历史。TUI 底座与验收以 [ADR-005](../decisions/005-tui-own-compositor.md)/[ADR-007](../decisions/007-no-compile-grok-reference.md) 为准;Team/dashboard 旧规划由 [ADR-008](../decisions/008-general-agent-positioning.md) 取代,当前输入行为见 [ADR-010](../decisions/010-input-ownership-and-interruption.md)。
 
 ## 1. 结论
 

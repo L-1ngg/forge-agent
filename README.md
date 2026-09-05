@@ -1,20 +1,33 @@
 # my-coding-harness
 
-> 当前为自有 compositor 的 Phase 2.2;operator 阶段验收结论、交付边界和验证证据见 [施工图](docs/phases/phase-2.2.md),后续事项见 [docs/plan.md](docs/plan.md)。体验与其余优化按 operator 后续要求安排。
+> 定位与复用边界见 [ADR-008](docs/decisions/008-general-agent-positioning.md),路线见 [docs/plan.md](docs/plan.md)。既有交付与未测项见 [Phase 2.2](docs/phases/phase-2.2.md),不因重新定位重开该阶段。
 
-个人 coding harness:一个自己拥有的 AI 编程助手。技术栈 **TypeScript + Bun**。
+一个可独立运行、可分层复用、可派生定制的通用单 Agent 项目。技术栈 **TypeScript + Bun**。Coding 是已有能力,资料调研与报告是首个非 coding 验证场景。
+
+支持直接运行 CLI/TUI、通过仓库内 Bun SDK 嵌入应用、fork 后定制完整 agent。CLI 默认提示词和工具仍面向 coding;SDK 由宿主显式装配能力。包仍为仓库内私有包,通用能力扩展与对外发布尚待实现。SDK 接入见 [docs/sdk.md](docs/sdk.md),示例见 [examples/embedded-agent.ts](examples/embedded-agent.ts)。
 
 ## Why
 
-设计吸取三个不重叠的参考项目:[pi](https://github.com/earendil-works/pi)(依赖底座)、[grok-build](https://github.com/xai-org/grok-build)(TUI 设计)、[clowder-ai](https://github.com/zts212653/clowder-ai)(协作语义、记忆、文档系统)。四条核心决策与论证见 [docs/plan.md](docs/plan.md) §0。
+设计吸取三个不重叠的参考项目:[pi](https://github.com/earendil-works/pi)(依赖底座)、[grok-build](https://github.com/xai-org/grok-build)(TUI 设计)、[clowder-ai](https://github.com/zts212653/clowder-ai)(协作语义、记忆、文档系统)。历史论证见 [docs/design-rationale.md](docs/design-rationale.md),当前边界以 ADR-008 为准。
 
 ## 架构
 
-monorepo 五包:`protocol` 定义事件;`core` 使用 pi `Agent` 与 `tools`;`tui` 只依赖 `protocol` 和 Node 内置模块;`cli` 连接两侧。依赖方向与铁律见 [docs/plan.md](docs/plan.md) §1。
+monorepo 五包的职责如下。运行时依赖由 `scripts/check-deps.ts` 检查;`pi-ai` 的导入仅允许出现在 `packages/core/src/pi-port.ts`。
+
+| 包 | 职责 |
+|---|---|
+| `protocol` | 自有事件、请求、响应与展示数据契约 |
+| `core` | 自研 `ExecutionCore`、权限、会话、生命周期与 SDK;依赖 `protocol`、`tools` |
+| `tools` | 工具契约与内置 coding 工具;业务能力由宿主装配 |
+| `tui` | 自有 cell compositor 与终端交互;只依赖 `protocol` 和 Node 内置模块 |
+| `cli` | 配置、凭据、coding 能力与存储装配,连接 SDK、headless 和 TUI |
+
+按 [ADR-009](docs/decisions/009-self-owned-agent-core.md),已移除 `pi-agent-core`,保留 `pi-ai` 的模型调用、认证与流解析。SDK 入口为 `@myh/core/sdk`,同实例一次运行一个 invocation,多个实例可独立运行。输入接收、取消和提交契约见 [SDK 接入](docs/sdk.md);施工与验证见 [自研执行内核](docs/phases/owned-core.md) 和 [SDK 施工图](docs/phases/sdk.md)。
 
 ## 路线图
 
-Phase 0 底座验证 → Phase 1 每天能用 → Phase 2 TUI 升级 → Phase 2.5 Team → Phase 3 产品化。
+自研执行内核 → 通用内核与 SDK → 能力扩展与调研报告 → 长任务可靠性 → 服务 API 与分发。
+本项目聚焦单 agent;Team 调度、消息路由、任务板和 dashboard 归外部项目。同进程 SDK 不提供进程级沙箱。
 各 Phase 施工图:[docs/phases/](docs/phases/)。
 
 ## 运行

@@ -4,16 +4,19 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。pi `Agent` 接自有 session store,TUI 使用自有 compositor。当前施工与验收真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md);B6 按 [ADR-007](docs/decisions/007-no-compile-grok-reference.md) 使用 in-repo cell golden,不编译 grok-build。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,不得据此声明人工验收通过。
+通用单 Agent 项目(TypeScript + Bun),执行内核为自研 `ExecutionCore`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@myh/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#架构)。
 
 ## 真相源层级
+
+历史 TUI 交付见 [Phase 2.2](docs/phases/phase-2.2.md);B6 按 [ADR-007](docs/decisions/007-no-compile-grok-reference.md) 使用 in-repo cell golden,不编译 grok-build。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,不得据此声明人工验收通过。
 
 拿不准哪个文档说了算时按此表;文档与代码冲突时**先修文档,再对齐代码**:
 
 | 问题 | 真相源 |
 |---|---|
 | 要做什么、做到哪了 | [docs/plan.md](docs/plan.md)(只放行动项) |
-| 当前 Phase 怎么施工 | [docs/phases/](docs/phases/) 下的 phase 施工图(路径 / tradeoff / 验收) |
+| 当前内核与 SDK 怎么施工、如何验收 | [自研内核](docs/phases/owned-core.md)、[SDK](docs/phases/sdk.md);历史阶段见 [docs/phases/](docs/phases/) |
+| 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
 | 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
 | 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |
 | 踩过的坑 | [docs/lessons.md](docs/lessons.md) |

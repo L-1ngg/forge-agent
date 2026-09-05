@@ -5,12 +5,12 @@ created: 2026-09-04
 
 # ADR-005: TUI 自有 TerminalFrame compositor,移除 pi-tui
 
-> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7;批准审查补入 phase-2.2 的 B0 前置安全快照与 interim request 策略)。同日修订:决策 1(产品目标)被 [ADR-006](./006-tui-cell-parity.md) 升级为锁定环境内逐 cell 零差异出口;决策 2/3 与其余条款仍有效。
+> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](./006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](./007-no-compile-grok-reference.md) 修订;自有 compositor 与依赖边界仍有效。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
 > 参与者:operator(发起,选择 1A/2A/3A)、Grok(起草)
 
 ## 背景
 
-[plan.md](../plan.md) §0 决策 2 与 [design-rationale.md](../design-rationale.md) C.2 把 TUI 钉在 `pi-tui` 原语上:UX 概念自写成 `Component`,`render()` 返回 `string[]`。Phase 2 M3-M6 按这条路径落地;Phase 2.1 试图在同一底座上补 typed entry、EntryShell、row budget 和 cell/PNG zero-diff。
+立项时的规划与 [design-rationale.md](../design-rationale.md) C.2 把 TUI 钉在 `pi-tui` 原语上:UX 概念自写成 `Component`,`render()` 返回 `string[]`。Phase 2 M3-M6 按这条路径落地;Phase 2.1 试图在同一底座上补 typed entry、EntryShell、row budget 和 cell/PNG zero-diff。
 
 operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造的,我认为改造的效果很不好」,要求完全删掉现有 TUI 实现后重新设计。随后确认三项:
 
@@ -22,14 +22,14 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 
 根因不是 TypeScript 不如 Rust,也不是缺几个 widget。`pi-tui` 是行导向(`Component.render(): string[]`),grok-build 是单元格导向(typed entry → 共享 chrome → 预先算好的 rect → 写入 cell)。Phase 2.1 在前者上叠后者,两套模型并存。证据见 [grok-build-tui-gap.md](../research/grok-build-tui-gap.md) §1、[phase-2.1.md](../phases/phase-2.1.md) §2.9。
 
-`pi-ai` / `pi-agent-core` 不在本决策范围内,继续 exact pin。
+`pi-ai` / `pi-agent-core` 不在当时 TUI 重写范围内;后续内核替换以 [ADR-009](009-self-owned-agent-core.md) 为准。
 
 ## 决策
 
 **`packages/tui` 拥有自己的 cell compositor 与终端宿主,移除 `@earendil-works/pi-tui`。**
 
 1. **唯一 paint 模型**是 `TerminalFrame`(二维 cell:grapheme / width / fg / bg / attributes / cursor)。高层产出 view state 与 layout plan,最终只写入 frame,再由 host 差分刷到终端。不再存在 `Component.render(): string[]` 这条路径。
-2. **产品目标**是 grok-build 的信息架构与交互契约,不是 pixel parity。Phase 2.1 的 AC-38 / AC-39 / AC-40 / AC-42 不继承。`grokbuild.png` 只作定性参考。
+2. **产品目标**是 grok-build 的信息架构与交互契约,不是 pixel parity。Phase 2.1 的 AC-38 / AC-39 / AC-40 / AC-42 不继承。历史截图不作为当前仓库资产或验收依据。
 3. **依赖铁律修正**([ADR-004](./004-single-process-protocol-isolation.md) 第 2 条):`tui` 只 import `@myh/protocol` 与 `node:` 内置。禁止再引入任何 TUI 框架(ink / blessed / ratatui-wasm / yoga 等)。Unicode 宽度、按键解码、markdown、editor 全部自写。
 4. **CLI 契约冻结**,清空时不得顺手改 `packages/cli` 的接线形状:
    - 导出 `App`、`scanFiles`
@@ -56,7 +56,7 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 
 - paint、layout、chrome 共用一套 cell 几何,不再把 grok 的 rect 翻译成 pi 的行
 - 差分刷新、alt-screen、按键解码的行为由本仓库测试锁定,不再跟 pi 的 0.84.x churn
-- Phase 2.5 dashboard 的二维分栏不再赌 `pi-tui` `HStack` 在真实终端里够用
+- 自有 compositor 可表达二维布局;历史 Phase 2.5 dashboard 已按 ADR-008 移出本项目路线
 
 **变难的:**
 

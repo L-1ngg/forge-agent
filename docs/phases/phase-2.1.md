@@ -7,6 +7,7 @@ created: 2026-09-02
 
 > 状态:已中止(2026-09-04)。operator 选择 1A/2A/3A:放弃 pi-tui 改造路径,改由 [phase-2.2.md](./phase-2.2.md) 接手。本文保留为历史施工图,AC-38/AC-39 未关闭不得改写成通过。同日 [ADR-006](../decisions/006-tui-cell-parity.md):AC-37/38/40/41 的 cell 口径语义由 phase-2.2 AC-48/49/50 接手;AC-39 的 PNG 硬门禁不恢复。[phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图。
 > 输入:[grok-build TUI 差距调研](../research/grok-build-tui-gap.md);通用设计背景见 [grok-build.md](../research/grok-build.md) 和 [design-rationale.md](../design-rationale.md)。
+> 资产核对(2026-09-06):旧 PNG 对照图已从工作区移除;资产清理不改变本阶段未完成或中止的验收结论,当前视觉回归见 ADR-007。
 
 ---
 
@@ -393,7 +394,7 @@ status 保留当前 truth 和 `$0.005` 阈值。只改成 typed segments + dock 
 
 - 覆盖 CJK/emoji/ANSI、40/60/80/120 cols、8/12/16/24 rows。
 - 覆盖 resize 前后 active streaming、manual fold、scroll follow 和 parked card。
-- 使用真实 PTY 分别运行 `main`/`alt`,对照 `grokbuild.png` 与目标不变量。
+- 使用真实 PTY 分别运行 `main`/`alt`,对照目标不变量与人工交互结果。
 - 核对 OSC 52、滚轮、truecolor;结论回填 [phase-2.md](./phase-2.md) AC-14。
 - 不在本批新增动画、dashboard 或其他 polish。
 
@@ -462,7 +463,7 @@ status 保留当前 truth 和 `$0.005` 阈值。只改成 typed segments + dock 
 - [ ] OSC 52、滚轮、truecolor 的真实终端结论写回 AC-14。
 - [ ] locked reference environment 中逐区域对照 header、user band、thinking、assistant、execute、edit、status、composer、shortcuts、card;cell diff 与 RGBA diff 均为 `0`。
 - [ ] 同一 scenario 连续 capture 两次 hash 一致;若不一致,先处理 cursor/time/animation/PTY nondeterminism,不更新 reference。
-- [ ] `grokbuild.png` 与 `myh.png` 仅作为历史定性证据;由于当前尺寸分别为 `2493x619` 与 `2560x1390`,不把它们当作 pixel baseline。
+- [ ] 历史 PNG 仅作定性参考,不作为 pixel baseline;本项随阶段中止停止验收,截图删除不计作通过。
 
 ## 5. Release 与 bug bar
 
