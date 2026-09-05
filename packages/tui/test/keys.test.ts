@@ -88,3 +88,18 @@ test("split UTF-8 across buffers decodes once", () => {
 	expect(decoder.push(bytes.subarray(0, 1))).toEqual([]);
 	expect(decoder.push(bytes.subarray(1))).toEqual([{ type: "char", text: "你" }]);
 });
+
+test("bracketed paste survives every byte split including both delimiters", () => {
+	const raw = Buffer.from("\x1b[200~one\n你好\x1b[201~");
+	for (let split = 1; split < raw.length; split++) {
+		const decoder = new KeyDecoder();
+		expect([...decoder.push(raw.subarray(0, split)), ...decoder.push(raw.subarray(split))]).toEqual([{ type: "paste", text: "one\n你好" }]);
+	}
+});
+
+test("escape timeout does not discard a slow bracketed paste", () => {
+	const decoder = new KeyDecoder();
+	expect(decoder.push("\x1b[200~one")).toEqual([]);
+	expect(decoder.flush()).toEqual([]);
+	expect(decoder.push("\ntwo\x1b[201~")).toEqual([{ type: "paste", text: "one\ntwo" }]);
+});

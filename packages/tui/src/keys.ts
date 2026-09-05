@@ -64,11 +64,12 @@ export class KeyDecoder {
 
 	/** True while undecoded bytes wait for the ambiguity window (lone ESC, partial sequence, paste). */
 	get pending(): boolean {
-		return this.buffer.length > 0 || this.pasting;
+		return !this.pasting && this.buffer.length > 0;
 	}
 
 	/** Resolve a pending lone ESC (or malformed tail) after the ambiguity window. */
 	flush(): Key[] {
+		if (this.pasting) return [];
 		this.buffer += this.decoder.decode();
 		return this.drain(true);
 	}
@@ -79,15 +80,10 @@ export class KeyDecoder {
 			if (this.pasting) {
 				const end = this.buffer.indexOf(PASTE_END);
 				if (end === -1) {
-					if (!final) {
-						this.pasteBuffer += this.buffer;
-						this.buffer = "";
-						break;
-					}
-					keys.push({ type: "unknown", raw: this.pasteBuffer + this.buffer });
-					this.pasteBuffer = "";
-					this.buffer = "";
-					this.pasting = false;
+					let suffixLength = Math.min(this.buffer.length, PASTE_END.length - 1);
+					while (suffixLength > 0 && !PASTE_END.startsWith(this.buffer.slice(-suffixLength))) suffixLength--;
+					this.pasteBuffer += this.buffer.slice(0, this.buffer.length - suffixLength);
+					this.buffer = suffixLength > 0 ? this.buffer.slice(-suffixLength) : "";
 					break;
 				}
 				this.pasteBuffer += this.buffer.slice(0, end);
@@ -102,6 +98,7 @@ export class KeyDecoder {
 				this.pasting = true;
 				continue;
 			}
+			if (!final && PASTE_BEGIN.startsWith(this.buffer)) break;
 			if (this.buffer[0] === "\x1b") {
 				if (this.buffer === "\x1b") {
 					if (!final) break;

@@ -17,9 +17,11 @@ import {
 const goldenDir = join(import.meta.dir, "fixtures/golden");
 
 test("each scenario dump is deterministic across two paints", () => {
+	const timezone = process.env.TZ;
 	for (const spec of SCENARIOS) {
 		expect(compareDumps(paintScenario(spec), paintScenario(spec)).status).toBe("equal");
 	}
+	expect(process.env.TZ).toBe(timezone);
 });
 
 test("AC-49: candidate matches checked-in golden FrameDump", async () => {

@@ -1,4 +1,4 @@
-import { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN, RESET_ATTRIBUTES, SHOW_CURSOR, paintDiff } from "./ansi.ts";
+import { DISABLE_BRACKETED_PASTE, ENABLE_BRACKETED_PASTE, ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN, RESET_ATTRIBUTES, SHOW_CURSOR, SYNC_OUTPUT_END, paintDiff } from "./ansi.ts";
 import { cloneFrame, type TerminalFrame } from "./frame.ts";
 import { KeyDecoder, type Key } from "./keys.ts";
 
@@ -44,19 +44,19 @@ export class Host {
 	private readonly output: HostOutput;
 	private readonly decoder = new KeyDecoder();
 	private readonly onData = (chunk: Buffer) => this.handleData(chunk);
-	private readonly onExit = () => this.restoreTerminal();
+	private readonly onExit = () => this.stop();
 	private readonly onUncaught = (error: unknown) => {
-		this.restoreTerminal();
+		this.stop();
 		console.error(error);
 		process.exit(1);
 	};
 	private readonly onSigwinch = () => this.handleResize();
 	private readonly onSigterm = () => {
-		this.restoreTerminal();
+		this.stop();
 		process.exit(128 + 15);
 	};
 	private readonly onSighup = () => {
-		this.restoreTerminal();
+		this.stop();
 		process.exit(128 + 1);
 	};
 	private lastFrame: TerminalFrame | null = null;
@@ -83,16 +83,21 @@ export class Host {
 	start(): void {
 		if (this.started) return;
 		this.started = true;
-		this.output.write(ENTER_ALT_SCREEN);
-		this.input.setRawMode?.(true);
-		this.input.resume?.();
-		this.input.on("data", this.onData);
-		process.on("SIGWINCH", this.onSigwinch);
-		if (this.options.trapSignals ?? true) {
-			process.on("exit", this.onExit);
-			process.on("uncaughtException", this.onUncaught);
-			process.on("SIGTERM", this.onSigterm);
-			process.on("SIGHUP", this.onSighup);
+		try {
+			this.output.write(`${ENTER_ALT_SCREEN}${ENABLE_BRACKETED_PASTE}`);
+			this.input.setRawMode?.(true);
+			this.input.resume?.();
+			this.input.on("data", this.onData);
+			process.on("SIGWINCH", this.onSigwinch);
+			if (this.options.trapSignals ?? true) {
+				process.on("exit", this.onExit);
+				process.on("uncaughtException", this.onUncaught);
+				process.on("SIGTERM", this.onSigterm);
+				process.on("SIGHUP", this.onSighup);
+			}
+		} catch (error) {
+			this.stop();
+			throw error;
 		}
 	}
 
@@ -118,13 +123,16 @@ export class Host {
 			if (output.length > 0) this.output.write(output);
 			this.lastFrame = cloneFrame(frame);
 		} catch (error) {
-			this.restoreTerminal();
+			this.stop();
 			throw error;
 		}
 	}
 
 	private handleData(chunk: Buffer): void {
-		for (const key of this.decoder.push(chunk)) this.options.onKey?.(key);
+		for (const key of this.decoder.push(chunk)) {
+			if (!this.started) break;
+			this.options.onKey?.(key);
+		}
 		if (this.decoder.pending) this.armEscapeTimer();
 		else this.clearEscapeTimer();
 	}
@@ -154,6 +162,6 @@ export class Host {
 	private restoreTerminal(): void {
 		this.input.setRawMode?.(false);
 		this.input.pause?.();
-		this.output.write(`${RESET_ATTRIBUTES}${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
+		this.output.write(`${SYNC_OUTPUT_END}${DISABLE_BRACKETED_PASTE}${RESET_ATTRIBUTES}${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
 	}
 }

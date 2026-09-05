@@ -29,6 +29,8 @@ test("dependency check allows Node built-ins in the TUI package", async () => {
 		}
 		await writeFile(join(rootPath, "packages", "tui", "src", "builtin.ts"), 'import { createHash } from "node:crypto";\nvoid createHash;\n');
 		expect(await findViolations(new URL(`file://${rootPath}/`))).toEqual([]);
+		await writeFile(join(rootPath, "packages", "tui", "src", "forbidden.ts"), 'import "@earendil-works/pi-tui";\n');
+		expect(await findViolations(new URL(`file://${rootPath}/`))).toContain("packages/tui/src/forbidden.ts has forbidden external import @earendil-works/pi-tui");
 	} finally {
 		await rm(rootPath, { recursive: true, force: true });
 	}

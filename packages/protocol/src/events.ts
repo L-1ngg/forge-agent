@@ -8,11 +8,14 @@ export type StopReason = "stop" | "length" | "tool_use" | "error" | "aborted" | 
 export interface TextBlock {
 	type: "text";
 	text: string;
+	textSignature?: string;
 }
 
 export interface ThinkingBlock {
 	type: "thinking";
 	thinking: string;
+	thinkingSignature?: string;
+	redacted?: boolean;
 }
 
 export interface ToolCallBlock {
@@ -20,6 +23,8 @@ export interface ToolCallBlock {
 	id: string;
 	name: string;
 	arguments: Record<string, unknown>;
+	thoughtSignature?: string;
+	namespace?: string;
 }
 
 export type SessionContentBlock = TextBlock | ThinkingBlock | ToolCallBlock;

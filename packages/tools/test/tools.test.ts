@@ -61,6 +61,14 @@ describe("write", () => {
 });
 
 describe("edit", () => {
+	test("replacement text is literal even when it contains replacement tokens", async () => {
+		const cwd = await temporaryDirectory();
+		await writeFile(join(cwd, "literal.txt"), "before");
+		const text = "$& $$ $` $'";
+		const result = await editTool.execute({ path: "literal.txt", old_text: "before", new_text: text }, { cwd });
+		expect(result.ok).toBe(true);
+		expect(await readFile(join(cwd, "literal.txt"), "utf8")).toBe(text);
+	});
 	test("replaces one exact match", async () => {
 		const cwd = await temporaryDirectory();
 		await writeFile(join(cwd, "edit.txt"), "before");
@@ -91,6 +99,17 @@ describe("edit", () => {
 });
 
 describe("bash", () => {
+	test("cancellation escalates for a shell and child that ignore SIGTERM", async () => {
+		const cwd = await temporaryDirectory();
+		const controller = new AbortController();
+		const started = performance.now();
+		const timer = setTimeout(() => controller.abort(), 100);
+		try {
+			const result = await bashTool.execute({ command: "trap '' TERM; sleep 1.5 & wait", timeout_ms: 2_000 }, { cwd, signal: controller.signal, env: { SHELL: "/bin/bash" } });
+			expect(result).toMatchObject({ ok: false, error: { error_code: "ABORTED" } });
+			expect(performance.now() - started).toBeLessThan(1_000);
+		} finally { clearTimeout(timer); }
+	});
 	test("captures output and honors the working directory", async () => {
 		const cwd = await temporaryDirectory();
 		const result = await bashTool.execute({ command: "pwd" }, { cwd });

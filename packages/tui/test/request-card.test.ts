@@ -7,6 +7,7 @@ import {
 	frameToText,
 	paintRequestCard,
 	requestCardActions,
+	cardBodyRows,
 	responseForRequestAction,
 } from "../src/index.ts";
 
@@ -25,11 +26,11 @@ test("AC-12: five request kinds share the same action contract", () => {
 		const actions = requestCardActions(envelope);
 		expect(actions.length).toBeGreaterThanOrEqual(2);
 		const card = new RequestCard(envelope);
-		expect(card.responseFor(actions[0]!)).toBeDefined();
+		if (envelope.kind !== "question") expect(card.responseFor(actions[0]!)).toBeDefined();
 		card.park();
 		expect(card.responseFor(actions[0]!)).toBeUndefined(); // parked cards cannot answer
 		card.resume();
-		expect(card.responseFor(actions[0]!)?.id).toBe(envelope.id);
+		if (envelope.kind !== "question") expect(card.responseFor(actions[0]!)?.id).toBe(envelope.id);
 	}
 });
 
@@ -59,4 +60,23 @@ test("card paint uses a rail and keeps the selected action visible", () => {
 	expect(text).toContain("Yes, proceed");
 	expect(text).toContain("No, reject");
 	expect(frame.cells[0]![0]!.grapheme).toBe("┃");
+});
+
+test("permission body includes the complete authorized arguments", () => {
+	const envelope = request("write", "permission", { toolCall: { type: "tool_call", id: "write", name: "write", arguments: { path: "file.ts", content: "AUTHORIZED_CONTENT", mode: "overwrite" } } });
+	const text = cardBodyRows(envelope, 80, theme).flatMap((row) => row.spans.map((span) => span.text)).join("\n");
+	expect(text).toContain("AUTHORIZED_CONTENT");
+	expect(text).toContain("overwrite");
+});
+
+test("selected actions stay visible even in a three-row card slot", () => {
+	const card = new RequestCard(kinds[0]!.envelope);
+	const frame = createFrame(40, 3);
+	paintRequestCard({ frame, y: 0, height: 3, card, focusIndex: 1, focused: true, theme });
+	expect(frameToText(frame)).toContain("No, reject");
+});
+
+test("confirming a question never invents a selection", () => {
+	const envelope = request("q", "question", { prompt: "Pick", multiple: true, choices: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] });
+	expect(responseForRequestAction(envelope, "confirm")).toBeUndefined();
 });

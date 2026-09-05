@@ -30,6 +30,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 class NullBus implements AppRequestBus {
+	close(): void {}
 	async *requests() {}
 	async *terminals() {}
 	respond(): boolean {
@@ -103,8 +104,8 @@ async function dumpScenarios(outDir: string): Promise<void> {
 async function compare(expectedPath: string, actualPath: string, manifestPath?: string): Promise<number> {
 	const expectedWrapped = unwrapDump(JSON.parse(await readFile(expectedPath, "utf8")));
 	const actualWrapped = unwrapDump(JSON.parse(await readFile(actualPath, "utf8")));
-	let expectedEnv: ReferenceEnvironment | undefined;
-	let actualEnv: ReferenceEnvironment | undefined;
+	let expectedEnv: ReferenceEnvironment | undefined = expectedWrapped.environment;
+	let actualEnv: ReferenceEnvironment | undefined = actualWrapped.environment;
 	if (manifestPath) {
 		const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { expected: ReferenceEnvironment; actual: ReferenceEnvironment };
 		expectedEnv = manifest.expected;

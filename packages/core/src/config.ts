@@ -35,12 +35,25 @@ const defaults: HarnessConfig = {
 };
 
 async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
+	let config: unknown;
 	try {
-		return JSON.parse(await readFile(path, "utf8")) as Partial<HarnessConfig>;
+		config = JSON.parse(await readFile(path, "utf8"));
 	} catch (error) {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return {};
 		throw new Error(`Unable to read config ${path}`, { cause: error });
 	}
+	if (typeof config !== "object" || config === null || Array.isArray(config)) {
+		throw new Error(`Invalid config ${path}: expected a JSON object`);
+	}
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "sessionPath"];
+	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
+	if (unknownKeys.length > 0) {
+		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);
+	}
+	if ("apiKey" in config && (typeof config.apiKey !== "string" || !config.apiKey.trim())) {
+		throw new Error(`Invalid config ${path}: apiKey must be a non-empty string`);
+	}
+	return config as Partial<HarnessConfig>;
 }
 
 export async function loadConfig(options: LoadConfigOptions): Promise<HarnessConfig> {

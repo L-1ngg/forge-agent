@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AgentRunner, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
+import { AgentRunner, createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
 
 const temporaryDirectories: string[] = [];
 async function temporaryDirectory(): Promise<string> {
@@ -108,6 +108,29 @@ test("agent runner abort cancels pending blocking requests before aborting the p
 	bus.close();
 });
 
+test("agent runner persists steering and follow-up user messages in event order", async () => {
+	const cwd = await temporaryDirectory();
+	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
+	const port = createPiTestPort({ responses: [{ text: "first" }, { text: "second" }, { text: "third" }] });
+	const runner = new AgentRunner(port, store);
+	let queued = false;
+	const emitted = [];
+	for await (const event of runner.runTurn("initial")) {
+		if (event.type === "message_delta" && !queued) {
+			queued = true;
+			runner.steer("steering");
+			runner.followUp("follow-up");
+		}
+		if (event.type === "message_end") emitted.push(event.message);
+	}
+	expect(store.messages()).toEqual(emitted);
+	expect(store.messages().filter((message) => message.role === "user").map((message) => message.content)).toEqual([
+		[{ type: "text", text: "initial" }],
+		[{ type: "text", text: "steering" }],
+		[{ type: "text", text: "follow-up" }],
+	]);
+});
+
 describe("config", () => {
 	test("merges global, project, and environment layers", async () => {
 		const root = await temporaryDirectory();
@@ -133,5 +156,32 @@ describe("config", () => {
 	test("resolves command and environment secrets", async () => {
 		expect(await resolveSecret("!echo test-secret")).toBe("test-secret");
 		expect(await resolveSecret("key-$TOKEN", { TOKEN: "value" })).toBe("key-value");
+	});
+
+	test("rejects misspelled config keys without exposing their values", async () => {
+		const root = await temporaryDirectory();
+		const path = join(root, ".myh", "config.json");
+		await mkdir(join(root, ".myh"), { recursive: true });
+		await writeFile(path, JSON.stringify({ provider: "xai", api_Key: "private-test-secret" }));
+		let failure: unknown;
+		try {
+			await loadConfig({ cwd: root, home: root, env: {} });
+		} catch (error) {
+			failure = error;
+		}
+		expect(failure).toBeInstanceOf(Error);
+		const message = (failure as Error).message;
+		expect(message).toContain(path);
+		expect(message).toContain("api_Key");
+		expect(message).toContain("apiKey");
+		expect(message).not.toContain("private-test-secret");
+	});
+
+	test("loads the configured API key and allows an environment override", async () => {
+		const root = await temporaryDirectory();
+		await mkdir(join(root, ".myh"), { recursive: true });
+		await writeFile(join(root, ".myh", "config.json"), JSON.stringify({ provider: "xai", apiKey: "project-test-key" }));
+		expect((await loadConfig({ cwd: root, home: root, env: {} })).apiKey).toBe("project-test-key");
+		expect((await loadConfig({ cwd: root, home: root, env: { MYH_API_KEY: "env-test-key" } })).apiKey).toBe("env-test-key");
 	});
 });

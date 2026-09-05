@@ -167,6 +167,8 @@ MCP 本身不要(单进程 + 自持 tool-call 循环,它那两件事都不存在
 
 ### C.1 内核:pi 的生成器层 + 自持状态
 
+> 施工收窄:当前按 [Phase 1 ④](./phases/phase-1.md) 使用 `Agent` 类并镜像事件到自有 session store;下文生成器方案保留为调度冲突时的逃生口,不是当前实现层级。
+
 采用 A 表的第 2 层,而且是生成器那一层。三个理由:
 
 1. **最难写对、又最不差异化。** 流式重组必须按 `contentIndex` 归组(block 不保证连续到达)、abort 后 tool 的收尾、tool_call 与 text 交错、steering 插入时机、`StopReason` 六态——每条都是 bug 农场,写对了也换不来产品区分度。

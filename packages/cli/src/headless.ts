@@ -52,6 +52,7 @@ export async function runHeadless(
 	const output = typeof outputOrOptions === "function" ? outputOrOptions : console.log;
 	const options = typeof outputOrOptions === "function" ? maybeOptions : (outputOrOptions ?? maybeOptions);
 	let requestExitCode = 0;
+	let runExitCode = 0;
 	const responder = options.requestBus
 		? (async () => {
 				for await (const request of options.requestBus!.requests()) {
@@ -62,12 +63,19 @@ export async function runHeadless(
 		  })()
 		: undefined;
 	try {
-		for await (const event of port.runTurn(prompt)) output(JSON.stringify(event));
+		for await (const event of port.runTurn(prompt)) {
+			if (event.type === "turn_end" || event.type === "message_end") {
+				const reason = event.type === "turn_end" ? event.stopReason : event.message.stopReason;
+				if (reason === "error") runExitCode = 1;
+				else if (reason === "aborted" && runExitCode === 0) runExitCode = 130;
+			}
+			output(JSON.stringify(event));
+		}
 	} finally {
 		if (options.requestBus) options.requestBus.close();
 		await responder;
 	}
-	return requestExitCode;
+	return requestExitCode || runExitCode;
 }
 
 export function jsonError(message: string, code = "CONFIGURATION_ERROR"): string {

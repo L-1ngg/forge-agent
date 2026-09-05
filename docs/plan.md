@@ -1,6 +1,6 @@
 # 个人 Coding Harness — 规划
 
-> 状态:Phase 2.2 施工中(2026-09-04):B0 已合入(pi-tui 移除,`6bac43d`),B1-B5 + B6 待施工;视觉出口经 [ADR-006](./decisions/006-tui-cell-parity.md) 升级为锁定环境逐 cell 零差异。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,改由 [phases/phase-2.2.md](./phases/phase-2.2.md) 接手。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 指示暂缓实测并按豁免处理,AC-14 未实测,E4 已复核。
+> 当前交付、operator 阶段验收结论与后续非阻塞项统一见 [phases/phase-2.2.md](./phases/phase-2.2.md)。视觉出口遵循 [ADR-007](./decisions/007-no-compile-grok-reference.md),不编译 grok-build。Phase 1 人工验收与 Phase 2 E1-E3 的豁免不等于实测通过,AC-14 仍未实测。
 > **本文件只放行动项。** 论证、探测证据、子系统设计见 [design-rationale.md](./design-rationale.md)。
 > 灵感来源:[pi](https://github.com/earendil-works/pi) · [clowder-ai](https://github.com/zts212653/clowder-ai) · [grok-build](https://github.com/xai-org/grok-build)
 > 第四来源 [cat-cafe-tutorials](https://github.com/zts212653/cat-cafe-tutorials) 的失效模式提炼见 [cat-cafe.md](./cat-cafe.md) —— 已并入本文件与 design-rationale。**该文件已审**(2026-08-31,对源仓库逐条核对,见 cat-cafe.md F.9):设计落点无一被推翻,修正集中在引用纪律(出处 / 标签 / 归因);引用时仍需连证据标签一起引。
@@ -19,8 +19,8 @@
 
 四条决策:
 
-1. **agent loop 用 pi 的生成器层,现在不自研。** `pi-agent-core` 是四层且成熟度不同:`pi-ai` 永久依赖、`agentLoop()` 现在用、`harness/` 积木单取、`AgentHarness` 是空壳。→ A、C.1
-2. **TUI 自有 cell compositor,不再依赖 `pi-tui`。** UX 借 grok 的信息架构与交互契约;视觉出口为锁定参考环境内逐 cell 零差异([ADR-006](./decisions/006-tui-cell-parity.md)),跨终端不作像素承诺。历史论证 C.2 保留,施工约束见 [ADR-005](./decisions/005-tui-own-compositor.md)(已批准)。
+1. **agent loop 用 pi 的 `Agent` 类,现在不自研。** 按 [Phase 1 的收窄决策](./phases/phase-1.md),通过事件镜像到自有 session store;`agentLoop()` 是未来调度冲突时的逃生口。`pi-ai` 继续依赖,不采用 `AgentHarness`。
+2. **TUI 自有 cell compositor,不再依赖 `pi-tui`。** UX 借 grok 的信息架构与交互契约;视觉门禁为本仓库 golden 逐 cell 零差异 + grok 几何不变量([ADR-007](./decisions/007-no-compile-grok-reference.md)),不代表 grok 运行时或跨终端像素相同。历史论证 C.2 保留,施工约束见 [ADR-005](./decisions/005-tui-own-compositor.md)。
 3. **team 用文件实现 clowder 的语义,in-process 多 `Agent` 实例。** 语义值得抄,Redis / A2A / web UI 不要。→ C.3
 4. **core 与 UI 以协议隔离,现在就做。** 成本几天,不做则以后是重写。→ C.4
 
@@ -58,7 +58,7 @@ protocol  ←  core  ←  cli  →  tui  →  protocol
 ### 与 pi 的接缝
 
 ```ts
-const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
+const agent = new Agent({ initialState, streamFn: models.streamSimple.bind(models) })
 ```
 
 在 `core` 里包一层自己的窄接口,不让 pi 的类型漏到 `tui` 和 `tools`。pi 12 个月发了 43 个版本,隔离层几十行,收益是 breaking change 只砸一个文件。
@@ -73,7 +73,7 @@ const agent = new Agent({ ...initialState }, models.streamSimple.bind(models))
 
 剩余发布前人工验收:真实终端/tmux 下滚轮、OSC 52、truecolor,以及完整二维 dashboard 的焦点、resize 与持续 streaming 交互。
 
-**Plan B**(已升格为 Phase 2.2 正路径,待 ADR-005 确认):TUI 自己在 Bun 上写 cell compositor;继续只用 `pi-ai` / `pi-agent-core`,不引 `pi-tui`。
+**Plan B**(已由 ADR-005 批准并升格为 Phase 2.2 正路径):TUI 自己在 Bun 上写 cell compositor;继续只用 `pi-ai` / `pi-agent-core`,不引 `pi-tui`。
 
 ### Phase 1 — 每天能用
 
@@ -134,4 +134,6 @@ subagent(独立 context,返回单条最终摘要)· `requireDifferentFamily` 评
 
 ## 3. 下一步
 
-[ADR-005](./decisions/005-tui-own-compositor.md) 与 [phases/phase-2.2.md](./phases/phase-2.2.md) 已由 operator 2026-09-04 批准;同日 [ADR-006](./decisions/006-tui-cell-parity.md) 把视觉出口升级为锁定环境逐 cell 零差异。B0-B5 已合入。B6 按 [ADR-007](./decisions/007-no-compile-grok-reference.md) 改为 in-repo golden(`tui-frame dump-scenarios`),不再编译 grok-build。
+- 等待 operator 提出下一批需求,不自动启动 TUI 优化或 Phase 2.5。
+- 后续按要求安排 TUI 体验及其余模块优化;已知边界见 [Phase 2.2](./phases/phase-2.2.md) 的阶段关闭与验证记录。
+- 后续补测新 TUI 的 5 天 dogfooding、真实 provider 多轮工具调用/session 重开/取消,以及 AC-14 的滚轮、OSC 52 与 truecolor 能力;未测项不阻塞本次阶段关闭,现有降级继续有效。

@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-个人 coding harness(TypeScript + Bun)。当前状态:**Phase 2.2 B0-B5 已合;B6 为 in-repo cell golden,不编译 grok-build([ADR-007](docs/decisions/007-no-compile-grok-reference.md))**。Phase 2 M1-M6 代码与自动化验收已完成;Phase 2.1 pixel parity 已中止,施工真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md) 与 [docs/decisions/005-tui-own-compositor.md](docs/decisions/005-tui-own-compositor.md)。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,AC-14 未实测。
+个人 coding harness(TypeScript + Bun)。pi `Agent` 接自有 session store,TUI 使用自有 compositor。当前施工与验收真相源为 [docs/phases/phase-2.2.md](docs/phases/phase-2.2.md);B6 按 [ADR-007](docs/decisions/007-no-compile-grok-reference.md) 使用 in-repo cell golden,不编译 grok-build。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,不得据此声明人工验收通过。
 
 ## 真相源层级
 

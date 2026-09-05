@@ -1,4 +1,4 @@
-import { type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type TokenUsage } from "@myh/protocol";
+import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent } from "@myh/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, type TerminalFrame } from "./frame.ts";
 import { computeScreenLayout, layoutOffsets } from "./layout.ts";
@@ -49,12 +49,15 @@ export interface AppRequestBus {
 	requests(): AsyncIterable<RequestEnvelopeUnion>;
 	respond(response: unknown): boolean;
 	terminals(): AsyncIterable<RequestOutcome<RequestKind>>;
+	close(): void;
+	getTerminal?(requestId: string): RequestOutcome<RequestKind> | undefined;
 }
 
 /** Structural view of the core agent port; AgentRunner satisfies this. */
 export interface AppPort {
 	runTurn(input: string): AsyncIterable<SessionEvent>;
 	abort?(): void;
+	getUsage?(): ContextUsageSnapshot | undefined;
 }
 
 /** Structural view of core's InputCompletionSource; parsing stays in core. */
@@ -65,14 +68,13 @@ export interface AppCompletionSource {
 
 export interface AppOptions {
 	port: AppPort;
-	/** Part of the frozen CLI contract; every mode enters alt-screen until B5. */
+	/** main is an alias for alt until an inline host is implemented. */
 	host: AppHostMode;
 	requestBus: AppRequestBus;
 	completionSource?: AppCompletionSource | undefined;
 	getStatus?: () => { provider: string; model: string };
 	cwd: string;
 	homeDir: string;
-	/** Part of the frozen CLI contract; the welcome screen lands in B5. */
 	showWelcome?: boolean;
 	/** Test seams; default to process.stdin / process.stdout / process.env. */
 	stdin?: HostInput;
@@ -94,9 +96,11 @@ export class App {
 	private readonly focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
-	private queued: string | undefined;
+	private readonly queued: string[] = [];
+	private runTask: Promise<void> | undefined;
 	private picker: PickerState | undefined;
-	private lastUsage: TokenUsage | undefined;
+	private suggestionVersion = 0;
+	private previousTranscript: { spans: EntrySpan[]; totalRows: number; height: number } | undefined;
 	private started = false;
 	private stoppedPromise: Promise<void> | undefined;
 	private resolveStopped: (() => void) | undefined;
@@ -118,17 +122,30 @@ export class App {
 		this.stoppedPromise = new Promise((resolve) => {
 			this.resolveStopped = resolve;
 		});
-		this.host.start();
-		this.repaint();
-		void this.consumeRequests();
-		void this.consumeTerminals();
+		try {
+			this.host.start();
+			this.repaint();
+			void this.consumeRequests();
+			void this.consumeTerminals();
+		} catch (error) {
+			await this.stop();
+			throw error;
+		}
 	}
 
 	async stop(): Promise<void> {
-		if (!this.started) return;
+		if (!this.started) return this.stoppedPromise;
 		this.started = false;
-		this.host.stop();
-		this.resolveStopped?.();
+		this.queued.length = 0;
+		this.suggestionVersion++;
+		try {
+			if (this.running) this.options.port.abort?.();
+			this.requestBus.close();
+			this.host.stop();
+			await this.runTask;
+		} finally {
+			this.resolveStopped?.();
+		}
 	}
 
 	async waitUntilStopped(): Promise<void> {
@@ -153,6 +170,7 @@ export class App {
 	}
 
 	private handleKey(key: Key): void {
+		if (!this.started) return;
 		if (isCtrlC(key)) {
 			void this.stop();
 			return;
@@ -170,6 +188,16 @@ export class App {
 	}
 
 	private handleCardKey(key: Key): void {
+		const card = this.visibleCard();
+		if (card?.handleTextKey(key, this.focus.focusIndex)) {
+			this.repaint();
+			return;
+		}
+		if (card && (key.type === "pageUp" || key.type === "pageDown")) {
+			card.bodyOffset = Math.max(0, card.bodyOffset + (key.type === "pageDown" ? 3 : -3));
+			this.repaint();
+			return;
+		}
 		const result = this.focus.handleKey(key);
 		if (result.action === "park" && result.card) {
 			this.cards.get(result.card.id)?.park();
@@ -180,7 +208,7 @@ export class App {
 			this.repaint();
 			return;
 		}
-		if (key.type === "enter") {
+		if (key.type === "enter" || (key.type === "char" && key.text === " ")) {
 			this.chooseAction(this.focus.focusIndex);
 			return;
 		}
@@ -263,6 +291,7 @@ export class App {
 		if (!picker) return false;
 		if (key.type === "escape") {
 			this.picker = undefined;
+			this.suggestionVersion++;
 			this.repaint();
 			return true;
 		}
@@ -296,6 +325,7 @@ export class App {
 	}
 
 	private refreshSuggestions(): void {
+		const version = ++this.suggestionVersion;
 		const source = this.options.completionSource;
 		if (!source) {
 			this.picker = undefined;
@@ -303,10 +333,13 @@ export class App {
 		}
 		const input = editorText(this.draft);
 		const cursor = editorCursorOffset(this.draft);
-		void Promise.resolve(source.getSuggestions(input, cursor)).then((result) => {
-			if (!this.started) return;
+		this.picker = undefined;
+		void Promise.resolve().then(() => source.getSuggestions(input, cursor)).then((result) => {
+			if (!this.started || version !== this.suggestionVersion) return;
 			this.picker = result && result.items.length > 0 ? { items: result.items, prefix: result.prefix, index: 0 } : undefined;
 			this.repaint();
+		}).catch(() => {
+			if (version === this.suggestionVersion) this.picker = undefined;
 		});
 	}
 
@@ -317,10 +350,14 @@ export class App {
 		const action = requestCardActions(card.record.request)[index];
 		if (!action) return;
 		const envelope = card.responseFor(action);
-		if (!envelope) return;
-		this.requestBus.respond(envelope);
+		if (!envelope) {
+			this.repaint();
+			return;
+		}
+		if (!this.requestBus.respond(envelope)) return;
 		card.markResolved(envelope.result);
 		this.focus.remove(card.record.id);
+		this.cards.delete(card.record.id);
 		this.projector.addNotice(archivedCardLine(card.record));
 		this.repaint();
 	}
@@ -331,33 +368,35 @@ export class App {
 			return;
 		}
 		const input = submitEditor(this.draft);
+		this.suggestionVersion++;
 		this.picker = undefined;
 		if (this.dispatchCommand(input)) {
 			this.repaint();
 			return;
 		}
 		if (this.running) {
-			this.queued = input;
+			this.queued.push(input);
 			this.repaint();
 			return;
 		}
-		void this.runTurn(input);
+		this.runTask = this.runTurn(input);
 		this.repaint();
 	}
 
 	private cancelAndSend(): void {
 		if (isEditorEmpty(this.draft) && !this.running) return;
 		const input = isEditorEmpty(this.draft) ? undefined : submitEditor(this.draft);
+		this.suggestionVersion++;
 		this.picker = undefined;
 		if (this.running) {
-			this.queued = input;
+			this.queued.splice(0, this.queued.length, ...(input ? [input] : []));
 			this.options.port.abort?.();
 			this.repaint();
 			return;
 		}
 		if (input) {
 			if (this.dispatchCommand(input)) this.repaint();
-			else void this.runTurn(input);
+			else this.runTask = this.runTurn(input);
 		}
 	}
 
@@ -369,6 +408,8 @@ export class App {
 		}
 		if (command === "/clear") {
 			this.projector.clear();
+			this.scroll.jumpToEnd();
+			this.previousTranscript = undefined;
 			return true;
 		}
 		if (command === "/help") {
@@ -380,23 +421,27 @@ export class App {
 
 	private async runTurn(input: string): Promise<void> {
 		this.running = true;
-		this.repaint();
 		try {
-			for await (const event of this.options.port.runTurn(input)) this.handleEvent(event);
-		} catch (error) {
-			this.projector.addNotice(error instanceof Error ? error.message : String(error));
+			let current: string | undefined = input;
+			while (current !== undefined && this.started) {
+				this.repaint();
+				try {
+					for await (const event of this.options.port.runTurn(current)) this.handleEvent(event);
+				} catch (error) {
+					this.projector.addNotice(error instanceof Error ? error.message : String(error));
+				}
+				current = this.queued.shift();
+				if (current !== undefined && this.dispatchCommand(current)) current = this.queued.shift();
+			}
 		} finally {
 			this.running = false;
-			const next = this.queued;
-			this.queued = undefined;
-			if (next) void this.runTurn(next);
-			else this.repaint();
+			this.repaint();
 		}
 	}
 
 	private handleEvent(event: SessionEvent): void {
-		if (event.type === "message_end" && event.message.usage) this.lastUsage = event.message.usage;
 		this.projector.apply(event);
+		if (event.type === "message_end" && event.message.errorMessage) this.projector.addNotice(event.message.errorMessage);
 		if (event.type === "turn_end" && (event.stopReason === "error" || event.stopReason === "aborted")) this.projector.addNotice(`turn ${event.stopReason}`);
 		this.repaint();
 	}
@@ -441,19 +486,27 @@ export class App {
 
 	private statusSegments(): string[] {
 		const status = this.options.getStatus?.();
-		const cost = this.lastUsage?.cost?.total;
+		const usage = this.options.port.getUsage?.();
+		const cost = usage?.costUsd;
+		const contextLabel = this.contextLabel(usage);
 		return buildStatusSegments({
 			...(status ?? {}),
+			...(contextLabel ? { contextLabel } : {}),
 			...(cost !== undefined ? { cost } : {}),
-			...(this.running ? { activity: this.queued ? "queued" : "working" } : {}),
+			...(this.running ? { activity: this.queued.length > 0 ? `queued (${this.queued.length})` : "working" } : {}),
 		});
+	}
+
+	private contextLabel(usage: ContextUsageSnapshot | undefined): string | undefined {
+		if (usage?.contextTokens === undefined) return undefined;
+		return `${usage.contextEstimated ? "~" : ""}${formatTokens(usage.contextTokens)}${usage.contextWindow ? ` / ${formatTokens(usage.contextWindow)}` : ""}`;
 	}
 
 	private layoutPlan(columns: number, rows: number, hasStatus: boolean) {
 		const card = this.visibleCard();
 		const interactiveOwner = card ? ("card" as const) : ("composer" as const);
 		const interactiveLines = card
-			? Math.max(1, cardDesiredHeight(card.record.request, columns, this.theme) - 2)
+			? cardDesiredHeight(card.record.request, columns, this.theme)
 			: Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
 		return computeScreenLayout({ columns, rows, interactiveLines, hasStatus, interactiveOwner });
 	}
@@ -476,7 +529,7 @@ export class App {
 		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const offsets = layoutOffsets(plan);
 		if (plan.header.height === 1) {
-			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(this.lastUsage ? { contextLabel: formatTokens(this.lastUsage.totalTokens) } : {}) }, this.theme);
+			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir }, this.theme);
 		}
 		const entries = this.projector.getEntries();
 		if ((this.options.showWelcome ?? false) && entries.length === 0 && plan.transcript.height > 0 && !this.picker) {
@@ -532,14 +585,15 @@ export class App {
 			return span;
 		});
 		const totalRows = start;
-		this.scroll.captureAnchor(spans, totalRows, height);
+		if (this.previousTranscript) this.scroll.captureAnchor(this.previousTranscript.spans, this.previousTranscript.totalRows, this.previousTranscript.height);
 		this.scroll.restoreAnchor(spans, totalRows, height);
+		this.previousTranscript = { spans, totalRows, height };
 		const maxOffset = Math.max(0, totalRows - height);
 		if (this.scroll.offset > maxOffset) this.scroll.scrollBy(0, maxOffset);
 		const windowTop = Math.max(0, totalRows - height - Math.min(this.scroll.offset, maxOffset));
 		for (const [index, span] of spans.entries()) {
 			if (span.start + span.height <= windowTop || span.start >= windowTop + height) continue;
-			paintEntry(frame, top + (span.start - windowTop), presentations[index]!.presentation, this.theme);
+			paintEntry(frame, top + (span.start - windowTop), presentations[index]!.presentation, this.theme, { top, bottom: top + height });
 		}
 	}
 
@@ -548,12 +602,19 @@ export class App {
 			for await (const envelope of this.requestBus.requests()) {
 				if (!this.started) return;
 				const card = new RequestCard(envelope);
+				const terminal = this.requestBus.getTerminal?.(envelope.id);
+				if (terminal) {
+					card.terminal(terminal);
+					this.projector.addNotice(archivedCardLine(card.record));
+					this.repaint();
+					continue;
+				}
 				this.cards.set(envelope.id, card);
 				this.focus.push(card.record);
 				this.repaint();
 			}
 		} catch {
-			// A closing bus ends the loop; stop() owns terminal restoration.
+			await this.stop();
 		}
 	}
 
@@ -566,11 +627,12 @@ export class App {
 				if (card.record.state === "resolved") continue;
 				card.terminal(outcome);
 				this.focus.remove(outcome.requestId);
+				this.cards.delete(outcome.requestId);
 				this.projector.addNotice(archivedCardLine(card.record));
 				this.repaint();
 			}
 		} catch {
-			// Closing bus.
+			await this.stop();
 		}
 	}
 

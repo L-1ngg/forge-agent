@@ -55,25 +55,25 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		return 0;
 	}
 
-	const workingDirectory = cwd();
-	const config = await loadConfig({ cwd: workingDirectory });
-	const prompt = args.prompt;
-	if (args.json && !prompt) {
-		console.log(jsonError("-p/--prompt is required with --json", "INVALID_ARGUMENT"));
-		return 2;
-	}
-	const provider = args.provider ?? config.provider;
-	const model = args.model ?? config.model;
-	if (!provider || !model) {
-		const message = "Provider and model are required; set MYH_PROVIDER/MYH_MODEL or pass --provider/--model";
-		if (args.json) console.log(jsonError(message));
-		else console.error(message);
-		return 2;
-	}
-	const sessionPath = args.session ?? config.sessionPath ?? `${workingDirectory}/.myh/session.jsonl`;
-	const store = await SessionStore.open(sessionPath, workingDirectory);
-
 	try {
+		const workingDirectory = cwd();
+		const config = await loadConfig({ cwd: workingDirectory });
+		const prompt = args.prompt;
+		if (args.json && !prompt) {
+			console.log(jsonError("-p/--prompt is required with --json", "INVALID_ARGUMENT"));
+			return 2;
+		}
+		const provider = args.provider ?? config.provider;
+		const model = args.model ?? config.model;
+		if (!provider || !model) {
+			const message = "Provider and model are required; set MYH_PROVIDER/MYH_MODEL or pass --provider/--model";
+			if (args.json) console.log(jsonError(message));
+			else console.error(message);
+			return 2;
+		}
+		const sessionPath = args.session ?? config.sessionPath ?? `${workingDirectory}/.myh/session.jsonl`;
+		const store = await SessionStore.open(sessionPath, workingDirectory);
+
 		// Headless runs retain the bounded default; interactive users answer on their
 		// own time and are cancelled explicitly by abort/exit instead.
 		const requestBus = new RequestBus(args.json ? {} : { timeoutMs: null });

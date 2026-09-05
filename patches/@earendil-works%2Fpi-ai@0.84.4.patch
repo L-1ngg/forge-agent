@@ -1,0 +1,12 @@
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index c35771dcc9b2173d0b459d13c6d86e622de45e9a..7296b8d6fe3e77b32164ad2bf35208a664e6ba17 100644
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -633,6 +633,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+         }
+         else if (event.type === "response.completed" || event.type === "response.incomplete") {
+             finalizeResponse(event.response);
++            break;
+         }
+         else if (event.type === "error") {
+             throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");

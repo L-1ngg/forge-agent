@@ -1,5 +1,5 @@
 import { writeText, setCursor, type CellStyle, type TerminalFrame } from "./frame.ts";
-import { graphemes, graphemeWidth } from "./width.ts";
+import { graphemes, graphemeWidth, truncateToWidth, visibleWidth } from "./width.ts";
 import type { EditorState } from "./editor.ts";
 import type { Theme } from "./theme.ts";
 
@@ -91,8 +91,8 @@ export function paintComposer(input: ComposerPaintInput): void {
 		writeText(frame, right, y + row, "│", border);
 	}
 	const caption = input.caption ?? "";
-	const captionText = caption ? ` ${caption} ` : "";
-	const captionWidth = [...captionText].length;
+	const captionText = caption ? ` ${truncateToWidth(caption, Math.max(0, width - 4))} ` : "";
+	const captionWidth = visibleWidth(captionText);
 	const dashCount = Math.max(0, width - 2 - captionWidth);
 	writeText(frame, x, y + height - 1, `╰${"─".repeat(dashCount)}`, border);
 	if (captionText) writeText(frame, x + 1 + dashCount, y + height - 1, captionText, muted);
@@ -101,7 +101,7 @@ export function paintComposer(input: ComposerPaintInput): void {
 	const contentX = x + 1 + INNER_PADDING;
 	const contentWidth = width - 2 - INNER_PADDING * 2;
 	const contentRows = height - 2;
-	const wrapWidth = contentWidth - graphemeWidth(PROMPT_PREFIX.trimEnd()) - 1;
+	const wrapWidth = Math.max(1, contentWidth - graphemeWidth(PROMPT_PREFIX.trimEnd()) - 1);
 	const wrapped = wrapDraft(draft, wrapWidth);
 	// Only the first visual row carries the prompt prefix; continuation rows indent.
 	const indent = graphemeWidth(PROMPT_PREFIX.trimEnd()) + 1;
@@ -113,7 +113,7 @@ export function paintComposer(input: ComposerPaintInput): void {
 		if (row === 0 && skip === 0) writeText(frame, contentX, lineY, PROMPT_PREFIX, muted);
 		if (!visual) break;
 		if (empty && row === 0 && input.placeholder) {
-			writeText(frame, contentX + indent, lineY, input.placeholder, muted);
+			writeText(frame, contentX + indent, lineY, truncateToWidth(input.placeholder, wrapWidth), muted);
 			continue;
 		}
 		writeText(frame, contentX + indent, lineY, visual.graphemes.join(""), text);

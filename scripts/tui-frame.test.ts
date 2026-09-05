@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,4 +20,20 @@ test("tui-frame dump then compare against itself is equal", async () => {
 	} finally {
 		await rm(dir, { recursive: true, force: true });
 	}
+});
+
+test("tui-frame compare checks embedded environment manifests", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "tui-manifest-"));
+	try {
+		const golden = JSON.parse(await readFile("packages/tui/test/fixtures/golden/user-hello-40.json", "utf8"));
+		const expected = join(directory, "expected.json");
+		const actual = join(directory, "actual.json");
+		await writeFile(expected, JSON.stringify(golden));
+		golden.environment.timezone = "Asia/Shanghai";
+		await writeFile(actual, JSON.stringify(golden));
+		const child = Bun.spawn(["bun", "scripts/tui-frame.ts", "compare", expected, actual], { stdout: "pipe", stderr: "pipe" });
+		const output = await new Response(child.stdout).text();
+		expect(await child.exited).toBe(1);
+		expect(JSON.parse(output).status).toBe("environment-mismatch");
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });

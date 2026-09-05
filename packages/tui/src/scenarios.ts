@@ -2,7 +2,7 @@ import { block } from "@myh/protocol";
 import { createFrame, dumpFrame, type FrameDump } from "./frame.ts";
 import { createTheme } from "./theme.ts";
 import { paintEntry, entryHeight, computeEntryLayout } from "./transcript/entry-shell.ts";
-import { presentEntry } from "./transcript/present.ts";
+import { formatTimestamp, presentEntry } from "./transcript/present.ts";
 import type { TranscriptEntry } from "./transcript/types.ts";
 
 /** Unix ms for 2026-09-04 15:18:00 UTC — capture runs with TZ=UTC so grok prints "3:18 PM". */
@@ -121,7 +121,6 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
 ];
 
 export function paintScenario(spec: ScenarioSpec): FrameDump {
-	process.env.TZ = "UTC";
 	const theme = createTheme({ mode: "truecolor" });
 	const frame = createFrame(spec.columns, spec.rows);
 	let y = 0;
@@ -129,6 +128,7 @@ export function paintScenario(spec: ScenarioSpec): FrameDump {
 		const hasTimestamp = entry.kind === "user" || entry.kind === "assistant";
 		const layout = computeEntryLayout(spec.columns, hasTimestamp ? "3:18 PM" : undefined);
 		const presentation = presentEntry(entry, layout.contentWidth, theme);
+		if (entry.kind === "user" || entry.kind === "assistant") presentation.chrome.timestamp = formatTimestamp(entry.timestamp, true);
 		const height = entryHeight(presentation);
 		if (y + height > spec.rows) break;
 		paintEntry(frame, y, presentation, theme);

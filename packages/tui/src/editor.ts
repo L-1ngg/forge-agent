@@ -64,7 +64,7 @@ export function insertText(state: EditorState, text: string): void {
 	const after = current.slice(state.cursorColumn).join("");
 	if (parts.length === 1) {
 		state.lines[state.cursorLine] = before + parts[0] + after;
-		state.cursorColumn += graphemes(parts[0]!).length;
+		state.cursorColumn = graphemes(before + parts[0]).length;
 		return;
 	}
 	const newLines = [before + parts[0]!, ...parts.slice(1, -1), parts.at(-1)! + after];

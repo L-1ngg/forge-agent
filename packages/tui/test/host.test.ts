@@ -52,10 +52,12 @@ test("start enters alt-screen and raw mode; stop restores exactly once", () => {
 	host.start();
 	expect(output.text).toContain(ENTER_ALT_SCREEN);
 	expect(input.raw).toBe(true);
+	expect(output.text).toContain("\x1b[?2004h");
 	host.stop();
 	host.stop();
 	expect(input.raw).toBe(false);
 	expect(output.count(LEAVE_ALT_SCREEN)).toBe(1);
+	expect(output.text).toContain("\x1b[?2004l");
 });
 
 test("paint before start throws without touching the terminal", () => {
@@ -103,6 +105,9 @@ test("crash path: a throwing paint still restores the terminal", () => {
 	expect(() => host.paint(frame)).toThrow("injected write failure");
 	expect(input.raw).toBe(false);
 	expect(output.chunks.at(-1)).toContain(LEAVE_ALT_SCREEN);
+	expect(host.isStarted).toBe(false);
+	host.stop();
+	expect(output.count(LEAVE_ALT_SCREEN)).toBe(1);
 });
 
 test("resize clears the diff baseline and reports the new size", () => {

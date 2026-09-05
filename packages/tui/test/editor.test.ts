@@ -82,3 +82,12 @@ test("insert in the middle respects the cursor", () => {
 	expect(editorText(editor)).toBe("abc");
 	expect(editor.cursorColumn).toBe(2);
 });
+
+test("a combining mark arriving separately keeps the cursor inside the grapheme buffer", () => {
+	const editor = createEditor();
+	insertText(editor, "e");
+	insertText(editor, "\u0301");
+	expect(editor.cursorColumn).toBe(1);
+	backspace(editor);
+	expect(editorText(editor)).toBe("");
+});

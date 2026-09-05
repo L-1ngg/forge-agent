@@ -39,6 +39,8 @@ class FakeOutput implements HostOutput {
 }
 
 class FakeBus implements AppRequestBus {
+	acceptResponses = true;
+	private closed = false;
 	readonly responses: ResponseEnvelope[] = [];
 	private readonly envelopes: RequestEnvelopeUnion[] = [];
 	private readonly terminalOutcomes: RequestOutcome<RequestKind>[] = [];
@@ -57,12 +59,22 @@ class FakeBus implements AppRequestBus {
 
 	respond(value: unknown): boolean {
 		this.responses.push(value as ResponseEnvelope);
-		return true;
+		return this.acceptResponses;
+	}
+
+	close(): void {
+		this.closed = true;
+		this.notify?.();
+		this.notifyTerminal?.();
+	}
+
+	getTerminal(id: string): RequestOutcome<RequestKind> | undefined {
+		return this.terminalOutcomes.find((outcome) => outcome.requestId === id);
 	}
 
 	async *requests(): AsyncIterable<RequestEnvelopeUnion> {
 		let index = 0;
-		for (;;) {
+		while (!this.closed) {
 			if (index < this.envelopes.length) {
 				yield this.envelopes[index]!;
 				index++;
@@ -76,7 +88,7 @@ class FakeBus implements AppRequestBus {
 
 	async *terminals(): AsyncIterable<RequestOutcome<RequestKind>> {
 		let index = 0;
-		for (;;) {
+		while (!this.closed) {
 			if (index < this.terminalOutcomes.length) {
 				yield this.terminalOutcomes[index]!;
 				index++;
@@ -249,13 +261,15 @@ test("AC-33: Esc parks a card without calling respond(); Tab resumes it", async 
 
 test("AC-34: parked Esc does not abort the turn", async () => {
 	let aborted = 0;
+	let release: (() => void) | undefined;
 	const port: AppPort = {
 		async *runTurn() {
 			yield { type: "turn_start", timestamp: 1 };
-			await new Promise<void>(() => {}); // hang until abort
+			await new Promise<void>((resolve) => { release = resolve; });
 		},
 		abort() {
 			aborted++;
+			release?.();
 		},
 	};
 	const bus = new FakeBus();
@@ -263,7 +277,7 @@ test("AC-34: parked Esc does not abort the turn", async () => {
 	await app.start();
 	input.emit(Buffer.from("go"));
 	input.emit(Buffer.from("\r"));
-	await waitFor(() => frameToText(app.composeFrameForTest()).includes("working") || true);
+	await waitFor(() => release !== undefined);
 	bus.push(request("r-esc", "question", { prompt: "pick one" }));
 	await waitFor(() => frameToText(app.composeFrameForTest()).includes("Question"));
 	input.emit(Buffer.from("\x1b"));
@@ -342,6 +356,194 @@ test("Enter queues while a turn is running; Ctrl+Enter aborts and sends", async 
 	expect(calls[0]).toBe("first");
 	expect(calls.at(-1)).toBe("third");
 	await app.stop();
+});
+
+test("repeated Enter submissions run in FIFO order", async () => {
+	const calls: string[] = [];
+	let release: (() => void) | undefined;
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) {
+			calls.push(value);
+			if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+		},
+		abort() { release?.(); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => release !== undefined);
+		input.emit(Buffer.from("second\rthird\r"));
+		release?.();
+		await waitFor(() => calls.length >= 2);
+		await Bun.sleep(5);
+		expect(calls).toEqual(["first", "second", "third"]);
+	} finally { await app.stop(); }
+});
+
+test("stop aborts and waits for the active turn and never starts queued input", async () => {
+	const calls: string[] = [];
+	let release: (() => void) | undefined;
+	let aborted = false;
+	let settled = false;
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) {
+			calls.push(value);
+			await new Promise<void>((resolve) => { release = resolve; });
+			await Bun.sleep(5);
+			settled = true;
+		},
+		abort() { aborted = true; release?.(); },
+	} });
+	await app.start();
+	input.emit(Buffer.from("first\r"));
+	await waitFor(() => release !== undefined);
+	input.emit(Buffer.from("queued\r"));
+	await app.stop();
+	try {
+		expect(aborted).toBe(true);
+		expect(settled).toBe(true);
+		expect(calls).toEqual(["first"]);
+	} finally { release?.(); }
+});
+
+test("completion results cannot replace a newer draft or reopen after submit", async () => {
+	const pending = new Map<string, (value: ReturnType<AppCompletionSource["getSuggestions"]>) => void>();
+	const source: AppCompletionSource = {
+		getSuggestions(value) { return new Promise((resolve) => pending.set(value, resolve)); },
+		applyCompletion() { throw new Error("unexpected completion"); },
+	};
+	const { app, input } = createApp({ completionSource: source });
+	await app.start();
+	try {
+		input.emit(Buffer.from("a"));
+		input.emit(Buffer.from("b"));
+		await Bun.sleep(0);
+		pending.get("ab")?.(null);
+		await Bun.sleep(0);
+		pending.get("a")?.({ items: [{ value: "stale", label: "STALE_COMPLETION" }], prefix: "a" });
+		await Bun.sleep(0);
+		expect(frameToText(app.composeFrameForTest())).not.toContain("STALE_COMPLETION");
+		input.emit(Buffer.from("c\r"));
+		await Bun.sleep(0);
+		pending.get("abc")?.({ items: [{ value: "stale", label: "STALE_COMPLETION" }], prefix: "abc" });
+		await Bun.sleep(0);
+		expect(frameToText(app.composeFrameForTest())).not.toContain("STALE_COMPLETION");
+	} finally { await app.stop(); }
+});
+
+test("context display uses the port truth point instead of last response totals", async () => {
+	const { app, input } = createApp({ port: {
+		...fakePort([{ type: "message_end", timestamp: 1, message: {
+			role: "assistant", content: [{ type: "text", text: "done" }], timestamp: 1,
+			usage: { input: 9_000, output: 999, totalTokens: 9_999, cacheRead: 0, cacheWrite: 0 },
+		} }]),
+		getUsage: () => ({ contextTokens: 2_000, contextWindow: 128_000, contextEstimated: true }),
+	} as AppPort });
+	await app.start();
+	try {
+		input.emit(Buffer.from("go\r"));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("done"));
+		const text = frameToText(app.composeFrameForTest());
+		expect(text).toContain("~2K / 128K");
+		expect(text).not.toContain("10K");
+	} finally { await app.stop(); }
+});
+
+test("scrollback stays anchored during streaming and cannot paint over the header", async () => {
+	let advance: (() => void) | undefined;
+	const first = Array.from({ length: 50 }, (_, index) => `row-${index}`).join("\n");
+	const { app, input } = createApp({ port: {
+		async *runTurn() {
+			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
+			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: first };
+			await new Promise<void>((resolve) => { advance = resolve; });
+			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: "\nnew-row-a\nnew-row-b" };
+		},
+		abort() { advance?.(); },
+	} });
+	await app.start();
+	try {
+		const header = frameToText(app.composeFrameForTest()).split("\n")[0];
+		input.emit(Buffer.from("go\r"));
+		await waitFor(() => advance !== undefined);
+		input.emit(Buffer.from("\x1b[5~"));
+		const before = frameToText(app.composeFrameForTest()).split("\n");
+		advance?.();
+		await Bun.sleep(5);
+		const after = frameToText(app.composeFrameForTest()).split("\n");
+		expect(after[1]).toBe(before[1]);
+		expect(after[0]).toBe(header);
+	} finally { await app.stop(); }
+});
+
+test("a rejected card response cannot be archived as an authorization", async () => {
+	const { app, input, bus } = createApp();
+	bus.acceptResponses = false;
+	await app.start();
+	try {
+		bus.push(request("late", "permission", { toolCall: { type: "tool_call", id: "t", name: "bash", arguments: { command: "ls" } } }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Permission: bash"));
+		input.emit(Buffer.from("\r"));
+		bus.pushTerminal({ status: "timeout", requestId: "late" });
+		await Bun.sleep(0);
+		const text = frameToText(app.composeFrameForTest());
+		expect(text).toContain("timed out");
+		expect(text).not.toContain("allow_once");
+	} finally { await app.stop(); }
+});
+
+test("question cards accept a chosen option and free text without using the composer", async () => {
+	const { app, input, bus } = createApp();
+	await app.start();
+	try {
+		bus.push(request("choice", "question", { prompt: "Pick", choices: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Question"));
+		input.emit(Buffer.from("\t\r"));
+		expect(bus.responses[0]?.result).toEqual({ decision: "answer", answers: ["b"] });
+		bus.push(request("text", "question", { prompt: "Name", allowFreeText: true }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Name"));
+		input.emit(Buffer.from("my answer\t\r"));
+		expect(bus.responses[1]?.result).toEqual({ decision: "answer", answers: ["my answer"] });
+	} finally { await app.stop(); }
+});
+
+test("question multiple selection records only the choices explicitly toggled", async () => {
+	const { app, input, bus } = createApp();
+	await app.start();
+	try {
+		bus.push(request("multi", "question", { prompt: "Pick", multiple: true, choices: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Question"));
+		input.emit(Buffer.from("\t \t\r"));
+		expect(bus.responses[0]?.result).toEqual({ decision: "answer", answers: ["b"] });
+	} finally { await app.stop(); }
+});
+
+test("permission body can be scrolled without hiding the selected action", async () => {
+	const { app, input, bus } = createApp();
+	await app.start();
+	try {
+		bus.push(request("long", "permission", { toolCall: { type: "tool_call", id: "t", name: "write", arguments: { path: "file", content: "line ".repeat(200) + "END_OF_CHANGE" } } }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Permission: write"));
+		for (let index = 0; index < 30; index++) input.emit(Buffer.from("\x1b[6~"));
+		const text = frameToText(app.composeFrameForTest());
+		expect(text).toContain("END_OF_CHANGE");
+		expect(text).toContain("Yes, allow once");
+	} finally { await app.stop(); }
+});
+
+test("a terminal arriving before its request cannot leave a blocking card", async () => {
+	const { app, bus } = createApp();
+	await app.start();
+	try {
+		bus.pushTerminal({ status: "timeout", requestId: "already-done" });
+		await Bun.sleep(0);
+		bus.push(request("already-done", "question", { prompt: "expired" }));
+		await Bun.sleep(0);
+		const text = frameToText(app.composeFrameForTest());
+		expect(text).toContain("timed out");
+		expect(text).toContain("╭");
+		expect(bus.responses).toEqual([]);
+	} finally { await app.stop(); }
 });
 
 async function waitFor(condition: () => boolean): Promise<void> {

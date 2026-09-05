@@ -21,14 +21,16 @@ export class AgentRunner {
 	) {}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		if (this.activeTurn) throw new Error("Agent runner is already processing a turn");
 		const turn = { aborted: false };
 		this.activeTurn = turn;
-		const messages: SessionMessage[] = [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }];
+		const startedAt = Date.now();
+		const messages: SessionMessage[] = [];
 		let ended = false;
 		let aborted = false;
 		try {
 			for await (const event of this.port.runTurn(input)) {
-				if (event.type === "message_end" && event.message.role !== "user") {
+				if (event.type === "message_end") {
 					messages.push(event.message);
 					if (event.message.stopReason === "aborted") aborted = true;
 				}
@@ -37,6 +39,7 @@ export class AgentRunner {
 				yield event;
 			}
 			if (!ended) throw new Error("Agent event stream ended without agent_end");
+			if (messages[0]?.role !== "user") messages.unshift({ role: "user", content: [{ type: "text", text: input }], timestamp: startedAt });
 			if (!turn.aborted && !aborted && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
 		} finally {
 			if (this.activeTurn === turn) this.activeTurn = undefined;

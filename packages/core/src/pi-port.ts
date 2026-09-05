@@ -146,9 +146,17 @@ function toSessionContent(message: Message): SessionContentBlock[] {
 		);
 	}
 	return message.content.map((block) => {
-		if (block.type === "text") return { type: "text" as const, text: block.text };
-		if (block.type === "thinking") return { type: "thinking" as const, thinking: block.thinking };
-		return { type: "tool_call" as const, id: block.id, name: block.name, arguments: block.arguments };
+		if (block.type === "text") return { type: "text" as const, text: block.text, ...(block.textSignature !== undefined ? { textSignature: block.textSignature } : {}) };
+		if (block.type === "thinking") return {
+			type: "thinking" as const, thinking: block.thinking,
+			...(block.thinkingSignature !== undefined ? { thinkingSignature: block.thinkingSignature } : {}),
+			...(block.redacted !== undefined ? { redacted: block.redacted } : {}),
+		};
+		return {
+			type: "tool_call" as const, id: block.id, name: block.name, arguments: block.arguments,
+			...(block.thoughtSignature !== undefined ? { thoughtSignature: block.thoughtSignature } : {}),
+			...(block.namespace !== undefined ? { namespace: block.namespace } : {}),
+		};
 	});
 }
 
@@ -217,9 +225,8 @@ function fromSessionMessage(message: SessionMessage, model: Model<string>): Mess
 	return {
 		role: "assistant",
 		content: message.content.map((block) => {
-			if (block.type === "text") return { type: "text" as const, text: block.text };
-			if (block.type === "thinking") return { type: "thinking" as const, thinking: block.thinking };
-			return { type: "toolCall" as const, id: block.id, name: block.name, arguments: block.arguments };
+			if (block.type === "text" || block.type === "thinking") return { ...block };
+			return { ...block, type: "toolCall" as const };
 		}),
 		api: message.api ?? model.api,
 		provider: message.provider ?? model.provider,
@@ -246,7 +253,7 @@ function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<As
 	};
 }
 
-function mapEvent(event: AgentEvent, toolCommands: Map<string, string>): SessionEvent[] {
+function mapEvent(event: AgentEvent, toolCommands: Map<string, string>, editBlocks: Map<string, BlockEnvelope<"edit">>): SessionEvent[] {
 	const timestamp = eventTimestamp();
 	switch (event.type) {
 		case "agent_start":
@@ -277,6 +284,7 @@ function mapEvent(event: AgentEvent, toolCommands: Map<string, string>): Session
 		case "tool_execution_start":
 			rememberToolCommand(toolCommands, event.toolCallId, event.toolName, event.args);
 			const startBlock = startToolBlock(event.toolCallId, event.toolName, event.args, timestamp);
+			if (startBlock?.kind === "edit") editBlocks.set(event.toolCallId, startBlock as BlockEnvelope<"edit">);
 			return [{
 				type: "tool_execution_start",
 				timestamp,
@@ -296,8 +304,12 @@ function mapEvent(event: AgentEvent, toolCommands: Map<string, string>): Session
 				...(updateBlock ? { block: updateBlock } : {}),
 			}];
 		case "tool_execution_end":
-			const endBlock = executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp, toolCommands.get(event.toolCallId));
+			const editBlock = editBlocks.get(event.toolCallId);
+			const endBlock = editBlock
+				? { ...editBlock, lifecycle: event.isError ? "failed" as const : "complete" as const, updatedAt: timestamp }
+				: executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp, toolCommands.get(event.toolCallId));
 			toolCommands.delete(event.toolCallId);
+			editBlocks.delete(event.toolCallId);
 			return [{
 				type: "tool_execution_end",
 				timestamp,
@@ -533,6 +545,8 @@ export function createPermissionBeforeToolCall(options: PermissionHookOptions): 
 }
 
 class PiAgentPort implements AgentPort {
+	private active = false;
+	private aborted = false;
 	private readonly requestBus: RequestBus | undefined;
 	private readonly clearPreparedInputs: (() => void) | undefined;
 	private readonly usage: UsageTracker;
@@ -559,13 +573,19 @@ class PiAgentPort implements AgentPort {
 	}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		if (this.active) throw new Error("Agent is already processing a turn");
+		this.active = true;
+		this.aborted = false;
+		const previousMessages = this.agent.state.messages.slice();
 		this.usage.beginTurn();
 		this.syncUsageContext();
 		const queue = new AsyncQueue<SessionEvent>();
 		const toolCommands = new Map<string, string>();
+		const editBlocks = new Map<string, BlockEnvelope<"edit">>();
 		const unsubscribe = this.agent.subscribe((event) => {
+			if (event.type === "turn_end" && event.message.role === "assistant" && event.message.stopReason === "aborted") this.aborted = true;
 			this.observeUsage(event);
-			for (const mapped of mapEvent(event, toolCommands)) queue.push(mapped);
+			for (const mapped of mapEvent(event, toolCommands, editBlocks)) queue.push(mapped);
 		});
 		let completed = false;
 		const running = this.agent.prompt(input).then(
@@ -579,11 +599,18 @@ class PiAgentPort implements AgentPort {
 			for await (const event of queue) yield event;
 			await running;
 		} finally {
-			if (!completed) this.agent.abort();
+			if (!completed) this.abort();
+			await running;
 			unsubscribe();
 			this.clearPreparedInputs?.();
 			toolCommands.clear();
+			if (this.aborted) {
+				this.agent.state.messages = previousMessages;
+				this.agent.clearAllQueues();
+				this.syncUsageContext();
+			}
 			this.usage.endTurn();
+			this.active = false;
 		}
 	}
 
@@ -596,6 +623,7 @@ class PiAgentPort implements AgentPort {
 	}
 
 	abort(): void {
+		if (this.active) this.aborted = true;
 		this.requestBus?.abort();
 		this.agent.abort();
 	}
@@ -650,6 +678,9 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 	const models = builtinModels({ credentials });
 	const catalogModel = models.getModel(options.provider, options.model);
 	if (!catalogModel) throw new Error(`Unknown model ${options.provider}/${options.model}`);
+	if (!await models.checkAuth(options.provider)) {
+		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .myh/config.json, MYH_API_KEY, or the provider's API key environment variable.`);
+	}
 	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
 	const permissionOptions: PermissionHookOptions | undefined = options.permission
 		? { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }

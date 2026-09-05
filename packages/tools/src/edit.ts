@@ -44,7 +44,7 @@ export const editTool: HarnessTool<EditInput, EditOutput> = {
 				return toolError("EDIT_AMBIGUOUS", `old_text matched ${matches} times`, "old_text", "a unique fragment or replace_all: true", input.old_text);
 			}
 			const replacements = input.replace_all ? matches : 1;
-			const next = input.replace_all ? content.split(input.old_text).join(input.new_text) : content.replace(input.old_text, input.new_text);
+			const next = input.replace_all ? content.split(input.old_text).join(input.new_text) : content.replace(input.old_text, () => input.new_text);
 			await writeFile(path, next, "utf8");
 			return { ok: true, value: { path, replacements } };
 		} catch (error) {

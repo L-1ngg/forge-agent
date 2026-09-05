@@ -42,6 +42,7 @@ export function shortcutRoutes(state: InputRouterState): readonly ShortcutRoute[
 	if (owner === "card") {
 		const escLabel = nextEscStep(state) === "leave_input" ? "back" : "scrollback";
 		return [
+			{ keys: ["pgup/pgdn"], label: "scroll" },
 			{ keys: ["tab"], label: "next" },
 			{ keys: ["enter"], label: "choose" },
 			{ keys: ["esc"], label: escLabel, pinned: true },

@@ -5,11 +5,17 @@ created: 2026-09-04
 
 # Phase 2.2 施工图 — 自有 TerminalFrame TUI
 
-> 状态:B0-B5 已合入;B6 改为 in-repo golden(ADR-007,不再编译 grok-build)。Owner:operator。
+> 状态:已完成(2026-09-05),operator 已验收当前 TUI 并确认阶段关闭;体验与其余优化按后续要求另开。B6 为 in-repo golden(ADR-007,不再编译 grok-build)。Owner:operator。
 > 决策:[ADR-005](../decisions/005-tui-own-compositor.md)(决策 1 由 ADR-006 修订;reference 路径由 [ADR-007](../decisions/007-no-compile-grok-reference.md) 再修订)。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
 
 ---
+
+## 阶段关闭
+
+operator 于 2026-09-05 确认:"这阶段先这样吧，我验收了tui勉强实现，后续我再要求你优化，其余还有一些部分也是后面再优化，这阶段算完成了，请你提交commit"。
+
+据此关闭当前阶段,验收口径为当前实现可作为阶段交付,不代表 TUI 体验已充分打磨或达到 grok 全量能力。5 天 dogfooding、AC-14 终端能力实测与真实 provider 多轮工具/session 验证仍未完成,转为后续非阻塞事项,不得改写成实测通过。除提交本阶段变更外,不自动开展优化或启动下一阶段。
 
 ## Why
 
@@ -262,14 +268,14 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 
 ### 新 AC
 
-- [ ] AC-43:`packages/tui` 的 `package.json` 与 `src/**/*.ts` 不出现 `@earendil-works/pi-tui`;`check-deps` 对违规变红。
-- [ ] AC-44:所有可见输出只来自 `TerminalFrame`;测试禁止再断言 `Component.render(): string[]`。
-- [ ] AC-45:editor 在 40/80 列对 ASCII 与 CJK 提交原文、光标不落在宽字符中央。
-- [ ] AC-46:`start` 后正常退出、Ctrl+C、以及 host 绘制函数抛错时,终端都离开 alt-screen 并恢复 raw mode。
-- [ ] AC-47:B0 起根依赖不再包含 `@earendil-works/pi-tui`;`pi-ai` / `pi-agent-core` 仍 exact pin。
-- [ ] AC-48:canonical scenario 两次 `paintScenario` hash 一致;environment manifest 字段不一致时 harness 返回 `environment-mismatch`。
-- [ ] AC-49:`paintScenario` 与 `packages/tui/test/fixtures/golden/` 中锁定 FrameDump 逐 cell 零差异;grok 几何不变量(content 列 3、timestamp 整留整藏、collapsed 留 rail 列)由单测锁定。不编译、不运行 grok-build。
-- [ ] AC-50:parity 反向验证——人为改 golden 的 1 个 cell,对应 scenario 测试必须变红。
+- [x] AC-43:`packages/tui` 的 `package.json` 与 `src/**/*.ts` 不出现 `@earendil-works/pi-tui`;`check-deps` 对违规变红。
+- [x] AC-44:所有可见输出只来自 `TerminalFrame`;测试禁止再断言 `Component.render(): string[]`。
+- [x] AC-45:editor 在 40/80 列对 ASCII 与 CJK 提交原文、光标不落在宽字符中央。
+- [x] AC-46:`start` 后正常退出、Ctrl+C、以及 host 绘制函数抛错时,终端都离开 alt-screen 并恢复 raw mode。
+- [x] AC-47:B0 起根依赖不再包含 `@earendil-works/pi-tui`;`pi-ai` / `pi-agent-core` 仍 exact pin。
+- [x] AC-48:canonical scenario 两次 `paintScenario` hash 一致;environment manifest 字段不一致时 harness 返回 `environment-mismatch`。
+- [x] AC-49:`paintScenario` 与 `packages/tui/test/fixtures/golden/` 中锁定 FrameDump 逐 cell 零差异;grok 几何不变量(content 列 3、timestamp 整留整藏、collapsed 留 rail 列)由单测锁定。不编译、不运行 grok-build。
+- [x] AC-50:parity 反向验证——人为改 golden 的 1 个 cell,对应 scenario 测试必须变红。
 
 ### 继承并必须在新测试下重测
 
@@ -280,6 +286,52 @@ type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewi
 退役:Phase 2 AC-13(同一 Component 树在两种 pi-tui 宿主下);Phase 2.1 AC-39(PNG 硬门禁,降为辅证)与 AC-42(以 pi-tui 为前提的 compositor 条件条款,底座已自有)。Phase 2.1 AC-37/38/40/41 的语义由 AC-48/49/50 在自有 compositor 上接手。
 
 ## Test plan
+
+### 2026-09-05 xAI 启动与流终止修复
+
+现场配置使用 `api_Key`,而加载器只消费 `apiKey`,导致凭据静默丢失。修正本机字段,并在配置加载时拒绝未知顶层字段与空/非字符串密钥;`createPiPort` 在启动阶段用 pi 的 `checkAuth` 检查凭据,保留 provider 原生环境变量支持。配置错误纳入 CLI `STARTUP_ERROR` 路径。
+
+真实代理的 `/v1/responses` 在约 2.6 秒发出 `response.completed`,之后仍发送心跳、不关闭 HTTP body。`pi-ai@0.84.4` 的 Responses 消费循环完成消息后仍等 EOF,使 turn 无法结束。用 Bun 的持久化依赖补丁仅修正该循环:收到 `response.completed` / `response.incomplete` 并处理完内容与 usage 后退出;`response.failed` 继续抛错,缺终态 EOF 仍按错误处理。不在 harness 中另写 SSE parser。补丁适用于 pi 共用的 Responses parser;升级 pi 时必须复跑保持连接的回归,上游修复后移除补丁。
+
+- [x] AC-51:错误字段在启动时明确报错,不泄露密钥;`apiKey` / `XAI_API_KEY` 均能通过 CLI 传到本地 xAI Responses endpoint。
+- [x] AC-52:收到 Responses 终态但连接不关闭时,turn 正常结束;incomplete/failed/缺终态保持各自语义。真实代理的最小问候能完成,不发送项目历史或执行工具。
+
+| 项目 | 证据 / 边界 |
+|---|---|
+| Ran | `bun run check`:240 pass / 0 fail,45 files;依赖门禁、五包 typecheck 通过;`bun install --frozen-lockfile --ignore-scripts` 通过 |
+| 反向验证 | 拼写错误回归在修复前失败;`responses-terminal.test.ts` 的 completed/incomplete 保持连接场景在补丁前均超时取消,补丁后与 failed/缺终态共 4 项通过 |
+| 真实请求 | 使用本机配置的 xAI `grok-4.6` 与 `createPiPort`,空 history/tools,输入 `hello`;2692ms 返回 `Hello! How can I assist you?`,stopReason=stop |
+| Not run / Why | 未用真实代理执行项目工具、发送既有 session 或重做人工 TUI 视觉验收;本次限制为配置与最小问候链路 |
+| Risk | 单次问候不代表代理长期稳定性;pi 升级须检查 `patches/@earendil-works%2Fpi-ai@0.84.4.patch`,避免丢失终态退出修复 |
+
+### 2026-09-05 审核修复
+
+基线 `bun run check`:200 pass / 0 fail。本轮最终 `bun run check`:230 pass / 0 fail,43 files;依赖门禁与五包 typecheck 全部通过。B0-B6 的实现和 golden 已存在,但不能据此声明人工交互验收完成。本轮按既有契约修复:
+
+- turn:退出取消执行并等待收尾;Enter 使用 FIFO;Ctrl+Enter 替换待发送队列;取消后的 pi 内存上下文与未落盘 turn 保持一致。
+- session:保存事件流中实际发生的用户消息(含 steering / follow-up);恢复时保留 provider continuation 字段。
+- TUI:接回 `getUsage()` 真相点;修复流式追加/resize 时的滚动锚点和 transcript 区域裁剪。
+- input:启停 bracketed paste,支持分片/慢粘贴;丢弃过期 completion 结果。
+- card:展示完整权限入参,允许滚动审阅;保留可见 action;question 必须由用户选择/填写;终态以总线为准。
+- tools:edit 替换文本按字面写入;POSIX shell 使用独立进程组,取消/超时先 SIGTERM,250ms 后 SIGKILL。`context.env.SHELL` 参与选择执行 shell。
+- rendering:组合字符分片不破坏 editor 光标;caption/placeholder 保留边框;长代码、thinking 和 tool output 换行显示;edit block 结束时标记 complete/failed。
+- parity:CLI 比较内嵌 environment(含 timezone);canonical rendering 不修改全局 `TZ`;原有 10 份 golden 不变。
+- headless:provider error 返回 1,aborted 返回 130;请求交互的 20-24 退出码优先。
+
+验证证据:
+
+| 项目 | 证据 / 边界 |
+|---|---|
+| Ran | `bun run check`:230 pass / 0 fail;多批 focused tests 先复现失败再通过;`git diff --check` 通过 |
+| HTTP replay | `packages/core/test/provider-replay.test.ts`:真实 `createPiPort` 接 loopback SSE,JSONL 重开后第二次 HTTP 请求保留 thinking signature 与 redacted payload |
+| PTY | `tests/tui-integration/pty.test.ts`:真实 stdin/raw mode,慢速分片 CJK 粘贴、permission park/resume、80x24→40x12 resize、真实 edit、流式中 Ctrl+C、会话原子性与退出恢复 |
+| Headless | `MYH_API_KEY=test bun run test:headless`:11 行合法 JSON,首尾为 agent_start/agent_end,turn stopReason=stop;该脚本使用 faux,不是远程请求 |
+| AC-43..47 | `scripts/check-deps.test.ts` 注入禁止依赖;`frame/host/editor/composer/app` tests 与 PTY;根 manifest exact pin 复核 |
+| AC-48..50 | `reference-parity.test.ts`、`parity.test.ts`、`scripts/tui-frame.test.ts`;环境不同拒绝,改单 cell 返回 diff |
+| Not run / Why | 审核阶段未执行真实 provider 与 tmux/终端视觉实测、AC-14、5 天 dogfooding;随后 xAI 最小问候实测见本节启动与流终止修复,不替代其余人工验收 |
+| Risk | 旧 JSONL 已丢失的 signature 无法补回;取消会话不回滚工具已产生的文件副作用;Windows 进程树取消未验证;上下文 token 为带 `~` 的估计值 |
+
+后续非阻塞事项:operator 已验收当前 TUI;体验优化与新 TUI 的 5 天 dogfooding 按后续要求安排。AC-14 继续按 §Entry 的降级记录;滚轮、OSC 52、独立 inline/main host、完整 CommonMark、team/dashboard 均未新增实现。UI 层历史 transcript 回显仍未接线,当前 session 恢复只装配 agent context。
 
 | 层 | 覆盖什么 | 跑在哪 |
 |---|---|---|
@@ -301,7 +353,7 @@ bun run check
 
 ## 明确不做
 
-- pixel parity harness 与 `scripts/tui-frame.ts` → 随 B0 删除,不再维护
+- 旧 PNG pixel parity harness → 随 B0 删除;B6 的 `scripts/tui-frame.ts` 为自有 cell dump/compare 工具,继续维护
 - 逐行 port grok-build Rust → 借契约,不借代码
 - 继续使用 `pi-tui` Editor / Markdown / ScrollView / TuiAltScreen
 - 引入第二个 TUI 框架
@@ -318,9 +370,9 @@ bun run check
 | projector 丢内容 | revert B3 | 允许旧视觉,不允许丢事件 |
 | park 卡住 request | revert B4 | UI 异常时 deny/cancel,绝不默认 allow |
 | 真实终端能力不足 | 记入 AC-14 降级 | 不把未测写成通过 |
-| grok-build 无法被干净驱动出 canonical states | B6 spike 先行,找次优 capture 路径 | 不放宽 cell 比较字段,不拿观感冒充通过 |
+| in-repo golden 与规格不一致 | 核对 scenario 与几何不变量,审阅逐 cell diff | 不以重新生成 golden 掩盖回归 |
 
-各 batch 不改 session schema。B0 是唯一大删,必须单独先合。
+原 B0-B6 不改 session schema。本轮续接修复为 v3 content 添加可选 signature/redacted/namespace 字段,不更改树结构;旧文件仍可读取,但已丢失的字段无法恢复。B0 是唯一大删,必须单独先合。
 
 ## Key Decisions
 
@@ -330,7 +382,7 @@ bun run check
 2. 渲染底座 = 自有 `TerminalFrame` compositor,移除 `pi-tui`。
 3. 施工 = 批准后清空重写,只留 `App` / `scanFiles`。
 
-本施工图补充、仍待 E1 一并确认:
+施工图补充决策(4-8 已由 operator 2026-09-04 批准,见 ADR-005):
 
 4. 第一版只做 alt-screen;`ui.host = "main"` 暂缓,允许临时 alias 到 alt。
 5. editor / 宽度 / 按键 / markdown 均自写,不新增 npm TUI 依赖。

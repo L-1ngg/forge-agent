@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { block, type BlockEnvelope } from "@myh/protocol";
-import { bashTool } from "@myh/tools";
+import { bashTool, editTool } from "@myh/tools";
 import { createEditBlockData, createPiTestPort, digest } from "../src/index.ts";
 
 test("core computes line hunks and aggregate edit counts", () => {
@@ -55,4 +55,20 @@ test("execute block keeps its original command when a failed result has no detai
 	for await (const event of port.runTurn("run command")) events.push(event);
 	const end = events.find((event) => event.type === "tool_execution_end");
 	expect(end?.block).toMatchObject({ kind: "execute", lifecycle: "failed", data: { command: "false" } });
+});
+
+test("edit execution ends with a terminal block for both success and failure", async () => {
+	for (const fails of [false, true]) {
+		const port = createPiTestPort({
+			tools: [{ ...editTool, async execute() {
+				if (fails) throw new Error("edit failed");
+				return { ok: true, value: { path: "file", replacements: 1 } };
+			} }],
+			responses: [{ toolCalls: [{ id: "edit", name: "edit", arguments: { path: "file", old_text: "old", new_text: "new" } }] }, { text: "done" }],
+		});
+		const events = [];
+		for await (const event of port.runTurn("edit")) events.push(event);
+		const end = events.find((event) => event.type === "tool_execution_end");
+		expect(end?.block).toMatchObject({ kind: "edit", lifecycle: fails ? "failed" : "complete", data: { path: "file", additions: 1, removals: 1 } });
+	}
 });

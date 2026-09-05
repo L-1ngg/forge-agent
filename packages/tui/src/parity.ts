@@ -14,6 +14,7 @@ export interface ReferenceEnvironment {
 	term?: string;
 	colorTerm?: string;
 	locale?: string;
+	timezone?: string;
 }
 
 export type ParityVerdict =
@@ -21,7 +22,7 @@ export type ParityVerdict =
 	| { status: "environment-mismatch"; reason: string }
 	| { status: "diff"; differingCells: number; cursorMismatch: boolean; hash: string };
 
-const CELL_FIELDS = ["crateCommit", "harnessPatchHash", "rustc", "columns", "rows", "theme", "tick", "fixtureHash"] as const;
+const CELL_FIELDS = ["crateCommit", "harnessPatchHash", "rustc", "columns", "rows", "theme", "tick", "fixtureHash", "timezone", "term", "colorTerm", "locale"] as const;
 
 export function compareEnvironments(expected: ReferenceEnvironment, actual: ReferenceEnvironment): string | undefined {
 	for (const field of CELL_FIELDS) {

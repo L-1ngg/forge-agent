@@ -29,10 +29,10 @@ test("draft text paints after the prefix and the cursor follows", () => {
 	expect(frame.cursor).toMatchObject({ x: 2 + 2 + 2, y: 3 }); // border+pad, prefix, 2 chars
 });
 
-test("CJK draft keeps the cursor on cell boundaries", () => {
+test.each([40, 80])("CJK draft keeps the cursor on cell boundaries at %i columns", (columns) => {
 	const draft = createEditor();
 	insertText(draft, "你好");
-	const frame = paint(draft);
+	const frame = paint(draft, columns);
 	expect(frameToText(frame).split("\n")[3]).toContain("你好");
 	expect(frame.cursor!.x).toBe(2 + 2 + 4); // two wide graphemes = 4 columns
 });
@@ -52,4 +52,11 @@ test("wrapDraft puts a wrap-boundary cursor on a phantom row", () => {
 	const wrapped = wrapDraft(draft, 4); // exactly full
 	expect(wrapped.cursorX).toBe(0);
 	expect(wrapped.cursorY).toBe(1);
+});
+
+test("narrow composer clips placeholder and wide caption inside its borders", () => {
+	const frame = paint(createEditor(), 12, 3, "你好你好你好你好");
+	expect(frame.cells[3]![11]!.grapheme).toBe("│");
+	expect(frame.cells[4]![11]!.grapheme).toBe("╯");
+	expect(frame.cells[4]![10]!.width).not.toBe(0);
 });

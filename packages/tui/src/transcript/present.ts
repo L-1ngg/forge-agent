@@ -1,10 +1,10 @@
 import type { AnyBlockEnvelope, BlockDisplayMode, EditBlockData, ExecuteBlockData, ThinkingBlockData } from "@myh/protocol";
 import { defaultStyle, type CellStyle, type TerminalColor } from "../frame.ts";
 import type { Theme } from "../theme.ts";
-import { visibleWidth, wrapText } from "../width.ts";
+import { graphemes, graphemeWidth, visibleWidth, wrapText } from "../width.ts";
 import { renderMarkdown } from "../markdown.ts";
 import { trimHeadTail, trimTail } from "./fold.ts";
-import type { EntryChromeSpec, EntryRow, TranscriptEntry } from "./types.ts";
+import type { EntryChromeSpec, EntryRow, StyledSpan, TranscriptEntry } from "./types.ts";
 
 /** Kind renderers produce rows + a chrome declaration; the shell owns geometry. */
 export interface EntryPresentation {
@@ -20,11 +20,11 @@ function row(text: string, style: CellStyle, background?: TerminalColor): EntryR
 	return { spans: text ? [{ text, style }] : [], ...(background ? { background } : {}) };
 }
 
-export function formatTimestamp(timestamp: number | undefined): string | undefined {
+export function formatTimestamp(timestamp: number | undefined, utc = false): string | undefined {
 	if (timestamp === undefined) return undefined;
 	const date = new Date(timestamp);
-	let hours = date.getHours();
-	const minutes = date.getMinutes().toString().padStart(2, "0");
+	let hours = utc ? date.getUTCHours() : date.getHours();
+	const minutes = (utc ? date.getUTCMinutes() : date.getMinutes()).toString().padStart(2, "0");
 	const suffix = hours >= 12 ? "PM" : "AM";
 	hours = hours % 12 || 12;
 	return `${hours}:${minutes} ${suffix}`;
@@ -36,6 +36,37 @@ export function formatDurationMs(durationMs: number): string {
 }
 
 export function presentEntry(entry: TranscriptEntry, contentWidth: number, theme: Theme): EntryPresentation {
+	const presentation = presentKind(entry, contentWidth, theme);
+	presentation.rows = presentation.rows.flatMap((entryRow) => wrapRow(entryRow, Math.max(1, contentWidth)));
+	return presentation;
+}
+
+function wrapRow(entryRow: EntryRow, width: number): EntryRow[] {
+	if (entryRow.spans.reduce((total, span) => total + visibleWidth(span.text), 0) <= width) return [entryRow];
+	const rows: EntryRow[] = [];
+	let spans: StyledSpan[] = [];
+	let used = 0;
+	for (const span of entryRow.spans) {
+		let text = "";
+		for (const grapheme of graphemes(span.text)) {
+			const size = graphemeWidth(grapheme);
+			if (used + size > width && used > 0) {
+				if (text) spans.push({ ...span, text });
+				rows.push({ ...entryRow, spans });
+				spans = [];
+				text = "";
+				used = 0;
+			}
+			text += size > width ? "?" : grapheme;
+			used += Math.min(size, width);
+		}
+		if (text) spans.push({ ...span, text });
+	}
+	if (spans.length > 0) rows.push({ ...entryRow, spans });
+	return rows;
+}
+
+function presentKind(entry: TranscriptEntry, contentWidth: number, theme: Theme): EntryPresentation {
 	switch (entry.kind) {
 		case "user":
 			return presentUser(entry, contentWidth, theme);
@@ -138,12 +169,13 @@ function presentExecute(block: AnyBlockEnvelope, contentWidth: number, theme: Th
 
 function presentEdit(block: AnyBlockEnvelope, contentWidth: number, theme: Theme): EntryPresentation {
 	const data = block.data as EditBlockData;
+	const failed = block.lifecycle === "failed";
 	const mode = displayModeOf(block);
 	const name = data.path.split("/").pop() ?? data.path;
 	const summary = data.additions > 0 || data.removals > 0 ? ` +${data.additions}/-${data.removals}` : "";
 	const header: EntryRow = {
 		spans: [
-			{ text: "Edit ", style: fg(theme, "muted", true) },
+			{ text: failed ? "Edit failed " : "Edit ", style: fg(theme, failed ? "accent_error" : "muted", true) },
 			{ text: name, style: fg(theme, "muted") },
 			...(summary ? [{ text: summary, style: fg(theme, "dim") }] : []),
 		],
@@ -170,7 +202,7 @@ function presentEdit(block: AnyBlockEnvelope, contentWidth: number, theme: Theme
 			}
 		}
 	}
-	return { rows, chrome: { rail: theme.color("accent_edit"), collapsed: false, vpadTop: 0, vpadBottom: 1 } };
+	return { rows, chrome: { rail: theme.color(failed ? "accent_error" : "accent_edit"), collapsed: false, vpadTop: 0, vpadBottom: 1 } };
 }
 
 function presentNotice(entry: TranscriptEntry & { kind: "notice" }, theme: Theme): EntryPresentation {

@@ -3,6 +3,8 @@ import { attributesEqual, colorEquals, diffFrames, type CellStyle, type Terminal
 /** Terminal control sequences owned by the host's paint path. */
 export const ENTER_ALT_SCREEN = "\x1b[?1049h";
 export const LEAVE_ALT_SCREEN = "\x1b[?1049l";
+export const ENABLE_BRACKETED_PASTE = "\x1b[?2004h";
+export const DISABLE_BRACKETED_PASTE = "\x1b[?2004l";
 export const SHOW_CURSOR = "\x1b[?25h";
 export const HIDE_CURSOR = "\x1b[?25l";
 export const RESET_ATTRIBUTES = "\x1b[0m";

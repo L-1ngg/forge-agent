@@ -127,3 +127,36 @@ test("allow_always remembers the rewritten scope and permits the same rewritten 
 		bus.close();
 	}
 });
+
+test("returning the event iterator waits for pi to become idle before reuse", async () => {
+	const port = createPiTestPort({ responses: [{ text: "first response" }, { text: "second response" }], tokensPerSecond: 100 });
+	for await (const event of port.runTurn("first")) {
+		if (event.type === "message_delta") break;
+	}
+	const events = await collectEvents(port);
+	expect(events.some((event) => (event as { type: string }).type === "agent_end")).toBe(true);
+});
+
+test("a rejected concurrent run does not cancel the active pi run", async () => {
+	const port = createPiTestPort({ responses: [{ text: "complete first response" }], tokensPerSecond: 100 });
+	let attempted = false;
+	let stopReason: string | undefined;
+	for await (const event of port.runTurn("first")) {
+		if (event.type === "message_delta" && !attempted) {
+			attempted = true;
+			await expect(collectEvents(port)).rejects.toThrow("already");
+		}
+		if (event.type === "turn_end") stopReason = event.stopReason;
+	}
+	expect(stopReason).toBe("stop");
+});
+
+test("aborted pi turns do not remain in the next context", async () => {
+	const port = createPiTestPort({ responses: [{ text: "discard this response" }, { text: "done" }], tokensPerSecond: 100 });
+	const before = port.getUsage?.()?.contextTokens;
+	for await (const event of port.runTurn("discard this prompt")) {
+		if (event.type === "message_delta") port.abort();
+	}
+	expect(port.getUsage?.()?.contextTokens).toBe(before);
+	await collectEvents(port);
+});

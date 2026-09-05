@@ -61,23 +61,39 @@ export const bashTool: HarnessTool<BashInput, BashOutput> = {
 		}
 		if (context.signal?.aborted) return toolError("ABORTED", "Command was aborted before it started", "command", "command with a live abort signal", "bun test", true);
 
-		const child = Bun.spawn([process.env.SHELL ?? "/bin/sh", "-lc", input.command], {
+		const env = { ...process.env, ...context.env };
+		const processGroup = process.platform !== "win32";
+		const child = Bun.spawn([env.SHELL ?? "/bin/sh", "-lc", input.command], {
 			cwd: context.cwd,
-			env: { ...process.env, ...context.env },
+			env,
+			detached: processGroup,
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		let timedOut = false;
 		let aborted = false;
+		let killTimer: ReturnType<typeof setTimeout> | undefined;
+		const kill = (signal: NodeJS.Signals): void => {
+			if (!processGroup) { child.kill(signal); return; }
+			try { process.kill(-child.pid, signal); }
+			catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ESRCH") child.kill(signal);
+			}
+		};
+		const terminate = (): void => {
+			kill("SIGTERM");
+			killTimer ??= setTimeout(() => kill("SIGKILL"), 250);
+		};
 		const timer = setTimeout(() => {
 			timedOut = true;
-			child.kill();
+			terminate();
 		}, timeout);
 		const onAbort = () => {
 			aborted = true;
-			child.kill();
+			terminate();
 		};
 		context.signal?.addEventListener("abort", onAbort, { once: true });
+		if (context.signal?.aborted) onAbort();
 		const budget: OutputBudget = { remaining: maxBytes, truncated: false };
 		try {
 			const [stdout, stderr, exitCode] = await Promise.all([collect(child.stdout, budget), collect(child.stderr, budget), child.exited]);
@@ -89,7 +105,9 @@ export const bashTool: HarnessTool<BashInput, BashOutput> = {
 			}
 			return { ok: true, value };
 		} finally {
+			if (aborted || timedOut) kill("SIGKILL");
 			clearTimeout(timer);
+			if (killTimer !== undefined) clearTimeout(killTimer);
 			context.signal?.removeEventListener("abort", onAbort);
 		}
 	},

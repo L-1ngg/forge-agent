@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { block } from "@myh/protocol";
-import { createTheme, presentEntry, type TranscriptEntry } from "../src/index.ts";
+import { createTheme, presentEntry, visibleWidth, type TranscriptEntry } from "../src/index.ts";
 
 const theme = createTheme({ mode: "truecolor" });
 
@@ -103,4 +103,18 @@ test("assistant keeps fenced code verbatim on a surface band", () => {
 	const texts = rowTexts(out);
 	expect(texts).toEqual(["before", "const x = 1;", "after"]);
 	expect(out.rows[1]!.background).toEqual(theme.color("dark_surface"));
+});
+
+test("long code, thinking and execute output wrap without losing content", () => {
+	const text = "abcdefghijklmnop".repeat(4);
+	const entries: TranscriptEntry[] = [
+		{ id: "code", kind: "assistant", markdown: `\`\`\`ts\n${text}\n\`\`\``, lifecycle: "complete" },
+		{ id: "thinking", kind: "thinking", block: block({ id: "thinking", kind: "thinking", lifecycle: "streaming" }, { markdown: text }, { defaultDisplayMode: "expanded" }) },
+		{ id: "execute", kind: "execute", block: block({ id: "execute", kind: "execute", lifecycle: "complete" }, { command: "echo", stdout: text }, { defaultDisplayMode: "expanded" }) },
+	];
+	for (const entry of entries) {
+		const rows = rowTexts(presentEntry(entry, 20, theme));
+		expect(rows.every((row) => visibleWidth(row) <= 20)).toBe(true);
+		expect(rows.join("")).toContain(text);
+	}
 });

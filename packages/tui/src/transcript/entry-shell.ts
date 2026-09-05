@@ -1,6 +1,6 @@
 import { fillRect, writeText, type CellStyle, type TerminalColor, type TerminalFrame } from "../frame.ts";
 import type { Theme } from "../theme.ts";
-import { visibleWidth } from "../width.ts";
+import { truncateToWidth, visibleWidth } from "../width.ts";
 import type { EntryRow } from "./types.ts";
 import type { EntryPresentation } from "./present.ts";
 
@@ -50,7 +50,7 @@ export function entryHeight(presentation: EntryPresentation): number {
  * vpad; kind rows only supply spans and optional full-row backgrounds.
  * Rows outside the frame are clipped by the frame itself.
  */
-export function paintEntry(frame: TerminalFrame, y: number, presentation: EntryPresentation, theme: Theme): void {
+export function paintEntry(frame: TerminalFrame, y: number, presentation: EntryPresentation, theme: Theme, clip = { top: 0, bottom: frame.rows }): void {
 	const { chrome, rows } = presentation;
 	const width = frame.columns;
 	const layout = computeEntryLayout(width, chrome.timestamp);
@@ -61,7 +61,7 @@ export function paintEntry(frame: TerminalFrame, y: number, presentation: EntryP
 
 	for (let index = 0; index < totalRows; index++) {
 		const lineY = y + index;
-		if (lineY < 0 || lineY >= frame.rows) continue;
+		if (lineY < Math.max(0, clip.top) || lineY >= Math.min(frame.rows, clip.bottom)) continue;
 		if (surface) fillRect(frame, 0, lineY, width, 1, { ...plainStyle(), background: surface });
 		if (chrome.rail && !chrome.collapsed) {
 			writeText(frame, 0, lineY, "┃", { ...plainStyle(), foreground: chrome.rail, ...(surface ? { background: surface } : {}) });
@@ -70,13 +70,13 @@ export function paintEntry(frame: TerminalFrame, y: number, presentation: EntryP
 
 	for (let index = 0; index < rows.length; index++) {
 		const lineY = y + chrome.vpadTop + index;
-		if (lineY < 0 || lineY >= frame.rows) continue;
+		if (lineY < Math.max(0, clip.top) || lineY >= Math.min(frame.rows, clip.bottom)) continue;
 		const entryRow: EntryRow = rows[index]!;
 		if (entryRow.background) fillRect(frame, contentX, lineY, layout.contentWidth, 1, { ...plainStyle(), background: entryRow.background });
 		let x = contentX;
 		for (const span of entryRow.spans) {
 			if (x >= contentRight) break;
-			x = writeText(frame, x, lineY, span.text, span.style);
+			x = writeText(frame, x, lineY, truncateToWidth(span.text, contentRight - x), span.style);
 		}
 		if (index === 0 && layout.timestampWidth > 0 && chrome.timestamp) {
 			const timestampX = width - ENTRY_RIGHT_PADDING - visibleWidth(chrome.timestamp);
