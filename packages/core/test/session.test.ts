@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentRunner, createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
+import { MemorySessionStorage, type SessionStorage } from "../src/session-storage.ts";
+import type { SessionMessage } from "@myh/protocol";
 
 const temporaryDirectories: string[] = [];
 async function temporaryDirectory(): Promise<string> {
@@ -59,8 +61,8 @@ test("agent runner does not persist an aborted or unpaired turn", async () => {
 				yield { type: "turn_end", timestamp: 2, stopReason: "aborted" };
 				yield { type: "agent_end", timestamp: 3 };
 			},
-			steer() {},
-			followUp() {},
+			steer() { return { accepted: false }; },
+			followUp() { return { accepted: false }; },
 			abort() {},
 		},
 		store,
@@ -85,8 +87,8 @@ test("agent runner abort cancels pending blocking requests before aborting the p
 				});
 				yield { type: "agent_end", timestamp: 1 };
 			},
-			steer() {},
-			followUp() {},
+			steer() { return { accepted: false }; },
+			followUp() { return { accepted: false }; },
 			abort() {
 				portAborted = true;
 			},
@@ -170,6 +172,67 @@ test("agent runner retains deferred messages without pending tool calls", async 
 	for await (const _event of runner.runTurn("defer")) {}
 	expect(store.messages()).toHaveLength(2);
 	expect(store.messages().at(-1)?.stopReason).toBe("deferred");
+});
+
+test("memory session storage isolates initial, committed, and loaded message objects", async () => {
+	const history: SessionMessage[] = [{ role: "assistant", timestamp: 1, content: [{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }] }];
+	const storage = new MemorySessionStorage(history);
+	history[0]!.content = [];
+	const loaded = await storage.load();
+	expect(loaded[0]!.content).toEqual([{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }]);
+	loaded[0]!.content = [];
+	const turn: SessionMessage[] = [{ role: "user", timestamp: 2, content: [{ type: "text", text: "committed" }] }];
+	await storage.appendTurn(turn);
+	turn[0]!.content = [];
+	expect((await storage.load()).map((message) => message.content)).toEqual([
+		[{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }], [{ type: "text", text: "committed" }],
+	]);
+});
+
+test("JSONL storage adapter restores the active branch and commits through the minimal interface", async () => {
+	const cwd = await temporaryDirectory();
+	const store = await SessionStore.open(join(cwd, "adapter.jsonl"), cwd);
+	const storage: SessionStorage = store.asStorage();
+	const message: SessionMessage = { role: "user", timestamp: 1, content: [{ type: "text", text: "stored" }] };
+	expect(await storage.appendTurn([message])).toBeUndefined();
+	expect(await storage.load()).toEqual([message]);
+	expect(await (await SessionStore.open(store.path, cwd)).load()).toEqual([message]);
+	store.branch(null);
+	expect(await storage.load()).toEqual([]);
+});
+
+test("agent runner faults after commit failure and rejects subsequent runs and queued inputs", async () => {
+	const storage = new MemorySessionStorage();
+	const failure = new Error("injected commit failure");
+	let commits = 0;
+	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "answer" }] }), {
+		async appendTurn() { commits++; throw failure; },
+	});
+	const events: string[] = [];
+	const run = async () => { for await (const event of runner.runTurn("hello")) events.push(event.type); };
+	await expect(run()).rejects.toBe(failure);
+	expect(events.at(-1)).toBe("agent_end");
+	expect(commits).toBe(1);
+	await expect(run()).rejects.toThrow("recreate");
+	expect(() => runner.steer("stale")).toThrow("recreate");
+	expect(() => runner.followUp("stale")).toThrow("recreate");
+	expect(commits).toBe(1);
+	const recreated = new AgentRunner(createPiTestPort({ responses: [{ text: "retry" }] }), storage);
+	for await (const _event of recreated.runTurn("fresh")) {}
+	expect(await storage.load()).toHaveLength(2);
+});
+
+test("agent runner does not commit when the consumer closes at agent_end", async () => {
+	let commits = 0;
+	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "uncommitted" }, { text: "committed" }] }), {
+		async appendTurn() { commits++; },
+	});
+	for await (const event of runner.runTurn("early")) {
+		if (event.type === "agent_end") break;
+	}
+	expect(commits).toBe(0);
+	for await (const _event of runner.runTurn("complete")) {}
+	expect(commits).toBe(1);
 });
 
 describe("config", () => {

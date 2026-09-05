@@ -40,11 +40,12 @@ export interface RunHeadlessOptions {
 }
 
 type HeadlessOutput = (line: string) => void;
+type HeadlessPort = Pick<AgentPort, "runTurn">;
 
-export function runHeadless(port: AgentPort, prompt: string, output?: HeadlessOutput, options?: RunHeadlessOptions): Promise<number>;
-export function runHeadless(port: AgentPort, prompt: string, options?: RunHeadlessOptions): Promise<number>;
+export function runHeadless(port: HeadlessPort, prompt: string, output?: HeadlessOutput, options?: RunHeadlessOptions): Promise<number>;
+export function runHeadless(port: HeadlessPort, prompt: string, options?: RunHeadlessOptions): Promise<number>;
 export async function runHeadless(
-	port: AgentPort,
+	port: HeadlessPort,
 	prompt: string,
 	outputOrOptions: HeadlessOutput | RunHeadlessOptions | undefined = console.log,
 	maybeOptions: RunHeadlessOptions = {},

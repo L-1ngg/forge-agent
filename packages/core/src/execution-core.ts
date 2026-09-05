@@ -1,5 +1,5 @@
 import type { SessionEvent, SessionMessage, ToolCallBlock } from "@myh/protocol";
-import type { AgentPort } from "./agent-runner.ts";
+import type { AgentPort, InputAcceptance } from "./agent-runner.ts";
 import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
 
 export interface ExecutionDriver {
@@ -24,10 +24,16 @@ class EventQueue implements AsyncIterable<SessionEvent> {
 	}
 }
 
+interface QueuedInput {
+	message: SessionMessage;
+	processed: (value: boolean) => void;
+}
+
 export class ExecutionCore implements AgentPort {
 	private messages: SessionMessage[];
-	private steering: SessionMessage[] = [];
-	private followups: SessionMessage[] = [];
+	private steering: QueuedInput[] = [];
+	private followups: QueuedInput[] = [];
+	private accepting = false;
 	private controller: AbortController | undefined;
 	private readonly usage: UsageTracker;
 
@@ -41,6 +47,7 @@ export class ExecutionCore implements AgentPort {
 		if (this.controller) throw new Error("Agent is already processing a turn");
 		const controller = new AbortController();
 		this.controller = controller;
+		this.accepting = true;
 		const previousMessages = this.messages.slice();
 		const queue = new EventQueue();
 		this.usage.beginTurn();
@@ -60,8 +67,6 @@ export class ExecutionCore implements AgentPort {
 			try { await running; } finally {
 				if (!consumed || controller.signal.aborted || failed) {
 					this.messages = previousMessages;
-					this.steering = [];
-					this.followups = [];
 				}
 				this.syncUsage();
 				this.usage.endTurn();
@@ -70,10 +75,22 @@ export class ExecutionCore implements AgentPort {
 		}
 	}
 
-	steer(input: string): void { this.steering.push(this.userMessage(input)); }
-	followUp(input: string): void { this.followups.push(this.userMessage(input)); }
+	steer(input: string): InputAcceptance { return this.enqueue(input, this.steering); }
+	followUp(input: string): InputAcceptance { return this.enqueue(input, this.followups); }
+	private enqueue(input: string, queue: QueuedInput[]): InputAcceptance {
+		if (!this.accepting) return { accepted: false };
+		const processed = new Promise<boolean>((resolve) => { queue.push({ message: this.userMessage(input), processed: resolve }); });
+		return { accepted: true, processed };
+	}
+	private closeInput(): void {
+		this.accepting = false;
+		for (const input of [...this.steering, ...this.followups]) input.processed(false);
+		this.steering = [];
+		this.followups = [];
+	}
 	abort(): void {
 		if (!this.controller) return;
+		this.closeInput();
 		this.controller.abort();
 		this.driver.abortInteractions();
 	}
@@ -92,10 +109,11 @@ export class ExecutionCore implements AgentPort {
 		};
 		emit({ type: "agent_start", timestamp: timestamp() });
 		try {
-			let pending = [this.userMessage(input)];
+			let pending: QueuedInput[] = [{ message: this.userMessage(input), processed() {} }];
 			while (true) {
+				signal.throwIfAborted();
 				emit({ type: "turn_start", timestamp: timestamp() });
-				for (const message of pending) appendUser(message);
+				for (const input of pending) { appendUser(input.message); input.processed(true); }
 				pending = [];
 				signal.throwIfAborted();
 				let assistant = await this.driver.stream(this.messages, signal, emit);
@@ -152,6 +170,8 @@ export class ExecutionCore implements AgentPort {
 			emit({ type: "turn_end", timestamp: timestamp(), stopReason: message.stopReason! });
 			return false;
 		} finally {
+			// Close atomically with the last queue check, before buffered events reach the host.
+			this.closeInput();
 			emit({ type: "agent_end", timestamp: timestamp() });
 		}
 	}

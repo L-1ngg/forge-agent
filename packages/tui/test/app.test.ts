@@ -355,7 +355,122 @@ test("Enter queues while a turn is running; Ctrl+Enter aborts and sends", async 
 	await waitFor(() => calls.includes("third"));
 	expect(calls[0]).toBe("first");
 	expect(calls.at(-1)).toBe("third");
+	expect(frameToText(app.composeFrameForTest())).toContain("second");
 	await app.stop();
+});
+
+test("ADR010: Esc during saving restores queued input and draft without autosending", async () => {
+	const calls: string[] = [];
+	let release!: () => void;
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) { calls.push(value); yield { type: "agent_end", timestamp: 1 }; await new Promise<void>((resolve) => { release = resolve; }); },
+		abort() {},
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => release !== undefined);
+		input.emit(Buffer.from("second\rthird\rdraft"));
+		expect(frameToText(app.composeFrameForTest())).toContain("second");
+		input.emit(Buffer.from("\x1b"));
+		await Bun.sleep(40);
+		release();
+		await Bun.sleep(5);
+		expect(calls).toEqual(["first"]);
+		const text = frameToText(app.composeFrameForTest());
+		expect(text.indexOf("second")).toBeLessThan(text.indexOf("third"));
+		expect(text.indexOf("third")).toBeLessThan(text.indexOf("draft"));
+	} finally { release?.(); await app.stop(); }
+});
+
+test("ADR010: saving failure retains the selected replacement and older queue as drafts", async () => {
+	const calls: string[] = [];
+	let release!: () => void;
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) {
+			calls.push(value);
+			yield { type: "agent_end", timestamp: 1 };
+			await new Promise<void>((resolve) => { release = resolve; });
+			throw new Error("disk failed");
+		},
+		abort() {},
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => release !== undefined);
+		input.emit(Buffer.from("second\rthird\x1b[13;5u"));
+		release();
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("disk failed"));
+		expect(calls).toEqual(["first"]);
+		const text = frameToText(app.composeFrameForTest());
+		expect(text).toContain("second");
+		expect(text).toContain("third");
+	} finally { release?.(); await app.stop(); }
+});
+
+test("ADR010: empty composer Up withdraws queued input for editing", async () => {
+	const calls: string[] = [];
+	let release!: () => void;
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) { calls.push(value); if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; }); },
+		abort() { release?.(); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => release !== undefined);
+		input.emit(Buffer.from("second\r\x1b[A"));
+		expect(frameToText(app.composeFrameForTest())).toContain("❯ second");
+		input.emit(Buffer.from(" edited\r"));
+		release();
+		await waitFor(() => calls.length === 2);
+		expect(calls).toEqual(["first", "second edited"]);
+	} finally { release?.(); await app.stop(); }
+});
+
+test("ADR010: a rejected invocation restores its input instead of clearing the composer", async () => {
+	const { app, input } = createApp({ port: {
+		runTurn() { throw new Error("Agent is faulted; recreate it from storage"); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("recoverable\r"));
+		expect(frameToText(app.composeFrameForTest())).toContain("❯ recoverable");
+	} finally { await app.stop(); }
+});
+
+for (const phase of ["stream", "tool"] as const) test(`ADR010: ordinary stop during ${phase} preserves input arriving during cleanup`, async () => {
+	let cancel!: () => void;
+	let finish!: () => void;
+	let cleaning = false;
+	const calls: string[] = [];
+	const cleanup = new Promise<void>((resolve) => { finish = resolve; });
+	const { app, input } = createApp({ port: {
+		async *runTurn(value) {
+			calls.push(value);
+			if (phase === "stream") yield { type: "message_delta", contentIndex: 0, contentType: "text", delta: "partial", timestamp: 1 };
+			else yield { type: "tool_execution_start", toolCallId: "hold", toolName: "hold", args: {}, timestamp: 1 };
+			await new Promise<void>((resolve) => { cancel = resolve; });
+			cleaning = true;
+			await cleanup;
+			yield { type: "turn_end", stopReason: "aborted", timestamp: 2 };
+		},
+		abort() { cancel?.(); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => cancel !== undefined);
+		input.emit(Buffer.from("queued\r\x1b"));
+		await waitFor(() => cleaning);
+		expect(frameToText(app.composeFrameForTest())).toContain("❯ queued");
+		input.emit(Buffer.from(" during cleanup\r"));
+		finish();
+		await waitFor(() => !frameToText(app.composeFrameForTest()).includes("stopping"));
+		expect(calls).toEqual(["first"]);
+		expect(frameToText(app.composeFrameForTest())).toContain("❯ queued during cleanup");
+	} finally { cancel?.(); finish(); await app.stop(); }
 });
 
 test("repeated Enter submissions run in FIFO order", async () => {

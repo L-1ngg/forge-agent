@@ -1,28 +1,31 @@
 import type { SessionEvent, SessionMessage } from "@myh/protocol";
 import type { UsageTruthPoint } from "./usage.ts";
 import type { RequestBus } from "./request-bus.ts";
-import type { SessionStore } from "./session-store.ts";
+
+export type InputAcceptance = { accepted: false } | { accepted: true; processed: Promise<boolean> };
 
 export interface AgentPort {
 	runTurn(input: string): AsyncIterable<SessionEvent>;
-	steer(input: string): void;
-	followUp(input: string): void;
+	steer(input: string): InputAcceptance;
+	followUp(input: string): InputAcceptance;
 	abort(): void;
 	getUsage?(): UsageTruthPoint | undefined;
 }
 
 export class AgentRunner {
-	private activeTurn: { aborted: boolean } | undefined;
+	private activeTurn: { aborted: boolean; accepting: boolean } | undefined;
+	private commitFailed = false;
 
 	constructor(
 		private readonly port: AgentPort,
-		private readonly store: SessionStore,
+		private readonly store: { appendTurn(messages: readonly SessionMessage[]): Promise<unknown> },
 		private readonly requestBus: RequestBus | undefined = undefined,
 	) {}
 
 	async *runTurn(input: string): AsyncIterable<SessionEvent> {
+		this.assertHealthy();
 		if (this.activeTurn) throw new Error("Agent runner is already processing a turn");
-		const turn = { aborted: false };
+		const turn = { aborted: false, accepting: true };
 		this.activeTurn = turn;
 		const startedAt = Date.now();
 		const messages: SessionMessage[] = [];
@@ -35,23 +38,33 @@ export class AgentRunner {
 					if (event.message.stopReason === "aborted" || event.message.stopReason === "error") unsuccessful = true;
 				}
 				if (event.type === "turn_end" && (event.stopReason === "aborted" || event.stopReason === "error")) unsuccessful = true;
-				if (event.type === "agent_end") ended = true;
+				if (event.type === "agent_end") { ended = true; turn.accepting = false; }
 				yield event;
 			}
 			if (!ended) throw new Error("Agent event stream ended without agent_end");
 			if (messages[0]?.role !== "user") messages.unshift({ role: "user", content: [{ type: "text", text: input }], timestamp: startedAt });
-			if (!turn.aborted && !unsuccessful && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
+			if (!turn.aborted && !unsuccessful && hasPairedToolCalls(messages)) {
+				try { await this.store.appendTurn(messages); }
+				catch (error) {
+					this.commitFailed = true;
+					throw error;
+				}
+			}
 		} finally {
 			if (this.activeTurn === turn) this.activeTurn = undefined;
 		}
 	}
 
-	steer(input: string): void {
-		this.port.steer(input);
+	steer(input: string): InputAcceptance {
+		this.assertHealthy();
+		if (!this.activeTurn?.accepting || this.activeTurn.aborted) return { accepted: false };
+		return this.port.steer(input);
 	}
 
-	followUp(input: string): void {
-		this.port.followUp(input);
+	followUp(input: string): InputAcceptance {
+		this.assertHealthy();
+		if (!this.activeTurn?.accepting || this.activeTurn.aborted) return { accepted: false };
+		return this.port.followUp(input);
 	}
 
 	abort(): void {
@@ -62,6 +75,10 @@ export class AgentRunner {
 
 	getUsage(): UsageTruthPoint | undefined {
 		return this.port.getUsage?.();
+	}
+
+	private assertHealthy(): void {
+		if (this.commitFailed) throw new Error("Agent session commit failed; recreate the agent and reload storage before continuing");
 	}
 }
 

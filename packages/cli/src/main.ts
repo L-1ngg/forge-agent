@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { homedir } from "node:os";
 import { cwd } from "node:process";
-import { AgentRunner, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
+import { createAgent, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
 import { builtinTools } from "@myh/tools";
 import { App, scanFiles } from "@myh/tui";
 import { jsonError, runHeadless } from "./headless.ts";
@@ -83,7 +83,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }],
 		};
 		const apiKey = await resolveSecret(config.apiKey);
-		const port = await portFactory({
+		const runner = await createAgent({
 			provider,
 			model,
 			...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
@@ -91,36 +91,39 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			systemPrompt: config.systemPrompt,
 			thinkingLevel: config.thinkingLevel,
 			cwd: workingDirectory,
-			history: store.messages(),
+			storage: store.asStorage(),
 			tools: builtinTools,
 			requestBus,
 			permission,
-		});
-		const runner = new AgentRunner(port, store, requestBus);
-		if (args.json) {
-			return await runHeadless(runner, prompt as string, console.log, { requestBus });
+		}, portFactory);
+		try {
+			if (args.json) {
+				return await runHeadless(runner, prompt as string, console.log, { requestBus });
+			}
+			const completionSource = createInputCompletionSource({
+				commands: [
+					{ name: "help", description: "Show commands" },
+					{ name: "clear", description: "Clear the transcript" },
+					{ name: "quit", description: "Exit" },
+				],
+				listFiles: (prefix) => scanFiles(workingDirectory, prefix),
+			});
+			const app = new App({
+				port: runner,
+				host: config.ui.host,
+				requestBus,
+				completionSource,
+				getStatus: () => ({ provider, model }),
+				cwd: workingDirectory,
+				homeDir: homedir(),
+				showWelcome: true,
+			});
+			await app.start();
+			await app.waitUntilStopped();
+			return 0;
+		} finally {
+			await runner.dispose();
 		}
-		const completionSource = createInputCompletionSource({
-			commands: [
-				{ name: "help", description: "Show commands" },
-				{ name: "clear", description: "Clear the transcript" },
-				{ name: "quit", description: "Exit" },
-			],
-			listFiles: (prefix) => scanFiles(workingDirectory, prefix),
-		});
-		const app = new App({
-			port: runner,
-			host: config.ui.host,
-			requestBus,
-			completionSource,
-			getStatus: () => ({ provider, model }),
-			cwd: workingDirectory,
-			homeDir: homedir(),
-			showWelcome: true,
-		});
-		await app.start();
-		await app.waitUntilStopped();
-		return 0;
 	} catch (error) {
 		if (args.json) console.log(jsonError(error instanceof Error ? error.message : String(error), "STARTUP_ERROR"));
 		else console.error(error instanceof Error ? error.message : String(error));

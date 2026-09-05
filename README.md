@@ -32,7 +32,7 @@ bun run myh -- -p "read package.json and summarize it" --json
 
 会话默认写入 `.myh/session.jsonl`;可用 `--session PATH` 指定其他 v3 JSONL 文件。
 
-交互宿主为 alt-screen;`ui.host = "main"` 当前也是 alt 的别名。`Enter` 按 FIFO 排队,`Ctrl+Enter` 取消当前 turn 并替换待发送队列,`Ctrl+C` 取消执行并退出。卡片 `Esc` 为 park,`Tab` / `Space` 返回;`PgUp` / `PgDn` 滚动卡片内容或 transcript。滚轮与 OSC 52 尚未实现。
+交互宿主为 alt-screen;`ui.host = "main"` 当前也是 alt 的别名。`Enter` 按 FIFO 排队,空输入框 `Up` 取回队尾编辑;普通 `Esc` 停止续发并恢复草稿,`Ctrl+Enter` 等当前任务收尾后仅发送指定输入,其余队列恢复草稿。提交失败保留待发内容并暂停续发,`Ctrl+C` 取消执行并退出。卡片 `Esc` 为 park,`Tab` / `Space` 返回;`PgUp` / `PgDn` 滚动卡片内容或 transcript。提交与取消边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md)。滚轮与 OSC 52 尚未实现。
 
 `bun run check` 运行依赖门禁、workspace typecheck 和全部测试,包括本地 HTTP provider replay 与 Linux/macOS PTY 交互回归。Headless 的 provider error 返回 1,取消返回 130,交互请求仍保留 20-24 的既有退出码。
 

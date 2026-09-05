@@ -70,9 +70,6 @@ test("runHeadless drains a blocking request and returns its deterministic exit c
 				yield { type: "agent_start", timestamp: 1 };
 				yield { type: "agent_end", timestamp: 2 };
 			},
-			steer() {},
-			followUp() {},
-			abort() {},
 		};
 		const lines: string[] = [];
 		const exitCode = await runHeadless(port, "headless request", (line) => lines.push(line), { requestBus: bus });
@@ -89,9 +86,6 @@ test("headless preserves the same structured block envelope consumed by TUI", as
 		async *runTurn() {
 			yield { type: "tool_execution_end", timestamp: 1, toolCallId: "exec-1", toolName: "bash", content: "ok", isError: false, block: richBlock };
 		},
-		steer() {},
-		followUp() {},
-		abort() {},
 	}, "block", (line) => lines.push(line));
 	expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ block: richBlock });
 });

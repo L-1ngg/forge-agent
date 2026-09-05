@@ -1,4 +1,5 @@
 import type { SessionMessage } from "@myh/protocol";
+import type { SessionStorage } from "./session-storage.ts";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -115,6 +116,17 @@ export class SessionStore {
 
 	messages(): SessionMessage[] {
 		return this.currentBranch().map((entry) => entry.message);
+	}
+
+	async load(): Promise<SessionMessage[]> {
+		return this.messages();
+	}
+
+	asStorage(): SessionStorage {
+		return {
+			load: () => this.load(),
+			appendTurn: async (messages) => { await this.appendTurn(messages); },
+		};
 	}
 
 	async appendTurn(messages: readonly SessionMessage[]): Promise<SessionEntry[]> {

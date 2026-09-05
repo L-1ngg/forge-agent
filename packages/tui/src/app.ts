@@ -1,6 +1,7 @@
 import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent } from "@myh/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
-import { createFrame, type TerminalFrame } from "./frame.ts";
+import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
+import { wrapText } from "./width.ts";
 import { computeScreenLayout, layoutOffsets } from "./layout.ts";
 import {
 	backspace,
@@ -97,6 +98,8 @@ export class App {
 	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
 	private readonly queued: string[] = [];
+	private autoSendPaused = false;
+	private replacement: string | undefined;
 	private runTask: Promise<void> | undefined;
 	private picker: PickerState | undefined;
 	private suggestionVersion = 0;
@@ -136,7 +139,7 @@ export class App {
 	async stop(): Promise<void> {
 		if (!this.started) return this.stoppedPromise;
 		this.started = false;
-		this.queued.length = 0;
+		this.pauseSending();
 		this.suggestionVersion++;
 		try {
 			if (this.running) this.options.port.abort?.();
@@ -239,7 +242,10 @@ export class App {
 			return;
 		}
 		if (key.type === "escape") {
-			if (nextEscStep(this.routerState()) === "abort_turn") this.options.port.abort?.();
+			if (nextEscStep(this.routerState()) === "abort_turn") {
+				this.pauseSending();
+				this.options.port.abort?.();
+			}
 			this.repaint();
 			return;
 		}
@@ -264,7 +270,11 @@ export class App {
 			case "arrow":
 				if (key.direction === "left") moveLeft(this.draft);
 				else if (key.direction === "right") moveRight(this.draft);
-				else if (key.direction === "up") moveUp(this.draft);
+				else if (key.direction === "up") {
+					const recalled = isEditorEmpty(this.draft) ? this.queued.pop() : undefined;
+					if (recalled !== undefined) replaceEditor(this.draft, recalled, recalled.length);
+					else moveUp(this.draft);
+				}
 				else moveDown(this.draft);
 				break;
 			case "home":
@@ -389,7 +399,9 @@ export class App {
 		this.suggestionVersion++;
 		this.picker = undefined;
 		if (this.running) {
-			this.queued.splice(0, this.queued.length, ...(input ? [input] : []));
+			this.autoSendPaused = true;
+			if (this.replacement !== undefined) this.queued.push(this.replacement);
+			this.replacement = input;
 			this.options.port.abort?.();
 			this.repaint();
 			return;
@@ -398,6 +410,22 @@ export class App {
 			if (this.dispatchCommand(input)) this.repaint();
 			else this.runTask = this.runTurn(input);
 		}
+	}
+
+	private restoreInputs(inputs: string[]): void {
+		if (inputs.length === 0) return;
+		if (!isEditorEmpty(this.draft)) inputs.push(editorText(this.draft));
+		const text = inputs.join("\n\n");
+		replaceEditor(this.draft, text, text.length);
+		this.suggestionVersion++;
+		this.picker = undefined;
+	}
+
+	private pauseSending(): void {
+		this.autoSendPaused = true;
+		if (this.replacement !== undefined) this.queued.push(this.replacement);
+		this.replacement = undefined;
+		this.restoreInputs(this.queued.splice(0));
 	}
 
 	private dispatchCommand(input: string): boolean {
@@ -421,16 +449,30 @@ export class App {
 
 	private async runTurn(input: string): Promise<void> {
 		this.running = true;
+		this.autoSendPaused = false;
 		try {
 			let current: string | undefined = input;
 			while (current !== undefined && this.started) {
 				this.repaint();
+				let inputProcessed = false;
 				try {
-					for await (const event of this.options.port.runTurn(current)) this.handleEvent(event);
+					for await (const event of this.options.port.runTurn(current)) {
+						if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "user") inputProcessed = true;
+						const reason = event.type === "turn_end" ? event.stopReason : event.type === "message_end" ? event.message.stopReason : undefined;
+						if (reason === "error" || (reason === "aborted" && !this.autoSendPaused)) this.pauseSending();
+						this.handleEvent(event);
+					}
 				} catch (error) {
 					this.projector.addNotice(error instanceof Error ? error.message : String(error));
+					if (!inputProcessed) this.queued.unshift(current);
+					this.pauseSending();
 				}
-				current = this.queued.shift();
+				if (this.autoSendPaused) {
+					this.restoreInputs(this.queued.splice(0));
+					current = this.replacement;
+					this.replacement = undefined;
+					this.autoSendPaused = false;
+				} else current = this.queued.shift();
 				if (current !== undefined && this.dispatchCommand(current)) current = this.queued.shift();
 			}
 		} finally {
@@ -473,7 +515,7 @@ export class App {
 			start += height;
 			return span;
 		});
-		return { totalRows: start, viewportHeight: plan.transcript.height, spans };
+		return { totalRows: start, viewportHeight: plan.transcript.height - this.queueHeight(columns, plan.transcript.height), spans };
 	}
 
 	private presentations(columns: number) {
@@ -493,7 +535,7 @@ export class App {
 			...(status ?? {}),
 			...(contextLabel ? { contextLabel } : {}),
 			...(cost !== undefined ? { cost } : {}),
-			...(this.running ? { activity: this.queued.length > 0 ? `queued (${this.queued.length})` : "working" } : {}),
+			...(this.running ? { activity: this.autoSendPaused ? "stopping" : this.queued.length > 0 ? `queued (${this.queued.length})` : "working" } : {}),
 		});
 	}
 
@@ -516,6 +558,15 @@ export class App {
 		this.host.paint(this.composeFrame());
 	}
 
+	private queueLines(columns: number): string[] {
+		const pending = this.queued.map((input, index) => `Queued ${index + 1}: ${input}`);
+		if (this.replacement !== undefined) pending.push(`Next: ${this.replacement}`);
+		return pending.flatMap((input) => wrapText(input, Math.max(1, columns - 2)));
+	}
+	private queueHeight(columns: number, available: number): number {
+		return Math.min(this.queueLines(columns).length, Math.floor(available / 2));
+	}
+
 	/** Compose the current frame. Pure w.r.t. the terminal; exposed for tests. */
 	composeFrameForTest(): TerminalFrame {
 		return this.composeFrame();
@@ -528,18 +579,25 @@ export class App {
 		const segments = this.statusSegments();
 		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const offsets = layoutOffsets(plan);
+		const queueHeight = this.queueHeight(columns, plan.transcript.height);
+		const transcriptHeight = plan.transcript.height - queueHeight;
 		if (plan.header.height === 1) {
 			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir }, this.theme);
 		}
 		const entries = this.projector.getEntries();
 		if ((this.options.showWelcome ?? false) && entries.length === 0 && plan.transcript.height > 0 && !this.picker) {
-			paintWelcome(frame, offsets.transcript, plan.transcript.height, { cwd: this.options.cwd, homeDir: this.options.homeDir, model: this.options.getStatus?.().model }, this.theme);
+			paintWelcome(frame, offsets.transcript, transcriptHeight, { cwd: this.options.cwd, homeDir: this.options.homeDir, model: this.options.getStatus?.().model }, this.theme);
 		} else {
-			this.paintTranscriptRegion(frame, offsets.transcript, plan.transcript.height);
+			this.paintTranscriptRegion(frame, offsets.transcript, transcriptHeight);
+		}
+		const queueLines = this.queueLines(columns);
+		for (let row = 0; row < queueHeight; row++) {
+			const text = row === queueHeight - 1 && queueLines.length > queueHeight ? `... (${this.queued.length} queued)` : queueLines[row]!;
+			writeText(frame, 1, offsets.transcript + transcriptHeight + row, text, { ...defaultStyle(), foreground: this.theme.color("activity") });
 		}
 		if (this.picker && plan.interactive.owner === "composer") {
-			const height = pickerHeight(this.picker.items.length, Math.min(8, plan.transcript.height));
-			paintPicker(frame, offsets.transcript + plan.transcript.height - height, height, this.picker, this.theme);
+			const height = pickerHeight(this.picker.items.length, Math.min(8, transcriptHeight));
+			paintPicker(frame, offsets.transcript + transcriptHeight - height, height, this.picker, this.theme);
 		}
 		const card = this.visibleCard();
 		if (plan.interactive.owner === "card" && card) {
