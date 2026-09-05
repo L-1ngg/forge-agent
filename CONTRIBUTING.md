@@ -10,6 +10,7 @@ Use Bun 1.3.12 and the existing workspace toolchain:
 bun install --frozen-lockfile
 bun run check
 bun run test:headless
+bun run typecheck:examples
 ```
 
 The test suite uses local provider replays and real PTYs. It does not require an API key. Keep regression tests with behavior changes, and include what you ran, what you did not run, why, and remaining risks in your PR.
@@ -25,3 +26,5 @@ The maintainer works directly on `master`; external contributors should use a br
 Report bugs with a minimal reproduction, commit, Bun version, OS, and terminal. Feature requests should describe the task and expected outcome, rather than assuming a particular implementation. Roadmap directions live in [docs/plan.md](docs/plan.md), not a separate task board.
 
 Contributions are licensed under the repository's [MIT license](LICENSE). See [AGENTS.md](AGENTS.md) and [docs/SOP.md](docs/SOP.md) for the detailed internal workflow.
+
+Maintainers create development snapshots through the [manual draft prerelease workflow](docs/release.md). It revalidates the selected commit on both platforms; normal pushes never publish a release.

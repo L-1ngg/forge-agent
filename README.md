@@ -123,9 +123,12 @@ This is a personal project under active development. APIs and configuration may 
 ```bash
 bun run check
 bun run test:headless
+bun run typecheck:examples
 ```
 
 [SDK guide](docs/sdk.en.md) · [中文 SDK 指南](docs/sdk.md) · [Contributing](CONTRIBUTING.md) · [Internal documentation](docs/README.md) (Chinese)
+
+Maintainers can create [source prerelease drafts](docs/release.md) after dual-platform verification. Publishing a draft is a separate manual step.
 
 Design references: [pi](https://github.com/earendil-works/pi), [grok-build](https://github.com/xai-org/grok-build), and [clowder-ai](https://github.com/zts212653/clowder-ai). Their licenses apply to their own code; the local pi-ai patch retains upstream attribution.
 

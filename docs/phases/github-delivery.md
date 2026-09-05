@@ -26,7 +26,7 @@ created: 2026-09-06
 
 ## Release 与 Rollback
 
-每批检查后独立提交并推送 `master`。Release 保持 draft 和 prerelease,公开发布由 operator 决定。失败保留诊断,不覆盖标签或已有产物。回退使用对应提交的 revert;如回退命名,本机运行目录同步恢复,不更改会话内容。第三批补充手动发布操作指南。
+每批检查后独立提交并推送 `master`。Release 保持 draft 和 prerelease,公开发布由 operator 决定。失败保留诊断,不覆盖标签或已有产物。回退使用对应提交的 revert;如回退命名,本机运行目录同步恢复,不更改会话内容。操作与失败处理见 [release.md](../release.md)。
 
 ## Evidence
 
@@ -44,3 +44,11 @@ created: 2026-09-06
 - Not run:英文示例未调用真实模型,外部文档链接未逐一联网验证。
 - Why:使用现有本地 SDK HTTP 回归验证执行契约,示例另做严格类型检查;本批是对外文档与许可交付。
 - Risk:公开 SDK 仍为私有 workspace 包,没有 npm 或稳定接口承诺。
+
+### 第三批本地验证
+
+- Ran:`bun install --frozen-lockfile`、`bun run check`(297 pass / 0 fail)、`bun run typecheck:examples` 与 `actionlint 1.7.12` 通过。发布策略测试覆盖输入、真实 Git 分支归属、已有标签/草稿、分页和 API 失败,以及发布任务依赖双平台验证的关系。
+- Ran:GitHub 保留 Issues、关闭 Wiki/Projects、设置项目 topics;默认 token 权限仍为只读。
+- Not run:远程双平台与草稿归档验证待本批提交后执行。
+- Why:GitHub 必须先加载已推送 workflow 才能执行远程验证。
+- Risk:手动发布是源码草稿,不发布 npm、二进制或稳定 API。

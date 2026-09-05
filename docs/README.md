@@ -11,6 +11,7 @@
 | [plan.md](plan.md) | 规划 + 行动项(**热层**:只放当前要做的) |
 | [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、存储、输入归属与生命周期契约;接口变化时同步 |
 | [GitHub 交付](phases/github-delivery.md) | 命名、CI、草稿预发布施工与验证 |
+| [release.md](release.md) | 英文手动源码预发布操作与失败处理 |
 | [phases/owned-core.md](phases/owned-core.md)、[phases/sdk.md](phases/sdk.md) | 自研内核与 SDK 的施工、自动化证据及未验收边界 |
 | [phases/](phases/) | 各 Phase 施工图:路径 / tradeoff / 验收(**温层**) |
 | [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |

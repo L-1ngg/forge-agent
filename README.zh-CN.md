@@ -123,9 +123,12 @@ bun examples/embedded-agent.ts
 ```bash
 bun run check
 bun run test:headless
+bun run typecheck:examples
 ```
 
 [中文 SDK](docs/sdk.md) · [English SDK](docs/sdk.en.md) · [贡献说明](CONTRIBUTING.md) · [内部文档](docs/README.md)
+
+维护者可在双平台验证后创建 [源码预发布草稿](docs/release.md),公开发布仍是单独的手动操作。
 
 参考项目:[pi](https://github.com/earendil-works/pi)、[grok-build](https://github.com/xai-org/grok-build)、[clowder-ai](https://github.com/zts212653/clowder-ai)。各自代码适用其上游许可证;本地 pi-ai patch 保留上游归属。
 

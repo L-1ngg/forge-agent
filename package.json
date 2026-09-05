@@ -11,11 +11,12 @@
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
+    "typecheck:automation": "tsc --noEmit -p tsconfig.automation.json",
     "test": "bun test",
 		"test:headless": "bun scripts/test-headless.ts",
 		"tui:frame": "bun scripts/tui-frame.ts",
 		"check:deps": "bun scripts/check-deps.ts",
-    "check": "bun run check:deps && bun run typecheck && bun test"
+    "check": "bun run check:deps && bun run typecheck && bun run typecheck:automation && bun test"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4"
