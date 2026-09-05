@@ -1,14 +1,10 @@
 import {
-	Agent,
-	type AgentEvent,
-	type AgentMessage,
-	type AgentTool,
-	type BeforeToolCallContext,
-	type BeforeToolCallResult,
-} from "@earendil-works/pi-agent-core";
-import {
 	InMemoryCredentialStore,
 	Type,
+	validateToolArguments,
+	type AssistantMessageEventStream,
+	type Context,
+	type SimpleStreamOptions,
 	createModels,
 	fauxAssistantMessage,
 	fauxProvider,
@@ -21,13 +17,13 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type TokenUsage, type ToolCallBlock } from "@myh/protocol";
-import { wrapTool, type HarnessTool, type ToolContext, type ToolInputAuthorizer, type ToolInputRewrite } from "@myh/tools";
+import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type ToolCallBlock } from "@myh/protocol";
+import { type HarnessTool, type ToolContext, type ToolInputRewrite } from "@myh/tools";
 import { createEditBlockData } from "./diff.ts";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
-import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
+import { ExecutionCore } from "./execution-core.ts";
 
 export interface PiPortOptions {
 	provider: string;
@@ -41,7 +37,7 @@ export interface PiPortOptions {
 	tools?: HarnessTool<object, unknown>[];
 	/**
 	 * Rewrite tool input before execution; permission checks observe the rewritten object.
-	 * pi emits `tool_execution_start` before this wrapper runs, so that event can
+	 * The core emits `tool_execution_start` before this wrapper runs, so that event can
 	 * retain the model's original args even though policy and execution use the final input.
 	 */
 	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
@@ -66,50 +62,6 @@ export interface PiTestPortOptions {
 	tokensPerSecond?: number;
 	requestBus?: RequestBus;
 	permission?: PermissionContext;
-}
-
-interface QueueWaiter<T> {
-	resolve(result: IteratorResult<T>): void;
-	reject(error: unknown): void;
-}
-
-class AsyncQueue<T> implements AsyncIterable<T>, AsyncIterator<T> {
-	private readonly values: T[] = [];
-	private readonly waiters: QueueWaiter<T>[] = [];
-	private done = false;
-	private error: unknown;
-
-	push(value: T): void {
-		if (this.done) return;
-		const waiter = this.waiters.shift();
-		if (waiter) waiter.resolve({ value, done: false });
-		else this.values.push(value);
-	}
-
-	close(): void {
-		if (this.done) return;
-		this.done = true;
-		for (const waiter of this.waiters.splice(0)) waiter.resolve({ value: undefined, done: true });
-	}
-
-	fail(error: unknown): void {
-		if (this.done) return;
-		this.error = error;
-		this.done = true;
-		for (const waiter of this.waiters.splice(0)) waiter.reject(error);
-	}
-
-	next(): Promise<IteratorResult<T>> {
-		const value = this.values.shift();
-		if (value !== undefined) return Promise.resolve({ value, done: false });
-		if (this.error !== undefined) return Promise.reject(this.error);
-		if (this.done) return Promise.resolve({ value: undefined, done: true });
-		return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
-	}
-
-	[Symbol.asyncIterator](): AsyncIterator<T> {
-		return this;
-	}
 }
 
 function stringify(value: unknown): string {
@@ -160,7 +112,7 @@ function toSessionContent(message: Message): SessionContentBlock[] {
 	});
 }
 
-function toSessionMessage(message: AgentMessage): SessionMessage | undefined {
+function toSessionMessage(message: Message): SessionMessage | undefined {
 	if (typeof message !== "object" || message === null || !("role" in message)) return undefined;
 	const standard = message as Message;
 	if (standard.role !== "user" && standard.role !== "assistant" && standard.role !== "toolResult") return undefined;
@@ -238,10 +190,6 @@ function fromSessionMessage(message: SessionMessage, model: Model<string>): Mess
 	} satisfies AssistantMessage;
 }
 
-function eventTimestamp(): number {
-	return Date.now();
-}
-
 function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<AssistantMessage["usage"]> {
 	return {
 		input: usage.input,
@@ -253,73 +201,25 @@ function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<As
 	};
 }
 
-function mapEvent(event: AgentEvent, toolCommands: Map<string, string>, editBlocks: Map<string, BlockEnvelope<"edit">>): SessionEvent[] {
-	const timestamp = eventTimestamp();
-	switch (event.type) {
-		case "agent_start":
-			return [{ type: "agent_start", timestamp }];
-		case "agent_end":
-			return [{ type: "agent_end", timestamp }];
-		case "turn_start":
-			return [{ type: "turn_start", timestamp }];
-		case "turn_end": {
-			const message = toSessionMessage(event.message);
-			return [{ type: "turn_end", timestamp, ...(message?.stopReason ? { stopReason: message.stopReason } : {}) }];
-		}
-		case "message_start": {
-			const message = toSessionMessage(event.message);
-			return message ? [{ type: "message_start", timestamp, message }] : [];
-		}
-		case "message_update": {
-			const update = event.assistantMessageEvent;
-			if (update.type === "text_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "text", delta: update.delta }];
-			if (update.type === "thinking_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "thinking", delta: update.delta }];
-			if (update.type === "toolcall_delta") return [{ type: "message_delta", timestamp, contentIndex: update.contentIndex, contentType: "tool_call", delta: update.delta }];
-			return [];
-		}
-		case "message_end": {
-			const message = toSessionMessage(event.message);
-			return message ? [{ type: "message_end", timestamp, message }] : [];
-		}
-		case "tool_execution_start":
-			rememberToolCommand(toolCommands, event.toolCallId, event.toolName, event.args);
-			const startBlock = startToolBlock(event.toolCallId, event.toolName, event.args, timestamp);
-			if (startBlock?.kind === "edit") editBlocks.set(event.toolCallId, startBlock as BlockEnvelope<"edit">);
-			return [{
-				type: "tool_execution_start",
-				timestamp,
-				toolCallId: event.toolCallId,
-				toolName: event.toolName,
-				args: event.args as Record<string, unknown>,
-				...(startBlock ? { block: startBlock } : {}),
-			}];
-		case "tool_execution_update":
-			const updateBlock = executeToolBlock(event.toolCallId, event.toolName, event.partialResult, "streaming", timestamp, toolCommandFrom(toolCommands, event.toolCallId, event.args));
-			return [{
-				type: "tool_execution_update",
-				timestamp,
-				toolCallId: event.toolCallId,
-				toolName: event.toolName,
-				content: stringify(event.partialResult),
-				...(updateBlock ? { block: updateBlock } : {}),
-			}];
-		case "tool_execution_end":
-			const editBlock = editBlocks.get(event.toolCallId);
-			const endBlock = editBlock
-				? { ...editBlock, lifecycle: event.isError ? "failed" as const : "complete" as const, updatedAt: timestamp }
-				: executeToolBlock(event.toolCallId, event.toolName, event.result, event.isError ? "failed" : "complete", timestamp, toolCommands.get(event.toolCallId));
-			toolCommands.delete(event.toolCallId);
-			editBlocks.delete(event.toolCallId);
-			return [{
-				type: "tool_execution_end",
-				timestamp,
-				toolCallId: event.toolCallId,
-				toolName: event.toolName,
-				content: stringify(event.result),
-				isError: event.isError,
-				...(endBlock ? { block: endBlock } : {}),
-			}];
+function decorateToolEvent(event: SessionEvent, commands: Map<string, string>, edits: Map<string, BlockEnvelope<"edit">>): SessionEvent {
+	if (event.type === "tool_execution_start") {
+		rememberToolCommand(commands, event.toolCallId, event.toolName, event.args);
+		const envelope = startToolBlock(event.toolCallId, event.toolName, event.args, event.timestamp);
+		if (envelope?.kind === "edit") edits.set(event.toolCallId, envelope as BlockEnvelope<"edit">);
+		return envelope ? { ...event, block: envelope } : event;
 	}
+	if (event.type === "tool_execution_end") {
+		const edit = edits.get(event.toolCallId);
+		let result: unknown;
+		try { result = JSON.parse(event.content); } catch { result = event.content; }
+		const envelope = edit
+			? { ...edit, lifecycle: event.isError ? "failed" as const : "complete" as const, updatedAt: event.timestamp }
+			: executeToolBlock(event.toolCallId, event.toolName, result, event.isError ? "failed" : "complete", event.timestamp, commands.get(event.toolCallId));
+		commands.delete(event.toolCallId);
+		edits.delete(event.toolCallId);
+		return envelope ? { ...event, block: envelope } : event;
+	}
+	return event;
 }
 
 function startToolBlock(toolCallId: string, toolName: string, args: unknown, timestamp: number): BlockEnvelope<"edit" | "execute"> | undefined {
@@ -367,11 +267,6 @@ function rememberToolCommand(commands: Map<string, string>, toolCallId: string, 
 	if (typeof command === "string") commands.set(toolCallId, command);
 }
 
-function toolCommandFrom(commands: Map<string, string>, toolCallId: string, args: unknown): string | undefined {
-	const command = objectValue(args).command;
-	return typeof command === "string" ? command : commands.get(toolCallId);
-}
-
 function objectValue(value: unknown): Record<string, unknown> {
 	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
@@ -384,93 +279,6 @@ function readableToolError(content: string): string | undefined {
 	} catch {
 		return undefined;
 	}
-}
-
-interface AdaptToolOptions {
-	rewriteInput?: ToolInputRewrite<object>;
-	authorizeInput?: ToolInputAuthorizer<object>;
-}
-
-function adaptTool(tool: HarnessTool<object, unknown>, cwd: string, options: AdaptToolOptions = {}): AgentTool {
-	const executable = options.rewriteInput || options.authorizeInput
-		? wrapTool(tool, {
-				...(options.rewriteInput ? { rewriteInput: options.rewriteInput } : {}),
-				...(options.authorizeInput ? { authorizeInput: options.authorizeInput } : {}),
-			})
-		: tool;
-	return {
-		name: tool.name,
-		label: tool.label,
-		description: tool.description,
-		parameters: Type.Unsafe(tool.parameters),
-		async execute(toolCallId, params, signal) {
-			const context: ToolContext = { cwd, toolCallId, ...(signal ? { signal } : {}) };
-			const outcome = await executable.execute(params as object, context);
-			if (!outcome.ok) throw new Error(JSON.stringify(outcome.error));
-			return { content: [{ type: "text", text: stringify(outcome.value) }], details: outcome.value };
-		},
-	};
-}
-
-interface AdaptedTools {
-	tools: AgentTool[];
-	prepareToolCall: (toolCall: ToolCallBlock, signal?: AbortSignal) => Promise<ToolCallBlock>;
-	markPreparedInput: (toolCall: ToolCallBlock) => void;
-	clearPreparedInputs: () => void;
-}
-
-function adaptTools(
-	tools: readonly HarnessTool<object, unknown>[],
-	cwd: string,
-	rewrites: Readonly<Record<string, ToolInputRewrite<object>>> | undefined,
-	permission: PermissionHookOptions | undefined,
-): AdaptedTools {
-	const preparedInputs = new Map<string, object>();
-	const preparedAuthorizations = new Set<string>();
-	const rewriteNames = new Set(Object.keys(rewrites ?? {}).filter((name) => tools.some((tool) => tool.name === name)));
-	const prepareToolCall = async (toolCall: ToolCallBlock, signal?: AbortSignal): Promise<ToolCallBlock> => {
-		const rewriteInput = rewriteNames.has(toolCall.name) ? rewrites?.[toolCall.name] : undefined;
-		if (!rewriteInput) return toolCall;
-		const context: ToolContext = { cwd, toolCallId: toolCall.id, ...(signal ? { signal } : {}) };
-		const rewritten = await rewriteInput(toolCall.arguments, context);
-		return { ...toolCall, arguments: rewritten as Record<string, unknown> };
-	};
-	const markPreparedInput = (toolCall: ToolCallBlock): void => {
-		if (!rewriteNames.has(toolCall.name)) return;
-		preparedInputs.set(toolCall.id, structuredClone(toolCall.arguments));
-		preparedAuthorizations.add(toolCall.id);
-	};
-	return {
-		tools: tools.map((tool) => {
-			const rewriteInput = rewriteNames.has(tool.name) ? rewrites?.[tool.name] : undefined;
-			const authorizeInput = rewriteInput && permission
-				? async (input: object, context: ToolContext): Promise<void> => {
-					if (context.toolCallId && preparedAuthorizations.delete(context.toolCallId)) return;
-					await createPermissionInputAuthorizer(tool.name, permission)(input, context);
-				}
-				: undefined;
-			const executionRewrite = rewriteInput
-				? async (input: object, context: ToolContext): Promise<object> => {
-					if (context.toolCallId && preparedInputs.has(context.toolCallId)) {
-						const prepared = preparedInputs.get(context.toolCallId) as object;
-						preparedInputs.delete(context.toolCallId);
-						return prepared;
-					}
-					return rewriteInput(input, context);
-				}
-				: undefined;
-			return adaptTool(tool, cwd, {
-				...(executionRewrite ? { rewriteInput: executionRewrite } : {}),
-				...(authorizeInput ? { authorizeInput } : {}),
-			});
-		}),
-		prepareToolCall,
-		markPreparedInput,
-		clearPreparedInputs: () => {
-			preparedInputs.clear();
-			preparedAuthorizations.clear();
-		},
-	};
 }
 
 export interface PermissionHookOptions {
@@ -505,7 +313,7 @@ async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookO
 	if (decision.kind === "deny") return { allowed: false, reason: decision.reason };
 	if (!options.requestBus) return { allowed: false, reason: "Interactive permission request is unavailable" };
 
-	const outcome = await options.requestBus.ask("permission", decision.payload, signal ? { signal } : {});
+	const outcome = await options.requestBus.ask("permission", structuredClone(decision.payload), signal ? { signal } : {});
 	const result = permissionResultFromOutcome(outcome);
 	if (result.decision === "allow_once") return { allowed: true };
 	if (result.decision === "allow_always") {
@@ -522,14 +330,17 @@ async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookO
 	return { allowed: false, reason: result.reason ?? "Tool execution denied" };
 }
 
-function createPermissionInputAuthorizer(toolName: string, options: PermissionHookOptions): ToolInputAuthorizer<object> {
-	return async (input, context) => {
-		const check = await checkPermission(makeToolCall(context.toolCallId ?? "unknown", toolName, input), options, context.signal);
-		if (!check.allowed) throw new Error(check.reason);
-	};
+export interface BeforeToolCallContext {
+	toolCall: { type: string; id: string; name: string; arguments: Record<string, unknown> };
+	args?: unknown;
 }
 
-/** Adapt the pure permission decision to pi's deny-only beforeToolCall hook. */
+export interface BeforeToolCallResult {
+	block: true;
+	reason: string;
+	terminate: true;
+}
+
 export function createPermissionBeforeToolCall(options: PermissionHookOptions): (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined> {
 	return async (context, signal) => {
 		if (options.skipTools?.has(context.toolCall.name)) return undefined;
@@ -544,130 +355,94 @@ export function createPermissionBeforeToolCall(options: PermissionHookOptions): 
 	};
 }
 
-class PiAgentPort implements AgentPort {
-	private active = false;
-	private aborted = false;
-	private readonly requestBus: RequestBus | undefined;
-	private readonly clearPreparedInputs: (() => void) | undefined;
-	private readonly usage: UsageTracker;
-
-	constructor(private readonly agent: Agent, requestBus?: RequestBus, clearPreparedInputs?: () => void) {
-		this.requestBus = requestBus;
-		this.clearPreparedInputs = clearPreparedInputs;
-		this.usage = new UsageTracker({ contextWindow: agent.state.model.contextWindow });
-		this.syncUsageContext();
-
-		// Capture the exact context after pi applies its optional transform and
-		// again at the provider boundary, where the final LLM message list exists.
-		const previousTransform = agent.transformContext;
-		agent.transformContext = async (messages, signal) => {
-			const transformed = previousTransform ? await previousTransform(messages, signal) : messages;
-			this.usage.setContext({ messages: this.usageMessagesFrom(transformed), contextWindow: agent.state.model.contextWindow });
-			return transformed;
-		};
-		const previousStreamFunction = agent.streamFunction;
-		agent.streamFunction = (model, context, options) => {
-			this.usage.setContext({ messages: this.usageMessagesFrom(context.messages), contextWindow: model.contextWindow });
-			return previousStreamFunction(model, context, options);
-		};
-	}
-
-	async *runTurn(input: string): AsyncIterable<SessionEvent> {
-		if (this.active) throw new Error("Agent is already processing a turn");
-		this.active = true;
-		this.aborted = false;
-		const previousMessages = this.agent.state.messages.slice();
-		this.usage.beginTurn();
-		this.syncUsageContext();
-		const queue = new AsyncQueue<SessionEvent>();
-		const toolCommands = new Map<string, string>();
-		const editBlocks = new Map<string, BlockEnvelope<"edit">>();
-		const unsubscribe = this.agent.subscribe((event) => {
-			if (event.type === "turn_end" && event.message.role === "assistant" && event.message.stopReason === "aborted") this.aborted = true;
-			this.observeUsage(event);
-			for (const mapped of mapEvent(event, toolCommands, editBlocks)) queue.push(mapped);
-		});
-		let completed = false;
-		const running = this.agent.prompt(input).then(
-			() => {
-				completed = true;
-				queue.close();
-			},
-			(error) => queue.fail(error),
-		);
-		try {
-			for await (const event of queue) yield event;
-			await running;
-		} finally {
-			if (!completed) this.abort();
-			await running;
-			unsubscribe();
-			this.clearPreparedInputs?.();
-			toolCommands.clear();
-			if (this.aborted) {
-				this.agent.state.messages = previousMessages;
-				this.agent.clearAllQueues();
-				this.syncUsageContext();
-			}
-			this.usage.endTurn();
-			this.active = false;
-		}
-	}
-
-	steer(input: string): void {
-		this.agent.steer({ role: "user", content: input, timestamp: Date.now() });
-	}
-
-	followUp(input: string): void {
-		this.agent.followUp({ role: "user", content: input, timestamp: Date.now() });
-	}
-
-	abort(): void {
-		if (this.active) this.aborted = true;
-		this.requestBus?.abort();
-		this.agent.abort();
-	}
-
-	getUsage(): UsageTruthPoint {
-		return this.usage.snapshot();
-	}
-
-	private observeUsage(event: AgentEvent): void {
-		if (event.type === "message_end") {
-			this.syncUsageContext();
-			if (event.message.role === "assistant") {
-				const usage = toTokenUsage(event.message.usage);
-				this.usage.recordUsage(usage);
-			}
-			return;
-		}
-		if (event.type === "tool_execution_end" || event.type === "turn_start") this.syncUsageContext();
-	}
-
-	private syncUsageContext(): void {
-		this.usage.setContext({ messages: this.usageMessages(), contextWindow: this.agent.state.model.contextWindow });
-	}
-
-	private usageMessages(): SessionMessage[] {
-		return this.usageMessagesFrom(this.agent.state.messages);
-	}
-
-	private usageMessagesFrom(messages: readonly AgentMessage[]): SessionMessage[] {
-		return messages.flatMap((message) => {
-			const converted = toSessionMessage(message);
-			return converted ? [converted] : [];
-		});
-	}
+interface ModelPortOptions {
+	model: Model<string>;
+	stream: (model: Model<string>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
+	systemPrompt: string;
+	thinkingLevel: PiPortOptions["thinkingLevel"];
+	history?: SessionMessage[];
+	tools?: HarnessTool<object, unknown>[];
+	cwd: string;
+	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
+	permission?: PermissionContext;
+	requestBus?: RequestBus;
 }
 
-function toTokenUsage(usage: AssistantMessage["usage"]): TokenUsage {
+function createModelPort(options: ModelPortOptions): AgentPort {
+	const tools = options.tools ?? [];
+	const modelTools = tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: Type.Unsafe(tool.parameters) }));
+	const core = new ExecutionCore({
+		contextWindow: options.model.contextWindow,
+		abortInteractions: () => { options.requestBus?.abort(); },
+		async stream(messages, signal, emit) {
+			let started = false;
+			const stream = options.stream(options.model, {
+				systemPrompt: options.systemPrompt,
+				messages: messages.map((message) => fromSessionMessage(message, options.model)),
+				tools: modelTools,
+			}, { signal, ...(options.thinkingLevel !== "off" ? { reasoning: options.thinkingLevel } : {}) });
+			for await (const event of stream) {
+				if (!started && event.type !== "done" && event.type !== "error") {
+					started = true;
+					const message = toSessionMessage(event.partial);
+					if (message) emit({ type: "message_start", timestamp: Date.now(), message });
+				}
+				if (event.type === "text_delta" || event.type === "thinking_delta" || event.type === "toolcall_delta") {
+					emit({ type: "message_delta", timestamp: Date.now(), contentIndex: event.contentIndex, contentType: event.type === "text_delta" ? "text" : event.type === "thinking_delta" ? "thinking" : "tool_call", delta: event.delta });
+				}
+			}
+			const result = toSessionMessage(await stream.result());
+			if (!result) throw new Error("Provider did not return an assistant message");
+			if (!started) emit({ type: "message_start", timestamp: Date.now(), message: result });
+			return result;
+		},
+		async execute(call, signal) {
+			signal.throwIfAborted();
+			const index = tools.findIndex((tool) => tool.name === call.name);
+			const tool = tools[index];
+			const schema = modelTools[index];
+			if (!tool || !schema) throw new Error(`Tool ${call.name} not found`);
+			let input = validateToolArguments(schema, { ...call, type: "toolCall" }) as object;
+			const context: ToolContext = { cwd: options.cwd, toolCallId: call.id, signal };
+			const rewrite = options.toolInputRewrites?.[call.name];
+			if (rewrite) input = await rewrite(input, context);
+			signal.throwIfAborted();
+			input = validateToolArguments(schema, { ...call, type: "toolCall", arguments: input as Record<string, unknown> }) as object;
+			const finalCall = { ...call, arguments: input as Record<string, unknown> };
+			if (options.permission) {
+				const check = await checkPermission(finalCall, { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
+				if (!check.allowed) return {
+					terminate: true,
+					message: { role: "toolResult", toolCallId: call.id, toolName: call.name, isError: true, timestamp: Date.now(), content: [{ type: "text", text: check.reason }] },
+				};
+			}
+			signal.throwIfAborted();
+			const outcome = await tool.execute(input, context);
+			return {
+				...(outcome.ok ? { details: outcome.value } : {}),
+				message: {
+					role: "toolResult", toolCallId: call.id, toolName: call.name, timestamp: Date.now(),
+					isError: !outcome.ok,
+					content: [{ type: "text", text: stringify(outcome.ok ? outcome.value : outcome.error) }],
+				},
+			};
+		},
+	}, options.history);
 	return {
-		input: usage.input,
-		output: usage.output,
-		cacheRead: usage.cacheRead,
-		cacheWrite: usage.cacheWrite,
-		totalTokens: usage.totalTokens,
-		cost: { ...usage.cost },
+		async *runTurn(input) {
+			const commands = new Map<string, string>();
+			const edits = new Map<string, BlockEnvelope<"edit">>();
+			try {
+				for await (const event of core.runTurn(input)) yield decorateToolEvent(event, commands, edits);
+			} finally {
+				commands.clear();
+				edits.clear();
+			}
+		},
+		steer: (input) => core.steer(input),
+		followUp: (input) => core.followUp(input),
+		abort: () => core.abort(),
+		getUsage: () => core.getUsage(),
 	};
 }
 
@@ -682,26 +457,7 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .myh/config.json, MYH_API_KEY, or the provider's API key environment variable.`);
 	}
 	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
-	const permissionOptions: PermissionHookOptions | undefined = options.permission
-		? { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }
-		: undefined;
-	const adaptedTools = adaptTools(options.tools ?? [], options.cwd, options.toolInputRewrites, permissionOptions);
-	if (permissionOptions) {
-		permissionOptions.prepareToolCall = adaptedTools.prepareToolCall;
-		permissionOptions.markPreparedInput = adaptedTools.markPreparedInput;
-	}
-	const agent = new Agent({
-		streamFn: models.streamSimple.bind(models),
-		initialState: {
-			systemPrompt: options.systemPrompt,
-			model,
-			thinkingLevel: options.thinkingLevel,
-			tools: adaptedTools.tools,
-			messages: (options.history ?? []).map((message) => fromSessionMessage(message, model)),
-		},
-		...(permissionOptions ? { beforeToolCall: createPermissionBeforeToolCall(permissionOptions) } : {}),
-	});
-	return new PiAgentPort(agent, options.requestBus, adaptedTools.clearPreparedInputs);
+	return createModelPort({ ...options, model, stream: models.streamSimple.bind(models) });
 }
 
 function lastUserText(messages: Message[]): string {
@@ -738,23 +494,12 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 	);
 	const models = createModels();
 	models.setProvider(faux.provider);
-	const permissionOptions: PermissionHookOptions | undefined = options.permission
-		? { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }
-		: undefined;
-	const adaptedTools = adaptTools(options.tools ?? [], options.cwd ?? process.cwd(), options.toolInputRewrites, permissionOptions);
-	if (permissionOptions) {
-		permissionOptions.prepareToolCall = adaptedTools.prepareToolCall;
-		permissionOptions.markPreparedInput = adaptedTools.markPreparedInput;
-	}
-	const agent = new Agent({
-		streamFn: models.streamSimple.bind(models),
-		initialState: {
-			systemPrompt: "pi contract test",
-			model: faux.getModel(),
-			thinkingLevel: "off",
-			tools: adaptedTools.tools,
-		},
-		...(permissionOptions ? { beforeToolCall: createPermissionBeforeToolCall(permissionOptions) } : {}),
+	return createModelPort({
+		...options,
+		model: faux.getModel(),
+		stream: models.streamSimple.bind(models),
+		systemPrompt: "execution contract test",
+		thinkingLevel: "off",
+		cwd: options.cwd ?? process.cwd(),
 	});
-	return new PiAgentPort(agent, options.requestBus, adaptedTools.clearPreparedInputs);
 }

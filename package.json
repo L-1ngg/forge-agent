@@ -16,7 +16,6 @@
     "check": "bun run check:deps && bun run typecheck && bun test"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.84.4",
     "@earendil-works/pi-ai": "0.84.4"
   },
   "devDependencies": {

@@ -27,20 +27,20 @@ export class AgentRunner {
 		const startedAt = Date.now();
 		const messages: SessionMessage[] = [];
 		let ended = false;
-		let aborted = false;
+		let unsuccessful = false;
 		try {
 			for await (const event of this.port.runTurn(input)) {
 				if (event.type === "message_end") {
 					messages.push(event.message);
-					if (event.message.stopReason === "aborted") aborted = true;
+					if (event.message.stopReason === "aborted" || event.message.stopReason === "error") unsuccessful = true;
 				}
-				if (event.type === "turn_end" && event.stopReason === "aborted") aborted = true;
+				if (event.type === "turn_end" && (event.stopReason === "aborted" || event.stopReason === "error")) unsuccessful = true;
 				if (event.type === "agent_end") ended = true;
 				yield event;
 			}
 			if (!ended) throw new Error("Agent event stream ended without agent_end");
 			if (messages[0]?.role !== "user") messages.unshift({ role: "user", content: [{ type: "text", text: input }], timestamp: startedAt });
-			if (!turn.aborted && !aborted && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
+			if (!turn.aborted && !unsuccessful && hasPairedToolCalls(messages)) await this.store.appendTurn(messages);
 		} finally {
 			if (this.activeTurn === turn) this.activeTurn = undefined;
 		}

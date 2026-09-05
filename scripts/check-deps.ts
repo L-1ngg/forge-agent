@@ -24,10 +24,20 @@ function importSpecifiers(source: string): string[] {
 
 export async function findViolations(projectRoot: URL = root): Promise<string[]> {
 	const violations: string[] = [];
+	const rootManifest = new URL("package.json", projectRoot);
+	if (await Bun.file(rootManifest).exists()) {
+		const manifest = JSON.parse(await readFile(rootManifest, "utf8")) as Record<string, unknown>;
+		if (dependencyNames(manifest).includes("@earendil-works/pi-agent-core")) {
+			violations.push("package.json must not depend on pi-agent-core");
+		}
+	}
 	for (const packageName of packageNames) {
 		const packageUrl = new URL(`packages/${packageName}/`, projectRoot);
 		const manifest = JSON.parse(await readFile(new URL("package.json", packageUrl), "utf8")) as Record<string, unknown>;
 		const dependencies = dependencyNames(manifest);
+		if (dependencies.includes("@earendil-works/pi-agent-core")) {
+			violations.push(`packages/${packageName}/package.json must not depend on pi-agent-core`);
+		}
 
 		if (packageName === "core" && dependencies.includes("@myh/tui")) {
 			violations.push("packages/core/package.json must not depend on @myh/tui");
@@ -54,6 +64,9 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				violations.push(`${displayPath} must not call prompt/confirm directly`);
 			}
 			for (const specifier of imports) {
+				if (specifier === "@earendil-works/pi-agent-core" || specifier.startsWith("@earendil-works/pi-agent-core/")) {
+					violations.push(`${displayPath} must not import pi-agent-core`);
+				}
 				if (packageName === "core" && specifier === "@myh/tui") {
 					violations.push(`${displayPath} must not import @myh/tui`);
 				}
@@ -64,7 +77,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (
-					(specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/") || specifier === "@earendil-works/pi-agent-core") &&
+					(specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) &&
 					displayPath !== "packages/core/src/pi-port.ts"
 				) {
 					violations.push(`${displayPath} imports pi agent/model APIs outside packages/core/src/pi-port.ts`);

@@ -131,6 +131,47 @@ test("agent runner persists steering and follow-up user messages in event order"
 	]);
 });
 
+test("agent runner rolls back a failed invocation including completed tool turns", async () => {
+	const cwd = await temporaryDirectory();
+	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
+	let executions = 0;
+	const port = createPiTestPort({
+		tools: [{
+			name: "capture", label: "Capture", description: "Record execution.",
+			parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+			async execute() { executions++; return { ok: true, value: "done" }; },
+		}],
+		responses: [
+			{ text: "baseline" },
+			{ toolCalls: [{ id: "completed", name: "capture", arguments: {} }], stopReason: "tool_use" },
+			{ stopReason: "error", errorMessage: "injected provider failure" },
+			{ text: "recovered" },
+		],
+	});
+	const runner = new AgentRunner(port, store);
+	for await (const _event of runner.runTurn("keep")) {}
+	const before = store.messages();
+	const usageBefore = port.getUsage?.()?.contextTokens;
+	for await (const _event of runner.runTurn("discard")) {}
+	expect(executions).toBe(1);
+	expect(store.messages()).toEqual(before);
+	expect(port.getUsage?.()?.contextTokens).toBe(usageBefore);
+	expect((await SessionStore.open(store.path, cwd)).messages()).toEqual(before);
+	for await (const _event of runner.runTurn("retry")) {}
+	expect(store.messages().filter((message) => message.role === "user").map((message) => message.content)).toEqual([
+		[{ type: "text", text: "keep" }], [{ type: "text", text: "retry" }],
+	]);
+});
+
+test("agent runner retains deferred messages without pending tool calls", async () => {
+	const cwd = await temporaryDirectory();
+	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
+	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "pending remotely", stopReason: "deferred" }] }), store);
+	for await (const _event of runner.runTurn("defer")) {}
+	expect(store.messages()).toHaveLength(2);
+	expect(store.messages().at(-1)?.stopReason).toBe("deferred");
+});
+
 describe("config", () => {
 	test("merges global, project, and environment layers", async () => {
 		const root = await temporaryDirectory();
