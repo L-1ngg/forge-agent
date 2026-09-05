@@ -1,4 +1,4 @@
-import { permissionScopeForToolCall, serializePermissionArguments, type PermissionScope, type ToolCallBlock } from "@myh/protocol";
+import { permissionScopeForToolCall, serializePermissionArguments, type PermissionScope, type ToolCallBlock } from "@forge-agent/protocol";
 
 export type PermissionRuleEffect = "allow" | "deny";
 

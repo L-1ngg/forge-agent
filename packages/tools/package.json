@@ -1,5 +1,5 @@
 {
-  "name": "@myh/tools",
+  "name": "@forge-agent/tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@myh/protocol": "workspace:*"
+    "@forge-agent/protocol": "workspace:*"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",

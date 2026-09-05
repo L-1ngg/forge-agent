@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { block } from "@myh/protocol";
+import { block } from "@forge-agent/protocol";
 import {
 	ENTRY_LEFT_PADDING,
 	ENTRY_RAIL_WIDTH,

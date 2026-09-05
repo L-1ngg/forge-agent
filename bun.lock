@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "my-coding-harness",
+      "name": "forge-agent",
       "dependencies": {
         "@earendil-works/pi-ai": "0.84.4",
       },
@@ -14,44 +14,44 @@
       },
     },
     "packages/cli": {
-      "name": "@myh/cli",
+      "name": "@forge-agent/cli",
       "version": "0.1.0",
       "bin": {
-        "myh": "./src/main.ts",
+        "forge-agent": "./src/main.ts",
       },
       "dependencies": {
-        "@myh/core": "workspace:*",
-        "@myh/protocol": "workspace:*",
-        "@myh/tools": "workspace:*",
-        "@myh/tui": "workspace:*",
+        "@forge-agent/core": "workspace:*",
+        "@forge-agent/protocol": "workspace:*",
+        "@forge-agent/tools": "workspace:*",
+        "@forge-agent/tui": "workspace:*",
       },
     },
     "packages/core": {
-      "name": "@myh/core",
+      "name": "@forge-agent/core",
       "version": "0.1.0",
       "dependencies": {
         "@earendil-works/pi-ai": "0.84.4",
-        "@myh/protocol": "workspace:*",
-        "@myh/tools": "workspace:*",
+        "@forge-agent/protocol": "workspace:*",
+        "@forge-agent/tools": "workspace:*",
         "diff": "8.0.4",
       },
     },
     "packages/protocol": {
-      "name": "@myh/protocol",
+      "name": "@forge-agent/protocol",
       "version": "0.1.0",
     },
     "packages/tools": {
-      "name": "@myh/tools",
+      "name": "@forge-agent/tools",
       "version": "0.1.0",
       "dependencies": {
-        "@myh/protocol": "workspace:*",
+        "@forge-agent/protocol": "workspace:*",
       },
     },
     "packages/tui": {
-      "name": "@myh/tui",
+      "name": "@forge-agent/tui",
       "version": "0.1.0",
       "dependencies": {
-        "@myh/protocol": "workspace:*",
+        "@forge-agent/protocol": "workspace:*",
       },
     },
   },
@@ -115,17 +115,17 @@
 
     "@earendil-works/pi-telemetry": ["@earendil-works/pi-telemetry@0.84.4", "", {}, "sha512-8e2CuxM+ht+hedQXTZmi5JVl6/xDK9RpSDL2+MbITevKYQhMZ/z6lJOTFgox3HQyGxO8mOZEtYGVeQNaD4OzqA=="],
 
+    "@forge-agent/cli": ["@forge-agent/cli@workspace:packages/cli"],
+
+    "@forge-agent/core": ["@forge-agent/core@workspace:packages/core"],
+
+    "@forge-agent/protocol": ["@forge-agent/protocol@workspace:packages/protocol"],
+
+    "@forge-agent/tools": ["@forge-agent/tools@workspace:packages/tools"],
+
+    "@forge-agent/tui": ["@forge-agent/tui@workspace:packages/tui"],
+
     "@google/genai": ["@google/genai@1.52.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q=="],
-
-    "@myh/cli": ["@myh/cli@workspace:packages/cli"],
-
-    "@myh/core": ["@myh/core@workspace:packages/core"],
-
-    "@myh/protocol": ["@myh/protocol@workspace:packages/protocol"],
-
-    "@myh/tools": ["@myh/tools@workspace:packages/tools"],
-
-    "@myh/tui": ["@myh/tui@workspace:packages/tui"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 

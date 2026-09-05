@@ -1,16 +1,16 @@
 {
-  "name": "@myh/cli",
+  "name": "@forge-agent/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "myh": "./src/main.ts"
+    "forge-agent": "./src/main.ts"
   },
   "dependencies": {
-    "@myh/core": "workspace:*",
-    "@myh/protocol": "workspace:*",
-    "@myh/tools": "workspace:*",
-    "@myh/tui": "workspace:*"
+    "@forge-agent/core": "workspace:*",
+    "@forge-agent/protocol": "workspace:*",
+    "@forge-agent/tools": "workspace:*",
+    "@forge-agent/tui": "workspace:*"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",

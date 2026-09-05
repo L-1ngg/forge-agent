@@ -1,5 +1,5 @@
-import { response, type RequestEnvelopeFor, type RequestKind, type ResponseEnvelope, type ResponseResultByKind, type SessionEvent } from "@myh/protocol";
-import type { AgentPort, RequestBus } from "@myh/core";
+import { response, type RequestEnvelopeFor, type RequestKind, type ResponseEnvelope, type ResponseResultByKind, type SessionEvent } from "@forge-agent/protocol";
+import type { AgentPort, RequestBus } from "@forge-agent/core";
 
 export const HEADLESS_REQUEST_EXIT_CODES: Record<RequestKind, number> = {
 	permission: 20,

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createPiPort } from "../src/pi-port.ts";
-import type { SessionMessage } from "@myh/protocol";
+import type { SessionMessage } from "@forge-agent/protocol";
 
 for (const terminal of ["completed", "incomplete", "failed", "missing"] as const) {
 	test(`Responses ${terminal} preserves stop semantics without waiting for HTTP EOF`, async () => {

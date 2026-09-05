@@ -6,7 +6,7 @@ import {
 	type RequestPayloadByKind,
 	type ResponseEnvelope,
 	type ResponseResultByKind,
-} from "@myh/protocol";
+} from "@forge-agent/protocol";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 

@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentRunner, createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
 import { MemorySessionStorage, type SessionStorage } from "../src/session-storage.ts";
-import type { SessionMessage } from "@myh/protocol";
+import type { SessionMessage } from "@forge-agent/protocol";
 
 const temporaryDirectories: string[] = [];
 async function temporaryDirectory(): Promise<string> {
-	const path = await mkdtemp(join(tmpdir(), "myh-core-"));
+	const path = await mkdtemp(join(tmpdir(), "forge-agent-core-"));
 	temporaryDirectories.push(path);
 	return path;
 }
@@ -236,15 +236,26 @@ test("agent runner does not commit when the consumer closes at agent_end", async
 });
 
 describe("config", () => {
+	test("uses the XDG Forge Agent directory and ignores legacy config and variables", async () => {
+		const root = await temporaryDirectory();
+		const xdg = join(root, "xdg");
+		await mkdir(join(xdg, "forge-agent"), { recursive: true });
+		await mkdir(join(root, ".myh"), { recursive: true });
+		await writeFile(join(xdg, "forge-agent", "config.json"), JSON.stringify({ provider: "new-provider", model: "new-model" }));
+		await writeFile(join(root, ".myh", "config.json"), JSON.stringify({ provider: "legacy-project" }));
+		const config = await loadConfig({ cwd: root, home: root, env: { XDG_CONFIG_HOME: xdg, MYH_PROVIDER: "legacy-env" } });
+		expect(config).toMatchObject({ provider: "new-provider", model: "new-model" });
+	});
+
 	test("merges global, project, and environment layers", async () => {
 		const root = await temporaryDirectory();
 		const home = join(root, "home");
 		const cwd = join(root, "project");
-		await mkdir(join(home, ".config", "myh"), { recursive: true });
-		await mkdir(join(cwd, ".myh"), { recursive: true });
-		await writeFile(join(home, ".config", "myh", "config.json"), JSON.stringify({ provider: "global", model: "global-model", ui: { host: "alt" } }));
-		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } }));
-		const config = await loadConfig({ cwd, home, env: { MYH_PROVIDER: "env" } });
+		await mkdir(join(home, ".config", "forge-agent"), { recursive: true });
+		await mkdir(join(cwd, ".forge-agent"), { recursive: true });
+		await writeFile(join(home, ".config", "forge-agent", "config.json"), JSON.stringify({ provider: "global", model: "global-model", ui: { host: "alt" } }));
+		await writeFile(join(cwd, ".forge-agent", "config.json"), JSON.stringify({ model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } }));
+		const config = await loadConfig({ cwd, home, env: { FORGE_AGENT_PROVIDER: "env" } });
 		expect(config).toMatchObject({ provider: "env", model: "project-model", baseUrl: "https://proxy.example/v1", ui: { host: "main" } });
 	});
 
@@ -252,8 +263,8 @@ describe("config", () => {
 		const root = await temporaryDirectory();
 		const home = join(root, "home");
 		const cwd = join(root, "project");
-		await mkdir(join(cwd, ".myh"), { recursive: true });
-		await writeFile(join(cwd, ".myh", "config.json"), JSON.stringify({ ui: { host: "invalid" } }));
+		await mkdir(join(cwd, ".forge-agent"), { recursive: true });
+		await writeFile(join(cwd, ".forge-agent", "config.json"), JSON.stringify({ ui: { host: "invalid" } }));
 		expect((await loadConfig({ cwd, home, env: {} })).ui.host).toBe("alt");
 	});
 
@@ -264,8 +275,8 @@ describe("config", () => {
 
 	test("rejects misspelled config keys without exposing their values", async () => {
 		const root = await temporaryDirectory();
-		const path = join(root, ".myh", "config.json");
-		await mkdir(join(root, ".myh"), { recursive: true });
+		const path = join(root, ".forge-agent", "config.json");
+		await mkdir(join(root, ".forge-agent"), { recursive: true });
 		await writeFile(path, JSON.stringify({ provider: "xai", api_Key: "private-test-secret" }));
 		let failure: unknown;
 		try {
@@ -283,9 +294,9 @@ describe("config", () => {
 
 	test("loads the configured API key and allows an environment override", async () => {
 		const root = await temporaryDirectory();
-		await mkdir(join(root, ".myh"), { recursive: true });
-		await writeFile(join(root, ".myh", "config.json"), JSON.stringify({ provider: "xai", apiKey: "project-test-key" }));
+		await mkdir(join(root, ".forge-agent"), { recursive: true });
+		await writeFile(join(root, ".forge-agent", "config.json"), JSON.stringify({ provider: "xai", apiKey: "project-test-key" }));
 		expect((await loadConfig({ cwd: root, home: root, env: {} })).apiKey).toBe("project-test-key");
-		expect((await loadConfig({ cwd: root, home: root, env: { MYH_API_KEY: "env-test-key" } })).apiKey).toBe("env-test-key");
+		expect((await loadConfig({ cwd: root, home: root, env: { FORGE_AGENT_API_KEY: "env-test-key" } })).apiKey).toBe("env-test-key");
 	});
 });

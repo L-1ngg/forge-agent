@@ -36,12 +36,12 @@ export async function runEmbeddedAgent(options: Pick<AgentOptions, "provider" | 
 }
 
 if (import.meta.main) {
-	const provider = process.env.MYH_PROVIDER;
-	const model = process.env.MYH_MODEL;
-	if (!provider || !model) throw new Error("Set MYH_PROVIDER and MYH_MODEL explicitly");
+	const provider = process.env.FORGE_AGENT_PROVIDER;
+	const model = process.env.FORGE_AGENT_MODEL;
+	if (!provider || !model) throw new Error("Set FORGE_AGENT_PROVIDER and FORGE_AGENT_MODEL explicitly");
 	await runEmbeddedAgent({
 		provider, model,
-		...(process.env.MYH_API_KEY ? { apiKey: process.env.MYH_API_KEY } : {}),
-		...(process.env.MYH_BASE_URL ? { baseUrl: process.env.MYH_BASE_URL } : {}),
+		...(process.env.FORGE_AGENT_API_KEY ? { apiKey: process.env.FORGE_AGENT_API_KEY } : {}),
+		...(process.env.FORGE_AGENT_BASE_URL ? { baseUrl: process.env.FORGE_AGENT_BASE_URL } : {}),
 	});
 }

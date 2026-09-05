@@ -1,16 +1,16 @@
 # SDK 接入
 
-> 范围:仓库内 Bun SDK,入口 `@myh/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
+> 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
 ## 创建实例
 
 ```ts
-import { createAgent } from "@myh/core/sdk";
+import { createAgent } from "@forge-agent/core/sdk";
 
 const agent = await createAgent({
   provider: "xai",
   model: "grok-4.6",
-  ...(process.env.MYH_API_KEY ? { apiKey: process.env.MYH_API_KEY } : {}),
+  ...(process.env.FORGE_AGENT_API_KEY ? { apiKey: process.env.FORGE_AGENT_API_KEY } : {}),
   systemPrompt: "Answer the user's questions concisely.",
   cwd: process.cwd(),
 });
@@ -23,15 +23,15 @@ try {
 }
 ```
 
-宿主显式选择配置来源。SDK 不加载 `.myh/config.json`,也不展开 `$ENV_VAR` 或执行 `!command`;传入的 apiKey 是已解析凭据。未传 apiKey 时,模型适配层仍可能使用 provider 原生环境凭据。SDK 不装配 coding 工具或提示词,CLI 自行装配现有能力。
+宿主显式选择配置来源。SDK 不加载 `.forge-agent/config.json`,也不展开 `$ENV_VAR` 或执行 `!command`;传入的 apiKey 是已解析凭据。未传 apiKey 时,模型适配层仍可能使用 provider 原生环境凭据。SDK 不装配 coding 工具或提示词,CLI 自行装配现有能力。
 
-无文件副作用的自定义工具示例见 `examples/embedded-agent.ts`。根目录示例直接引用 SDK 入口文件,workspace 宿主使用 `@myh/core/sdk` 子路径:
+无文件副作用的自定义工具示例见 `examples/embedded-agent.ts`。根目录示例直接引用 SDK 入口文件,workspace 宿主使用 `@forge-agent/core/sdk` 子路径:
 
 ```bash
-MYH_PROVIDER=xai MYH_MODEL=grok-4.6 MYH_API_KEY=secret bun examples/embedded-agent.ts
+FORGE_AGENT_PROVIDER=xai FORGE_AGENT_MODEL=grok-4.6 FORGE_AGENT_API_KEY=secret bun examples/embedded-agent.ts
 ```
 
-代理地址由示例宿主读取 `MYH_BASE_URL` 后传入,不是 SDK 自动读取。
+代理地址由示例宿主读取 `FORGE_AGENT_BASE_URL` 后传入,不是 SDK 自动读取。
 
 ## 存储
 

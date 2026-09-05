@@ -1,4 +1,4 @@
-import type { ToolCallBlock } from "@myh/protocol";
+import type { ToolCallBlock } from "@forge-agent/protocol";
 
 export interface DangerMatch {
 	command: "rm" | "chmod" | "kill" | "git push";

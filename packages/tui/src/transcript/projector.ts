@@ -5,7 +5,7 @@ import {
 	type SessionContentBlock,
 	type SessionEvent,
 	type SessionMessage,
-} from "@myh/protocol";
+} from "@forge-agent/protocol";
 import type { TranscriptEntry } from "./types.ts";
 import { messageEntryId, thinkingEntryId, toolEntryId } from "./identity.ts";
 

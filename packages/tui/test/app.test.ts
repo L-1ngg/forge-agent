@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { block, request, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope, type SessionEvent } from "@myh/protocol";
+import { block, request, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope, type SessionEvent } from "@forge-agent/protocol";
 import { App, computeScreenLayout, frameToText, type AppCompletionSource, type AppPort, type AppRequestBus } from "../src/index.ts";
 import { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } from "../src/ansi.ts";
 import type { HostInput, HostOutput } from "../src/host.ts";

@@ -27,7 +27,7 @@ created: 2026-09-05
 
 ### 1. 宿主接入层
 
-路径:新增 `packages/core/src/agent.ts`,显式导出 `@myh/core/sdk`,不立即删除现有仓库内部导出。
+路径:新增 `packages/core/src/agent.ts`,当前导出为 `@forge-agent/core/sdk`(ADR-011 更名),保留仓库内部导出。
 
 接口名称与语义:
 
@@ -69,7 +69,7 @@ created: 2026-09-05
 
 CLI 保留参数解析、配置/secret 加载、JSONL 选择与 UI 装配,改用 createAgent;在 finally 中 await dispose。CLI 与 SDK 的差异仅为宿主装配,不是执行流程。测试注入点保持内部使用,不为了 fake provider 扩大公共模型接口。
 
-示例使用自定义无副作用工具与内存存储,不导入 CLI/TUI、不读取 .myh 配置、不创建会话文件。明确 Bun 支持范围;对外 npm 发布与 Node.js 兼容暂不承诺。
+示例使用自定义无副作用工具与内存存储,不导入 CLI/TUI、不读取项目配置、不创建会话文件。明确 Bun 支持范围;对外 npm 发布与 Node.js 兼容暂不承诺。
 
 ## Batches
 

@@ -7,7 +7,7 @@ import { bashTool, editTool, readTool, writeTool } from "../src/index.ts";
 const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
-	const path = await mkdtemp(join(tmpdir(), "myh-tools-"));
+	const path = await mkdtemp(join(tmpdir(), "forge-agent-tools-"));
 	temporaryDirectories.push(path);
 	return path;
 }

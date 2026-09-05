@@ -1,4 +1,4 @@
-import type { RequestKind } from "@myh/protocol";
+import type { RequestKind } from "@forge-agent/protocol";
 
 export type KeyOwner = "card" | "scrollback" | "composer" | "global";
 export type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewind" | "noop";

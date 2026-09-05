@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { homedir } from "node:os";
 import { cwd } from "node:process";
-import { createAgent, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@myh/core";
-import { builtinTools } from "@myh/tools";
-import { App, scanFiles } from "@myh/tui";
+import { createAgent, createInputCompletionSource, createPiPort, loadConfig, MemoryPermissionStore, RequestBus, resolveSecret, SessionStore, type AgentPort, type PermissionContext, type PiPortOptions } from "@forge-agent/core";
+import { builtinTools } from "@forge-agent/tools";
+import { App, scanFiles } from "@forge-agent/tui";
 import { jsonError, runHeadless } from "./headless.ts";
 
 interface Args {
@@ -36,7 +36,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function usage(): string {
-	return "myh [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--session PATH]";
+	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--session PATH]";
 }
 
 type PortFactory = (options: PiPortOptions) => Promise<AgentPort>;
@@ -66,12 +66,12 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		const provider = args.provider ?? config.provider;
 		const model = args.model ?? config.model;
 		if (!provider || !model) {
-			const message = "Provider and model are required; set MYH_PROVIDER/MYH_MODEL or pass --provider/--model";
+			const message = "Provider and model are required; set FORGE_AGENT_PROVIDER/FORGE_AGENT_MODEL or pass --provider/--model";
 			if (args.json) console.log(jsonError(message));
 			else console.error(message);
 			return 2;
 		}
-		const sessionPath = args.session ?? config.sessionPath ?? `${workingDirectory}/.myh/session.jsonl`;
+		const sessionPath = args.session ?? config.sessionPath ?? `${workingDirectory}/.forge-agent/session.jsonl`;
 		const store = await SessionStore.open(sessionPath, workingDirectory);
 
 		// Headless runs retain the bounded default; interactive users answer on their

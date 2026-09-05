@@ -59,8 +59,8 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 export async function loadConfig(options: LoadConfigOptions): Promise<HarnessConfig> {
 	const env = options.env ?? process.env;
 	const home = options.home ?? homedir();
-	const globalPath = join(env.XDG_CONFIG_HOME ?? join(home, ".config"), "myh", "config.json");
-	const projectPath = join(options.cwd, ".myh", "config.json");
+	const globalPath = join(env.XDG_CONFIG_HOME ?? join(home, ".config"), "forge-agent", "config.json");
+	const projectPath = join(options.cwd, ".forge-agent", "config.json");
 	const globalConfig = await readConfig(globalPath);
 	const projectConfig = await readConfig(projectPath);
 	const mergedUi = {
@@ -74,9 +74,9 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 		...globalConfig,
 		...projectConfig,
 		ui: mergedUi,
-		...(env.MYH_PROVIDER ? { provider: env.MYH_PROVIDER } : {}),
-		...(env.MYH_MODEL ? { model: env.MYH_MODEL } : {}),
-		...(env.MYH_API_KEY ? { apiKey: env.MYH_API_KEY } : {}),
+		...(env.FORGE_AGENT_PROVIDER ? { provider: env.FORGE_AGENT_PROVIDER } : {}),
+		...(env.FORGE_AGENT_MODEL ? { model: env.FORGE_AGENT_MODEL } : {}),
+		...(env.FORGE_AGENT_API_KEY ? { apiKey: env.FORGE_AGENT_API_KEY } : {}),
 	};
 }
 

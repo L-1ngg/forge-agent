@@ -13,7 +13,7 @@ export function paintWelcome(frame: TerminalFrame, top: number, height: number, 
 	if (height <= 0) return;
 	const cwd = input.cwd.startsWith(input.homeDir) ? `~${input.cwd.slice(input.homeDir.length)}` : input.cwd;
 	const lines = [
-		"myh",
+		"Forge Agent",
 		"Type a message to start. / for commands, @ for files.",
 		input.model ? `model ${input.model} · ${cwd}` : cwd,
 	];

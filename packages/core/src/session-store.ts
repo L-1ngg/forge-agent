@@ -1,4 +1,4 @@
-import type { SessionMessage } from "@myh/protocol";
+import type { SessionMessage } from "@forge-agent/protocol";
 import type { SessionStorage } from "./session-storage.ts";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";

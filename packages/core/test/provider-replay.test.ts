@@ -25,7 +25,7 @@ test("provider thinking signatures survive session storage and replay over HTTP"
 			return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), { headers: { "content-type": "text/event-stream" } });
 		},
 	});
-	const directory = await mkdtemp(join(tmpdir(), "myh-replay-"));
+	const directory = await mkdtemp(join(tmpdir(), "forge-agent-replay-"));
 	try {
 		const path = join(directory, "session.jsonl");
 		const store = await SessionStore.open(path, directory);

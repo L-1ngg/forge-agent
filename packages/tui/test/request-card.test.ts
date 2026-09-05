@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { request, type RequestEnvelopeUnion, type RequestKind } from "@myh/protocol";
+import { request, type RequestEnvelopeUnion, type RequestKind } from "@forge-agent/protocol";
 import {
 	RequestCard,
 	createFrame,

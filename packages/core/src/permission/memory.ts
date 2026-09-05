@@ -1,4 +1,4 @@
-import type { PermissionScope, ToolCallBlock } from "@myh/protocol";
+import type { PermissionScope, ToolCallBlock } from "@forge-agent/protocol";
 import { matchesPermissionRule, type PermissionRule, type PermissionRuleMatch, permissionScope } from "./rules.ts";
 
 export interface RememberedPermission extends PermissionScope {

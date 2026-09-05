@@ -1,4 +1,4 @@
-import type { InputCompletionItem, InputCompletionSuggestions } from "@myh/protocol";
+import type { InputCompletionItem, InputCompletionSuggestions } from "@forge-agent/protocol";
 import { activeMention } from "./mention.ts";
 import { slashCommandPrefix } from "./slash.ts";
 

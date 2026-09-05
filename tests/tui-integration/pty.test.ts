@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 test("PTY: paste, permission park, resize, execute and Ctrl+C restore the terminal", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "myh-pty-"));
+	const directory = await mkdtemp(join(tmpdir(), "forge-agent-pty-"));
 	await writeFile(join(directory, "file.txt"), "before");
 	let output = "";
 	const decoder = new TextDecoder();
 	const terminal = new Bun.Terminal({ cols: 80, rows: 24, data(_terminal, data) { output += decoder.decode(data, { stream: true }); } });
-	const child = Bun.spawn(["bun", "tests/tui-integration/pty.fixture.ts"], { terminal, env: { ...process.env, MYH_PTY_DIRECTORY: directory } });
+	const child = Bun.spawn(["bun", "tests/tui-integration/pty.fixture.ts"], { terminal, env: { ...process.env, FORGE_AGENT_PTY_DIRECTORY: directory } });
 	const waitFor = async (condition: () => boolean | Promise<boolean>) => {
 		for (let attempt = 0; attempt < 500; attempt++) {
 			if (await condition()) return;

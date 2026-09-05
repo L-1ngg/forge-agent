@@ -4,9 +4,9 @@ import {
 	headlessRequestDecision,
 	runHeadless,
 } from "../src/headless.ts";
-import { RequestBus } from "@myh/core";
-import type { RequestEnvelopeFor, RequestKind } from "@myh/protocol";
-import { block } from "@myh/protocol";
+import { RequestBus } from "@forge-agent/core";
+import type { RequestEnvelopeFor, RequestKind } from "@forge-agent/protocol";
+import { block } from "@forge-agent/protocol";
 
 const requests: { [K in RequestKind]: RequestEnvelopeFor<K> } = {
 	permission: {

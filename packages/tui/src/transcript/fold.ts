@@ -1,4 +1,4 @@
-import type { BlockDisplayMode, BlockFoldConfig, BlockMetadata } from "@myh/protocol";
+import type { BlockDisplayMode, BlockFoldConfig, BlockMetadata } from "@forge-agent/protocol";
 
 export interface FoldStateOptions {
 	defaultDisplayMode?: BlockDisplayMode | undefined;

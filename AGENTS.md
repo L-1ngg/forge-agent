@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-通用单 Agent 项目(TypeScript + Bun),执行内核为自研 `ExecutionCore`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@myh/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#架构)。
+通用单 Agent 项目(TypeScript + Bun),执行内核为自研 `ExecutionCore`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#架构)。
 
 ## 真相源层级
 

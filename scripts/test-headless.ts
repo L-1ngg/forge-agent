@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { main } from "../packages/cli/src/main.ts";
 import { createPiTestPort } from "../packages/core/src/pi-port.ts";
 
-const directory = await mkdtemp(join(tmpdir(), "myh-headless-"));
+const directory = await mkdtemp(join(tmpdir(), "forge-agent-headless-"));
 try {
 	const code = await main(
 		["-p", "phase-1 smoke", "--json", "--provider", "faux", "--model", "faux-1", "--session", join(directory, "session.jsonl")],

@@ -1,6 +1,6 @@
-import type { SlashCommandInvocation, SlashCommandPrefix } from "@myh/protocol";
+import type { SlashCommandInvocation, SlashCommandPrefix } from "@forge-agent/protocol";
 
-export type { SlashCommandInvocation, SlashCommandPrefix } from "@myh/protocol";
+export type { SlashCommandInvocation, SlashCommandPrefix } from "@forge-agent/protocol";
 
 /** Parse a command only when it starts the input (after optional whitespace). */
 export function parseSlashCommand(input: string): SlashCommandInvocation | undefined {

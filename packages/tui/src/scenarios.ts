@@ -1,4 +1,4 @@
-import { block } from "@myh/protocol";
+import { block } from "@forge-agent/protocol";
 import { createFrame, dumpFrame, type FrameDump } from "./frame.ts";
 import { createTheme } from "./theme.ts";
 import { paintEntry, entryHeight, computeEntryLayout } from "./transcript/entry-shell.ts";

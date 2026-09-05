@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { block } from "@myh/protocol";
+import { block } from "@forge-agent/protocol";
 import {
 	compareDumps,
 	computeEntryLayout,

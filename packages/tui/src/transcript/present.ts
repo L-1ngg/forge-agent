@@ -1,4 +1,4 @@
-import type { AnyBlockEnvelope, BlockDisplayMode, EditBlockData, ExecuteBlockData, ThinkingBlockData } from "@myh/protocol";
+import type { AnyBlockEnvelope, BlockDisplayMode, EditBlockData, ExecuteBlockData, ThinkingBlockData } from "@forge-agent/protocol";
 import { defaultStyle, type CellStyle, type TerminalColor } from "../frame.ts";
 import type { Theme } from "../theme.ts";
 import { graphemes, graphemeWidth, visibleWidth, wrapText } from "../width.ts";

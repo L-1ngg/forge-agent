@@ -1,4 +1,4 @@
-import type { SessionMessage } from "@myh/protocol";
+import type { SessionMessage } from "@forge-agent/protocol";
 
 export interface SessionStorage {
 	load(): Promise<SessionMessage[]>;

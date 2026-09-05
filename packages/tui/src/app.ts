@@ -1,4 +1,4 @@
-import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent } from "@myh/protocol";
+import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent } from "@forge-agent/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
 import { wrapText } from "./width.ts";
@@ -45,7 +45,7 @@ import { paintPicker, pickerHeight, type PickerState } from "./picker.ts";
 
 export type AppHostMode = "main" | "alt";
 
-/** Structural view of the core request bus; tui may only import @myh/protocol. */
+/** Structural view of the core request bus; tui may only import @forge-agent/protocol. */
 export interface AppRequestBus {
 	requests(): AsyncIterable<RequestEnvelopeUnion>;
 	respond(response: unknown): boolean;

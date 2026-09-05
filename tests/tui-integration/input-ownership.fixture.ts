@@ -16,7 +16,7 @@ const agent = await createAgent({
 			if (++commits === 1) {
 				process.send?.({ type: "saving" });
 				await commitGate;
-				if (process.env.MYH_PTY_FAIL_COMMIT === "1") throw new Error("injected disk failure");
+				if (process.env.FORGE_AGENT_PTY_FAIL_COMMIT === "1") throw new Error("injected disk failure");
 			}
 			await storage.appendTurn(messages);
 		},

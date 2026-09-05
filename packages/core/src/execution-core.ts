@@ -1,4 +1,4 @@
-import type { SessionEvent, SessionMessage, ToolCallBlock } from "@myh/protocol";
+import type { SessionEvent, SessionMessage, ToolCallBlock } from "@forge-agent/protocol";
 import type { AgentPort, InputAcceptance } from "./agent-runner.ts";
 import { UsageTracker, type UsageTruthPoint } from "./usage.ts";
 

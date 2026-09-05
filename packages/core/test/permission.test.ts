@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { createPermissionBeforeToolCall, MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
 import { RequestBus } from "../src/request-bus.ts";
-import { permissionScopeForToolCall, response } from "@myh/protocol";
-import type { ToolCallBlock } from "@myh/protocol";
+import { permissionScopeForToolCall, response } from "@forge-agent/protocol";
+import type { ToolCallBlock } from "@forge-agent/protocol";
 
 const readCall: ToolCallBlock = {
 	type: "tool_call",

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { scanFiles } from "../src/index.ts";
 
 test("scanFiles scans synchronously and filters by path prefix", async () => {
-	const root = await mkdtemp(join(tmpdir(), "myh-scan-"));
+	const root = await mkdtemp(join(tmpdir(), "forge-agent-scan-"));
 	try {
 		await mkdir(join(root, "src"), { recursive: true });
 		await mkdir(join(root, "src2"), { recursive: true });

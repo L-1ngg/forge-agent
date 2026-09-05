@@ -3,7 +3,7 @@ import fc from "fast-check";
 import { createAgent, type CreateAgentOptions } from "../src/agent.ts";
 import { createPiTestPort } from "../src/pi-port.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
-import { response } from "@myh/protocol";
+import { response } from "@forge-agent/protocol";
 
 const options: CreateAgentOptions = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };
 

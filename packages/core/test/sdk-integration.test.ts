@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createAgent, MemorySessionStorage, type Agent } from "@myh/core/sdk";
-import { response, type SessionEvent } from "@myh/protocol";
+import { createAgent, MemorySessionStorage, type Agent } from "@forge-agent/core/sdk";
+import { response, type SessionEvent } from "@forge-agent/protocol";
 
 interface ModelRequest {
 	system: unknown;
@@ -24,7 +24,7 @@ function modelResponse(toolCall: boolean): Response {
 }
 
 test("public SDK drives isolated HTTP tool loops without implicit config or file storage", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "myh-sdk-http-"));
+	const directory = await mkdtemp(join(tmpdir(), "forge-agent-sdk-http-"));
 	const requests: ModelRequest[] = [];
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 		const body = await request.json() as ModelRequest;
@@ -33,8 +33,8 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 	} });
 	const agents: Agent[] = [];
 	try {
-		await mkdir(join(directory, ".myh"));
-		await writeFile(join(directory, ".myh/config.json"), "invalid JSON that must never be loaded");
+		await mkdir(join(directory, ".forge-agent"));
+		await writeFile(join(directory, ".forge-agent/config.json"), "invalid JSON that must never be loaded");
 		const executed: string[] = [];
 		const firstStorage = new MemorySessionStorage();
 		const secondStorage = new MemorySessionStorage();
@@ -73,8 +73,8 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 		expect(requests).toHaveLength(3);
 		for (const request of requests) expect(request.tools.map((tool) => tool.name)).toEqual(["capture"]);
 		expect(JSON.stringify(requests[0]!.system)).toContain("host-");
-		expect(await readdir(directory)).toEqual([".myh"]);
-		expect(await readdir(join(directory, ".myh"))).toEqual(["config.json"]);
+		expect(await readdir(directory)).toEqual([".forge-agent"]);
+		expect(await readdir(join(directory, ".forge-agent"))).toEqual(["config.json"]);
 	} finally {
 		for (const agent of agents) await agent.dispose();
 		server.stop(true);

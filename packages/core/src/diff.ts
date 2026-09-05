@@ -1,4 +1,4 @@
-import type { DiffHunk, DiffLine, EditBlockData } from "@myh/protocol";
+import type { DiffHunk, DiffLine, EditBlockData } from "@forge-agent/protocol";
 import { structuredPatch } from "diff";
 
 export interface EditDiffOptions {

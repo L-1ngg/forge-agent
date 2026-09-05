@@ -272,7 +272,7 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 });
 
 test("concurrent owned instances isolate permissions, tools, cancellation, and stored turns", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "myh-owned-isolation-"));
+	const directory = await mkdtemp(join(tmpdir(), "forge-agent-owned-isolation-"));
 	const firstBus = new RequestBus({ idPrefix: "first", timeoutMs: 1_000 });
 	const secondBus = new RequestBus({ idPrefix: "second", timeoutMs: 1_000 });
 	try {

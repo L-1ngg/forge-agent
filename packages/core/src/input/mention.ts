@@ -1,6 +1,6 @@
-import type { MentionToken } from "@myh/protocol";
+import type { MentionToken } from "@forge-agent/protocol";
 
-export type { MentionToken } from "@myh/protocol";
+export type { MentionToken } from "@forge-agent/protocol";
 
 /** Parse human input mentions; routing and execution remain outside this parser. */
 export function parseMentions(input: string): MentionToken[] {

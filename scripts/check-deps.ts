@@ -39,14 +39,14 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			violations.push(`packages/${packageName}/package.json must not depend on pi-agent-core`);
 		}
 
-		if (packageName === "core" && dependencies.includes("@myh/tui")) {
-			violations.push("packages/core/package.json must not depend on @myh/tui");
+		if (packageName === "core" && dependencies.includes("@forge-agent/tui")) {
+			violations.push("packages/core/package.json must not depend on @forge-agent/tui");
 		}
-		if (packageName === "tools" && dependencies.includes("@myh/core")) {
-			violations.push("packages/tools/package.json must not depend on @myh/core");
+		if (packageName === "tools" && dependencies.includes("@forge-agent/core")) {
+			violations.push("packages/tools/package.json must not depend on @forge-agent/core");
 		}
 		if (packageName === "tui") {
-			const allowed = new Set(["@myh/protocol"]);
+			const allowed = new Set(["@forge-agent/protocol"]);
 			for (const dependency of dependencies) {
 				if (!allowed.has(dependency)) violations.push(`packages/tui/package.json has forbidden dependency ${dependency}`);
 			}
@@ -67,13 +67,13 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (specifier === "@earendil-works/pi-agent-core" || specifier.startsWith("@earendil-works/pi-agent-core/")) {
 					violations.push(`${displayPath} must not import pi-agent-core`);
 				}
-				if (packageName === "core" && specifier === "@myh/tui") {
-					violations.push(`${displayPath} must not import @myh/tui`);
+				if (packageName === "core" && specifier === "@forge-agent/tui") {
+					violations.push(`${displayPath} must not import @forge-agent/tui`);
 				}
-				if (packageName === "tools" && specifier === "@myh/core") {
-					violations.push(`${displayPath} must not import @myh/core`);
+				if (packageName === "tools" && specifier === "@forge-agent/core") {
+					violations.push(`${displayPath} must not import @forge-agent/core`);
 				}
-				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@myh/protocol") {
+				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol") {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (

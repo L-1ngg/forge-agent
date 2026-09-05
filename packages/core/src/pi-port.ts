@@ -17,8 +17,8 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type ToolCallBlock } from "@myh/protocol";
-import { type HarnessTool, type ToolContext, type ToolInputRewrite } from "@myh/tools";
+import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type ToolCallBlock } from "@forge-agent/protocol";
+import { type HarnessTool, type ToolContext, type ToolInputRewrite } from "@forge-agent/tools";
 import { createEditBlockData } from "./diff.ts";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
 import type { AgentPort } from "./agent-runner.ts";
@@ -271,7 +271,7 @@ function objectValue(value: unknown): Record<string, unknown> {
 	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
-/** myh tools throw structured errors; show the human message instead of raw JSON. */
+/** forge-agent tools throw structured errors; show the human message instead of raw JSON. */
 function readableToolError(content: string): string | undefined {
 	try {
 		const value = objectValue(JSON.parse(content));
@@ -454,7 +454,7 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 	const catalogModel = models.getModel(options.provider, options.model);
 	if (!catalogModel) throw new Error(`Unknown model ${options.provider}/${options.model}`);
 	if (!await models.checkAuth(options.provider)) {
-		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .myh/config.json, MYH_API_KEY, or the provider's API key environment variable.`);
+		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .forge-agent/config.json, FORGE_AGENT_API_KEY, or the provider's API key environment variable.`);
 	}
 	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
 	return createModelPort({ ...options, model, stream: models.streamSimple.bind(models) });

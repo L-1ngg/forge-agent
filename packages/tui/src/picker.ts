@@ -1,4 +1,4 @@
-import type { InputCompletionItem } from "@myh/protocol";
+import type { InputCompletionItem } from "@forge-agent/protocol";
 import { defaultStyle, fillRect, writeText, type TerminalFrame } from "./frame.ts";
 import type { Theme } from "./theme.ts";
 import { truncateToWidth } from "./width.ts";

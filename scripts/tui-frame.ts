@@ -83,7 +83,7 @@ async function dumpScenarios(outDir: string): Promise<void> {
 		const wrapped = {
 			scenario: spec.name,
 			environment: {
-				crateCommit: "myh",
+				crateCommit: "forge-agent",
 				harnessPatchHash: "candidate",
 				rustc: "bun",
 				columns: spec.columns,

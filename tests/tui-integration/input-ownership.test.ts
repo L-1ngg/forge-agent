@@ -17,7 +17,7 @@ for (const mode of ["fifo", "stop", "replace", "failure"] as const) test(`PTY AD
 	const terminal = new Bun.Terminal({ cols: mode === "stop" ? 40 : 80, rows: mode === "stop" ? 12 : 24, data(_terminal, data) { output += decoder.decode(data, { stream: true }); } });
 	const child = Bun.spawn(["bun", "tests/tui-integration/input-ownership.fixture.ts"], {
 		terminal,
-		env: { ...process.env, MYH_PTY_FAIL_COMMIT: mode === "failure" ? "1" : "0" },
+		env: { ...process.env, FORGE_AGENT_PTY_FAIL_COMMIT: mode === "failure" ? "1" : "0" },
 		ipc(message) { reports.push(message as Report); },
 	});
 	async function waitFor(condition: () => boolean | Promise<boolean>) {

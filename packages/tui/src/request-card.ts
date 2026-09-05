@@ -1,4 +1,4 @@
-import { permissionScopeForToolCall, response, type RequestEnvelopeUnion, type RequestOutcome, type RequestKind, type ResponseEnvelope } from "@myh/protocol";
+import { permissionScopeForToolCall, response, type RequestEnvelopeUnion, type RequestOutcome, type RequestKind, type ResponseEnvelope } from "@forge-agent/protocol";
 import { defaultStyle, fillRect, writeText, type CellStyle, type TerminalFrame } from "./frame.ts";
 import type { Theme } from "./theme.ts";
 import { truncateToWidth, wrapText } from "./width.ts";

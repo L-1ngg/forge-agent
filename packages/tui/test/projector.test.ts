@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { block, type SessionEvent, type SessionMessage } from "@myh/protocol";
+import { block, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { TranscriptProjector } from "../src/index.ts";
 
 function userMessage(text: string, timestamp = 1000): SessionMessage {

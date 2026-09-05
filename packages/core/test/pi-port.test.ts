@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { permissionScopeForToolCall, response, type ToolCallBlock } from "@myh/protocol";
+import { permissionScopeForToolCall, response, type ToolCallBlock } from "@forge-agent/protocol";
 import { createPiTestPort, MemoryPermissionStore, RequestBus } from "../src/index.ts";
-import type { HarnessTool } from "@myh/tools";
+import type { HarnessTool } from "@forge-agent/tools";
 
 interface CaptureInput {
 	path: string;

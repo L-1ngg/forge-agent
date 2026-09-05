@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import type { SessionEvent, SessionMessage } from "@myh/protocol";
+import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { createAgent } from "../src/agent.ts";
 import { ExecutionCore, type ExecutionDriver } from "../src/execution-core.ts";
 

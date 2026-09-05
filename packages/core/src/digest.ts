@@ -1,4 +1,4 @@
-import type { AnyBlockEnvelope, EditBlockData, ExecuteBlockData, FoldBlockData, TextBlockData, ThinkingBlockData } from "@myh/protocol";
+import type { AnyBlockEnvelope, EditBlockData, ExecuteBlockData, FoldBlockData, TextBlockData, ThinkingBlockData } from "@forge-agent/protocol";
 
 export interface DigestOptions {
 	maxLength?: number;

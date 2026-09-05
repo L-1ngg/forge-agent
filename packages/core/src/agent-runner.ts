@@ -1,4 +1,4 @@
-import type { SessionEvent, SessionMessage } from "@myh/protocol";
+import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import type { UsageTruthPoint } from "./usage.ts";
 import type { RequestBus } from "./request-bus.ts";
 

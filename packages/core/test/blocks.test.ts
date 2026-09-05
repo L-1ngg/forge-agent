@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { block, type BlockEnvelope } from "@myh/protocol";
-import { bashTool, editTool } from "@myh/tools";
+import { block, type BlockEnvelope } from "@forge-agent/protocol";
+import { bashTool, editTool } from "@forge-agent/tools";
 import { createEditBlockData, createPiTestPort, digest } from "../src/index.ts";
 
 test("core computes line hunks and aggregate edit counts", () => {

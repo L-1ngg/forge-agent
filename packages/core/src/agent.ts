@@ -1,5 +1,5 @@
-import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@myh/protocol";
-import type { HarnessTool, ToolInputRewrite } from "@myh/tools";
+import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
+import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
 import { AgentRunner, type AgentPort, type InputAcceptance } from "./agent-runner.ts";
 import { createPiPort, type PiPortOptions } from "./pi-port.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";

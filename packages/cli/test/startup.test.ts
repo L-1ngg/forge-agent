@@ -4,19 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 async function runCli(config: Record<string, unknown>, env: Record<string, string> = {}) {
-	const directory = await mkdtemp(join(tmpdir(), "myh-startup-"));
+	const directory = await mkdtemp(join(tmpdir(), "forge-agent-startup-"));
 	try {
-		await mkdir(join(directory, ".myh"));
-		await writeFile(join(directory, ".myh", "config.json"), JSON.stringify(config));
+		await mkdir(join(directory, ".forge-agent"));
+		await writeFile(join(directory, ".forge-agent", "config.json"), JSON.stringify(config));
 		const child = Bun.spawn([process.execPath, join(import.meta.dir, "../src/main.ts"), "--json", "-p", "hello"], {
 			cwd: directory,
-			env: { ...process.env, XDG_CONFIG_HOME: join(directory, "global"), MYH_PROVIDER: "", MYH_MODEL: "", MYH_API_KEY: "", XAI_API_KEY: "", ...env },
+			env: { ...process.env, XDG_CONFIG_HOME: join(directory, "global"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "", XAI_API_KEY: "", ...env },
 			stdin: "ignore", stdout: "pipe", stderr: "pipe",
 		});
 		const timer = setTimeout(() => child.kill(), 5000);
 		try {
 			const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-			return { stdout, stderr, exitCode, events: stdout.trim().split("\n").map((line) => JSON.parse(line)) };
+			const session = Bun.file(join(directory, ".forge-agent", "session.jsonl"));
+			return { stdout, stderr, exitCode, events: stdout.trim().split("\n").map((line) => JSON.parse(line)), session: await session.exists() ? await session.text() : undefined };
 		} finally {
 			clearTimeout(timer);
 		}
@@ -41,7 +42,7 @@ test("CLI rejects missing xAI credentials before starting a turn", async () => {
 	expect(result.exitCode).toBe(1);
 	expect(result.events).toHaveLength(1);
 	expect(result.stdout).toContain("STARTUP_ERROR");
-	expect(result.stdout).toContain("MYH_API_KEY");
+	expect(result.stdout).toContain("FORGE_AGENT_API_KEY");
 	expect(result.stdout).not.toContain("agent_start");
 });
 
@@ -69,6 +70,7 @@ for (const credentialSource of ["apiKey", "XAI_API_KEY"] as const) {
 				...(credentialSource === "apiKey" ? { apiKey: "test-local-key" } : {}),
 			}, credentialSource === "XAI_API_KEY" ? { XAI_API_KEY: "test-local-key" } : {});
 			expect(result.exitCode).toBe(0);
+			expect(result.session).toContain("Hello!");
 			expect(requests).toHaveLength(1);
 			expect(requests[0]).toMatchObject({ path: "/v1/responses", authorization: "Bearer test-local-key", body: { model: "grok-4.6", stream: true } });
 			expect(result.events).toContainEqual(expect.objectContaining({ type: "message_end", message: expect.objectContaining({ role: "assistant", stopReason: "stop", content: expect.arrayContaining([expect.objectContaining({ type: "text", text: "Hello!" })]) }) }));

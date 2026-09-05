@@ -1,4 +1,4 @@
-import type { ContextUsageSnapshot, SessionMessage, TokenUsage } from "@myh/protocol";
+import type { ContextUsageSnapshot, SessionMessage, TokenUsage } from "@forge-agent/protocol";
 
 export interface ContextAssembly {
 	messages?: readonly SessionMessage[];

@@ -2,7 +2,7 @@ import { App, dumpFrame } from "../../packages/tui/src/index.ts";
 import { createAgent, createPiTestPort, RequestBus, SessionStore } from "../../packages/core/src/index.ts";
 import { editTool } from "../../packages/tools/src/index.ts";
 
-const directory = process.env.MYH_PTY_DIRECTORY!;
+const directory = process.env.FORGE_AGENT_PTY_DIRECTORY!;
 const bus = new RequestBus({ timeoutMs: null });
 const store = await SessionStore.open(`${directory}/session.jsonl`, directory);
 const agent = await createAgent({

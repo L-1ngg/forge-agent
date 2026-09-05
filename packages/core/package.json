@@ -1,5 +1,5 @@
 {
-  "name": "@myh/core",
+  "name": "@forge-agent/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4",
     "diff": "8.0.4",
-    "@myh/protocol": "workspace:*",
-    "@myh/tools": "workspace:*"
+    "@forge-agent/protocol": "workspace:*",
+    "@forge-agent/tools": "workspace:*"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",

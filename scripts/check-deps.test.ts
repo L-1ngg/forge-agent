@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { findViolations } from "./check-deps.ts";
 
 test("dependency check rejects the replaced execution engine even inside the model adapter", async () => {
-	const rootPath = await mkdtemp(join(tmpdir(), "myh-deps-engine-"));
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-engine-"));
 	try {
 		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
@@ -25,7 +25,7 @@ test("dependency check rejects the replaced execution engine even inside the mod
 });
 
 test("dependency check rejects a direct UI blocking call", async () => {
-	const rootPath = await mkdtemp(join(tmpdir(), "myh-deps-"));
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-"));
 	try {
 		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
@@ -41,7 +41,7 @@ test("dependency check rejects a direct UI blocking call", async () => {
 });
 
 test("dependency check allows Node built-ins in the TUI package", async () => {
-	const rootPath = await mkdtemp(join(tmpdir(), "myh-deps-node-"));
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-node-"));
 	try {
 		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
@@ -51,6 +51,23 @@ test("dependency check allows Node built-ins in the TUI package", async () => {
 		expect(await findViolations(new URL(`file://${rootPath}/`))).toEqual([]);
 		await writeFile(join(rootPath, "packages", "tui", "src", "forbidden.ts"), 'import "@earendil-works/pi-tui";\n');
 		expect(await findViolations(new URL(`file://${rootPath}/`))).toContain("packages/tui/src/forbidden.ts has forbidden external import @earendil-works/pi-tui");
+	} finally {
+		await rm(rootPath, { recursive: true, force: true });
+	}
+});
+
+test("dependency check enforces renamed workspace boundaries", async () => {
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-renamed-"));
+	try {
+		for (const name of ["protocol", "tools", "core", "tui", "cli"]) {
+			await mkdir(join(rootPath, "packages", name, "src"), { recursive: true });
+			await writeFile(join(rootPath, "packages", name, "package.json"), "{}");
+		}
+		await writeFile(join(rootPath, "packages", "core", "package.json"), JSON.stringify({ dependencies: { "@forge-agent/tui": "workspace:*" } }));
+		await writeFile(join(rootPath, "packages", "tools", "src", "illegal.ts"), 'import "@forge-agent/core";');
+		const violations = await findViolations(new URL(`file://${rootPath}/`));
+		expect(violations).toContain("packages/core/package.json must not depend on @forge-agent/tui");
+		expect(violations).toContain("packages/tools/src/illegal.ts must not import @forge-agent/core");
 	} finally {
 		await rm(rootPath, { recursive: true, force: true });
 	}

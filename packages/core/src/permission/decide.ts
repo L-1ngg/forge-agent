@@ -1,4 +1,4 @@
-import type { PermissionRequestPayload, PermissionScope, ToolCallBlock } from "@myh/protocol";
+import type { PermissionRequestPayload, PermissionScope, ToolCallBlock } from "@forge-agent/protocol";
 import { dangerousMatch } from "./danger-list.ts";
 import type { PermissionMemory } from "./memory.ts";
 import { findMatchingRule, formatPermissionRule, permissionScope, type PermissionRule } from "./rules.ts";

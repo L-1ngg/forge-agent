@@ -1,4 +1,4 @@
-import type { AnyBlockEnvelope, BlockLifecycle } from "@myh/protocol";
+import type { AnyBlockEnvelope, BlockLifecycle } from "@forge-agent/protocol";
 import type { CellStyle, TerminalColor } from "../frame.ts";
 
 /** UI-local transcript vocabulary. Protocol events remain the cross-client truth. */
