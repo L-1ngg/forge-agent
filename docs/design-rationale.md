@@ -83,7 +83,7 @@ async prompt(_input, _images) { return this.unavailable("prompt"); }
 
 ## B. 借用矩阵
 
-> 历史选型矩阵:下文「取用」指立项建议。当前只保留 pi-ai 模型适配,自有 TUI 与 ExecutionCore 分别由 ADR-005/009 落地;Team 边界按 ADR-008。实际包职责见 [README 架构](../README.md#架构)。
+> 历史选型矩阵:下文「取用」指立项建议。当前只保留 pi-ai 模型适配,自有 TUI 与 ExecutionCore 分别由 ADR-005/009 落地;Team 边界按 ADR-008。实际包职责见 [README 架构](../README.md#architecture)。
 
 ### 可复用性判定
 
@@ -329,7 +329,7 @@ dashboard 因此白拿——它监督的不是远端进程,就是内存里那几
 
 #### 现在就要做的三件事
 
-**① `protocol` 包 + 单向依赖 + CI 检查** —— 当前结构见 [README 架构](../README.md#架构)。
+**① `protocol` 包 + 单向依赖 + CI 检查** —— 当前结构见 [README 架构](../README.md#architecture)。
 
 **② 阻塞式交互必须是带 id 的 request/response —— 最高风险项**
 

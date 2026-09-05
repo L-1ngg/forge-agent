@@ -1,0 +1,28 @@
+name: Bug report
+description: Report reproducible incorrect behavior.
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Commit, Bun version, OS, terminal, and provider/model identifiers. Do not include credentials or private session content.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal steps or a small self-contained example.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove API keys, personal data, and private repository content.

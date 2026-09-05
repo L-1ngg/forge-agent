@@ -49,4 +49,4 @@ clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了�
 
 - 详细论证:[design-rationale.md](../design-rationale.md) C.3(in-process 多 agent)、C.4(协议边界与演进路径)
 - 失效模式证据:[cat-cafe.md](../cat-cafe.md) F.1(Redis 数据丢失)、F.2(双执行入口、并发上限)
-- 当前实现:[README 架构](../../README.md#架构) 的包职责与依赖方向
+- 当前实现:[README 架构](../../README.md#architecture) 的包职责与依赖方向

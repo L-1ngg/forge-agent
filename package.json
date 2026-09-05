@@ -1,6 +1,7 @@
 {
   "name": "forge-agent",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -9,6 +10,7 @@
     "forge-agent": "bun packages/cli/src/main.ts",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "test": "bun test",
 		"test:headless": "bun scripts/test-headless.ts",
 		"tui:frame": "bun scripts/tui-frame.ts",

@@ -2,10 +2,11 @@
 
 > 状态:待交付审核与下一批设计(2026-09-06)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
 > 设计论证与历史研究见 [design-rationale.md](design-rationale.md)、[cat-cafe.md](cat-cafe.md) 和 [research/](research/)。
-> 已实现能力与依赖边界见 [README](../README.md#架构),内核与 SDK 的施工及证据分别见 [owned-core.md](phases/owned-core.md)、[sdk.md](phases/sdk.md)。
+> 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据分别见 [owned-core.md](phases/owned-core.md)、[sdk.md](phases/sdk.md)。
 
 ## 1. 当前行动项
 
+- [ ] 完成 [GitHub 交付](phases/github-delivery.md):双语入口、全仓命名、双平台 CI 与源码草稿预发布(ADR-011),不扩大 npm/API 分发范围。
 - [ ] 审核已提交的内核、SDK 与 ADR-010 修复;提交不等于人工交付验收,未测边界以对应施工图为准。
 - [ ] 对照内核施工图核定剩余真实任务验收,明确已记录的最小 SDK 烟测与完整多轮工具/session/取消验证的差别。
 - [ ] 第二批交付审核后,制定第三批能力扩展施工图,明确选型、范围与验收,再开始实现。
