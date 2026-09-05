@@ -102,7 +102,7 @@ The dependency gate keeps UI dependencies out of the core and restricts pi-ai im
 
 | Horizon | Direction |
 |---|---|
-| **Now** | Validate the core and SDK in real tasks; establish the public repository and source prerelease workflow |
+| **Now** | Validate the core and SDK in real tasks and resolve remaining acceptance gaps |
 | **Next** | Tool and Skills extensions; source-traceable research and reports |
 | **Later** | Context management, recovery, and long-task reliability; then service APIs and distribution |
 

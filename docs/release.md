@@ -28,6 +28,8 @@ Extract the archive, enter its directory, then run `bun install --frozen-lockfil
 
 Invalid input, a target outside `master` history, an existing tag/draft/release, API lookup failures, or either platform's failed checks prevent publication. A release job rechecks availability before writing. A new push during a run does not change its target SHA. Workflow runs are serialized; they do not cancel an active prerelease to replace it.
 
+GitHub may hide unpublished drafts from the read-only validation token. The write-scoped publication job repeats the check and rejects an existing draft before creating or uploading anything; in that case, the platform checks will have run before the duplicate is reported.
+
 If asset upload fails after draft creation, the draft may be incomplete. Inspect it before taking action; a retry refuses to overwrite it. Remove an incomplete draft only after reviewing its state, or use a new version. The workflow does not delete drafts, replace tags, publish a stable release, or grant write access to verification jobs.
 
 CI uses read-only tokens, Actions pinned to full commit SHAs, and local provider fixtures. Real-provider smoke tests and manual terminal acceptance remain separate. Internal delivery evidence is recorded in [GitHub delivery](phases/github-delivery.md) (Chinese).
