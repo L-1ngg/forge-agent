@@ -5,7 +5,7 @@ created: 2026-09-05
 
 # ADR-010: 输入归属、执行干预与提交边界
 
-> 状态:已批准(2026-09-05)。代码实现与自动化验收完成,待 operator 交付审核;证据见文末。
+> 状态:提交方向部分被 [ADR-013](013-incremental-session-persistence.md) 及 [ADR-014](014-pi-aligned-context-management.md) 取代(2026-09-07)，新方向已实现并完成本地验收，见[实现证据](../phases/context-management-acceptance.md)；下文保留 2026-09-05 历史规则与验收证据，输入归属等未替代部分继续有效。
 > 参与者:operator 提出体验问题并要求记录方案,Codex 调研与起草。
 
 ## 背景

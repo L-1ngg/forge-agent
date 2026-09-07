@@ -25,6 +25,7 @@
 ### 第四批 — 长任务可靠性
 
 - 围绕真实任务补齐上下文管理、恢复、执行约束和评估。
+- 上下文工程规格与任务进度见 [GitHub #2](https://github.com/L-1ngg/forge-agent/issues/2)；采用 [Pi 对齐决策](decisions/014-pi-aligned-context-management.md) 与[施工方案](phases/context-management.md)，不改变本路线的先后顺序。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
 - 知识库按场景接入,不默认开启持久记忆或新增检索基础设施。

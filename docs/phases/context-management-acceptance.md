@@ -11,7 +11,7 @@ created: 2026-09-07
 
 落实 [Spec #2](https://github.com/L-1ngg/forge-agent/issues/2) 及其 #3 至 #13 子任务。Pi 决策基准为 `9767ba275f3e9a5ee0f5c5342249b629ab1b2282`，运行依赖保持 `pi-ai 0.84.4`，循环仍由自研 `ExecutionCore` 拥有。
 
-开工 HEAD 为 `05d8912fddd70d0cdefc153edb92daa6598252ba`。开工前已有的 `CONTEXT.md`、ADR-010、`docs/plan.md` 修改，以及 ADR-012/013/014、上下文设计施工图和六份研究文件均保留，不纳入本次实现提交。其历史“未实现”状态不作为本批状态；当前实现结果以本证据及 Issues 为准。
+开工 HEAD 为 `05d8912fddd70d0cdefc153edb92daa6598252ba`。运行代码与验收先独立提交为 `85b6499`。开工前已有的 `CONTEXT.md`、ADR-010、`docs/plan.md` 修改，以及 ADR-012/013/014、上下文设计施工图和六份研究文件按父规格 Construction reference 的交付要求随后单独收录；保留既有正文，只同步实现状态、公开配置名及验收链接。当前实现结果以本证据及 Issues 为准。
 
 ## 已实现行为
 
