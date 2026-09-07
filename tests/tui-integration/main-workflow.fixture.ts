@@ -19,7 +19,7 @@ const agent = await createAgent({
 }, async (options) => createPiTestPort({
 	...options, tools: builtinTools, permission, requestBus: bus, cwd: directory,
 	responses: [
-		{ text: "I will inspect the project files before making the change.", toolCalls: Array.from({ length: 10 }, (_, index) => ({ id: `read-${index}`, name: "read", arguments: { path: index === 9 ? "missing.ts" : `sample-${index}.ts`, start_line: 11, end_line: 80 } })) },
+		{ text: "I will inspect the project files before making the change.", toolCalls: Array.from({ length: 10 }, (_, index) => ({ id: `read-${index}`, name: "read", arguments: { path: index === 9 ? "missing.ts" : `sample-${index}.ts`, offset: 11, limit: 70 } })) },
 		{ text: "The sample files are ready. One optional file was not found." },
 		{ text: "I will update the sample, check the command output, and write the result.", toolCalls: [
 			{ id: "edit", name: "edit", arguments: { path: "sample-0.ts", old_text: "FILE_0_LINE_1 ", new_text: "UPDATED_LINE_1 " } },

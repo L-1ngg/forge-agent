@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { PermissionMode } from "./permission/decide.ts";
+import type { ContextSettings, RetryPolicy } from "./context/compaction.ts";
 
 export type TuiHostMode = "main" | "alt";
 
@@ -10,6 +11,10 @@ export interface HarnessUiConfig {
 }
 
 export interface HarnessConfig {
+	context?: Partial<ContextSettings>;
+	retry?: Partial<RetryPolicy>;
+	maxTokens?: number;
+	contextWindow?: number;
 	provider?: string;
 	model?: string;
 	baseUrl?: string;
@@ -45,7 +50,7 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "sessionPath"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "sessionPath", "context", "retry", "maxTokens", "contextWindow"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);

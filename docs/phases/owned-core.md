@@ -2,6 +2,8 @@
 
 > 状态:代码已提交、自动化回归通过,完整内核验收待完成(2026-09-06)。内核替换为 `d2519aa`,SDK 与 ADR-010 修复为 `04db82b`;本批落实 [ADR-009](../decisions/009-self-owned-agent-core.md),不重开 Phase 2.2。
 
+> 契约替代(2026-09-07):下文保留原批次历史。取消回滚、`length` 伪工具结果和 `AgentRunner` 整次提交已由 [上下文规格 #2](https://github.com/L-1ngg/forge-agent/issues/2) 的逐记录保存及有限上下文恢复取代；当前验收见 [上下文实现证据](context-management-acceptance.md)。
+
 ## Entry
 
 原始要求:“请你按照这份规划的文档实现,你可以自主决策是否有必要多agent来提效”。按路线顺序先完成执行内核替换,SDK 与后续能力另批施工。既有工作区文档和图片删除保留,不自动提交。

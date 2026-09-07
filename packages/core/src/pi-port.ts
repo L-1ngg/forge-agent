@@ -1,5 +1,8 @@
 import {
 	InMemoryCredentialStore,
+	getSupportedThinkingLevels,
+	isRetryableAssistantError,
+	isContextOverflow,
 	Type,
 	validateToolArguments,
 	type AssistantMessageEventStream,
@@ -24,8 +27,15 @@ import { decide, formatPermissionRule, type PermissionContext } from "./permissi
 import type { AgentPort } from "./agent-runner.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { ExecutionCore } from "./execution-core.ts";
+import { SUMMARY_SYSTEM, resolveRetryPolicy, validateRequestLimits, type ContextSettings, type RetryPolicy } from "./context/compaction.ts";
+import { randomUUID } from "node:crypto";
 
 export interface PiPortOptions {
+	sessionId?: string;
+	context?: Partial<ContextSettings>;
+	retry?: Partial<RetryPolicy>;
+	maxTokens?: number;
+	contextWindow?: number;
 	provider: string;
 	model: string;
 	baseUrl?: string;
@@ -88,14 +98,10 @@ function toPiStopReason(reason: StopReason | undefined): AssistantMessage["stopR
 function toSessionContent(message: Message): SessionContentBlock[] {
 	if (message.role === "user") {
 		if (typeof message.content === "string") return [{ type: "text", text: message.content }];
-		return message.content.map((block) =>
-			block.type === "text" ? { type: "text" as const, text: block.text } : { type: "text" as const, text: `[image: ${block.mimeType}]` },
-		);
+		return message.content.map((block) => ({ ...block }));
 	}
 	if (message.role === "toolResult") {
-		return message.content.map((block) =>
-			block.type === "text" ? { type: "text" as const, text: block.text } : { type: "text" as const, text: `[image: ${block.mimeType}]` },
-		);
+		return message.content.map((block) => ({ ...block }));
 	}
 	return message.content.map((block) => {
 		if (block.type === "text") return { type: "text" as const, text: block.text, ...(block.textSignature !== undefined ? { textSignature: block.textSignature } : {}) };
@@ -159,8 +165,8 @@ function zeroUsage(): NonNullable<AssistantMessage["usage"]> {
 
 function fromSessionMessage(message: SessionMessage, model: Model<string>): Message {
 	const textAndImages = message.content
-		.filter((block) => block.type === "text")
-		.map((block) => ({ type: "text" as const, text: block.text }));
+		.filter((block) => block.type === "text" || block.type === "image")
+		.map((block) => ({ ...block }));
 	if (message.role === "user") {
 		return { role: "user", content: textAndImages, timestamp: message.timestamp } satisfies UserMessage;
 	}
@@ -176,7 +182,7 @@ function fromSessionMessage(message: SessionMessage, model: Model<string>): Mess
 	}
 	return {
 		role: "assistant",
-		content: message.content.map((block) => {
+		content: message.content.filter((block) => block.type !== "image").map((block) => {
 			if (block.type === "text" || block.type === "thinking") return { ...block };
 			return { ...block, type: "toolCall" as const };
 		}),
@@ -252,7 +258,7 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 	const data: ExecuteBlockData = {
 		command: typeof details.command === "string" ? details.command : original?.command ?? "bash",
 		...(original?.description !== undefined ? { description: original.description } : {}),
-		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content && structuredError === undefined ? { stdout: content } : {}),
+		...(typeof details.stdout === "string" ? { stdout: details.stdout + (typeof details.notice === "string" ? "\n\n" + details.notice : "") } : content && structuredError === undefined ? { stdout: content } : {}),
 		...(typeof details.stderr === "string" ? { stderr: details.stderr } : structuredError !== undefined ? { stderr: structuredError } : {}),
 		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
 		...(lifecycle === "failed" ? { isError: true } : {}),
@@ -359,8 +365,13 @@ export function createPermissionBeforeToolCall(options: PermissionHookOptions): 
 }
 
 interface ModelPortOptions {
+	context?: Partial<ContextSettings>;
+	retry?: Partial<RetryPolicy>;
+	maxTokens?: number;
+	contextWindow?: number;
 	model: Model<string>;
 	stream: (model: Model<string>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
+	sessionId?: string;
 	systemPrompt: string;
 	thinkingLevel: PiPortOptions["thinkingLevel"];
 	history?: SessionMessage[];
@@ -372,18 +383,40 @@ interface ModelPortOptions {
 }
 
 function createModelPort(options: ModelPortOptions): AgentPort {
+	const sessionId = options.sessionId ?? randomUUID();
 	const tools = options.tools ?? [];
 	const modelTools = tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: Type.Unsafe(tool.parameters) }));
+	const summaryThinking = (requested: "inherit" | "off") => requested === "off" && !getSupportedThinkingLevels(options.model).includes("off")
+		? { level: options.thinkingLevel, fallback: "Model does not support reasoning off; inherited task reasoning" }
+		: { level: requested === "off" ? "off" as const : options.thinkingLevel };
 	const core = new ExecutionCore({
-		contextWindow: options.model.contextWindow,
+		contextWindow: options.contextWindow ?? options.model.contextWindow,
+		maxTokens: options.model.maxTokens,
+		...(options.retry ? { retry: options.retry } : {}),
+		summaryThinking,
+		isRetryable: (message) => isRetryableAssistantError(fromSessionMessage(message, options.model) as AssistantMessage),
+		isOverflow: (message) => isContextOverflow(fromSessionMessage(message, options.model) as AssistantMessage, options.contextWindow ?? options.model.contextWindow),
+		contextIdentity: JSON.stringify([options.model.provider, options.model.api, options.model.id, options.model.baseUrl, options.systemPrompt, modelTools]),
+		fixedText: options.systemPrompt + JSON.stringify(modelTools),
 		abortInteractions: () => { options.requestBus?.abort(); },
+		async summarize(request, signal) {
+			const thinking = summaryThinking(request.reasoning);
+			const stream = options.stream(options.model, {
+				systemPrompt: SUMMARY_SYSTEM,
+				messages: [{ role: "user", content: request.prompt, timestamp: Date.now() }],
+			}, { signal, sessionId, maxTokens: request.maxTokens, maxRetries: 0, cacheRetention: "none", ...(thinking.level !== "off" ? { reasoning: thinking.level } : {}) });
+			for await (const _event of stream) {}
+			const result = toSessionMessage(await stream.result());
+			if (!result) throw new Error("Provider did not return a summary");
+			return result;
+		},
 		async stream(messages, signal, emit) {
 			let started = false;
 			const stream = options.stream(options.model, {
 				systemPrompt: options.systemPrompt,
 				messages: messages.map((message) => fromSessionMessage(message, options.model)),
 				tools: modelTools,
-			}, { signal, ...(options.thinkingLevel !== "off" ? { reasoning: options.thinkingLevel } : {}) });
+			}, { signal, sessionId, maxRetries: 0, ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}), ...(options.thinkingLevel !== "off" ? { reasoning: options.thinkingLevel } : {}) });
 			for await (const event of stream) {
 				if (!started && event.type !== "done" && event.type !== "error") {
 					started = true;
@@ -422,15 +455,15 @@ function createModelPort(options: ModelPortOptions): AgentPort {
 			signal.throwIfAborted();
 			const outcome = await tool.execute(input, context);
 			return {
-				...(outcome.ok ? { details: outcome.value } : {}),
+				...(outcome.ok ? { details: outcome.value } : outcome.details !== undefined ? { details: outcome.details } : {}),
 				message: {
 					role: "toolResult", toolCallId: call.id, toolName: call.name, timestamp: Date.now(),
 					isError: !outcome.ok,
-					content: [{ type: "text", text: stringify(outcome.ok ? outcome.value : outcome.error) }],
+					content: [{ type: "text", text: stringify(outcome.ok ? outcome.value : { ...outcome.error, ...(outcome.details !== undefined ? { details: outcome.details } : {}) }) }],
 				},
 			};
 		},
-	}, options.history);
+	}, options.history, options.context);
 	return {
 		async *runTurn(input) {
 			const commands = new Map<string, CommandPresentation>();
@@ -446,10 +479,15 @@ function createModelPort(options: ModelPortOptions): AgentPort {
 		followUp: (input) => core.followUp(input),
 		abort: () => core.abort(),
 		getUsage: () => core.getUsage(),
+		setStorage: (storage) => core.setStorage(storage),
+		compact: (instructions, emit, signal) => core.compact(instructions, emit, signal),
+		configureContext: (settings) => core.configureContext(settings),
 	};
 }
 
 export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
+	resolveRetryPolicy(options.retry);
+	validateRequestLimits(options);
 	const credentials = new InMemoryCredentialStore();
 	const apiKey = options.apiKey;
 	if (apiKey) await credentials.modify(options.provider, async () => ({ type: "api_key", key: apiKey }));
@@ -460,7 +498,7 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .forge-agent/config.json, FORGE_AGENT_API_KEY, or the provider's API key environment variable.`);
 	}
 	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
-	return createModelPort({ ...options, model, stream: models.streamSimple.bind(models) });
+	return createModelPort({ ...options, sessionId: options.sessionId ?? randomUUID(), model, stream: models.streamSimple.bind(models) });
 }
 
 function lastUserText(messages: Message[]): string {

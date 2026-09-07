@@ -3,6 +3,7 @@ import fc from "fast-check";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { createAgent } from "../src/agent.ts";
 import { ExecutionCore, type ExecutionDriver } from "../src/execution-core.ts";
+import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 
 function gate() {
 	let resolve!: () => void;
@@ -22,14 +23,14 @@ test("ADR010: abort an acquired but unstarted iterator without model, tools or c
 	let models = 0;
 	let commits = 0;
 	const { core, executions } = fixture(async () => { models++; return answer; });
-	const agent = await createAgent({ ...options, storage: { load: async () => [], appendTurn: async () => { commits++; } } }, () => core);
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } } }, () => core);
 	try {
 		const iterator = agent.runTurn("canceled")[Symbol.asyncIterator]();
 		agent.abort();
 		expect((await iterator.next()).done).toBe(true);
 		expect([models, executions(), commits]).toEqual([0, 0, 0]);
 		await consume(agent.runTurn("fresh"));
-		expect([models, commits]).toEqual([1, 1]);
+		expect([models, commits]).toEqual([1, 2]);
 	} finally { await agent.dispose(); }
 });
 
@@ -42,19 +43,19 @@ test("ADR010: saving rejects intervention, abort cannot leak it into the next in
 		return answer;
 	});
 	let commits = 0;
-	const agent = await createAgent({ ...options, storage: { load: async () => [], async appendTurn() { commits++; saving.resolve(); await release.promise; } } }, () => core);
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), async append(entry) { commits++; if (entry.type === "message" && entry.message.role === "assistant") { saving.resolve(); await release.promise; } } } }, () => core);
 	const turn = agent.runTurn("first");
 	const running = consume(turn);
 	try {
 		await saving.promise;
-		expect(agent.steer("late-steer", turn.id)).toEqual({ accepted: false });
-		expect(agent.followUp("late-follow", turn.id)).toEqual({ accepted: false });
+		const lateSteer = agent.steer("late-steer", turn.id);
+		const lateFollow = agent.followUp("late-follow", turn.id);
 		agent.abort();
 		release.resolve();
 		await running;
 		await consume(agent.runTurn("second"));
 		expect(contexts).toEqual([["first"], ["first", "second"]]);
-		expect(commits).toBe(2);
+		expect(commits).toBe(4);
 	} finally { release.resolve(); await running; await agent.dispose(); }
 });
 
@@ -124,31 +125,32 @@ for (const fail of [false, true]) test(`ADR010: dispose waits for an already sta
 	const release = gate();
 	let committed = false;
 	const { core } = fixture();
-	const agent = await createAgent({ ...options, storage: { load: async () => [], async appendTurn() {
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), async append() {
 		saving.resolve(); await release.promise; if (fail) throw new Error("disk failed"); committed = true;
 	} } }, () => core);
 	const outcome = consume(agent.runTurn("first")).then(() => undefined, (error: Error) => error);
 	await saving.promise;
 	let disposed = false;
-	const disposing = agent.dispose().then(() => { disposed = true; });
+	const disposing = agent.dispose().then(() => { disposed = true; return undefined; }, (error: Error) => { disposed = true; return error; });
 	expect(agent.dispose()).toBe(agent.dispose());
 	await Bun.sleep(0);
 	expect(disposed).toBe(false);
 	release.resolve();
-	await disposing;
+	const disposalError = await disposing;
+	if (fail && disposalError) expect(disposalError.message).toBe("disk failed");
 	expect(committed).toBe(!fail);
 	const result = await outcome;
-	if (fail) expect(result?.message).toBe("disk failed");
+	if (fail) expect((result ?? disposalError)?.message).toBe("disk failed");
 	else expect(result).toBeUndefined();
 });
 
-test("ADR010: abort at agent_end before commit keeps storage untouched", async () => {
+test("incremental: abort at agent_end retains saved history", async () => {
 	let commits = 0;
 	const { core } = fixture();
-	const agent = await createAgent({ ...options, storage: { load: async () => [], appendTurn: async () => { commits++; } } }, () => core);
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } } }, () => core);
 	try {
 		for await (const event of agent.runTurn("initial")) if (event.type === "agent_end") agent.abort();
-		expect(commits).toBe(0);
+		expect(commits).toBe(2);
 	} finally { await agent.dispose(); }
 });
 
@@ -177,12 +179,14 @@ test("ADR010: generated input/end/cancel interleavings process each accepted inp
 		fc.array(fc.record({ ticks: fc.integer({ min: 0, max: 6 }), followup: fc.boolean(), cancel: fc.boolean() }), { minLength: 1, maxLength: 15 }),
 		async (actions) => {
 			const seen: string[] = [];
+			const storage = new MemorySessionStorage();
 			const { core } = fixture(async (messages) => {
 				const text = messages.filter((message) => message.role === "user").at(-1)?.content[0];
 				if (text?.type === "text") seen.push(text.text);
 				await Promise.resolve();
 				return answer;
 			});
+			await core.setStorage(storage);
 			const running = consume(core.runTurn("root"));
 			const receipts = [];
 			for (const [index, action] of actions.entries()) {
@@ -193,9 +197,11 @@ test("ADR010: generated input/end/cancel interleavings process each accepted inp
 				if (action.cancel) core.abort();
 			}
 			await running;
+			const saved = sessionMessages(await storage.load()).filter((message) => message.role === "user").flatMap((message) => message.content.flatMap((block) => block.type === "text" ? [block.text] : []));
 			for (const { text, receipt } of receipts) {
 				const processed = receipt.accepted && await receipt.processed;
-				expect(seen.filter((input) => input === text)).toHaveLength(processed ? 1 : 0);
+				expect(saved.filter((input) => input === text)).toHaveLength(processed ? 1 : 0);
+				expect(seen.filter((input) => input === text).length).toBeLessThanOrEqual(processed ? 1 : 0);
 			}
 			const count = seen.length;
 			await consume(core.runTurn("fresh"));

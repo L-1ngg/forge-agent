@@ -61,6 +61,7 @@ export interface AppRequestBus {
 
 /** Structural view of the core agent port; AgentRunner satisfies this. */
 export interface AppPort {
+	compact?(instructions?: string, emit?: (event: SessionEvent) => void): Promise<unknown>;
 	runTurn(input: string): AsyncIterable<SessionEvent>;
 	abort?(): void;
 	getUsage?(): ContextUsageSnapshot | undefined;
@@ -103,6 +104,7 @@ export class App {
 	private readonly focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
+	private compactTask: Promise<void> | undefined;
 	private browsing = false;
 	private selectedId: string | undefined;
 	private viewer: DetailView | undefined;
@@ -162,10 +164,11 @@ export class App {
 		this.pauseSending();
 		this.suggestionVersion++;
 		try {
-			if (this.running) this.options.port.abort?.();
+			if (this.running || this.compactTask) this.options.port.abort?.();
 			this.requestBus.close();
 			this.host.stop();
 			await this.runTask;
+			await this.compactTask;
 		} finally {
 			this.resolveStopped?.();
 		}
@@ -186,7 +189,7 @@ export class App {
 			cardKind: (top ?? parked)?.request.kind,
 			cardSubInput: this.focus.active && !!top && requestCardActions(top.request)[this.focus.focusIndex] === "answer_text",
 			editorFocused: !this.browsing,
-			running: this.running,
+			running: this.running || this.compactTask !== undefined,
 			selectedCanView: group || !!selected,
 			selectedCanFold: group || !!selected && ["tool", "thinking", "execute", "edit"].includes(selected.kind),
 		};
@@ -460,7 +463,7 @@ export class App {
 			this.repaint();
 			return;
 		}
-		if (this.running) {
+		if (this.running || this.compactTask) {
 			this.queued.push(input);
 			this.repaint();
 			return;
@@ -506,6 +509,16 @@ export class App {
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
+		if (command === "/compact" || command.startsWith("/compact ")) {
+			if (this.compactTask) return true;
+			if (!this.options.port.compact) { this.projector.addNotice("Compaction unavailable"); return true; }
+			this.pauseSending();
+			this.options.port.abort?.();
+			this.compactTask = this.options.port.compact(command.slice(8).trim() || undefined, (event) => this.handleEvent(event))
+				.then(() => {}, (error: unknown) => { this.projector.addNotice(error instanceof Error ? error.message : String(error)); })
+				.finally(() => { this.compactTask = undefined; this.pauseSending(); this.repaint(); });
+			return true;
+		}
 		if (command === "/quit" || command === "/exit") {
 			void this.stop();
 			return true;
@@ -561,6 +574,8 @@ export class App {
 	}
 
 	private handleEvent(event: SessionEvent): void {
+		if (event.type === "compaction") this.projector.addNotice(`Context ${event.phase}${event.error ? ": " + event.error : ""}`);
+		if (event.type === "recovery") this.projector.addNotice(`Context recovery: ${event.reason}`);
 		this.projector.apply(event);
 		if (event.type === "message_end" && event.message.errorMessage) this.projector.addNotice(event.message.errorMessage);
 		if (event.type === "turn_end" && (event.stopReason === "error" || event.stopReason === "aborted")) this.projector.addNotice(`turn ${event.stopReason}`);
@@ -800,7 +815,7 @@ export class App {
 		return pending.flatMap((input) => wrapText(input, Math.max(1, columns - 2)));
 	}
 	private activityLines(columns: number): string[] {
-		return [...this.queueLines(columns), ...(this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
+		return [...this.queueLines(columns), ...(this.compactTask ? ["compacting"] : this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
 	}
 
 	/** Compose the current frame. Pure w.r.t. the terminal; exposed for tests. */

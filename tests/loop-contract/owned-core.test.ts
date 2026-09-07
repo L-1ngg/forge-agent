@@ -29,7 +29,7 @@ function userTexts(events: SessionEvent[]): string[] {
 		: []);
 }
 
-test("owned core fails every tool call in a length-limited message without preparing or executing it", async () => {
+test("owned core preserves a length-limited response without preparing or executing its tool calls", async () => {
 	let executions = 0;
 	let rewrites = 0;
 	const port = createPiTestPort({
@@ -44,11 +44,12 @@ test("owned core fails every tool call in a length-limited message without prepa
 	expect(executions).toBe(0);
 	expect(rewrites).toBe(0);
 	for (const id of ["first", "second"]) {
-		expect(events.filter((event) => event.type === "tool_execution_start" && event.toolCallId === id)).toHaveLength(1);
-		expect(events.filter((event) => event.type === "tool_execution_end" && event.toolCallId === id)).toMatchObject([{ isError: true }]);
-		expect(events.filter((event) => event.type === "message_end" && event.message.role === "toolResult" && event.message.toolCallId === id)).toMatchObject([{ message: { isError: true } }]);
+		expect(events.filter((event) => event.type === "tool_execution_start" && event.toolCallId === id)).toHaveLength(0);
+		expect(events.filter((event) => event.type === "tool_execution_end" && event.toolCallId === id)).toHaveLength(0);
+		expect(events.filter((event) => event.type === "message_end" && event.message.role === "toolResult" && event.message.toolCallId === id)).toHaveLength(0);
 	}
-	expect(events.filter((event) => event.type === "turn_end")).toMatchObject([{ stopReason: "length" }, { stopReason: "stop" }]);
+	expect(events.filter((event) => event.type === "turn_end")).toMatchObject([{ stopReason: "length" }]);
+	expect(events.filter((event) => event.type === "message_end" && event.message.role === "assistant")).toMatchObject([{ message: { stopReason: "length" } }]);
 });
 
 test("owned core settles unserializable results and waits for sibling tools before releasing the instance", async () => {
@@ -299,7 +300,10 @@ test("concurrent owned instances isolate permissions, tools, cancellation, and s
 		expect(executed).toEqual(["second"]);
 		expect(firstEvents.filter((event) => event.type === "turn_end").at(-1)).toMatchObject({ stopReason: "aborted" });
 		expect(secondEvents.filter((event) => event.type === "turn_end").at(-1)).toMatchObject({ stopReason: "stop" });
-		expect(firstStore.messages()).toEqual([]);
+		expect(firstStore.messages().map((message) => message.role)).toEqual(["user", "assistant", "toolResult"]);
+		expect(firstStore.messages().at(-1)).toMatchObject({ toolCallId: "same-id", isError: true });
+		expect(JSON.stringify(firstStore.messages())).toContain("first-user");
+		expect(JSON.stringify(firstStore.messages())).not.toContain("second-user");
 		expect(userTexts(secondEvents)).toEqual(["second-user"]);
 		const reopened = await SessionStore.open(secondStore.path, directory);
 		expect(reopened.messages()).toEqual(secondStore.messages());

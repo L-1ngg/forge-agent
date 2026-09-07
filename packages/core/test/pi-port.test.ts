@@ -151,12 +151,12 @@ test("a rejected concurrent run does not cancel the active pi run", async () => 
 	expect(stopReason).toBe("stop");
 });
 
-test("aborted pi turns do not remain in the next context", async () => {
+test("aborted pi turns retain consumed inputs in the next context", async () => {
 	const port = createPiTestPort({ responses: [{ text: "discard this response" }, { text: "done" }], tokensPerSecond: 100 });
 	const before = port.getUsage?.()?.contextTokens;
 	for await (const event of port.runTurn("discard this prompt")) {
 		if (event.type === "message_delta") port.abort();
 	}
-	expect(port.getUsage?.()?.contextTokens).toBe(before);
+	expect(port.getUsage?.()?.contextTokens).toBeGreaterThan(before ?? 0);
 	await collectEvents(port);
 });

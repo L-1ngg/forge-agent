@@ -11,7 +11,8 @@ Forge Agent combines a self-owned execution core, an embeddable Bun SDK, and a t
 
 ## Current Capabilities
 
-- **Owned execution loop:** model streaming, tool execution, permissions, invocation-scoped steering and follow-ups, cancellation, and session commits.
+- **Owned execution loop:** model streaming, tool execution, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence.
+- **Long tasks:** automatic or manual context compaction, one bounded overflow recovery, and bounded Read/Bash previews with temporary command logs.
 - **Embeddable SDK:** independent instances with host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
 - **Coding CLI:** read, write, edit, and shell tools; interactive TUI or JSON event output for scripts.
 - **Terminal interface:** streaming transcript, tool and diff views, permission cards, queued input, and a cell-based renderer.

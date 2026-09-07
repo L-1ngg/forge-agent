@@ -3,8 +3,20 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentRunner, createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
-import { MemorySessionStorage, type SessionStorage } from "../src/session-storage.ts";
+import { MemorySessionStorage, messageEntry, sessionMessages, type SessionStorage } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
+
+async function appendMessages(storage: SessionStorage, messages: SessionMessage[]) {
+	const added = [];
+	let parentId = (await storage.load()).leafId;
+	for (const message of messages) {
+		const entry = messageEntry(message, parentId);
+		await storage.append(entry);
+		added.push(entry);
+		parentId = entry.id;
+	}
+	return added;
+}
 
 const temporaryDirectories: string[] = [];
 async function temporaryDirectory(): Promise<string> {
@@ -14,20 +26,20 @@ async function temporaryDirectory(): Promise<string> {
 }
 afterEach(async () => Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true }))));
 
-test("session store appends valid v3 entries and branches in place", async () => {
+test("session store appends valid v4 entries and branches in place", async () => {
 	const cwd = await temporaryDirectory();
 	const path = join(cwd, "session.jsonl");
 	const store = await SessionStore.open(path, cwd);
-	const first = await store.appendTurn([
+	const first = await appendMessages(store, [
 		{ role: "user", content: [{ type: "text", text: "first" }], timestamp: Date.now() },
 		{ role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: Date.now(), stopReason: "stop" },
 	]);
-	expect(first.every((entry) => /^[0-9a-f]{8}$/.test(entry.id))).toBe(true);
+	expect(first.every((entry) => /^[0-9a-f-]{36}$/.test(entry.id))).toBe(true);
 	expect(first[0]?.parentId).toBeNull();
 	expect(first[1]?.parentId).toBe(first[0]?.id);
 
 	store.branch(first[0]?.id ?? null);
-	const branch = await store.appendTurn([{ role: "user", content: [{ type: "text", text: "branch" }], timestamp: Date.now() }]);
+	const branch = await appendMessages(store, [{ role: "user", content: [{ type: "text", text: "branch" }], timestamp: Date.now() }]);
 	expect(branch[0]?.parentId).toBe(first[0]?.id);
 	expect(store.getTree()[0]?.children).toHaveLength(2);
 
@@ -39,7 +51,7 @@ test("session search locates and reads only matching entries", async () => {
 	const cwd = await temporaryDirectory();
 	const path = join(cwd, "session.jsonl");
 	const store = await SessionStore.open(path, cwd);
-	const entries = await store.appendTurn([
+	const entries = await appendMessages(store, [
 		{ role: "user", content: [{ type: "text", text: "alpha decision" }], timestamp: Date.now() },
 		{ role: "assistant", content: [{ type: "text", text: "beta" }], timestamp: Date.now() },
 	]);
@@ -47,30 +59,16 @@ test("session search locates and reads only matching entries", async () => {
 	const first = entries[0];
 	if (!first) throw new Error("Expected first session entry");
 	expect(await search.search("DECISION")).toEqual([first.id]);
-	expect((await search.readEntry(first.id))?.message.role).toBe("user");
+	expect(await search.readEntry(first.id)).toMatchObject({ type: "message", message: { role: "user" } });
 });
 
-test("agent runner does not persist an aborted or unpaired turn", async () => {
+test("agent runner persists an aborted assistant without executing its calls", async () => {
 	const cwd = await temporaryDirectory();
-	const path = join(cwd, "session.jsonl");
-	const store = await SessionStore.open(path, cwd);
-	const runner = new AgentRunner(
-		{
-			async *runTurn() {
-				yield { type: "message_end", timestamp: 1, message: { role: "assistant", content: [{ type: "tool_call", id: "call-1", name: "bash", arguments: {} }], timestamp: 1, stopReason: "aborted" } };
-				yield { type: "turn_end", timestamp: 2, stopReason: "aborted" };
-				yield { type: "agent_end", timestamp: 3 };
-			},
-			steer() { return { accepted: false }; },
-			followUp() { return { accepted: false }; },
-			abort() {},
-		},
-		store,
-	);
-	const events: unknown[] = [];
-	for await (const event of runner.runTurn("abort me")) events.push(event);
-	expect(events).toHaveLength(3);
-	expect(store.getEntries()).toHaveLength(0);
+	const store = await SessionStore.open(join(cwd, "aborted.jsonl"), cwd);
+	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "partial", stopReason: "aborted" }] }), store);
+	for await (const _event of runner.runTurn("abort me")) {}
+	expect(store.messages()).toHaveLength(2);
+	expect(store.messages().at(-1)?.stopReason).toBe("aborted");
 });
 
 test("agent runner abort cancels pending blocking requests before aborting the port", async () => {
@@ -133,7 +131,7 @@ test("agent runner persists steering and follow-up user messages in event order"
 	]);
 });
 
-test("agent runner rolls back a failed invocation including completed tool turns", async () => {
+test("agent runner retains a failed invocation including completed tool turns", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
 	let executions = 0;
@@ -156,12 +154,12 @@ test("agent runner rolls back a failed invocation including completed tool turns
 	const usageBefore = port.getUsage?.()?.contextTokens;
 	for await (const _event of runner.runTurn("discard")) {}
 	expect(executions).toBe(1);
-	expect(store.messages()).toEqual(before);
-	expect(port.getUsage?.()?.contextTokens).toBe(usageBefore);
-	expect((await SessionStore.open(store.path, cwd)).messages()).toEqual(before);
+	expect(store.messages()).toHaveLength(before.length + 4);
+	expect(port.getUsage?.()?.contextTokens).toBeGreaterThan(usageBefore ?? 0);
+	expect((await SessionStore.open(store.path, cwd)).messages()).toEqual(store.messages());
 	for await (const _event of runner.runTurn("retry")) {}
 	expect(store.messages().filter((message) => message.role === "user").map((message) => message.content)).toEqual([
-		[{ type: "text", text: "keep" }], [{ type: "text", text: "retry" }],
+		[{ type: "text", text: "keep" }], [{ type: "text", text: "discard" }], [{ type: "text", text: "retry" }],
 	]);
 });
 
@@ -178,13 +176,13 @@ test("memory session storage isolates initial, committed, and loaded message obj
 	const history: SessionMessage[] = [{ role: "assistant", timestamp: 1, content: [{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }] }];
 	const storage = new MemorySessionStorage(history);
 	history[0]!.content = [];
-	const loaded = await storage.load();
+	const loaded = sessionMessages(await storage.load());
 	expect(loaded[0]!.content).toEqual([{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }]);
 	loaded[0]!.content = [];
 	const turn: SessionMessage[] = [{ role: "user", timestamp: 2, content: [{ type: "text", text: "committed" }] }];
-	await storage.appendTurn(turn);
+	await appendMessages(storage, turn);
 	turn[0]!.content = [];
-	expect((await storage.load()).map((message) => message.content)).toEqual([
+	expect(sessionMessages(await storage.load()).map((message) => message.content)).toEqual([
 		[{ type: "thinking", thinking: "reason", thinkingSignature: "signature" }], [{ type: "text", text: "committed" }],
 	]);
 });
@@ -194,11 +192,12 @@ test("JSONL storage adapter restores the active branch and commits through the m
 	const store = await SessionStore.open(join(cwd, "adapter.jsonl"), cwd);
 	const storage: SessionStorage = store.asStorage();
 	const message: SessionMessage = { role: "user", timestamp: 1, content: [{ type: "text", text: "stored" }] };
-	expect(await storage.appendTurn([message])).toBeUndefined();
-	expect(await storage.load()).toEqual([message]);
-	expect(await (await SessionStore.open(store.path, cwd)).load()).toEqual([message]);
+	const entry = messageEntry(message, null);
+	expect(await storage.append(entry)).toBeUndefined();
+	expect(sessionMessages(await storage.load())).toEqual([message]);
+	expect((await SessionStore.open(store.path, cwd)).messages()).toEqual([message]);
 	store.branch(null);
-	expect(await storage.load()).toEqual([]);
+	expect(sessionMessages(await storage.load())).toEqual([]);
 });
 
 test("agent runner faults after commit failure and rejects subsequent runs and queued inputs", async () => {
@@ -206,7 +205,8 @@ test("agent runner faults after commit failure and rejects subsequent runs and q
 	const failure = new Error("injected commit failure");
 	let commits = 0;
 	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "answer" }] }), {
-		async appendTurn() { commits++; throw failure; },
+		load: async () => ({ entries: [], leafId: null }),
+		async append() { commits++; throw failure; },
 	});
 	const events: string[] = [];
 	const run = async () => { for await (const event of runner.runTurn("hello")) events.push(event.type); };
@@ -219,20 +219,21 @@ test("agent runner faults after commit failure and rejects subsequent runs and q
 	expect(commits).toBe(1);
 	const recreated = new AgentRunner(createPiTestPort({ responses: [{ text: "retry" }] }), storage);
 	for await (const _event of recreated.runTurn("fresh")) {}
-	expect(await storage.load()).toHaveLength(2);
+	expect((await storage.load()).entries).toHaveLength(2);
 });
 
-test("agent runner does not commit when the consumer closes at agent_end", async () => {
+test("agent runner keeps saved messages when the consumer closes at agent_end", async () => {
 	let commits = 0;
 	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "uncommitted" }, { text: "committed" }] }), {
-		async appendTurn() { commits++; },
+		load: async () => ({ entries: [], leafId: null }),
+		async append() { commits++; },
 	});
 	for await (const event of runner.runTurn("early")) {
 		if (event.type === "agent_end") break;
 	}
-	expect(commits).toBe(0);
+	expect(commits).toBe(2);
 	for await (const _event of runner.runTurn("complete")) {}
-	expect(commits).toBe(1);
+	expect(commits).toBe(4);
 });
 
 describe("config", () => {

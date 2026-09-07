@@ -11,7 +11,8 @@ Forge Agent 提供自研执行内核、可嵌入的 Bun SDK 与终端应用。�
 
 ## 当前能力
 
-- **自研执行循环:**模型流、工具执行、权限、单次 invocation 内的 steering/follow-up、取消与会话提交。
+- **自研执行循环:**模型流、工具执行、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
+- **长任务:**自动或手动上下文压缩、一次有限超限恢复，以及 Read/Bash 有限预览与命令临时日志。
 - **可嵌入 SDK:**实例独立,工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
 - **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
 - **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。

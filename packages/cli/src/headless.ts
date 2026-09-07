@@ -54,6 +54,7 @@ export async function runHeadless(
 	const options = typeof outputOrOptions === "function" ? maybeOptions : (outputOrOptions ?? maybeOptions);
 	let requestExitCode = 0;
 	let runExitCode = 0;
+	let recovering = false;
 	const responder = options.requestBus
 		? (async () => {
 				for await (const request of options.requestBus!.requests()) {
@@ -65,10 +66,12 @@ export async function runHeadless(
 		: undefined;
 	try {
 		for await (const event of port.runTurn(prompt)) {
+			if (event.type === "recovery") recovering = true;
 			if (event.type === "turn_end" || event.type === "message_end") {
 				const reason = event.type === "turn_end" ? event.stopReason : event.message.stopReason;
-				if (reason === "error") runExitCode = 1;
-				else if (reason === "aborted" && runExitCode === 0) runExitCode = 130;
+				if (reason === "error" || reason === "length") runExitCode = 1;
+				else if (reason === "aborted") runExitCode = 130;
+				else if (recovering && (reason === "stop" || reason === "tool_use")) { runExitCode = 0; recovering = false; }
 			}
 			output(JSON.stringify(event));
 		}

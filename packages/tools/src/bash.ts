@@ -1,3 +1,7 @@
+import { open } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
 
@@ -5,7 +9,6 @@ export interface BashInput {
 	command: string;
 	description?: string;
 	timeout_ms?: number;
-	max_output_bytes?: number;
 }
 
 export interface BashOutput {
@@ -14,39 +17,40 @@ export interface BashOutput {
 	stdout: string;
 	stderr: string;
 	truncated: boolean;
+	logPath?: string;
+	notice?: string;
 }
 
-interface OutputBudget {
-	remaining: number;
-	truncated: boolean;
-}
+const MAX_BYTES = 50 * 1024;
+const MAX_LINES = 2000;
 
-async function collect(stream: ReadableStream<Uint8Array>, budget: OutputBudget): Promise<string> {
-	const chunks: Uint8Array[] = [];
-	for await (const chunk of stream) {
-		if (budget.remaining <= 0) {
-			budget.truncated = true;
-			continue;
-		}
-		const retained = chunk.byteLength <= budget.remaining ? chunk : chunk.slice(0, budget.remaining);
-		chunks.push(retained);
-		budget.remaining -= retained.byteLength;
-		if (retained.byteLength < chunk.byteLength) budget.truncated = true;
+function tailPreview(bytes: Buffer): Buffer {
+	let start = Math.max(0, bytes.length - MAX_BYTES);
+	while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
+	let lines = 0;
+	for (let index = bytes.length - 1; index >= start; index--) {
+		if (bytes[index] === 10 && ++lines === MAX_LINES) { start = index + 1; break; }
 	}
-	return new TextDecoder().decode(Buffer.concat(chunks));
+	return bytes.subarray(start);
 }
 
-export const bashTool: HarnessTool<BashInput, BashOutput> = {
+interface OutputLog { write(data: Uint8Array): Promise<void>; close(): Promise<void>; }
+async function openOutputLog(path: string): Promise<OutputLog> {
+	const file = await open(path, "wx", 0o600);
+	return { write: async (data) => { await file.writeFile(data); }, close: () => file.close() };
+}
+
+export function createBashTool(openLog: (path: string) => Promise<OutputLog> = openOutputLog): HarnessTool<BashInput, BashOutput> {
+return {
 	name: "bash",
 	label: "Run command",
-	description: "Run one shell command in the working directory with a timeout and a shared stdout/stderr byte limit.",
+	description: "Run a shell command. Return a combined 2000-line / 50 KiB tail preview; large output is saved to a system temporary log readable with Read.",
 	parameters: {
 		type: "object",
 		properties: {
 			command: { type: "string", minLength: 1, description: "Shell command to execute." },
 			description: { type: "string", description: "Short human-readable purpose shown in the tool call title." },
 			timeout_ms: { type: "integer", minimum: 1, maximum: 600000, description: "Kill the command after this many milliseconds." },
-			max_output_bytes: { type: "integer", minimum: 1024, maximum: 1048576, description: "Maximum combined UTF-8 bytes retained from stdout and stderr." },
 		},
 		required: ["command"],
 		additionalProperties: false,
@@ -56,10 +60,6 @@ export const bashTool: HarnessTool<BashInput, BashOutput> = {
 		const timeout = input.timeout_ms ?? 120_000;
 		if (!Number.isInteger(timeout) || timeout < 1 || timeout > 600_000) {
 			return toolError("INVALID_ARGUMENT", "timeout_ms is outside the supported range", "timeout_ms", "integer from 1 to 600000", "30000");
-		}
-		const maxBytes = input.max_output_bytes ?? 65_536;
-		if (!Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > 1_048_576) {
-			return toolError("INVALID_ARGUMENT", "max_output_bytes is outside the supported range", "max_output_bytes", "integer from 1 to 1048576", "65536");
 		}
 		if (context.signal?.aborted) return toolError("ABORTED", "Command was aborted before it started", "command", "command with a live abort signal", "bun test", true);
 
@@ -96,21 +96,57 @@ export const bashTool: HarnessTool<BashInput, BashOutput> = {
 		};
 		context.signal?.addEventListener("abort", onAbort, { once: true });
 		if (context.signal?.aborted) onAbort();
-		const budget: OutputBudget = { remaining: maxBytes, truncated: false };
+		let preview: Buffer = Buffer.alloc(0);
+		let truncated = false;
+		let log: OutputLog | undefined;
+		let logPath: string | undefined;
+		let ioError: unknown;
+		let capture = Promise.resolve();
+		const collect = async (stream: ReadableStream<Uint8Array>): Promise<void> => {
+			try {
+				for await (const bytes of stream) {
+					if (ioError) break;
+					const chunk = Buffer.from(bytes);
+					const next = capture.then(async () => {
+						if (ioError) return;
+						const combined = Buffer.concat([preview, chunk]);
+						const tail = tailPreview(combined);
+						preview = Buffer.from(tail);
+						truncated ||= tail.length < combined.length;
+						if (!log && tail.length < combined.length) {
+							const path = join(tmpdir(), `forge-bash-${randomUUID()}.log`);
+							log = await openLog(path);
+							logPath = path;
+							await log.write(combined);
+						} else if (log) await log.write(chunk);
+					});
+					capture = next.catch((error: unknown) => { ioError = error; terminate(); });
+					await capture;
+				}
+			} catch (error) { ioError ??= error; terminate(); }
+		};
 		try {
-			const [stdout, stderr, exitCode] = await Promise.all([collect(child.stdout, budget), collect(child.stderr, budget), child.exited]);
-			if (aborted) return toolError("ABORTED", "Command was aborted", "command", "command that can complete before cancellation", input.command, true);
-			if (timedOut) return toolError("COMMAND_TIMEOUT", `Command exceeded ${timeout}ms`, "timeout_ms", "a timeout long enough for the command", String(Math.min(timeout * 2, 600_000)), true);
-			const value: BashOutput = { command: input.command, exitCode, stdout, stderr, truncated: budget.truncated };
-			if (exitCode !== 0) {
-				return toolError("COMMAND_FAILED", `Command exited with code ${exitCode}: ${stderr || stdout}`.trim(), "command", "command that exits with code 0", "bun test", true);
-			}
+			const [, , exitCode] = await Promise.all([collect(child.stdout), collect(child.stderr), child.exited]);
+			await capture;
+			try { await log?.close(); } catch (error) { ioError ??= error; }
+			const value: BashOutput = {
+				command: input.command, exitCode, stdout: preview.toString("utf8"), stderr: "", truncated,
+				...(logPath ? { logPath, notice: `Captured output: ${logPath}. Read this temporary file for earlier output.` } : {}),
+			};
+			const failure = ioError ? toolError("IO_ERROR", `Output capture failed; log may be incomplete: ${ioError instanceof Error ? ioError.message : String(ioError)}`, "command", "writable temporary storage", input.command)
+				: aborted ? toolError("ABORTED", "Command was aborted", "command", "live command", input.command, true)
+				: timedOut ? toolError("COMMAND_TIMEOUT", `Command exceeded ${timeout}ms`, "timeout_ms", "longer timeout", String(Math.min(timeout * 2, 600000)), true)
+				: exitCode !== 0 ? toolError("COMMAND_FAILED", `Command exited with code ${exitCode}`, "command", "command that exits with code 0", input.command, true)
+				: undefined;
+			if (failure && !failure.ok) return { ...failure, details: { ...value, ...(ioError ? { notice: "Output capture failed. Available output and log are incomplete." } : {}) } };
 			return { ok: true, value };
 		} finally {
-			if (aborted || timedOut) kill("SIGKILL");
+			if (aborted || timedOut || ioError) kill("SIGKILL");
 			clearTimeout(timer);
 			if (killTimer !== undefined) clearTimeout(killTimer);
 			context.signal?.removeEventListener("abort", onAbort);
 		}
 	},
 };
+}
+export const bashTool = createBashTool();

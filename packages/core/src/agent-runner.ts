@@ -1,4 +1,6 @@
-import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
+import type { SessionEvent } from "@forge-agent/protocol";
+import type { SessionStorage } from "./session-storage.ts";
+import type { CompactionResult, ContextSettings } from "./context/compaction.ts";
 import type { UsageTruthPoint } from "./usage.ts";
 import type { RequestBus } from "./request-bus.ts";
 
@@ -10,6 +12,9 @@ export interface AgentPort {
 	followUp(input: string): InputAcceptance;
 	abort(): void;
 	getUsage?(): UsageTruthPoint | undefined;
+	setStorage?(storage: SessionStorage): Promise<void>;
+	compact?(instructions?: string, emit?: (event: SessionEvent) => void, signal?: AbortSignal): Promise<CompactionResult>;
+	configureContext?(settings: Partial<ContextSettings>): void;
 }
 
 export class AgentRunner {
@@ -18,7 +23,7 @@ export class AgentRunner {
 
 	constructor(
 		private readonly port: AgentPort,
-		private readonly store: { appendTurn(messages: readonly SessionMessage[]): Promise<unknown> },
+		private readonly store: SessionStorage,
 		private readonly requestBus: RequestBus | undefined = undefined,
 	) {}
 
@@ -27,29 +32,18 @@ export class AgentRunner {
 		if (this.activeTurn) throw new Error("Agent runner is already processing a turn");
 		const turn = { aborted: false, accepting: true };
 		this.activeTurn = turn;
-		const startedAt = Date.now();
-		const messages: SessionMessage[] = [];
 		let ended = false;
-		let unsuccessful = false;
 		try {
+			await this.port.setStorage?.(this.store);
+			if (turn.aborted) { yield { type: "agent_end", timestamp: Date.now() }; return; }
 			for await (const event of this.port.runTurn(input)) {
-				if (event.type === "message_end") {
-					messages.push(event.message);
-					if (event.message.stopReason === "aborted" || event.message.stopReason === "error") unsuccessful = true;
-				}
-				if (event.type === "turn_end" && (event.stopReason === "aborted" || event.stopReason === "error")) unsuccessful = true;
 				if (event.type === "agent_end") { ended = true; turn.accepting = false; }
 				yield event;
 			}
 			if (!ended) throw new Error("Agent event stream ended without agent_end");
-			if (messages[0]?.role !== "user") messages.unshift({ role: "user", content: [{ type: "text", text: input }], timestamp: startedAt });
-			if (!turn.aborted && !unsuccessful && hasPairedToolCalls(messages)) {
-				try { await this.store.appendTurn(messages); }
-				catch (error) {
-					this.commitFailed = true;
-					throw error;
-				}
-			}
+		} catch (error) {
+			this.commitFailed = true;
+			throw error;
 		} finally {
 			if (this.activeTurn === turn) this.activeTurn = undefined;
 		}
@@ -76,20 +70,16 @@ export class AgentRunner {
 	getUsage(): UsageTruthPoint | undefined {
 		return this.port.getUsage?.();
 	}
+	configureContext(settings: Partial<ContextSettings>): void { this.assertHealthy(); this.port.configureContext?.(settings); }
+	async compact(instructions?: string, emit?: (event: SessionEvent) => void, signal?: AbortSignal): Promise<CompactionResult> {
+		this.assertHealthy();
+		if (this.activeTurn) throw new Error("Wait for active execution before compaction");
+		if (!this.port.compact) throw new Error("Port does not support compaction");
+		try { await this.port.setStorage?.(this.store); return await this.port.compact(instructions, emit, signal); }
+		catch (error) { this.commitFailed = true; throw error; }
+	}
 
 	private assertHealthy(): void {
 		if (this.commitFailed) throw new Error("Agent session commit failed; recreate the agent and reload storage before continuing");
 	}
-}
-
-function hasPairedToolCalls(messages: readonly SessionMessage[]): boolean {
-	const expected = new Set<string>();
-	const completed = new Set<string>();
-	for (const message of messages) {
-		if (message.role === "assistant") {
-			for (const block of message.content) if (block.type === "tool_call") expected.add(block.id);
-		}
-		if (message.role === "toolResult" && message.toolCallId) completed.add(message.toolCallId);
-	}
-	return [...expected].every((id) => completed.has(id));
 }

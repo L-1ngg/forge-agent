@@ -1,3 +1,4 @@
+import { sessionMessages } from "../src/session-storage.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -67,7 +68,7 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 		const secondEvents = await secondRun;
 		expect(executed).toEqual(["second"]);
 		expect(secondEvents.at(-1)?.type).toBe("agent_end");
-		expect((await secondStorage.load()).at(-1)?.stopReason).toBe("stop");
+		expect(sessionMessages(await secondStorage.load()).at(-1)?.stopReason).toBe("stop");
 		expect(JSON.stringify(await secondStorage.load())).not.toContain("first-prompt");
 		expect(JSON.stringify(await firstStorage.load())).not.toContain("second-prompt");
 		expect(requests).toHaveLength(3);

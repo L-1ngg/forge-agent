@@ -363,6 +363,7 @@ export class TranscriptProjector {
 		const source = content.source;
 		if (!source) return undefined;
 		if (message.role === "toolResult" && message.toolCallId) return undefined;
+		if (source.type === "image") return { id: content.entryId, kind: "user", text: `[image: ${source.mimeType}]`, timestamp: message.timestamp };
 		if (source.type === "text") {
 			if (source.text.length === 0) return undefined;
 			return message.role === "user"

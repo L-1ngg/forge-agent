@@ -27,7 +27,13 @@ export interface ToolCallBlock {
 	namespace?: string;
 }
 
-export type SessionContentBlock = TextBlock | ThinkingBlock | ToolCallBlock;
+export interface ImageBlock {
+	type: "image";
+	data: string;
+	mimeType: string;
+}
+
+export type SessionContentBlock = TextBlock | ThinkingBlock | ToolCallBlock | ImageBlock;
 
 export interface SessionMessage {
 	role: SessionRole;
@@ -42,6 +48,8 @@ export interface SessionMessage {
 	usage?: TokenUsage;
 	stopReason?: StopReason;
 	errorMessage?: string;
+	/** Failed length attempt selected for context recovery; retained only in raw history. */
+	contextExcluded?: boolean;
 }
 
 interface EventBase {
@@ -49,6 +57,8 @@ interface EventBase {
 }
 
 export type SessionEvent =
+	| (EventBase & { type: "compaction"; phase: "start" | "end" | "error" | "skipped" | "retry" | "attempt"; operationId: string; reason: string; beforeTokens: number; afterTokens?: number; error?: string; attempt?: number; delayMs?: number; thinking?: string; usage?: TokenUsage })
+	| (EventBase & { type: "recovery"; operationId: string; reason: string; attempt: number })
 	| (EventBase & { type: "agent_start" })
 	| (EventBase & { type: "agent_end" })
 	| (EventBase & { type: "turn_start" })

@@ -13,7 +13,7 @@ const agent = await createAgent({
 }, async (options) => createPiTestPort({
 	...options, cwd: directory, tools: [readTool], permission, requestBus: bus,
 	responses: [
-		{ toolCalls: [{ id: "short", name: "read", arguments: { path: "short.txt", start_line: 2, end_line: 3 } }, { id: "long", name: "read", arguments: { path: "long.txt" } }] },
+		{ toolCalls: [{ id: "short", name: "read", arguments: { path: "short.txt", offset: 2, limit: 2 } }, { id: "long", name: "read", arguments: { path: "long.txt" } }] },
 		{ text: "READS_COMPLETE" },
 	],
 }));

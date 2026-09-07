@@ -42,22 +42,52 @@ The host chooses where configuration comes from. The SDK does not read `.forge-a
 
 ## Storage and Commits
 
-Each instance starts with independent in-memory storage. A host may provide this interface, exported from `@forge-agent/core/sdk`:
+Each instance defaults to independent memory storage. Hosts may implement the types exported by `@forge-agent/core/sdk`:
 
 ```ts
-import type { SessionMessage } from "@forge-agent/protocol";
+import type { SessionState, SessionEntry } from "@forge-agent/core/sdk";
 
 interface SessionStorage {
-  load(): Promise<SessionMessage[]>;
-  appendTurn(messages: readonly SessionMessage[]): Promise<void>;
+  load(): Promise<SessionState>;
+  append(entry: SessionEntry): Promise<void>;
 }
 ```
 
-Declare `@forge-agent/protocol` as a workspace dependency when importing its message types. `createAgent` loads history once. Fully consuming a successful invocation commits it once, including tool continuation turns and processed interventions. Errors, cancellation, or iterator closure before commit prevent that invocation from being committed.
+`SessionState` contains all entries and the selected leafId. v4 records carry stable id, parentId and timestamp fields with an original message or separate compaction. The core allocates identities and appends serially: consumed user inputs before model requests, terminal assistant messages before tools, and settled tool results in call order before the next request.
 
-Once `appendTurn()` starts, cancellation and disposal wait for it to settle. They cannot revoke an arbitrary host write. Preserve the entire `SessionMessage`, including provider continuation signatures. The CLI's `SessionStore.asStorage()` retains the v3 JSONL format.
+Cancellation retains formed records and waits for started writes and tools. It does not roll back the invocation. Error and aborted assistant records remain inspectable but are filtered from future requests. Complete historical calls lacking results receive a request-only error stating that execution and side effects are unknown; they are never replayed.
 
-The storage adapter owns transactions, retries, and recovery. Do not let multiple instances write the same session concurrently. A failed commit throws to the consumer and faults the instance: inspect the actual storage state before recreating it. An exception does not prove that nothing was written. JSONL append has no transaction guarantee for power loss or partial writes; damaged files may require repair. Tool side effects are never rolled back.
+A successful append must be reloadable. A write failure stops new scheduling and faults the instance. Inspect actual storage before recreating it; do not blindly retry a potentially partial append or allow concurrent writers. JSONL has no power-loss or partial-write transaction guarantee. External tool effects are never rolled back.
+
+The CLI uses v4 through `SessionStore.asStorage()`. Older formats require a separate converted copy. Neither `processed` nor `message_end` acknowledges durability; normal iterator completion awaits all necessary writes.
+
+## Context Management
+
+The creation option `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }` defaults to `true`, `16384`, `20000`, and `"inherit"`. Update it while idle with `agent.configureContext(partial)`. Every task request checks whether estimated context strictly exceeds `contextWindow - reserveTokens`; recent tokens guide legal cut selection rather than imposing a final context cap.
+
+`contextWindow` optionally overrides the local capacity declaration, defaulting to model metadata. Lowering it tests triggering, not physical provider overflow. `maxTokens` controls ordinary task output independently of compaction reserve; provider defaults apply when omitted. `getUsage().contextEstimated` distinguishes measured usage from estimation. Model, system, tool, branch and projection changes invalidate prior anchors; summary usage never anchors task context.
+
+Historical user/toolResult content may include `{ type: "image", data: base64, mimeType }`. Requests retain the image, estimation counts 1024 tokens per image, and summaries serialize a placeholder. Task and summary pi-ai calls share `sessionId`: generated per instance by default, optionally supplied by the host, and derived from the session header in the CLI. Provider compatibility and cache settings control HTTP affinity fields; `cacheRetention: "none"` may suppress them.
+
+`await agent.compact(instructions?, onEvent?)` aborts active work, waits for tool and persistence cleanup, then compacts once without resuming the task. It returns `{ status, operationId, beforeTokens, afterTokens?, error? }`, with status `complete`, `skipped` or `error`. Storage faults still throw and disable the instance. Abort interrupts summaries and retry waits but waits for started writes. Instructions only focus the history summary.
+
+Summaries use the task model, authentication and routing, with no tools and `cacheRetention: "none"`. At most two logical requests generate history and an optional turn-prefix summary, concatenated directly. Reasoning inherits the task by default; `summaryReasoning: "off"` disables it only when supported, otherwise inheritance and the fallback reason are reported. The top-level `retry` policy defaults to enabled, three retries and a 2000 ms base delay: 2/4/8 seconds. Only classified transient responses retry the failed logical summary; provider retries are disabled and there is no cumulative summary-call cap.
+
+Failed proactive compaction preserves the view and permits the task request. Overflow and eligible length responses share one compaction recovery per continuous failure chain, including failures after partial text. Failed attempts remain in history, completed tools are never replayed, and successful answers are never regenerated just because reported usage exceeds the window. `enabled: false` disables automatic compaction and recovery; manual compaction remains available.
+
+Ordinary output-limit `length` text remains in subsequent requests; truncated tool calls are neither executed nor projected. A `length` attempt classified for context recovery stores `contextExcluded`, retaining its raw record while excluding it after reopening. Headless returns success after successful recovery, 1 for unrecovered error/length, and 130 for cancellation.
+
+Task streams and manual onEvent callbacks expose `compaction` phases (start, attempt, retry, end, error, skipped) and `recovery` events with operation identity, reason, estimates, attempts and usage. Attempt events report effective reasoning and any fallback. The TUI command is `/compact [instructions]`.
+
+## File and Command Output
+
+Read uses one-based `offset` and optional line-count `limit`, returning at most 2000 lines/50 KiB from the head, plus nextOffset or an oversized-line hint. It still reads the full file before slicing. Bash combines stdout/stderr in capture order and retains a 2000-line/50 KiB tail. Large output spills lazily to a complete system temporary log; logPath can be opened with ordinary Read. Failure, timeout and cancellation retain available output. Log I/O failure terminates the command and explicitly marks the capture incomplete.
+
+Logs have no quota, TTL, exit deletion or automatic scan; the system or user manages their lifetime. A missing log is an ordinary read error and does not prevent session loading. Custom tools own truncation and continuation; the core does not redistribute a batch output budget. Preview limits exclude additional status and path metadata.
+
+Use `SessionStore.convertCopy(source, target, cwd, options?)` to explicitly convert v3 to a distinct v4 file, refusing an existing target. The same entry point creates appendable copies of damaged or non-newline-terminated files. Open's onDiagnostic callback reports malformed JSON lines; leafId selects a branch. Uninterpretable selected chains or compaction boundaries are rejected. Roll back with preserved old data and a matching binary; disabling automatic compaction does not restore format compatibility.
+
+Run `bun examples/context-acceptance.ts` for bounded live-provider acceptance using explicit host configuration. It limits experimental calls and duration and removes its temporary session.
 
 ## Events, Input, and Lifecycle
 

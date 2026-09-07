@@ -21,7 +21,7 @@ export interface ToolError {
 	retryable: boolean;
 }
 
-export type ToolOutcome<T> = { ok: true; value: T } | { ok: false; error: ToolError };
+export type ToolOutcome<T> = { ok: true; value: T } | { ok: false; error: ToolError; details?: T };
 
 export function toolError(
 	error_code: ToolErrorCode,

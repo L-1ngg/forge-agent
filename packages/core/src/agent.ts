@@ -4,10 +4,18 @@ import { AgentRunner, type AgentPort, type InputAcceptance } from "./agent-runne
 import { createPiPort, type PiPortOptions } from "./pi-port.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
-import { MemorySessionStorage, type SessionStorage } from "./session-storage.ts";
+import { MemorySessionStorage, sessionMessages, type SessionStorage } from "./session-storage.ts";
 import type { UsageTruthPoint } from "./usage.ts";
+import { resolveRetryPolicy, validateRequestLimits, type CompactionResult, type ContextSettings, type RetryPolicy } from "./context/compaction.ts";
+import { randomUUID } from "node:crypto";
 
 export interface CreateAgentOptions {
+	/** Shared task/summary routing identity; supply it to retain affinity across reopening. */
+	sessionId?: string;
+	context?: Partial<ContextSettings>;
+	retry?: Partial<RetryPolicy>;
+	maxTokens?: number;
+	contextWindow?: number;
 	provider: string;
 	model: string;
 	apiKey?: string;
@@ -27,6 +35,8 @@ export interface AgentTurn extends AsyncIterable<SessionEvent> {
 }
 
 export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp"> {
+	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
+	configureContext(settings: Partial<ContextSettings>): void;
 	runTurn(input: string): AgentTurn;
 	steer(input: string, expectedTurnId: symbol): InputAcceptance;
 	followUp(input: string, expectedTurnId: symbol): InputAcceptance;
@@ -39,23 +49,30 @@ export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp">
 export type AgentOptions = CreateAgentOptions;
 
 export async function createAgent(options: CreateAgentOptions, portFactory: (options: PiPortOptions) => AgentPort | Promise<AgentPort> = createPiPort): Promise<Agent> {
+	resolveRetryPolicy(options.retry);
+	validateRequestLimits(options);
 	const storage = options.storage ?? new MemorySessionStorage();
 	const requestBus = options.requestBus ?? new RequestBus();
 	try {
 		const history = await storage.load();
 		const port = await portFactory({
+			sessionId: options.sessionId ?? randomUUID(),
 			provider: options.provider,
 			model: options.model,
 			systemPrompt: options.systemPrompt,
 			cwd: options.cwd,
 			thinkingLevel: options.thinkingLevel ?? "off",
+			...(options.context ? { context: options.context } : {}),
+			...(options.retry ? { retry: options.retry } : {}),
+			...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
+			...(options.contextWindow !== undefined ? { contextWindow: options.contextWindow } : {}),
 			...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
 			...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
 			...(options.tools ? { tools: options.tools } : {}),
 			...(options.toolInputRewrites ? { toolInputRewrites: options.toolInputRewrites } : {}),
 			permission: { ...options.permission, memory: options.permission?.memory ?? new MemoryPermissionStore() },
 			requestBus,
-			history: structuredClone(history),
+			history: sessionMessages(history),
 		});
 		return new HostedAgent(new AgentRunner(port, storage, requestBus), requestBus);
 	} catch (error) {
@@ -70,6 +87,8 @@ class HostedAgent implements Agent {
 	private disposed = false;
 	private faulted = false;
 	private disposing: Promise<void> | undefined;
+	private compacting: Promise<CompactionResult> | undefined;
+	private compactController: AbortController | undefined;
 
 	constructor(private runner: AgentRunner | undefined, private readonly bus: RequestBus) {
 		this.requests = bus.requests();
@@ -77,12 +96,14 @@ class HostedAgent implements Agent {
 
 	runTurn(input: string): AgentTurn {
 		this.assertAvailable();
+		if (this.compacting) throw new Error("Agent is compacting");
 		let started = false;
 		const id = Symbol("invocation");
 		return {
 			id,
 			[Symbol.asyncIterator]: () => {
 				this.assertAvailable();
+				if (this.compacting) throw new Error("Agent is compacting");
 				if (started) throw new Error("A turn can only be consumed once");
 				if (this.active) throw new Error("Agent is already processing a turn");
 				started = true;
@@ -108,6 +129,7 @@ class HostedAgent implements Agent {
 						active.canceled = true;
 						if (this.active === active && active.begun) this.runner?.abort();
 						try { return await iterator.return?.() ?? { done: true, value: undefined }; }
+						catch (error) { this.faulted = true; throw error; }
 						finally { release(); }
 					},
 				};
@@ -130,21 +152,44 @@ class HostedAgent implements Agent {
 		return active !== undefined && active.id === id && active.begun && !active.canceled;
 	}
 	abort(): void {
-		if (this.disposed || !this.active) return;
+		if (this.disposed) return;
+		if (this.compacting) { this.compactController?.abort(); this.runner?.abort(); }
+		if (!this.active) return;
 		this.active.canceled = true;
 		if (this.active.begun) this.runner?.abort();
 	}
 	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }
+	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); this.runner!.configureContext(settings); }
+	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult> {
+		this.assertAvailable();
+		if (this.compacting) throw new Error("Agent is compacting");
+		const controller = new AbortController();
+		this.compactController = controller;
+		const active = this.active;
+		if (active) { active.canceled = true; this.runner?.abort(); }
+		const running = (async () => {
+			try {
+				await active?.iterator.return?.();
+				if (this.active === active) this.active = undefined;
+				if (this.disposed) throw new Error("Agent has been disposed");
+				return await this.runner!.compact(instructions, emit, controller.signal);
+			} catch (error) { this.faulted = true; throw error; }
+			finally { this.compacting = undefined; this.compactController = undefined; }
+		})();
+		this.compacting = running;
+		return running;
+	}
 	respond(response: ResponseEnvelope): boolean { this.assertAvailable(); return this.bus.respond(response); }
 	dispose(): Promise<void> {
 		if (this.disposing) return this.disposing;
 		this.disposed = true;
+		this.compactController?.abort();
 		if (this.active) this.active.canceled = true;
 		this.runner?.abort();
 		this.bus.close();
 		const active = this.active;
 		this.disposing = (async () => {
-			try { await active?.iterator.return?.(); }
+			try { await active?.iterator.return?.(); await this.compacting; }
 			finally { this.active = undefined; this.runner = undefined; }
 		})();
 		return this.disposing;

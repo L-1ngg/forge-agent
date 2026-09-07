@@ -1,6 +1,8 @@
 import type { ContextUsageSnapshot, SessionMessage, TokenUsage } from "@forge-agent/protocol";
 
 export interface ContextAssembly {
+	identity?: string;
+	fixedText?: string;
 	messages?: readonly SessionMessage[];
 	/** Exact count from the provider/request builder when available. */
 	contextTokens?: number;
@@ -38,8 +40,8 @@ export function calculateContextUsage(context: ContextAssembly | readonly Sessio
 		const counted = assembly.tokenCounter?.(messages) ?? options.tokenCounter?.(messages);
 		const count = finiteNonNegative(counted);
 		if (count !== undefined) result.contextTokens = count;
-		else if (messages.length > 0) {
-			result.contextTokens = estimateContextTokens(messages);
+		else if (messages.length > 0 || assembly.fixedText) {
+			result.contextTokens = estimateContextTokens(messages) + estimateTextTokens(assembly.fixedText ?? "");
 			result.contextEstimated = true;
 		}
 	}
@@ -58,6 +60,7 @@ export class UsageTracker {
 	private latest: TokenUsage | undefined;
 	private runningCount = 0;
 	private readonly options: UsageTrackerOptions;
+	private anchor: { prefix: string; length: number; identity: string | undefined; tokens: number } | undefined;
 
 	constructor(options: UsageTrackerOptions = {}) {
 		this.options = { ...options };
@@ -65,6 +68,7 @@ export class UsageTracker {
 
 	setContext(context: ContextAssembly | readonly SessionMessage[]): void {
 		this.context = isMessageList(context) ? { messages: context } : { ...context };
+		if (this.anchor && (this.anchor.identity !== this.context.identity || this.anchor.prefix !== JSON.stringify((this.context.messages ?? []).slice(0, this.anchor.length)))) this.invalidate();
 		if (!isMessageList(context) && context.usage) this.latest = cloneUsage(context.usage);
 	}
 
@@ -74,7 +78,14 @@ export class UsageTracker {
 
 	recordUsage(usage: TokenUsage): void {
 		this.latest = cloneUsage(usage);
+		const messages = this.context.messages ?? [];
+		const last = messages.at(-1);
+		const tokens = usageTokens(usage);
+		if (last?.role === "assistant" && last.stopReason !== "error" && last.stopReason !== "aborted" && tokens > 0) {
+			this.anchor = { prefix: JSON.stringify(messages), length: messages.length, identity: this.context.identity, tokens };
+		}
 	}
+	invalidate(): void { this.anchor = undefined; }
 
 	record(usage: TokenUsage): void {
 		this.recordUsage(usage);
@@ -106,6 +117,11 @@ export class UsageTracker {
 			{ ...this.context, ...(this.latest ? { usage: this.latest } : {}) },
 			this.options,
 		);
+		if (this.anchor && this.context.contextTokens === undefined && !this.context.tokenCounter) {
+			const trailing = (this.context.messages ?? []).slice(this.anchor.length);
+			snapshot.contextTokens = this.anchor.tokens + estimateContextTokens(trailing);
+			snapshot.contextEstimated = trailing.length > 0;
+		}
 		if (this.runningCount > 0 || this.context.running !== undefined) snapshot.running = this.context.running ?? this.runningCount;
 		return snapshot;
 	}
@@ -129,13 +145,17 @@ function usageSnapshot(usage: TokenUsage): ContextUsageSnapshot {
 
 function latestUsage(messages: readonly SessionMessage[]): TokenUsage | undefined {
 	for (let index = messages.length - 1; index >= 0; index--) {
-		const usage = messages[index]?.usage;
-		if (usage) return usage;
+		const message = messages[index];
+		if (message?.role === "assistant" && message.stopReason !== "error" && message.stopReason !== "aborted" && message.usage && usageTokens(message.usage) > 0) return message.usage;
 	}
 	return undefined;
 }
 
-/** Conservative fallback used only when no provider-specific counter exists. */
+export function usageTokens(usage: TokenUsage): number {
+	return finitePositive(usage.totalTokens) ?? [usage.input, usage.output, usage.cacheRead, usage.cacheWrite].reduce((sum, value) => sum + (finiteNonNegative(value) ?? 0), 0);
+}
+
+/** Character heuristic, not an upper bound or exact tokenizer. */
 export function estimateContextTokens(messages: readonly SessionMessage[]): number {
 	let total = 0;
 	for (const message of messages) {
@@ -143,6 +163,7 @@ export function estimateContextTokens(messages: readonly SessionMessage[]): numb
 		for (const block of message.content) {
 			if (block.type === "text") total += estimateTextTokens(block.text);
 			else if (block.type === "thinking") total += estimateTextTokens(block.thinking);
+			else if (block.type === "image") total += 1024;
 			else total += estimateTextTokens(`${block.name} ${JSON.stringify(block.arguments)}`);
 		}
 	}
@@ -150,7 +171,7 @@ export function estimateContextTokens(messages: readonly SessionMessage[]): numb
 }
 
 function estimateTextTokens(value: string): number {
-	return value.length === 0 ? 0 : Math.max(1, Math.ceil([...value].length / 4));
+	return Math.ceil(value.length / 4);
 }
 
 function cloneUsage(usage: TokenUsage): TokenUsage {

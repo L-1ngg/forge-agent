@@ -84,12 +84,17 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 		};
 		const apiKey = await resolveSecret(config.apiKey);
 		const runner = await createAgent({
+			sessionId: store.header.id,
 			provider,
 			model,
 			...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
 			...(apiKey ? { apiKey } : {}),
 			systemPrompt: config.systemPrompt,
 			thinkingLevel: config.thinkingLevel,
+			...(config.context ? { context: config.context } : {}),
+			...(config.retry ? { retry: config.retry } : {}),
+			...(config.maxTokens !== undefined ? { maxTokens: config.maxTokens } : {}),
+			...(config.contextWindow !== undefined ? { contextWindow: config.contextWindow } : {}),
 			cwd: workingDirectory,
 			storage: store.asStorage(),
 			tools: builtinTools,
@@ -104,6 +109,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 				commands: [
 					{ name: "help", description: "Show commands" },
 					{ name: "clear", description: "Clear the transcript" },
+					{ name: "compact", description: "Compact context" },
 					{ name: "quit", description: "Exit" },
 				],
 				listFiles: (prefix) => scanFiles(workingDirectory, prefix),

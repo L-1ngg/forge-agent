@@ -1,6 +1,7 @@
 import { App, frameToText } from "../../packages/tui/src/index.ts";
 import { createAgent, createPiTestPort, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
 import type { SessionEvent } from "../../packages/protocol/src/index.ts";
+import { sessionMessages } from "../../packages/core/src/session-storage.ts";
 
 const bus = new RequestBus({ timeoutMs: null });
 const storage = new MemorySessionStorage();
@@ -12,13 +13,13 @@ const agent = await createAgent({
 	provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd(), requestBus: bus,
 	storage: {
 		load: () => storage.load(),
-		async appendTurn(messages) {
-			if (++commits === 1) {
+		async append(entry) {
+			if (entry.type === "message" && entry.message.role === "assistant" && ++commits === 1) {
 				process.send?.({ type: "saving" });
 				await commitGate;
 				if (process.env.FORGE_AGENT_PTY_FAIL_COMMIT === "1") throw new Error("injected disk failure");
 			}
-			await storage.appendTurn(messages);
+			await storage.append(entry);
 		},
 	},
 }, (options) => createPiTestPort({ ...options, responses: [{ text: "FIRST_COMPLETE" }, { text: "NEXT_COMPLETE" }, { text: "LAST_COMPLETE" }] }));
@@ -43,5 +44,5 @@ try {
 	process.send?.({ type: "ready" });
 	await app.waitUntilStopped();
 } finally { await agent.dispose(); }
-process.send?.({ type: "result", raw: process.stdin.isRaw, pending: bus.pendingCount, calls, messages: await storage.load() });
+process.send?.({ type: "result", raw: process.stdin.isRaw, pending: bus.pendingCount, calls, messages: sessionMessages(await storage.load()) });
 process.disconnect?.();

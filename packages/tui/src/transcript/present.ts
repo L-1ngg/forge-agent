@@ -5,7 +5,7 @@ import { graphemes, graphemeWidth, truncateToWidth, visibleWidth, wrapTextWithOf
 import { renderMarkdown } from "../markdown.ts";
 import { trimHeadTail, trimTail } from "./fold.ts";
 import type { EntryChromeSpec, EntryRow, StyledSpan, TranscriptEntry } from "./types.ts";
-import { entryDetail, readContent } from "./detail.ts";
+import { entryDetail, readContent, readNotice } from "./detail.ts";
 
 /** Kind renderers produce rows + a chrome declaration; the shell owns geometry. */
 export interface EntryPresentation {
@@ -238,9 +238,9 @@ function presentTool(entry: TranscriptEntry & { kind: "tool" }, contentWidth: nu
 	const read = entry.name === "read";
 	const collapsed = entry.displayMode === "collapsed";
 	const failed = entry.lifecycle === "failed";
-	const start = typeof entry.args.start_line === "number" ? entry.args.start_line : 1;
-	const range = entry.args.start_line !== undefined || entry.args.end_line !== undefined
-		? ` (${start}-${entry.args.end_line ?? ""})` : "";
+	const start = typeof entry.args.offset === "number" ? entry.args.offset : 1;
+	const range = entry.args.offset !== undefined || entry.args.limit !== undefined
+		? ` (${start}-${typeof entry.args.limit === "number" ? start + entry.args.limit - 1 : ""})` : "";
 	const specialized = entry.name === "bash" || entry.name === "edit";
 	const label = read ? "Read" : entry.name === "bash" ? "Run" : entry.name === "edit" ? "Edit" : entry.name === "write" ? "Write" : entry.name;
 	const subject = entry.name === "bash" ? commandTitle(String(entry.args.command ?? ""), entry.args.description)
@@ -271,5 +271,6 @@ function presentTool(entry: TranscriptEntry & { kind: "tool" }, contentWidth: nu
 			source: { line: index + 2, column: part.column },
 		}));
 	});
-	return { rows: [header, ...(body.length ? [row("", fg(theme, "muted")), ...body] : [])], chrome: { collapsed: false, vpadTop: 0, vpadBottom: 1 } };
+	const notice = readNotice(entry);
+	return { rows: [header, ...(body.length ? [row("", fg(theme, "muted")), ...body] : []), ...(notice ? wrapTextWithOffsets(notice, contentWidth).map((part) => row(part.text, fg(theme, "muted"))) : [])], chrome: { collapsed: false, vpadTop: 0, vpadBottom: 1 } };
 }

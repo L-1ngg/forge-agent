@@ -308,7 +308,7 @@ test("a completed thought before exploration belongs to its summary and remains 
 
 test("selected historical tool previews and opens details without submitting the draft", async () => {
 	const events: SessionEvent[] = ["older", "newer"].flatMap((id) => [
-		{ type: "tool_execution_start", toolCallId: id, toolName: "read", args: { path: `${id}.ts`, start_line: 10 }, timestamp: 1 },
+		{ type: "tool_execution_start", toolCallId: id, toolName: "read", args: { path: `${id}.ts`, offset: 10 }, timestamp: 1 },
 		{ type: "tool_execution_end", toolCallId: id, toolName: "read", content: JSON.stringify({ content: Array.from({ length: 16 }, (_, i) => `${id}_${i + 10}`).join("\n") }), isError: false, timestamp: 2 },
 	]);
 	const { app, input, bus } = createApp({ port: fakePort(events) });
@@ -405,7 +405,7 @@ test("existing session opens directly in history and failed edit details retain 
 
 test("replayed read retains its name, grouping and numbered details without a result toolName", async () => {
 	const { app, input } = createApp({ history: [
-		{ role: "assistant", timestamp: 1, content: [{ type: "tool_call", id: "old-read", name: "read", arguments: { path: "file.txt", start_line: 12 } }] },
+		{ role: "assistant", timestamp: 1, content: [{ type: "tool_call", id: "old-read", name: "read", arguments: { path: "file.txt", offset: 12 } }] },
 		{ role: "toolResult", timestamp: 2, toolCallId: "old-read", content: [{ type: "text", text: JSON.stringify({ content: "saved line\nnext line" }) }] },
 	] });
 	await app.start();

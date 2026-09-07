@@ -48,6 +48,36 @@ test("fallback context estimation is deterministic", () => {
 	expect(estimateContextTokens(messages)).toBe(estimateContextTokens(messages));
 });
 
+test("fallback counts Chinese, JSON arguments and images without counting base64 as text", () => {
+	const image: SessionMessage = { role: "user", timestamp: 1, content: [{ type: "image", data: "A".repeat(100000), mimeType: "image/png" }] };
+	expect(estimateContextTokens([image])).toBe(1025);
+	expect(estimateContextTokens([message("中文测试")])).toBe(2);
+	expect(estimateContextTokens([{ role: "assistant", timestamp: 1, content: [{ type: "tool_call", id: "id", name: "read", arguments: { path: "你好.txt" } }] }])).toBe(1 + Math.ceil('read {"path":"你好.txt"}'.length / 4));
+});
+
+test.each(["model", "system", "tools", "branch", "projection"])("usage anchor invalidates %s changes", (kind) => {
+	const tracker = new UsageTracker();
+	const measured: SessionMessage[] = [message("old"), { ...message("answer", usage), role: "assistant", stopReason: "stop" }];
+	tracker.setContext({ identity: "original", messages: measured }); tracker.recordUsage(usage);
+	tracker.setContext({ identity: ["model", "system", "tools"].includes(kind) ? kind : "original", messages: ["branch", "projection"].includes(kind) ? [message(kind), measured[1]!] : measured });
+	expect(tracker.snapshot().contextEstimated).toBe(true);
+	expect(tracker.snapshot().contextTokens).not.toBe(90);
+});
+
+test("valid task usage includes trailing estimates and invalidates changed request material", () => {
+	const tracker = new UsageTracker({ contextWindow: 1000 });
+	const assistant: SessionMessage = { role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: 2, stopReason: "stop", usage };
+	const measured = [message("task"), assistant];
+	tracker.setContext({ messages: measured, identity: "model-a/system-a/tools-a", fixedText: "system-a" });
+	tracker.recordUsage(usage);
+	expect(tracker.snapshot()).toMatchObject({ contextTokens: 90, contextEstimated: false });
+	tracker.setContext({ messages: [...measured, message("12345678")], identity: "model-a/system-a/tools-a", fixedText: "system-a" });
+	expect(tracker.snapshot()).toMatchObject({ contextTokens: 93, contextEstimated: true });
+	tracker.setContext({ messages: measured, identity: "model-b/system-a/tools-a", fixedText: "system-a" });
+	expect(tracker.snapshot().contextTokens).not.toBe(90);
+	expect(tracker.snapshot().contextEstimated).toBe(true);
+});
+
 test("pi port refreshes context usage after the assembled transcript changes", async () => {
 	const port = createPiTestPort({ responses: [{ text: "first" }, { text: "second" }] });
 	for await (const _event of port.runTurn("short")) {}
@@ -58,5 +88,5 @@ test("pi port refreshes context usage after the assembled transcript changes", a
 	expect(first?.contextTokens).toBeDefined();
 	expect(second?.contextTokens).toBeDefined();
 	expect(second?.contextTokens).toBeGreaterThan(first?.contextTokens ?? -1);
-	expect(second?.contextEstimated).toBe(true);
+	expect(second?.contextEstimated).toBe(false);
 });

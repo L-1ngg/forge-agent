@@ -8,7 +8,7 @@ export class SessionSearch {
 		const normalized = query.trim().toLocaleLowerCase();
 		if (!normalized) return [];
 		return (await this.entries())
-			.filter((entry) => JSON.stringify(entry.message).toLocaleLowerCase().includes(normalized))
+			.filter((entry) => JSON.stringify(entry.type === "message" ? entry.message : entry.summary).toLocaleLowerCase().includes(normalized))
 			.map((entry) => entry.id);
 	}
 

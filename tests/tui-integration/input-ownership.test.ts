@@ -76,7 +76,7 @@ for (const mode of ["fifo", "stop", "replace", "failure"] as const) test(`PTY AD
 		expect(result.raw).toBe(false);
 		expect(result.pending).toBe(0);
 		expect(result.messages?.filter((message) => message.role === "user").map((message) => message.content)).toEqual(
-			(mode === "failure" ? [] : expected).map((text) => [{ type: "text", text }]),
+			expected.map((text) => [{ type: "text", text }]),
 		);
 		expect(output).toContain("\x1b[?1049l");
 	} finally {

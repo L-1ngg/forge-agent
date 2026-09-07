@@ -20,24 +20,24 @@ test("SDK disposal remains terminal across generated queued inputs and cancellat
 		}
 		await agent.dispose();
 		await agent.dispose();
-		expect(await storage.load()).toHaveLength(0);
+		expect((await storage.load()).entries.length).toBeGreaterThanOrEqual(1);
 		expect((await iterator.next()).done).toBe(true);
 		expect(agent.getUsage()).toBeUndefined();
 		expect(() => agent.runTurn("late")).toThrow("disposed");
 	}), { numRuns: 20, seed: 90502 });
 });
 
-test("SDK commits complete calls but not a consumer break at agent_end", async () => {
+test("SDK retains complete calls even when the consumer breaks at agent_end", async () => {
 	const storage = new MemorySessionStorage();
 	const agent = await createAgent({ ...options, storage }, () => createPiTestPort({ responses: [{ text: "first" }, { text: "second" }] }));
 	const initialUsage = agent.getUsage()?.contextTokens;
 	for await (const event of agent.runTurn("first")) {
 		if (event.type === "agent_end") break;
 	}
-	expect(await storage.load()).toHaveLength(0);
-	expect(agent.getUsage()?.contextTokens).toBe(initialUsage);
+	expect((await storage.load()).entries.length).toBeGreaterThanOrEqual(1);
+	expect(agent.getUsage()?.contextTokens).toBeGreaterThan(initialUsage ?? 0);
 	for await (const event of agent.runTurn("second")) void event;
-	expect(await storage.load()).toHaveLength(2);
+	expect((await storage.load()).entries).toHaveLength(4);
 	await agent.dispose();
 });
 
@@ -49,7 +49,7 @@ test("SDK dispose aborts streaming while the event consumer is paused", async ()
 	const disposing = agent.dispose();
 	expect(agent.dispose()).toBe(disposing);
 	await disposing;
-	expect(await storage.load()).toHaveLength(0);
+	expect((await storage.load()).entries.length).toBeGreaterThanOrEqual(1);
 	expect(() => agent.runTurn("again")).toThrow("disposed");
 	expect(() => agent.steer("again", Symbol())).toThrow("disposed");
 	expect(() => agent.followUp("again", Symbol())).toThrow("disposed");
@@ -76,7 +76,7 @@ test("SDK default permission waits for host response and dispose closes requests
 });
 
 test("SDK rejects reuse after storage commit failure", async () => {
-	const agent = await createAgent({ ...options, storage: { load: async () => [], appendTurn: async () => { throw new Error("disk failed"); } } }, () => createPiTestPort({ responses: [{ text: "done" }] }));
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { throw new Error("disk failed"); } } }, () => createPiTestPort({ responses: [{ text: "done" }] }));
 	const consume = async () => { for await (const event of agent.runTurn("hello")) void event; };
 	await expect(consume()).rejects.toThrow("disk failed");
 	expect(() => agent.runTurn("again")).toThrow("faulted");

@@ -19,6 +19,14 @@ export function readContent(entry: Extract<TranscriptEntry, { kind: "tool" }>): 
 	return entry.content;
 }
 
+export function readNotice(entry: Extract<TranscriptEntry, { kind: "tool" }>): string | undefined {
+	if (entry.name !== "read") return;
+	try {
+		const value: unknown = JSON.parse(entry.content);
+		if (value && typeof value === "object" && "notice" in value && typeof value.notice === "string") return value.notice;
+	} catch { /* Non-JSON failures remain in the original content. */ }
+}
+
 export function entryDetail(entry: TranscriptEntry): EntryDetail {
 	const base = { live: false, kind: entry.kind };
 	switch (entry.kind) {
@@ -40,9 +48,9 @@ export function entryDetail(entry: TranscriptEntry): EntryDetail {
 				return { ...base, kind: "edit", title: `Edit ${path}${entry.lifecycle === "failed" ? " (failed)" : ""}`, metadata: path,
 					lines: [...(entry.lifecycle === "failed" ? [entry.content] : []), ...oldText.split("\n").map((line) => `-${line}`), ...newText.split("\n").map((line) => `+${line}`)] };
 			}
-			return { ...base, title: `${read ? "Read" : entry.name} ${path}${entry.lifecycle === "failed" ? " (failed)" : ""}`.trim(), metadata: path,
+			return { ...base, title: `${read ? "Read" : entry.name} ${path}${entry.lifecycle === "failed" ? " (failed)" : ""}`.trim(), metadata: [path, readNotice(entry)].filter(Boolean).join(" | "),
 				lines: (read ? readContent(entry) : `Arguments\n${JSON.stringify(entry.args, null, 2)}\n\nResult\n${entry.content}`).split("\n"),
-				...(read && entry.lifecycle !== "failed" ? { firstLine: typeof entry.args.start_line === "number" ? entry.args.start_line : 1 } : {}) };
+				...(read && entry.lifecycle !== "failed" ? { firstLine: typeof entry.args.offset === "number" ? entry.args.offset : 1 } : {}) };
 		}
 		case "execute": {
 			const data = entry.block.data as ExecuteBlockData;
