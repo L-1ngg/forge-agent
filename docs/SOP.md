@@ -1,6 +1,6 @@
 # SOP — 开发协作流程
 
-> 状态:生效(2026-09-02)。机制出处:[decisions/001-doc-system.md](decisions/001-doc-system.md)。
+> 状态:生效(2026-09-07)。机制出处:[decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 本文件是「怎么开发」的唯一真相源;[AGENTS.md](../AGENTS.md) 只放摘要并指向这里。
 
 ## 核心立场
@@ -48,6 +48,13 @@
 | Rollback | 合入前就有回退路径 | 开关 / revert / 保守侧降级(失败时拒绝,不放行) |
 | Learn | 可能复发才入库 | [lessons.md](lessons.md) 三门禁 |
 
+## Skills 接入
+
+- 使用 `to-spec`、`to-tickets` 或 `implement` 时，先按 [issue-tracker.md](agents/issue-tracker.md#规格与进度归属) 确定规格、任务状态与施工图的归属。
+- `to-spec` 产出需求规格，`to-tickets` 拆分可执行任务；中、大改动仍按本文件的改动分级补齐施工设计，再由 `implement` 实施。已有规格和施工图通过引用衔接。
+- `grill-with-docs`、`domain-modeling` 按 [domain.md](agents/domain.md) 维护术语与 ADR；具体接口契约继续以 `AGENTS.md` 指定的 SDK 指南等文档为准。
+- 项目内调用 `handoff` 时，按本文件「Review 交接」写入 `review-notes/`，覆盖 Skill 默认的操作系统临时目录落点。
+
 ## 验证纪律
 
 - 日常直接推送 `master`,CI 是推送后的反馈,不强制 PR 或额外审批。源码草稿预发布按 [release.md](release.md) 对指定 SHA 重新执行 Ubuntu/macOS 验证;公开发布由 operator 决定,不把 CI 通过视为人工验收。
@@ -61,6 +68,7 @@
 
 跨 session / 跨工具换人继续或评审时,写交接信,模板 [templates/review-request.md](templates/review-request.md)。要点:
 
+- 项目交接(含 `handoff`)统一保存为 `review-notes/YYYY-MM-DD-{topic}-review-request.md`；已有规格、ADR、issue 与验证记录使用路径或 URL 引用，交接信只补充恢复工作所需的上下文。
 - 原始需求**引用 operator 原话**,不写二手转述
 - verdict 绑定具体 commit SHA 或文档版本
 - 同 session 内的轻量评审直接对话完成,**不落盘** —— 避免为追溯再造追溯

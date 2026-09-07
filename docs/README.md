@@ -1,5 +1,6 @@
 # docs/ — 文档系统
 
+> 状态:生效(2026-09-07)。
 > 设计借自 [clowder-ai](https://github.com/zts212653/clowder-ai)(commit 7188f73),取舍记录见 [decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 原则:文档领路,代码跟随;证据说话,不是信心说话。
 
@@ -8,7 +9,10 @@
 | 文档 | 职责 |
 |---|---|
 | [英文 README](../README.md)、[中文 README](../README.zh-CN.md) | 使用入口、当前能力与路线摘要;双语内容一起维护 |
-| [plan.md](plan.md) | 规划 + 行动项(**热层**:只放当前要做的) |
+| [plan.md](plan.md) | 项目路线、优先级与当前阶段入口(**热层**);已建 issue 的任务使用链接 |
+| [Issue tracker](agents/issue-tracker.md) | GitHub Issues 操作与规格、任务进度、施工图的职责边界 |
+| [Domain docs](agents/domain.md) | single-context 领域文档的读取与写入约定;根目录 `CONTEXT.md` 按需创建 |
+| [Triage labels](agents/triage-labels.md) | triage 角色到 GitHub 标签的映射 |
 | [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、存储、输入归属与生命周期契约;接口变化时同步 |
 | [GitHub 交付](phases/github-delivery.md) | 命名、CI、草稿预发布施工与验证 |
 | [release.md](release.md) | 英文手动源码预发布操作与失败处理 |
@@ -30,10 +34,13 @@
 | `docs/phases/` | 阶段或功能施工图 | 历史阶段用 `phase-{N}.md`;当前按主题命名(如 `owned-core.md`、`sdk.md`),不另建一套数字路线 |
 | `docs/research/` | 固定快照的源码调研、可迁移结论与未决问题 | `{topic}.md` |
 | `docs/templates/` | 文档模板 | `{type}.md` |
+| `docs/agents/` | Skills 的项目配置 | `issue-tracker.md`、`domain.md`、`triage-labels.md` |
 | `review-notes/`(仓库根) | 跨 session 的 review 交接信 | `YYYY-MM-DD-{topic}-review-request.md` |
 
 - 教训条目:`LL-XXX` 三位递增,发布后不删不改 ID;重大改写保留 ID 并记录更新与原因。
 - 日期一律 `YYYY-MM-DD`。
+
+根目录 `CONTEXT.md` 只维护领域术语，按需创建；具体接口契约通过链接引用现有权威文档。Skills 的施工与交接流程见 [SOP](SOP.md#skills-接入)。
 
 ## 分层原则(2026-08-31 operator 确认)
 

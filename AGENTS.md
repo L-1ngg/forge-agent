@@ -14,7 +14,8 @@
 
 | 问题 | 真相源 |
 |---|---|
-| 要做什么、做到哪了 | [docs/plan.md](docs/plan.md)(只放行动项) |
+| 项目路线、优先级与当前阶段入口 | [docs/plan.md](docs/plan.md)(只放当前行动项与链接) |
+| Issue 规格、任务验收与任务状态 | GitHub Issues;与施工图的分工见 [issue-tracker.md](docs/agents/issue-tracker.md) |
 | 当前内核与 SDK 怎么施工、如何验收 | [自研内核](docs/phases/owned-core.md)、[SDK](docs/phases/sdk.md);历史阶段见 [docs/phases/](docs/phases/) |
 | 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
 | 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
@@ -38,3 +39,14 @@
 - 不覆盖、不回滚 operator 的改动
 - 不做破坏性 / 远程变更操作(hard reset、批量删除、force-push),除非明确要求
 - 工具链跟随仓库既有约定;greenfield 时 Python → uv,Node → bun
+
+## Agent skills
+
+### Issue tracker
+任务与规格使用 GitHub Issues，仓库为 `L-1ngg/forge-agent`。操作约定见 [issue-tracker.md](docs/agents/issue-tracker.md)。
+
+### Triage labels
+使用五个默认 triage 标签。角色映射见 [triage-labels.md](docs/agents/triage-labels.md)。
+
+### Domain docs
+采用 single-context：根目录 `CONTEXT.md` 与现有 `docs/decisions/`。读取规则见 [domain.md](docs/agents/domain.md)。
