@@ -1,3 +1,5 @@
+import type { EntryRow } from "./transcript/types.ts";
+
 /**
  * Application-level transcript scroll state (phase 2.2 B3).
  * offsetFromBottom === 0 means follow mode: new content keeps the viewport
@@ -8,19 +10,22 @@ export interface EntrySpan {
 	entryId: string;
 	start: number;
 	height: number;
+	rowSources?: readonly (EntryRow["source"] | undefined)[];
 }
 
 export interface ScrollAnchor {
 	entryId: string;
 	rowWithinEntry: number;
+	source?: EntryRow["source"];
 }
 
 export class ScrollState {
 	private offsetFromBottom = 0;
 	private anchor: ScrollAnchor | undefined;
+	private held = false;
 
 	get following(): boolean {
-		return this.offsetFromBottom === 0;
+		return this.offsetFromBottom === 0 && !this.held;
 	}
 
 	get offset(): number {
@@ -29,7 +34,7 @@ export class ScrollState {
 
 	scrollBy(lines: number, maxOffset: number): void {
 		this.offsetFromBottom = clamp(this.offsetFromBottom + Math.trunc(lines), 0, Math.max(0, maxOffset));
-		if (this.offsetFromBottom === 0) this.anchor = undefined;
+		this.anchor = undefined;
 	}
 
 	pageBy(pages: number, viewportHeight: number, maxOffset: number): void {
@@ -37,18 +42,23 @@ export class ScrollState {
 	}
 
 	jumpToEnd(): void {
+		this.held = false;
 		this.offsetFromBottom = 0;
 		this.anchor = undefined;
 	}
 
+	/** Manual reading remains paused even when all current content fits on screen. */
+	hold(): void { this.held = true; }
+
 	/** Capture the entry under the viewport's top row before a reflow. */
 	captureAnchor(spans: readonly EntrySpan[], totalRows: number, viewportHeight: number): void {
-		if (this.following) return;
+		if (this.following || this.anchor) return;
 		const viewportTop = Math.max(0, totalRows - this.offsetFromBottom - viewportHeight);
 		const span = spans.find((candidate) => viewportTop >= candidate.start && viewportTop < candidate.start + candidate.height)
 			?? [...spans].reverse().find((candidate) => candidate.start <= viewportTop);
 		if (!span) return;
-		this.anchor = { entryId: span.entryId, rowWithinEntry: Math.max(0, viewportTop - span.start) };
+		const rowWithinEntry = Math.max(0, viewportTop - span.start);
+		this.anchor = { entryId: span.entryId, rowWithinEntry, source: span.rowSources?.[rowWithinEntry] };
 	}
 
 	/** After a reflow, reposition so the anchored entry row stays put. */
@@ -59,11 +69,19 @@ export class ScrollState {
 			this.anchor = undefined;
 			return;
 		}
-		const row = Math.min(span.start + this.anchor.rowWithinEntry, span.start + Math.max(0, span.height - 1));
+		let rowWithinEntry = this.anchor.rowWithinEntry;
+		const source = this.anchor.source;
+		if (source && span.rowSources) {
+			let match: number | undefined;
+			for (const [index, value] of span.rowSources.entries()) {
+				if (value?.line === source.line && (match === undefined || value.column <= source.column)) match = index;
+			}
+			if (match !== undefined) rowWithinEntry = match;
+		}
+		const row = Math.min(span.start + rowWithinEntry, span.start + Math.max(0, span.height - 1));
 		const maxOffset = Math.max(0, totalRows - viewportHeight);
 		this.offsetFromBottom = clamp(totalRows - viewportHeight - (row - 0), 0, maxOffset);
-		// Anchor consumed; recapture on the next reflow.
-		this.anchor = undefined;
+		// Keep the original content position until navigation; rounded row starts drift on repeated resize.
 	}
 }
 

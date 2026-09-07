@@ -119,21 +119,29 @@ export function truncateToWidth(text: string, maxWidth: number): string {
 
 /** Greedy word-aware wrap: break at spaces when possible, never split a wide grapheme. */
 export function wrapText(text: string, width: number): string[] {
-	if (width <= 0) return [""];
-	const out: string[] = [];
-	for (const logical of text.split("\n")) {
+	return wrapTextWithOffsets(text, width).map((row) => row.text);
+}
+
+/** Source offsets survive word wrapping, including spaces omitted at line breaks. */
+export function wrapTextWithOffsets(text: string, width: number): { text: string; line: number; column: number }[] {
+	if (width <= 0) return [{ text: "", line: 0, column: 0 }];
+	const out: { text: string; line: number; column: number }[] = [];
+	for (const [sourceLine, logical] of text.split("\n").entries()) {
 		let line = "";
 		let lineWidth = 0;
+		let column = 0;
 		let lastSpace = -1; // index into `line` (string offset) of the last breakable space
 		for (const grapheme of graphemes(logical)) {
 			const w = graphemeWidth(grapheme);
 			if (w > 0 && lineWidth + w > width) {
 				if (lastSpace > 0) {
-					out.push(line.slice(0, lastSpace));
+					out.push({ text: line.slice(0, lastSpace), line: sourceLine, column });
+					column += lastSpace + 1;
 					line = line.slice(lastSpace + 1) + grapheme;
 					lineWidth = visibleWidth(line);
 				} else {
-					out.push(line);
+					out.push({ text: line, line: sourceLine, column });
+					column += line.length;
 					line = grapheme;
 					lineWidth = w;
 				}
@@ -144,7 +152,7 @@ export function wrapText(text: string, width: number): string[] {
 			line += grapheme;
 			lineWidth += w;
 		}
-		out.push(line);
+		out.push({ text: line, line: sourceLine, column });
 	}
 	return out;
 }

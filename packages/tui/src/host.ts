@@ -1,6 +1,7 @@
-import { DISABLE_BRACKETED_PASTE, ENABLE_BRACKETED_PASTE, ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN, RESET_ATTRIBUTES, SHOW_CURSOR, SYNC_OUTPUT_END, paintDiff } from "./ansi.ts";
+import { DISABLE_BRACKETED_PASTE, ENABLE_BRACKETED_PASTE, DISABLE_MOUSE, ENABLE_MOUSE, ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN, RESET_ATTRIBUTES, SHOW_CURSOR, SYNC_OUTPUT_END, paintDiff } from "./ansi.ts";
 import { cloneFrame, type TerminalFrame } from "./frame.ts";
 import { KeyDecoder, type Key } from "./keys.ts";
+import { copyNative } from "./clipboard.ts";
 
 /** Minimal stdin surface; satisfied by NodeJS.ReadStream. */
 export interface HostInput {
@@ -80,11 +81,20 @@ export class Host {
 		return this.started;
 	}
 
+	/** OSC 52 requests clipboard delivery; terminals may decline it without acknowledgement. */
+	async requestCopy(text: string): Promise<"copied" | "requested" | "unavailable"> {
+		if (!this.started) return "unavailable";
+		if (!this.options.stdout && await copyNative(text)) return "copied";
+		if (!this.started) return "unavailable";
+		this.output.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+		return "requested";
+	}
+
 	start(): void {
 		if (this.started) return;
 		this.started = true;
 		try {
-			this.output.write(`${ENTER_ALT_SCREEN}${ENABLE_BRACKETED_PASTE}`);
+			this.output.write(`${ENTER_ALT_SCREEN}${ENABLE_BRACKETED_PASTE}${ENABLE_MOUSE}`);
 			this.input.setRawMode?.(true);
 			this.input.resume?.();
 			this.input.on("data", this.onData);
@@ -162,6 +172,6 @@ export class Host {
 	private restoreTerminal(): void {
 		this.input.setRawMode?.(false);
 		this.input.pause?.();
-		this.output.write(`${SYNC_OUTPUT_END}${DISABLE_BRACKETED_PASTE}${RESET_ATTRIBUTES}${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
+		this.output.write(`${SYNC_OUTPUT_END}${DISABLE_MOUSE}${DISABLE_BRACKETED_PASTE}${RESET_ATTRIBUTES}${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
 	}
 }

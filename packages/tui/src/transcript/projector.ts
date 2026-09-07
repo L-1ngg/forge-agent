@@ -73,6 +73,8 @@ interface ToolProjection {
 	args?: Record<string, unknown>;
 	executed: boolean;
 	block?: AnyBlockEnvelope;
+	content?: string;
+	lifecycle?: "streaming" | "complete" | "failed";
 }
 
 interface NoticeProjection {
@@ -103,6 +105,7 @@ export class TranscriptProjector {
 	private messageSeq = 0;
 	private noticeSeq = 0;
 	private turnStartedAt: number | undefined;
+	private executionFailed = false;
 	private lastCompletedFingerprint: MessageFingerprint | undefined;
 
 	apply(event: SessionEvent): void {
@@ -123,11 +126,17 @@ export class TranscriptProjector {
 			case "tool_execution_update":
 			case "tool_execution_end":
 				this.applyTool(event.toolCallId, event.toolName, undefined, event.block);
+				this.tools.get(event.toolCallId)!.content = event.content;
+				this.tools.get(event.toolCallId)!.lifecycle = event.type === "tool_execution_update" ? "streaming" : event.isError ? "failed" : "complete";
 				return;
-			case "turn_start":
+			case "agent_start":
 				this.turnStartedAt = event.timestamp;
+				this.executionFailed = false;
 				return;
 			case "turn_end":
+				this.executionFailed = event.stopReason === "error" || event.stopReason === "aborted";
+				return;
+			case "agent_end":
 				this.endTurn(event.timestamp);
 				return;
 			default:
@@ -172,7 +181,7 @@ export class TranscriptProjector {
 			if (item.kind === "tool") {
 				if (anchoredTools.has(item.toolCallId)) continue;
 				const tool = this.tools.get(item.toolCallId);
-				if (tool?.block) entries.push(this.applyDisplayState(toolEntry(toolEntryId(item.toolCallId), tool.block)));
+				if (tool) entries.push(this.toolEntry(toolEntryId(item.toolCallId), tool));
 				continue;
 			}
 			const notice = noticeById.get(item.id);
@@ -261,6 +270,7 @@ export class TranscriptProjector {
 		this.messageSeq = 0;
 		this.noticeSeq = 0;
 		this.turnStartedAt = undefined;
+		this.executionFailed = false;
 		this.lastCompletedFingerprint = undefined;
 	}
 
@@ -304,6 +314,12 @@ export class TranscriptProjector {
 	}
 
 	private reconcileMessage(message: MessageProjection, value: SessionMessage, complete: boolean, eventTimestamp: number, preserveMissing = false): void {
+		if (value.role === "toolResult" && value.toolCallId) {
+			this.applyTool(value.toolCallId, value.toolName ?? this.tools.get(value.toolCallId)?.toolName ?? "tool", undefined, undefined);
+			const tool = this.tools.get(value.toolCallId)!;
+			tool.content = value.content.filter((part) => part.type === "text").map((part) => part.text).join("\n");
+			tool.lifecycle = complete ? value.isError ? "failed" : "complete" : "streaming";
+		}
 		message.role = value.role;
 		message.timestamp = value.timestamp;
 		message.complete = complete;
@@ -346,7 +362,7 @@ export class TranscriptProjector {
 	private entryForContent(message: MessageProjection, content: MutableContent, anchoredTools: Set<string>): TranscriptEntry | undefined {
 		const source = content.source;
 		if (!source) return undefined;
-		if (message.role === "toolResult" && message.toolCallId && this.tools.get(message.toolCallId)?.block?.kind === "execute") return undefined;
+		if (message.role === "toolResult" && message.toolCallId) return undefined;
 		if (source.type === "text") {
 			if (source.text.length === 0) return undefined;
 			return message.role === "user"
@@ -367,9 +383,7 @@ export class TranscriptProjector {
 		}
 		anchoredTools.add(source.id);
 		const tool = this.tools.get(source.id);
-		if (tool?.block) return this.applyDisplayState(toolEntry(content.entryId, this.blockWithDisplayState(source.id, tool.block)));
-		if (tool?.executed) return { id: content.entryId, kind: "notice", text: compactToolPreview(source.name, tool.args ?? source.arguments), tone: "muted" };
-		return { id: content.entryId, kind: "notice", text: message.complete ? `${source.name} tool call` : "Calling tool…", tone: "muted" };
+		return this.toolEntry(content.entryId, { toolCallId: source.id, executed: false, ...tool, toolName: source.name }, source.arguments);
 	}
 
 	private createMessage(role: SessionMessage["role"], timestamp: number, toolCallId?: string, implicit = false): MessageProjection {
@@ -397,10 +411,29 @@ export class TranscriptProjector {
 	private applyDisplayState<T extends TranscriptEntry>(entry: T): T {
 		if (entry.kind !== "thinking" && entry.kind !== "execute" && entry.kind !== "edit") return entry;
 		const state = this.displayState.get(entry.id) ?? this.displayState.get(entry.block.id);
-		if (!state) return entry;
+		if (!state) {
+			if (entry.kind === "execute" || entry.kind === "edit") entry.block.currentDisplayMode = "collapsed";
+			return entry;
+		}
 		entry.block.currentDisplayMode = state.currentDisplayMode;
 		entry.block.manualOverride = state.manualOverride;
 		return entry;
+	}
+
+	private toolEntry(id: string, tool: ToolProjection, args: Record<string, unknown> = {}): TranscriptEntry {
+		if (tool.block && (tool.block.kind === "execute" || tool.block.kind === "edit" || tool.block.kind === "thinking")) {
+			const value = this.blockWithDisplayState(tool.toolCallId, tool.block);
+			if (tool.lifecycle) value.lifecycle = tool.lifecycle;
+			const entry = this.applyDisplayState(toolEntry(id, value));
+			if ((entry.kind === "execute" || entry.kind === "edit") && tool.content !== undefined) entry.result = tool.content;
+			return entry;
+		}
+		return {
+			id, kind: "tool", toolCallId: tool.toolCallId, name: tool.toolName,
+			args: structuredClone(tool.args ?? args), content: tool.content ?? "",
+			lifecycle: tool.lifecycle ?? "streaming",
+			displayMode: (this.displayState.get(id) ?? this.displayState.get(tool.toolCallId))?.currentDisplayMode ?? "collapsed",
+		};
 	}
 
 	private blockWithDisplayState(id: string, value: AnyBlockEnvelope): AnyBlockEnvelope {
@@ -416,10 +449,7 @@ export class TranscriptProjector {
 	private reconcileIncomingDisplayState(toolCallId: string, value: AnyBlockEnvelope): void {
 		const anchor = this.anchorForTool(toolCallId);
 		const keys = anchor === undefined ? [toolCallId] : [toolCallId, anchor];
-		if (value.fold.respectManualFolds === false) {
-			for (const key of keys) this.displayState.delete(key);
-			return;
-		}
+		if (keys.some((key) => this.displayState.get(key)?.manualOverride)) return;
 		if (value.manualOverride === true && value.currentDisplayMode !== undefined) {
 			const state: DisplayState = {
 				currentDisplayMode: value.currentDisplayMode,
@@ -457,7 +487,7 @@ export class TranscriptProjector {
 		const startedAt = this.turnStartedAt;
 		this.turnStartedAt = undefined;
 		if (startedAt === undefined || timestamp < startedAt) return;
-		this.addNotice(`Worked for ${formatDuration(startedAt, timestamp)}`);
+		if (!this.executionFailed) this.addNotice(`Worked for ${formatDuration(startedAt, timestamp)}`);
 	}
 }
 
@@ -479,17 +509,6 @@ function toolEntry(id: string, value: AnyBlockEnvelope): TranscriptEntry {
 	if (value.kind === "execute") return { id, kind: "execute", block: structuredClone(value) };
 	if (value.kind === "edit") return { id, kind: "edit", block: structuredClone(value) };
 	return { id, kind: "notice", text: value.kind, tone: "muted" };
-}
-
-function compactToolPreview(name: string, value: unknown): string {
-	let encoded: string;
-	try {
-		encoded = JSON.stringify(value) ?? String(value);
-	} catch {
-		encoded = String(value);
-	}
-	const preview = `${name}(${encoded})`;
-	return preview.length > 96 ? `${preview.slice(0, 95)}…` : preview;
 }
 
 function formatDuration(start: number, end: number): string {

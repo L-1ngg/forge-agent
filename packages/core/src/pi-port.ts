@@ -201,7 +201,9 @@ function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<As
 	};
 }
 
-function decorateToolEvent(event: SessionEvent, commands: Map<string, string>, edits: Map<string, BlockEnvelope<"edit">>): SessionEvent {
+type CommandPresentation = Pick<ExecuteBlockData, "command" | "description">;
+
+function decorateToolEvent(event: SessionEvent, commands: Map<string, CommandPresentation>, edits: Map<string, BlockEnvelope<"edit">>): SessionEvent {
 	if (event.type === "tool_execution_start") {
 		rememberToolCommand(commands, event.toolCallId, event.toolName, event.args);
 		const envelope = startToolBlock(event.toolCallId, event.toolName, event.args, event.timestamp);
@@ -234,12 +236,12 @@ function startToolBlock(toolCallId: string, toolName: string, args: unknown, tim
 	if (toolName !== "bash" || typeof values.command !== "string") return undefined;
 	return block(
 		{ id: toolCallId, kind: "execute", lifecycle: "streaming", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false, colorSlot: "accent_execute", createdAt: timestamp, updatedAt: timestamp },
-		{ command: values.command },
+		{ command: values.command, ...(typeof values.description === "string" ? { description: values.description } : {}) },
 		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
 	);
 }
 
-function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number, fallbackCommand?: string): BlockEnvelope<"execute"> | undefined {
+function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number, original?: CommandPresentation): BlockEnvelope<"execute"> | undefined {
 	if (toolName !== "bash") return undefined;
 	const wrapper = objectValue(result);
 	const details = objectValue(wrapper.details ?? result);
@@ -248,7 +250,8 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 		: "";
 	const structuredError = lifecycle === "failed" ? readableToolError(content) : undefined;
 	const data: ExecuteBlockData = {
-		command: typeof details.command === "string" ? details.command : fallbackCommand ?? "bash",
+		command: typeof details.command === "string" ? details.command : original?.command ?? "bash",
+		...(original?.description !== undefined ? { description: original.description } : {}),
 		...(typeof details.stdout === "string" ? { stdout: details.stdout } : content && structuredError === undefined ? { stdout: content } : {}),
 		...(typeof details.stderr === "string" ? { stderr: details.stderr } : structuredError !== undefined ? { stderr: structuredError } : {}),
 		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
@@ -261,10 +264,10 @@ function executeToolBlock(toolCallId: string, toolName: string, result: unknown,
 	);
 }
 
-function rememberToolCommand(commands: Map<string, string>, toolCallId: string, toolName: string, args: unknown): void {
+function rememberToolCommand(commands: Map<string, CommandPresentation>, toolCallId: string, toolName: string, args: unknown): void {
 	if (toolName !== "bash") return;
-	const command = objectValue(args).command;
-	if (typeof command === "string") commands.set(toolCallId, command);
+	const { command, description } = objectValue(args);
+	if (typeof command === "string") commands.set(toolCallId, { command, ...(typeof description === "string" ? { description } : {}) });
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -430,7 +433,7 @@ function createModelPort(options: ModelPortOptions): AgentPort {
 	}, options.history);
 	return {
 		async *runTurn(input) {
-			const commands = new Map<string, string>();
+			const commands = new Map<string, CommandPresentation>();
 			const edits = new Map<string, BlockEnvelope<"edit">>();
 			try {
 				for await (const event of core.runTurn(input)) yield decorateToolEvent(event, commands, edits);

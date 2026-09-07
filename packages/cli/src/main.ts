@@ -117,6 +117,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 				cwd: workingDirectory,
 				homeDir: homedir(),
 				showWelcome: true,
+				history: store.messages(),
 			});
 			await app.start();
 			await app.waitUntilStopped();

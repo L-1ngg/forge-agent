@@ -1,10 +1,11 @@
 import type { AnyBlockEnvelope, BlockDisplayMode, EditBlockData, ExecuteBlockData, ThinkingBlockData } from "@forge-agent/protocol";
 import { defaultStyle, type CellStyle, type TerminalColor } from "../frame.ts";
 import type { Theme } from "../theme.ts";
-import { graphemes, graphemeWidth, visibleWidth, wrapText } from "../width.ts";
+import { graphemes, graphemeWidth, truncateToWidth, visibleWidth, wrapTextWithOffsets } from "../width.ts";
 import { renderMarkdown } from "../markdown.ts";
 import { trimHeadTail, trimTail } from "./fold.ts";
 import type { EntryChromeSpec, EntryRow, StyledSpan, TranscriptEntry } from "./types.ts";
+import { entryDetail, readContent } from "./detail.ts";
 
 /** Kind renderers produce rows + a chrome declaration; the shell owns geometry. */
 export interface EntryPresentation {
@@ -37,7 +38,7 @@ export function formatDurationMs(durationMs: number): string {
 
 export function presentEntry(entry: TranscriptEntry, contentWidth: number, theme: Theme): EntryPresentation {
 	const presentation = presentKind(entry, contentWidth, theme);
-	presentation.rows = presentation.rows.flatMap((entryRow) => wrapRow(entryRow, Math.max(1, contentWidth)));
+	presentation.rows = presentation.rows.flatMap((entryRow, line) => wrapRow({ ...entryRow, source: entryRow.source ?? { line, column: 0 } }, Math.max(1, contentWidth)));
 	return presentation;
 }
 
@@ -46,23 +47,27 @@ function wrapRow(entryRow: EntryRow, width: number): EntryRow[] {
 	const rows: EntryRow[] = [];
 	let spans: StyledSpan[] = [];
 	let used = 0;
+	let column = entryRow.source?.column ?? 0;
+	let rowColumn = column;
 	for (const span of entryRow.spans) {
 		let text = "";
 		for (const grapheme of graphemes(span.text)) {
 			const size = graphemeWidth(grapheme);
 			if (used + size > width && used > 0) {
 				if (text) spans.push({ ...span, text });
-				rows.push({ ...entryRow, spans });
+				rows.push({ ...entryRow, spans, ...(entryRow.source ? { source: { line: entryRow.source.line, column: rowColumn } } : {}) });
+				rowColumn = column;
 				spans = [];
 				text = "";
 				used = 0;
 			}
 			text += size > width ? "?" : grapheme;
 			used += Math.min(size, width);
+			column += grapheme.length;
 		}
 		if (text) spans.push({ ...span, text });
 	}
-	if (spans.length > 0) rows.push({ ...entryRow, spans });
+	if (spans.length > 0) rows.push({ ...entryRow, spans, ...(entryRow.source ? { source: { line: entryRow.source.line, column: rowColumn } } : {}) });
 	return rows;
 }
 
@@ -78,6 +83,8 @@ function presentKind(entry: TranscriptEntry, contentWidth: number, theme: Theme)
 			return presentExecute(entry.block, contentWidth, theme);
 		case "edit":
 			return presentEdit(entry.block, contentWidth, theme);
+		case "tool":
+			return presentTool(entry, contentWidth, theme);
 		case "notice":
 			return presentNotice(entry, theme);
 	}
@@ -88,16 +95,17 @@ const USER_PREFIX = "❯ ";
 function presentUser(entry: TranscriptEntry & { kind: "user" }, contentWidth: number, theme: Theme): EntryPresentation {
 	const surface = theme.color("surface");
 	const textWidth = Math.max(1, contentWidth - visibleWidth(USER_PREFIX));
-	const lines = wrapText(entry.text, textWidth);
+	const lines = wrapTextWithOffsets(entry.text, textWidth);
 	const rows = lines.map((line, index) => ({
 		spans: [
 			...(index === 0 ? [{ text: USER_PREFIX, style: fg(theme, "dim", false, surface) }] : []),
-			{ text: line, style: fg(theme, "status", false, surface) },
+			{ text: line.text, style: fg(theme, "status", false, surface) },
 		],
+		source: { line: line.line, column: line.column },
 	}));
 	return {
 		rows,
-		chrome: { surface, timestamp: formatTimestamp(entry.timestamp), vpadTop: 1, vpadBottom: 1, collapsed: false },
+		chrome: { surface, timestamp: formatTimestamp(entry.timestamp), vpadTop: 1, vpadBottom: 1, gapAfter: 1, collapsed: false },
 	};
 }
 
@@ -113,6 +121,18 @@ function displayModeOf(block: AnyBlockEnvelope): BlockDisplayMode {
 	return block.currentDisplayMode ?? block.defaultDisplayMode ?? block.fold.defaultDisplayMode ?? "expanded";
 }
 
+function commandTitle(command: string, description: unknown): string {
+	return typeof description === "string" && description.trim() ? description.trim().replace(/^(?:Run|Running)\s+/i, "") : command;
+}
+
+function toolMarker(theme: Theme, failed: boolean, streaming: boolean, mode: BlockDisplayMode, kind: "execute" | "file" | "other"): StyledSpan {
+	const slot = failed ? "accent_error"
+		: kind === "execute" ? streaming ? "accent_running" : "accent_success"
+		: mode === "collapsed" ? "muted"
+		: kind === "file" ? "status" : streaming ? "accent_running" : "accent_tool";
+	return { text: "◆ ", style: fg(theme, slot) };
+}
+
 function presentThinking(block: AnyBlockEnvelope, contentWidth: number, theme: Theme, durationMs?: number): EntryPresentation {
 	const data = block.data as ThinkingBlockData;
 	const streaming = block.lifecycle === "streaming";
@@ -120,7 +140,7 @@ function presentThinking(block: AnyBlockEnvelope, contentWidth: number, theme: T
 	const mode = displayModeOf(block);
 	const header: EntryRow = {
 		spans: [
-			{ text: "◆ ", style: fg(theme, "accent_thinking") },
+			{ text: "◆ ", style: fg(theme, streaming ? "accent_thinking" : mode === "collapsed" ? "muted" : "status") },
 			{ text: title, style: fg(theme, "muted") },
 		],
 	};
@@ -143,8 +163,9 @@ function presentExecute(block: AnyBlockEnvelope, contentWidth: number, theme: Th
 	const titleStyle = fg(theme, failed ? "accent_error" : mode === "collapsed" ? "muted" : "status");
 	const header: EntryRow = {
 		spans: [
+			toolMarker(theme, failed, block.lifecycle === "streaming", mode, "execute"),
 			{ text: "Run ", style: fg(theme, "muted", true) },
-			{ text: data.command, style: titleStyle },
+			{ text: truncateToWidth(commandTitle(data.command, data.description), Math.max(1, contentWidth - 6)), style: titleStyle },
 		],
 	};
 	if (mode === "collapsed") {
@@ -155,9 +176,9 @@ function presentExecute(block: AnyBlockEnvelope, contentWidth: number, theme: Th
 	const first = block.fold.firstLines ?? 2;
 	const last = block.fold.lastLines ?? 3;
 	const visible = mode === "truncated" ? trimHeadTail(output, first, last, (omitted) => `… +${omitted} lines`) : output;
-	const bodyRows = visible.map((line) => row(line, fg(theme, line.startsWith("… +") ? "muted" : "status", false, panel), panel));
+	const bodyRows = visible.map((line, index) => ({ ...row(line, fg(theme, line.startsWith("… +") ? "muted" : "status", false, panel), panel), source: { line: index + 2, column: 0 } }));
 	return {
-		rows: [header, ...bodyRows],
+		rows: [header, ...(data.description || visibleWidth(data.command) > contentWidth - 6 ? [{ ...row(`$ ${data.command}`, fg(theme, "muted")), source: { line: 1, column: 0 } }] : []), ...bodyRows],
 		chrome: {
 			rail: block.lifecycle === "streaming" ? theme.color("accent_running") : failed ? theme.color("accent_error") : theme.color("accent_execute"),
 			collapsed: false,
@@ -175,6 +196,7 @@ function presentEdit(block: AnyBlockEnvelope, contentWidth: number, theme: Theme
 	const summary = data.additions > 0 || data.removals > 0 ? ` +${data.additions}/-${data.removals}` : "";
 	const header: EntryRow = {
 		spans: [
+			toolMarker(theme, failed, block.lifecycle === "streaming", mode, "file"),
 			{ text: failed ? "Edit failed " : "Edit ", style: fg(theme, failed ? "accent_error" : "muted", true) },
 			{ text: name, style: fg(theme, "muted") },
 			...(summary ? [{ text: summary, style: fg(theme, "dim") }] : []),
@@ -210,4 +232,44 @@ function presentNotice(entry: TranscriptEntry & { kind: "notice" }, theme: Theme
 		rows: [row(entry.text, fg(theme, entry.tone === "error" ? "error" : entry.tone === "success" ? "success" : "muted"))],
 		chrome: { collapsed: false, vpadTop: 0, vpadBottom: 1 },
 	};
+}
+
+function presentTool(entry: TranscriptEntry & { kind: "tool" }, contentWidth: number, theme: Theme): EntryPresentation {
+	const read = entry.name === "read";
+	const collapsed = entry.displayMode === "collapsed";
+	const failed = entry.lifecycle === "failed";
+	const start = typeof entry.args.start_line === "number" ? entry.args.start_line : 1;
+	const range = entry.args.start_line !== undefined || entry.args.end_line !== undefined
+		? ` (${start}-${entry.args.end_line ?? ""})` : "";
+	const specialized = entry.name === "bash" || entry.name === "edit";
+	const label = read ? "Read" : entry.name === "bash" ? "Run" : entry.name === "edit" ? "Edit" : entry.name === "write" ? "Write" : entry.name;
+	const subject = entry.name === "bash" ? commandTitle(String(entry.args.command ?? ""), entry.args.description)
+		: String(entry.args.path ?? entry.args.pattern ?? entry.args.query ?? entry.args.description ?? "");
+	const title = `${label}${subject ? ` ${subject}` : ""}${read ? range : ""}`;
+	const suffix = failed ? " (failed)" : entry.lifecycle === "streaming" ? " …" : "";
+	const titleWidth = Math.max(1, contentWidth - 2 - visibleWidth(suffix));
+	const markerKind = entry.name === "bash" ? "execute" : read || entry.name === "edit" ? "file" : "other";
+	const header: EntryRow = { spans: [toolMarker(theme, failed, entry.lifecycle === "streaming", entry.displayMode, markerKind),
+		{ text: truncateToWidth(label, titleWidth), style: fg(theme, failed ? "accent_error" : "muted", true) },
+		{ text: truncateToWidth(title.slice(label.length), Math.max(0, titleWidth - visibleWidth(label))) + suffix, style: fg(theme, failed ? "accent_error" : collapsed ? "muted" : "status") }] };
+	if (collapsed) return { rows: [header], chrome: { collapsed: true, vpadTop: 0, vpadBottom: 1 } };
+	const content = specialized ? entryDetail(entry).lines.join("\n") : readContent(entry);
+	const panel = theme.color("stdout_panel");
+	const lines = content === "" ? [] : content.split("\n");
+	const gutter = String(start + lines.length - 1).length;
+	const visible = entry.displayMode === "truncated" && lines.length > 8
+		? [...lines.slice(0, 5).map((line, index) => ({ line, index })), { line: `... +${lines.length - 8} lines`, index: -1 }, ...lines.slice(-3).map((line, index) => ({ line, index: lines.length - 3 + index }))]
+		: lines.map((line, index) => ({ line, index }));
+	const body = visible.flatMap(({ line, index }) => {
+		if (index < 0) return [row(line, fg(theme, "muted", false, panel), panel)];
+		const prefix = read && !failed ? `${String(start + index).padStart(gutter)}  ` : "";
+		return wrapTextWithOffsets(line, Math.max(1, contentWidth - prefix.length)).map((part, wrappedIndex) => ({
+			spans: [
+				{ text: wrappedIndex === 0 ? prefix : " ".repeat(prefix.length), style: fg(theme, "dim", false, panel) },
+				{ text: part.text, style: fg(theme, failed ? "accent_error" : "status", false, panel) },
+			], background: panel,
+			source: { line: index + 2, column: part.column },
+		}));
+	});
+	return { rows: [header, ...(body.length ? [row("", fg(theme, "muted")), ...body] : [])], chrome: { collapsed: false, vpadTop: 0, vpadBottom: 1 } };
 }

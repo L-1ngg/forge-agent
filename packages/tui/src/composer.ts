@@ -20,6 +20,7 @@ export interface ComposerPaintInput {
 	caption?: string | undefined;
 	placeholder?: string | undefined;
 	compact: boolean;
+	focused?: boolean;
 }
 
 interface VisualLine {
@@ -79,7 +80,7 @@ const INNER_PADDING = 1; // spaces between border and content on each side
 export function paintComposer(input: ComposerPaintInput): void {
 	const { frame, x, y, width, height, draft, theme } = input;
 	if (width < 4 || height < 3) return;
-	const borderColor = theme.color("prompt_border_active");
+	const borderColor = theme.color(input.focused === false ? "prompt_border" : "prompt_border_active");
 	const border: CellStyle = { foreground: borderColor, background: { kind: "default" }, attributes: { bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, hidden: false, strikethrough: false } };
 	const text: CellStyle = { ...border, foreground: theme.color("status") };
 	const muted: CellStyle = { ...border, foreground: theme.color("muted") };

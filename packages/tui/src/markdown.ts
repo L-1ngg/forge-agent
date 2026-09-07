@@ -1,6 +1,6 @@
 import type { CellStyle } from "./frame.ts";
 import type { Theme } from "./theme.ts";
-import { wrapText } from "./width.ts";
+import { wrapTextWithOffsets } from "./width.ts";
 import type { EntryRow, StyledSpan } from "./transcript/types.ts";
 
 function style(theme: Theme, slot: Parameters<Theme["color"]>[0], extra: Partial<CellStyle["attributes"]> = {}, background?: CellStyle["background"]): CellStyle {
@@ -17,37 +17,38 @@ export function renderMarkdown(markdown: string, width: number, theme: Theme): E
 	let inFence = false;
 	const codeBg = theme.color("dark_surface");
 	const codeStyle = style(theme, "status", {}, codeBg);
-	for (const line of markdown.split("\n")) {
+	for (const [sourceLine, line] of markdown.split("\n").entries()) {
 		if (line.trimStart().startsWith("```")) {
 			inFence = !inFence;
 			continue;
 		}
 		if (inFence) {
-			rows.push({ spans: line ? [{ text: line, style: codeStyle }] : [], background: codeBg });
+			rows.push({ spans: line ? [{ text: line, style: codeStyle }] : [], background: codeBg, source: { line: sourceLine, column: 0 } });
 			continue;
 		}
 		const heading = /^(#{1,6})\s+(.*)$/.exec(line);
 		if (heading) {
 			const body = heading[2] ?? "";
-			for (const wrapped of wrapText(body, width)) rows.push({ spans: [{ text: wrapped, style: style(theme, "status", { bold: true }) }] });
+			for (const wrapped of wrapTextWithOffsets(body, width)) rows.push({ spans: [{ text: wrapped.text, style: style(theme, "status", { bold: true }) }], source: { line: sourceLine, column: wrapped.column } });
 			continue;
 		}
 		const list = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(line);
 		if (list) {
 			const bullet = `${list[1] ?? ""}${list[2]} `;
 			const rest = list[3] ?? "";
-			const wrapped = wrapText(rest, Math.max(1, width - bullet.length));
+			const wrapped = wrapTextWithOffsets(rest, Math.max(1, width - bullet.length));
 			wrapped.forEach((part, index) => {
 				rows.push({
 					spans: [
 						...(index === 0 ? [{ text: bullet, style: style(theme, "muted") }] : [{ text: " ".repeat(bullet.length), style: style(theme, "muted") }]),
-						...parseInline(part, theme),
+						...parseInline(part.text, theme),
 					],
+					source: { line: sourceLine, column: part.column },
 				});
 			});
 			continue;
 		}
-		for (const wrapped of wrapText(line, width)) rows.push({ spans: parseInline(wrapped, theme) });
+		for (const wrapped of wrapTextWithOffsets(line, width)) rows.push({ spans: parseInline(wrapped.text, theme), source: { line: sourceLine, column: wrapped.column } });
 	}
 	if (rows.length === 0) rows.push({ spans: [] });
 	return rows;

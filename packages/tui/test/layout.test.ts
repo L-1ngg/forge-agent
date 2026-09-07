@@ -4,7 +4,7 @@ import { computeScreenLayout, layoutOffsets, type ScreenLayoutPlan } from "../sr
 const ROWS = [8, 12, 16, 20, 24, 40];
 
 function sum(plan: ScreenLayoutPlan): number {
-	return plan.header.height + plan.transcript.height + plan.interactive.height + plan.status.height + plan.shortcuts.height;
+	return plan.header.height + plan.transcript.height + plan.activity.height + plan.interactive.height + plan.status.height + plan.shortcuts.height + Object.values(plan.gaps).reduce((sum, gap) => sum + gap, 0);
 }
 
 test("layout stays non-negative and within the viewport at every locked size", () => {
@@ -45,9 +45,9 @@ test("compact flag flips at rows<=20 and caps composer growth", () => {
 	expect(computeScreenLayout({ columns: 80, rows: 20, interactiveLines: 1, hasStatus: false }).compact).toBe(true);
 	expect(computeScreenLayout({ columns: 80, rows: 21, interactiveLines: 1, hasStatus: false }).compact).toBe(false);
 	const compact = computeScreenLayout({ columns: 80, rows: 20, interactiveLines: 20, hasStatus: false });
-	expect(compact.interactive.height).toBeLessThanOrEqual(5);
+	expect(compact.interactive.height).toBe(10);
 	const tall = computeScreenLayout({ columns: 80, rows: 40, interactiveLines: 20, hasStatus: false });
-	expect(tall.interactive.height).toBeLessThanOrEqual(8);
+	expect(tall.interactive.height).toBe(20);
 });
 
 test("a card-owned slot never shares the interactive region with the composer", () => {
@@ -61,9 +61,9 @@ test("offsets place regions top to bottom without overlap", () => {
 	const plan = computeScreenLayout({ columns: 80, rows: 24, interactiveLines: 1, hasStatus: true });
 	const offsets = layoutOffsets(plan);
 	expect(offsets.header).toBe(0);
-	expect(offsets.transcript).toBe(plan.header.height);
-	expect(offsets.interactive).toBe(offsets.transcript + plan.transcript.height);
+	expect(offsets.transcript).toBe(plan.header.height + plan.gaps.header);
+	expect(offsets.interactive).toBe(offsets.transcript + plan.transcript.height + plan.gaps.activity + plan.activity.height + plan.gaps.prompt);
 	expect(offsets.status).toBe(offsets.interactive + plan.interactive.height);
-	expect(offsets.shortcuts).toBe(offsets.status + plan.status.height);
+	expect(offsets.shortcuts).toBe(offsets.status + plan.status.height + plan.gaps.shortcuts);
 	expect(offsets.shortcuts + plan.shortcuts.height).toBeLessThanOrEqual(24);
 });

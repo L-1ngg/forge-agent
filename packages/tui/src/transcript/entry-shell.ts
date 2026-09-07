@@ -42,7 +42,7 @@ export function entryContentStartColumn(): number {
 
 /** Height an entry will occupy once painted by the shell. */
 export function entryHeight(presentation: EntryPresentation): number {
-	return presentation.chrome.vpadTop + presentation.rows.length + presentation.chrome.vpadBottom;
+	return presentation.chrome.vpadTop + presentation.rows.length + presentation.chrome.vpadBottom + (presentation.chrome.gapAfter ?? 0);
 }
 
 /**

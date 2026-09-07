@@ -5,12 +5,32 @@ created: 2026-09-04
 
 # Phase 2.2 施工图 — 自有 TerminalFrame TUI
 
-> 状态:已完成(2026-09-05),operator 已验收当前 TUI 并确认阶段关闭;体验与其余优化按后续要求另开。B6 为 in-repo golden(ADR-007,不再编译 grok-build)。Owner:operator。
+> 状态:已完成(2026-09-05),operator 已验收阶段关闭时的 TUI;2026-09-07 滚轮与工具折叠修复的历史证据见本文后续 UI 修复节,后续交互与验收边界以 [主界面工作流设计](tui-main-workflow.md) 为准。B6 为 in-repo golden(ADR-007,不再编译 grok-build)。Owner:operator。
 > 决策:[ADR-005](../decisions/005-tui-own-compositor.md)(决策 1 由 ADR-006 修订;reference 路径由 [ADR-007](../decisions/007-no-compile-grok-reference.md) 再修订)。
 > [phase-2.md](./phase-2.md) 仍是 M1-M6 历史施工图;[phase-2.1.md](./phase-2.1.md) 已中止,本文接手 TUI 重写。
 > 后续变更:内核替换见 [ADR-009](../decisions/009-self-owned-agent-core.md),SDK 与输入队列/停止修复见 [SDK 施工图](sdk.md) 和 [ADR-010](../decisions/010-input-ownership-and-interruption.md)。本文保留阶段关闭时的范围与证据,不作为当前 SDK 或取消契约。
 
 ---
+
+## 2026-09-07 后续 UI 修复
+
+以下保留最初滚轮与工具折叠修复的历史行为和验证记录,不重开历史阶段验收。单击/Ctrl+O 等绑定及无详情视图的边界已由 [主界面工作流设计](tui-main-workflow.md) 取代,不作为当前交互契约。
+根因:Host 未启用鼠标报告且 KeyDecoder 未消费鼠标协议;无 block 的 toolResult 被渲染成普通 assistant 消息。
+
+- Host 启停成对开关 1000/1006 鼠标报告;解码 SGR 与旧式 X10 鼠标输入,滚轮每次滚动 3 行,不进入 composer。
+- 工具调用在 TUI 默认收起,结果归属原调用,不再作为独立 assistant 正文。保留 execute/edit 专用展开内容;普通工具以 UI-local tool entry 展示。
+- 点击 transcript 工具标题切换该条目的折叠;Ctrl+O 保留最近条目的切换。用户选择跨后续事件保留。
+- read 展开参考 grok `scrollback/blocks/tool/read.rs`:Read 路径/范围标题、空行、行号、内容面板;复用本仓库 cell shell。不新增语法高亮依赖或全屏 viewer。
+- [x] AC-53:真实 Host 输入的滚轮能往返滚动,不修改草稿;退出和异常恢复关闭鼠标报告。
+- [x] AC-54:真实 read 工具执行后默认不显示正文,点击/快捷键展开后显示,再次收起隐藏;多个调用可以单独展开。
+- [x] AC-55:流更新、失败、session 事件重放不重复显示工具结果,不覆盖人工折叠。
+
+验证:先跑能复现原症状的 App 测试,再验证真实 PTY + faux provider + read 工具,最后执行 `bun run check`。
+结果:`bun run check` 为 302 pass / 0 fail(52 files),依赖边界、五包 typecheck 与 automation typecheck 通过。`tool-ui.test.ts` 使用真实 PTY 与 read 工具验证 80x24/40x12 滚轮往返、独立展开、行号和退出恢复;鼠标协议逐字节分段、异常恢复及工具更新/失败/重放由 TUI 测试覆盖。
+反向证据:`bun test packages/tui/test/app.test.ts -t 'mouse wheel|read result'` 在修复前为 2 fail:滚轮前后首行相同,read 正文默认可见;修复后为 2 pass。
+Not run / Why / Risk:未调用真实远端模型,本地 faux provider 足以驱动原执行链;未运行 grok 二进制(ADR-007),未完成 operator 实际终端人工验收。对齐到源码中的展开结构,不声明语法高亮、全屏 viewer 或像素一致。
+operator 后续反馈(2026-09-07):"上面的两个问题解决了，但是实际上的CLI的UIUX体验和grok build差距依旧很大，比如工具结果不能展开，布局不如grok build好。" AC-53..55 的勾选仅表示上述自动化场景通过,不据此声明整体交互已验收。随后通过 `grill-with-docs` 确定并实施的新方案与后续验证见 [主界面工作流设计](tui-main-workflow.md)。
+回退:仅回退本次 TUI 与测试改动;内核、SDK、持久化事件契约不变。真实终端人工体验仍须单列,不以 PTY 代替。
 
 ## 阶段关闭
 

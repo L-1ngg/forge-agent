@@ -7,7 +7,8 @@ test("key owner priority is card → scrollback → composer → global", () => 
 	expect(resolveKeyOwner({ cardFocused: true, cardParked: false })).toBe("card");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: true })).toBe("scrollback");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: false, editorFocused: true })).toBe("composer");
-	expect(resolveKeyOwner({ cardFocused: false, cardParked: false, editorFocused: false })).toBe("global");
+	expect(resolveKeyOwner({ cardFocused: false, cardParked: false, editorFocused: false })).toBe("scrollback");
+	expect(resolveKeyOwner({ cardFocused: false, cardParked: false })).toBe("global");
 });
 
 test("Esc on a focused card parks; parked Esc is noop and never abort", () => {

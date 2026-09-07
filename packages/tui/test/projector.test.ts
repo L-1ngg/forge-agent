@@ -76,10 +76,38 @@ test("AC-29: tool execution updates in place; toolResult does not duplicate", ()
 	expect(projector.getEntryIds()).toEqual(["tool-call-1"]);
 });
 
-test("turn boundary adds the Worked-for notice", () => {
+test("generic tool output stays on its call through updates, failures and replay", () => {
 	const projector = new TranscriptProjector();
+	const call: SessionMessage = { role: "assistant", timestamp: 1, content: [{ type: "tool_call", id: "r", name: "read", arguments: { path: "file.txt" } }] };
+	projector.apply({ type: "message_end", timestamp: 1, message: call });
+	const id = projector.getEntryIds()[0]!;
+	projector.setEntryDisplayState(id, "expanded", true);
+	projector.apply({ type: "tool_execution_start", timestamp: 2, toolCallId: "r", toolName: "read", args: { path: "file.txt" } });
+	projector.apply({ type: "tool_execution_update", timestamp: 3, toolCallId: "r", toolName: "read", content: "partial" });
+	expect(projector.getEntries()).toMatchObject([{ kind: "tool", displayMode: "expanded", content: "partial" }]);
+	projector.setEntryDisplayState(id, "collapsed", true);
+	projector.apply({ type: "tool_execution_end", timestamp: 4, toolCallId: "r", toolName: "read", content: "failed to read", isError: true });
+	const result: SessionMessage = { role: "toolResult", toolCallId: "r", toolName: "read", isError: true, timestamp: 5, content: [{ type: "text", text: "failed to read" }] };
+	projector.apply({ type: "message_end", timestamp: 5, message: result });
+	expect(projector.getEntries()).toMatchObject([{ id, kind: "tool", displayMode: "collapsed", lifecycle: "failed", content: "failed to read" }]);
+	expect(projector.getEntries()).toHaveLength(1);
+	const replay = new TranscriptProjector();
+	for (const message of [call, result]) replay.apply({ type: "message_end", timestamp: message.timestamp, message });
+	expect(replay.getEntries()).toMatchObject([{ kind: "tool", name: "read", args: { path: "file.txt" }, displayMode: "collapsed", content: "failed to read" }]);
+	expect(replay.getEntries()).toHaveLength(1);
+});
+
+test("execution boundary adds one Worked-for notice across multiple model turns", () => {
+	const projector = new TranscriptProjector();
+	projector.apply({ type: "agent_start", timestamp: 1000 });
 	projector.apply({ type: "turn_start", timestamp: 1000 });
+	projector.apply({ type: "turn_end", timestamp: 2000, stopReason: "tool_use" });
+	expect(projector.getEntries().filter((entry) => entry.kind === "notice")).toHaveLength(0);
+	projector.apply({ type: "turn_start", timestamp: 2001 });
 	projector.apply({ type: "turn_end", timestamp: 3700, stopReason: "stop" });
+	projector.apply({ type: "agent_end", timestamp: 3700 });
+	projector.apply({ type: "agent_end", timestamp: 3701 });
+	expect(projector.getEntries().filter((entry) => entry.kind === "notice")).toHaveLength(1);
 	const notice = projector.getEntries().at(-1);
 	expect(notice).toMatchObject({ kind: "notice", text: "Worked for 2.7s" });
 });

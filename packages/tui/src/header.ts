@@ -8,9 +8,10 @@ export function paintHeader(frame: TerminalFrame, y: number, input: { cwd: strin
 	const cwd = input.cwd.startsWith(input.homeDir) ? `~${input.cwd.slice(input.homeDir.length)}` : input.cwd;
 	const left: CellStyle = { ...defaultStyle(), foreground: theme.color("muted") };
 	const right: CellStyle = { ...defaultStyle(), foreground: theme.color("status") };
-	writeText(frame, 1, y, truncateToWidth(cwd, frame.columns - 2), left);
+	const label = input.contextLabel ? truncateToWidth(input.contextLabel, Math.max(0, frame.columns - 4)) : "";
+	const leftWidth = Math.max(0, frame.columns - 2 - (label ? visibleWidth(label) + 2 : 0));
+	writeText(frame, 1, y, truncateToWidth(cwd, leftWidth), left);
 	if (input.contextLabel) {
-		const label = truncateToWidth(input.contextLabel, frame.columns - 2);
 		writeText(frame, Math.max(0, frame.columns - 1 - visibleWidth(label)), y, label, right);
 	}
 }

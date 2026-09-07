@@ -11,12 +11,14 @@ export interface InputRouterState {
 	editorFocused?: boolean | undefined;
 	running?: boolean | undefined;
 	searching?: boolean | undefined;
+	selectedCanFold?: boolean;
+	selectedCanView?: boolean;
 }
 
 /** Single priority function shared by input handling and visible hints. */
 export function resolveKeyOwner(state: InputRouterState): KeyOwner {
 	if (state.cardFocused) return "card";
-	if (state.cardParked || state.searching) return "scrollback";
+	if (state.cardParked || state.searching || state.editorFocused === false) return "scrollback";
 	if (state.editorFocused) return "composer";
 	return "global";
 }
@@ -50,15 +52,19 @@ export function shortcutRoutes(state: InputRouterState): readonly ShortcutRoute[
 	}
 	if (owner === "scrollback") {
 		return [
+			...(state.selectedCanView === false ? [] : [{ keys: ["enter"], label: "details" }]),
+			...(state.selectedCanFold === false ? [] : [{ keys: ["e"], label: "preview" }]),
+			{ keys: ["j/k"], label: "select" },
 			{ keys: ["pgup/pgdn"], label: "scroll" },
-			{ keys: ["tab", "space"], label: requestKindShortcutLabel(state.cardKind), pinned: true },
+			{ keys: ["tab"], label: state.cardParked ? requestKindShortcutLabel(state.cardKind) : "input", pinned: true },
+			{ keys: ["ctrl+c"], label: "quit", pinned: true },
 		];
 	}
 	if (owner === "composer") {
 		return [
 			{ keys: ["enter"], label: state.running ? "queue" : "send" },
 			{ keys: ["ctrl+enter"], label: "send now" },
-			{ keys: ["ctrl+o"], label: "fold" },
+			{ keys: ["tab"], label: "browse" },
 			{ keys: ["pgup/pgdn"], label: "scroll" },
 			{ keys: ["ctrl+c"], label: "quit", pinned: true },
 		];

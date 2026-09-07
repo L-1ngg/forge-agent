@@ -8,6 +8,7 @@ import { graphemes } from "./width.ts";
 export type Key =
 	| { type: "char"; text: string }
 	| { type: "enter" }
+	| { type: "newline" }
 	| { type: "backspace" }
 	| { type: "tab" }
 	| { type: "shiftTab" }
@@ -20,6 +21,7 @@ export type Key =
 	| { type: "delete" }
 	| { type: "pageUp" }
 	| { type: "pageDown" }
+	| { type: "mouse"; action: "up" | "down" | "click" | "release" | "drag"; x: number; y: number }
 	| { type: "paste"; text: string }
 	| { type: "unknown"; raw: string };
 
@@ -27,6 +29,9 @@ const PASTE_BEGIN = "\x1b[200~";
 const PASTE_END = "\x1b[201~";
 
 const SEQUENCES: readonly (readonly [string, Key])[] = [
+	["\x1b[13;2u", { type: "newline" }],
+	["\x1b[27;2;13~", { type: "newline" }],
+	["\x1b\r", { type: "newline" }],
 	["\x1b[A", { type: "arrow", direction: "up", ctrl: false }],
 	["\x1b[B", { type: "arrow", direction: "down", ctrl: false }],
 	["\x1b[C", { type: "arrow", direction: "right", ctrl: false }],
@@ -58,8 +63,25 @@ export class KeyDecoder {
 	private readonly decoder = new TextDecoder("utf-8", { fatal: false });
 
 	push(data: Buffer | string): Key[] {
-		this.buffer += typeof data === "string" ? data : this.decoder.decode(data, { stream: true });
-		return this.drain(false);
+		if (typeof data === "string") {
+			this.buffer += data;
+			return this.drain(false);
+		}
+		const keys: Key[] = [];
+		for (let offset = 0; offset < data.length;) {
+			// X10 has three binary payload bytes; decoding them as UTF-8 loses large coordinates.
+			if (!this.pasting && this.buffer.startsWith("\x1b[M") && this.buffer.length < 6) {
+				this.buffer += String.fromCharCode(data[offset++]!);
+			} else {
+				const prefix = this.buffer === "\x1b" || this.buffer === "\x1b[" || data[offset] === 27;
+				const escape = data.indexOf(27, offset + 1);
+				const end = prefix ? offset + 1 : escape === -1 ? data.length : escape;
+				this.buffer += this.decoder.decode(data.subarray(offset, end), { stream: true });
+				offset = end;
+			}
+			keys.push(...this.drain(false));
+		}
+		return keys;
 	}
 
 	/** True while undecoded bytes wait for the ambiguity window (lone ESC, partial sequence, paste). */
@@ -100,6 +122,29 @@ export class KeyDecoder {
 			}
 			if (!final && PASTE_BEGIN.startsWith(this.buffer)) break;
 			if (this.buffer[0] === "\x1b") {
+				if (this.buffer.startsWith("\x1b[<") || this.buffer.startsWith("\x1b[M")) {
+					const sgr = this.buffer.startsWith("\x1b[<");
+					const report = sgr ? /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(this.buffer) : null;
+					const length = sgr ? report?.[0].length : this.buffer.length >= 6 ? 6 : undefined;
+					if (length === undefined) {
+						if (!final && (!sgr || /^\x1b\[<[\d;]*$/.test(this.buffer))) break;
+						keys.push({ type: "unknown", raw: this.buffer });
+						this.buffer = "";
+						break;
+					}
+					const button = sgr ? Number(report![1]) : this.buffer.charCodeAt(3) - 32;
+					const x = sgr ? Number(report![2]) - 1 : this.buffer.charCodeAt(4) - 33;
+					const y = sgr ? Number(report![3]) - 1 : this.buffer.charCodeAt(5) - 33;
+					const base = button & ~28;
+					if (x >= 0 && y >= 0) {
+						if ((sgr && report![4] === "m" && base === 0) || (!sgr && base === 3)) keys.push({ type: "mouse", action: "release", x, y });
+						else if (base === 64 || base === 65) keys.push({ type: "mouse", action: base === 64 ? "up" : "down", x, y });
+						else if (base === 32) keys.push({ type: "mouse", action: "drag", x, y });
+						else if (button === 0) keys.push({ type: "mouse", action: "click", x, y });
+					}
+					this.buffer = this.buffer.slice(length);
+					continue;
+				}
 				if (this.buffer === "\x1b") {
 					if (!final) break;
 					keys.push({ type: "escape" });

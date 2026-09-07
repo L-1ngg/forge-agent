@@ -1,4 +1,4 @@
-import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent } from "@forge-agent/protocol";
+import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
 import { wrapText } from "./width.ts";
@@ -27,6 +27,7 @@ import { paintShortcuts, type ShortcutHint } from "./dock.ts";
 import { createTheme, type Theme } from "./theme.ts";
 import { isCtrlC, type Key } from "./keys.ts";
 import { TranscriptProjector } from "./transcript/projector.ts";
+import type { TranscriptEntry } from "./transcript/types.ts";
 import { presentEntry } from "./transcript/present.ts";
 import { computeEntryLayout, entryHeight, paintEntry } from "./transcript/entry-shell.ts";
 import { ScrollState, type EntrySpan } from "./scroll.ts";
@@ -40,8 +41,12 @@ import {
 	requestCardActions,
 	type RequestCardRecord,
 } from "./request-card.ts";
-import { paintWelcome } from "./welcome.ts";
+import { paintWelcome, welcomeHeight } from "./welcome.ts";
 import { paintPicker, pickerHeight, type PickerState } from "./picker.ts";
+import { DetailView } from "./detail-view.ts";
+import { entryDetail } from "./transcript/detail.ts";
+import { transcriptViews } from "./transcript/groups.ts";
+import { TextSelection } from "./text-selection.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -77,6 +82,7 @@ export interface AppOptions {
 	cwd: string;
 	homeDir: string;
 	showWelcome?: boolean;
+	history?: readonly SessionMessage[];
 	/** Test seams; default to process.stdin / process.stdout / process.env. */
 	stdin?: HostInput;
 	stdout?: HostOutput;
@@ -97,6 +103,18 @@ export class App {
 	private readonly focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
 	private running = false;
+	private browsing = false;
+	private selectedId: string | undefined;
+	private viewer: DetailView | undefined;
+	private lastClick: { id: string; at: number } | undefined;
+	private readonly expandedGroups = new Set<string>();
+	private submitted = false;
+	private selection: TextSelection | undefined;
+	private selectionFlash: TextSelection | undefined;
+	private feedback: string | undefined;
+	private feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+	private copyVersion = 0;
+	private interactiveRegion: { x: number; y: number; width: number; height: number } | undefined;
 	private readonly queued: string[] = [];
 	private autoSendPaused = false;
 	private replacement: string | undefined;
@@ -109,6 +127,7 @@ export class App {
 	private resolveStopped: (() => void) | undefined;
 
 	constructor(private readonly options: AppOptions) {
+		for (const message of options.history ?? []) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
 		this.theme = createTheme({ ...(options.env ? { env: options.env } : {}) });
 		this.host = new Host({
 			...(options.stdin ? { stdin: options.stdin } : {}),
@@ -139,6 +158,7 @@ export class App {
 	async stop(): Promise<void> {
 		if (!this.started) return this.stoppedPromise;
 		this.started = false;
+		clearTimeout(this.feedbackTimer);
 		this.pauseSending();
 		this.suggestionVersion++;
 		try {
@@ -158,12 +178,17 @@ export class App {
 	private routerState(): InputRouterState {
 		const top = this.focus.top();
 		const parked = this.focus.parkedTop();
+		const selected = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+		const group = this.selectedId?.startsWith("group:") ?? false;
 		return {
 			cardFocused: this.focus.active,
 			cardParked: !this.focus.active && this.focus.hasParked,
 			cardKind: (top ?? parked)?.request.kind,
-			editorFocused: true,
+			cardSubInput: this.focus.active && !!top && requestCardActions(top.request)[this.focus.focusIndex] === "answer_text",
+			editorFocused: !this.browsing,
 			running: this.running,
+			selectedCanView: group || !!selected,
+			selectedCanFold: group || !!selected && ["tool", "thinking", "execute", "edit"].includes(selected.kind),
 		};
 	}
 
@@ -174,8 +199,19 @@ export class App {
 
 	private handleKey(key: Key): void {
 		if (!this.started) return;
+		if (key.type === "mouse") {
+			this.handleMouse(key);
+			return;
+		}
 		if (isCtrlC(key)) {
 			void this.stop();
+			return;
+		}
+		if (this.viewer) {
+			const action = this.viewer.handleKey(key);
+			if (action?.type === "close") this.viewer = undefined;
+			if (action?.type === "copy") this.copyText(action.text);
+			this.repaint();
 			return;
 		}
 		const owner = resolveKeyOwner(this.routerState());
@@ -192,6 +228,11 @@ export class App {
 
 	private handleCardKey(key: Key): void {
 		const card = this.visibleCard();
+		if (key.type === "escape" && this.routerState().cardSubInput) {
+			this.focus.handleKey({ type: "tab" });
+			this.repaint();
+			return;
+		}
 		if (card?.handleTextKey(key, this.focus.focusIndex)) {
 			this.repaint();
 			return;
@@ -204,6 +245,8 @@ export class App {
 		const result = this.focus.handleKey(key);
 		if (result.action === "park" && result.card) {
 			this.cards.get(result.card.id)?.park();
+			this.browsing = true;
+			this.selectedId ??= this.presentations(this.screen().columns).at(-1)?.id;
 			this.repaint();
 			return;
 		}
@@ -222,21 +265,50 @@ export class App {
 	}
 
 	private handleScrollbackKey(key: Key): void {
-		const result = this.focus.handleKey(key);
+		const result = this.focus.handleKey(key.type === "char" && key.text === "i" ? { type: "tab" } : key);
 		if (result.action === "resume" && result.card) {
 			this.cards.get(result.card.id)?.resume();
 			this.repaint();
 			return;
 		}
-		if (key.type === "escape") return; // parked: Esc must not abort (AC-34)
+		if (key.type === "tab" || (key.type === "char" && ["i", " "].includes(key.text))) {
+			this.browsing = false;
+			this.repaint();
+			return;
+		}
+		if (key.type === "escape") {
+			if (nextEscStep(this.routerState()) === "abort_turn") { this.pauseSending(); this.options.port.abort?.(); }
+			this.repaint();
+			return;
+		}
 		if (key.type === "pageUp") this.scrollPage(1);
 		else if (key.type === "pageDown") this.scrollPage(-1);
-		else if (key.type === "ctrl" && key.key === "o") this.toggleLatestFoldable();
+		else if (key.type === "enter" || (key.type === "ctrl" && key.key === "f")) this.openDetail();
+		else if (key.type === "arrow") {
+			if (key.direction === "up" || key.direction === "down") this.selectEntry(key.direction === "up" ? -1 : 1);
+			else this.foldSelected(key.direction === "left" ? "collapsed" : "expanded");
+		} else if (key.type === "char") {
+			if (key.text === "j" || key.text === "k") this.selectEntry(key.text === "k" ? -1 : 1);
+			else if (key.text === "e") this.foldSelected();
+			else if (key.text === "h" || key.text === "l") this.foldSelected(key.text === "h" ? "collapsed" : "expanded");
+			else if (key.text === "G") this.scroll.jumpToEnd();
+			else if (key.text === "y" || key.text === "Y") {
+				const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+				if (entry) { const detail = entryDetail(entry); this.copyText(key.text === "Y" ? detail.metadata : detail.lines.join("\n")); }
+			}
+		}
 		this.repaint();
 	}
 
 	private handleComposerKey(key: Key): void {
 		if (this.picker && this.handlePickerKey(key)) return;
+		if (key.type === "tab") {
+			this.browsing = true;
+			this.selectedId ??= this.presentations(this.screen().columns).at(-1)?.id;
+			this.suggestionVersion++;
+			this.repaint();
+			return;
+		}
 		if (key.type === "ctrlEnter") {
 			this.cancelAndSend();
 			return;
@@ -249,11 +321,6 @@ export class App {
 			this.repaint();
 			return;
 		}
-		if (key.type === "ctrl" && key.key === "o") {
-			this.toggleLatestFoldable();
-			this.repaint();
-			return;
-		}
 		switch (key.type) {
 			case "char":
 				insertText(this.draft, key.text);
@@ -261,6 +328,15 @@ export class App {
 			case "paste":
 				insertText(this.draft, key.text);
 				break;
+			case "newline":
+				insertText(this.draft, "\n");
+				break;
+			case "delete": {
+				const before = editorCursorOffset(this.draft);
+				moveRight(this.draft);
+				if (editorCursorOffset(this.draft) !== before) backspace(this.draft);
+				break;
+			}
 			case "enter":
 				this.submit();
 				return;
@@ -436,6 +512,8 @@ export class App {
 		}
 		if (command === "/clear") {
 			this.projector.clear();
+			this.selectedId = undefined;
+			this.expandedGroups.clear();
 			this.scroll.jumpToEnd();
 			this.previousTranscript = undefined;
 			return true;
@@ -448,6 +526,7 @@ export class App {
 	}
 
 	private async runTurn(input: string): Promise<void> {
+		this.submitted = true;
 		this.running = true;
 		this.autoSendPaused = false;
 		try {
@@ -488,54 +567,190 @@ export class App {
 		this.repaint();
 	}
 
-	private toggleLatestFoldable(): void {
-		const foldable = this.projector.getEntries().filter((entry) => entry.kind === "thinking" || entry.kind === "execute" || entry.kind === "edit");
-		const last = foldable.at(-1);
-		if (!last) return;
-		const current = last.block.currentDisplayMode ?? last.block.defaultDisplayMode ?? last.block.fold.defaultDisplayMode ?? "expanded";
-		const next = current === "collapsed" ? "expanded" : "collapsed";
-		this.projector.setEntryDisplayState(last.id, next, true);
+	private selectEntry(delta: number): void {
+		const entries = this.presentations(this.screen().columns);
+		const current = entries.findIndex((entry) => entry.id === this.selectedId);
+		this.selectedId = entries[Math.max(0, Math.min(entries.length - 1, current + delta))]?.id;
+		const metrics = this.transcriptMetrics();
+		const span = metrics.spans.find((item) => item.entryId === this.selectedId);
+		if (!span) return;
+		const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
+		if (span.start < top || span.start >= top + metrics.viewportHeight) this.setTranscriptTop(span.start);
+	}
+
+	private openDetail(): void {
+		this.scroll.hold();
+		const group = this.presentations(this.screen().columns).find((view) => view.id === this.selectedId)?.members;
+		if (group) {
+			for (const member of group) this.expandedGroups.add(member.id);
+			this.selectedId = group[0]?.id;
+			return;
+		}
+		const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+		if (entry) this.viewer = new DetailView(entry.id, entryDetail(entry));
+	}
+
+	private copyText(text: string): void {
+		if (!text) return;
+		const version = ++this.copyVersion;
+		void this.host.requestCopy(text).catch(() => "unavailable" as const).then((result) => {
+			if (!this.started || version !== this.copyVersion) return;
+			this.feedback = result === "copied" ? "Copied" : result === "requested" ? "Copy requested" : "Clipboard unavailable";
+			clearTimeout(this.feedbackTimer);
+			this.feedbackTimer = setTimeout(() => { this.feedback = undefined; this.selectionFlash = undefined; this.repaint(); }, 1200);
+			this.repaint();
+		});
+	}
+
+	private setTranscriptTop(top: number): void {
+		const metrics = this.transcriptMetrics();
+		const max = Math.max(0, metrics.totalRows - metrics.viewportHeight);
+		this.scroll.scrollBy(max - top - this.scroll.offset, max);
+		this.scroll.hold();
+		this.previousTranscript = undefined;
+	}
+
+	private foldSelected(mode?: "collapsed" | "expanded"): void {
+		if (this.selectedId?.startsWith("group:")) {
+			const metrics = this.transcriptMetrics();
+			const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
+			const members = this.presentations(this.screen().columns).find((view) => view.id === this.selectedId)?.members ?? [];
+			const close = mode === "collapsed" || mode === undefined && members.some((member) => this.expandedGroups.has(member.id));
+			for (const member of members) {
+				if (close) this.expandedGroups.delete(member.id);
+				else this.expandedGroups.add(member.id);
+			}
+			this.setTranscriptTop(top);
+			return;
+		}
+		const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+		if (!entry) return;
+		if (entry.kind !== "tool" && entry.kind !== "thinking" && entry.kind !== "execute" && entry.kind !== "edit") return;
+		const metrics = this.transcriptMetrics();
+		const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
+		const current = entry.kind === "tool" ? entry.displayMode : entry.block.currentDisplayMode ?? entry.block.defaultDisplayMode ?? entry.block.fold.defaultDisplayMode ?? "expanded";
+		const next = mode ?? (current === "collapsed" ? entry.kind === "tool" && entry.name === "read" ? "truncated" : "expanded" : "collapsed");
+		const previousStart = metrics.spans.find((span) => span.entryId === entry.id)?.start ?? 0;
+		this.projector.setEntryDisplayState(entry.id, next, true);
+		const nextStart = this.transcriptMetrics().spans.find((span) => span.entryId === entry.id)?.start ?? previousStart;
+		this.setTranscriptTop(top + nextStart - previousStart);
+	}
+
+	private handleMouse(key: Extract<Key, { type: "mouse" }>): void {
+		const screen = this.screen();
+		key = { ...key, x: key.x - screen.x, y: key.y - screen.y };
+		if (key.action === "release" || key.action === "drag") {
+			if (this.selection) {
+				this.selection.move(key);
+				if (this.selection.moved) this.lastClick = undefined;
+				if (key.action === "release") {
+					this.copyText(this.selection.text());
+					this.selectionFlash = this.selection.moved ? this.selection : undefined;
+					this.selection = undefined;
+				}
+				this.repaint();
+			}
+			return;
+		}
+		if (key.x < 0 || key.y < 0 || key.x >= screen.columns || key.y >= screen.rows) return;
+		if (this.viewer) {
+			if (key.action === "click" && key.y > 0 && key.y < screen.rows - 2) this.startSelection(key, 1, screen.rows - 2, 1);
+			else this.viewer.handleKey(key);
+			this.repaint(); return;
+		}
+		const plan = this.layoutPlan(screen.columns, screen.rows, this.statusSegments().length > 0);
+		const offsets = layoutOffsets(plan);
+		const { totalRows, viewportHeight, spans } = this.transcriptMetrics();
+		if (key.x >= this.host.columns || key.y >= this.host.rows) return;
+		const card = this.visibleCard();
+		const interactive = this.interactiveRegion;
+		if (!card && key.action === "click" && interactive && key.x >= interactive.x && key.x < interactive.x + interactive.width && key.y >= interactive.y && key.y < interactive.y + interactive.height) {
+			this.browsing = false;
+			this.refreshSuggestions();
+			this.repaint();
+			return;
+		}
+		if (card && key.y >= offsets.interactive && key.y < offsets.interactive + plan.interactive.height) {
+			if (key.action === "up" || key.action === "down") card.bodyOffset = Math.max(0, card.bodyOffset + (key.action === "down" ? 3 : -3));
+		} else if (key.action === "up" || key.action === "down") {
+			this.scroll.scrollBy(key.action === "up" ? 3 : -3, Math.max(0, totalRows - viewportHeight));
+			this.scroll.hold();
+		} else if (!this.picker && key.y >= offsets.transcript && key.y < offsets.transcript + viewportHeight) {
+			const windowTop = Math.max(0, totalRows - viewportHeight - this.scroll.offset);
+			const targetRow = windowTop + key.y - offsets.transcript;
+			const span = spans.find((candidate) => candidate.start <= targetRow && targetRow < candidate.start + candidate.height);
+			const entry = span && this.presentations(screen.columns).find((view) => view.id === span.entryId);
+			if (entry) {
+				if (this.focus.active) {
+					const parked = this.focus.park();
+					if (parked) this.cards.get(parked.id)?.park();
+				}
+				this.browsing = true;
+				this.selectedId = entry.id;
+				this.scroll.hold();
+				const now = Date.now();
+				if (span?.start === targetRow && this.lastClick?.id === entry.id && now - this.lastClick.at <= 400) {
+					this.foldSelected(); this.lastClick = undefined;
+				} else this.lastClick = span?.start === targetRow ? { id: entry.id, at: now } : undefined;
+				const source = this.projector.getEntry(entry.id);
+				const textEntry = source?.kind === "assistant" || source?.kind === "user" || source?.kind === "notice";
+				if (span && (targetRow > span.start || textEntry) && key.x >= 3) this.startSelection(key, offsets.transcript, offsets.transcript + viewportHeight, 3);
+			}
+		}
+		this.repaint();
+	}
+
+	private startSelection(point: { x: number; y: number }, top: number, bottom: number, left: number): void {
+		const { x, y, columns, rows } = this.screen();
+		const full = this.composeFrame();
+		const snapshot = createFrame(columns, rows);
+		for (let row = 0; row < rows; row++) snapshot.cells[row] = full.cells[row + y]!.slice(x, x + columns);
+		this.selection = new TextSelection(point, snapshot, { top, bottom, left, right: columns - (this.viewer ? 1 : 2) });
 	}
 
 	private scrollPage(direction: 1 | -1): void {
 		const { totalRows, viewportHeight } = this.transcriptMetrics();
 		this.scroll.pageBy(direction, viewportHeight, Math.max(0, totalRows - viewportHeight));
+		this.scroll.hold();
 	}
 
 	private transcriptMetrics(): { totalRows: number; viewportHeight: number; spans: EntrySpan[] } {
-		const columns = this.host.columns;
-		const rows = this.host.rows;
+		const { columns, rows } = this.screen();
 		const segments = this.statusSegments();
 		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const presentations = this.presentations(columns);
 		let start = 0;
 		const spans: EntrySpan[] = presentations.map((presentation) => {
 			const height = entryHeight(presentation.presentation);
-			const span = { entryId: presentation.id, start, height };
+			const span = { entryId: presentation.id, start, height, rowSources: [
+				...Array.from({ length: presentation.presentation.chrome.vpadTop }, () => undefined),
+				...presentation.presentation.rows.map((row) => row.source),
+			] };
 			start += height;
 			return span;
 		});
-		return { totalRows: start, viewportHeight: plan.transcript.height - this.queueHeight(columns, plan.transcript.height), spans };
+		return { totalRows: start, viewportHeight: plan.transcript.height, spans };
 	}
 
 	private presentations(columns: number) {
-		return this.projector.getEntries().map((entry) => {
-			const hasTimestamp = entry.kind === "user" || entry.kind === "assistant";
-			const layout = computeEntryLayout(columns, hasTimestamp ? "0:00 PM" : undefined);
-			return { id: entry.id, presentation: presentEntry(entry, layout.contentWidth, this.theme) };
-		});
+		const views = transcriptViews(this.projector.getEntries(), columns, this.theme, this.expandedGroups);
+		for (const view of views) {
+			if (view.members?.some((member) => this.expandedGroups.has(member.id))) {
+				for (const member of view.members) this.expandedGroups.add(member.id);
+			}
+		}
+		if (this.selectedId && !views.some((view) => view.id === this.selectedId)) {
+			const memberId = this.selectedId.startsWith("group:") ? this.selectedId.slice(6) : this.selectedId;
+			this.selectedId = views.find((view) => view.id === memberId || view.members?.some((member) => member.id === memberId))?.id;
+		}
+		return views;
 	}
 
 	private statusSegments(): string[] {
-		const status = this.options.getStatus?.();
 		const usage = this.options.port.getUsage?.();
 		const cost = usage?.costUsd;
-		const contextLabel = this.contextLabel(usage);
 		return buildStatusSegments({
-			...(status ?? {}),
-			...(contextLabel ? { contextLabel } : {}),
 			...(cost !== undefined ? { cost } : {}),
-			...(this.running ? { activity: this.autoSendPaused ? "stopping" : this.queued.length > 0 ? `queued (${this.queued.length})` : "working" } : {}),
 		});
 	}
 
@@ -547,10 +762,31 @@ export class App {
 	private layoutPlan(columns: number, rows: number, hasStatus: boolean) {
 		const card = this.visibleCard();
 		const interactiveOwner = card ? ("card" as const) : ("composer" as const);
+		const emptyWelcome = this.options.showWelcome && !this.submitted && this.projector.getEntries().length === 0;
+		const width = emptyWelcome ? Math.min(75, Math.max(4, columns - 2)) : columns;
+		const wrapped = wrapDraft(this.draft, Math.max(1, width - 6));
 		const interactiveLines = card
 			? cardDesiredHeight(card.record.request, columns, this.theme)
-			: Math.max(1, wrapDraft(this.draft, Math.max(1, columns - 6)).lines.length);
-		return computeScreenLayout({ columns, rows, interactiveLines, hasStatus, interactiveOwner });
+			: this.browsing ? 1 : Math.max(1, wrapped.cursorY + 1, wrapped.lines.length);
+		return computeScreenLayout({ columns, rows, interactiveLines, hasStatus, interactiveOwner, activityLines: this.activityLines(columns).length, compact: this.host.rows <= 20, tiny: this.host.rows <= 16 });
+	}
+
+	private screen() {
+		const x = this.host.columns < 8 ? 0 : this.host.rows <= 20 ? 1 : 2;
+		const y = this.host.rows <= 20 ? 0 : 1;
+		return { x, y, columns: Math.max(1, this.host.columns - x * 2), rows: Math.max(1, this.host.rows - y * 2) };
+	}
+
+	private surround(content: TerminalFrame): TerminalFrame {
+		const { x, y } = this.screen();
+		const background = this.theme.color("base");
+		const frame = createFrame(this.host.columns, this.host.rows, { ...defaultStyle(), background });
+		for (let row = 0; row < content.rows; row++) for (let column = 0; column < content.columns; column++) {
+			const cell = content.cells[row]![column]!;
+			if (frame.cells[row + y]?.[column + x]) frame.cells[row + y]![column + x] = cell.background.kind === "default" ? { ...cell, background } : cell;
+		}
+		if (content.cursor) frame.cursor = { ...content.cursor, x: content.cursor.x + x, y: content.cursor.y + y };
+		return frame;
 	}
 
 	private repaint(): void {
@@ -563,8 +799,8 @@ export class App {
 		if (this.replacement !== undefined) pending.push(`Next: ${this.replacement}`);
 		return pending.flatMap((input) => wrapText(input, Math.max(1, columns - 2)));
 	}
-	private queueHeight(columns: number, available: number): number {
-		return Math.min(this.queueLines(columns).length, Math.floor(available / 2));
+	private activityLines(columns: number): string[] {
+		return [...this.queueLines(columns), ...(this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
 	}
 
 	/** Compose the current frame. Pure w.r.t. the terminal; exposed for tests. */
@@ -573,33 +809,49 @@ export class App {
 	}
 
 	private composeFrame(): TerminalFrame {
-		const columns = this.host.columns;
-		const rows = this.host.rows;
+		const { columns, rows } = this.screen();
 		const frame = createFrame(columns, rows);
+		if (this.viewer) {
+			const entry = this.projector.getEntry(this.viewer.entryId);
+			if (entry) this.viewer.update(entryDetail(entry));
+			this.viewer.paint(frame, this.theme, this.feedback);
+			(this.selection ?? this.selectionFlash)?.paint(frame);
+			return this.surround(frame);
+		}
 		const segments = this.statusSegments();
 		const plan = this.layoutPlan(columns, rows, segments.length > 0);
 		const offsets = layoutOffsets(plan);
-		const queueHeight = this.queueHeight(columns, plan.transcript.height);
-		const transcriptHeight = plan.transcript.height - queueHeight;
+		const transcriptHeight = plan.transcript.height;
 		if (plan.header.height === 1) {
-			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir }, this.theme);
+			const contextLabel = this.contextLabel(this.options.port.getUsage?.());
+			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(contextLabel ? { contextLabel } : {}) }, this.theme);
 		}
 		const entries = this.projector.getEntries();
-		if ((this.options.showWelcome ?? false) && entries.length === 0 && plan.transcript.height > 0 && !this.picker) {
-			paintWelcome(frame, offsets.transcript, transcriptHeight, { cwd: this.options.cwd, homeDir: this.options.homeDir, model: this.options.getStatus?.().model }, this.theme);
+		const welcome = (this.options.showWelcome ?? false) && !this.submitted && entries.length === 0 && !this.visibleCard();
+		let composerY = offsets.interactive;
+		let composerX = 0;
+		let composerWidth = columns;
+		if (welcome) {
+			const logoRows = welcomeHeight(columns, transcriptHeight);
+			const top = offsets.transcript + Math.max(0, Math.floor((transcriptHeight - logoRows - 1) / 2));
+			paintWelcome(frame, top, logoRows, { cwd: this.options.cwd, homeDir: this.options.homeDir }, this.theme);
+			composerY = Math.min(offsets.interactive, top + logoRows + 1);
+			composerWidth = Math.min(75, Math.max(4, columns - 2));
+			composerX = Math.max(0, Math.floor((columns - composerWidth) / 2));
 		} else {
 			this.paintTranscriptRegion(frame, offsets.transcript, transcriptHeight);
 		}
-		const queueLines = this.queueLines(columns);
-		for (let row = 0; row < queueHeight; row++) {
-			const text = row === queueHeight - 1 && queueLines.length > queueHeight ? `... (${this.queued.length} queued)` : queueLines[row]!;
-			writeText(frame, 1, offsets.transcript + transcriptHeight + row, text, { ...defaultStyle(), foreground: this.theme.color("activity") });
+		const activityLines = this.activityLines(columns);
+		for (let row = 0; row < plan.activity.height; row++) {
+			const text = row === plan.activity.height - 1 && activityLines.length > plan.activity.height ? `... (${this.queued.length} queued)${this.running ? " working" : ""}` : activityLines[row]!;
+			writeText(frame, 1, offsets.activity + row, text, { ...defaultStyle(), foreground: this.theme.color("activity") });
 		}
 		if (this.picker && plan.interactive.owner === "composer") {
-			const height = pickerHeight(this.picker.items.length, Math.min(8, transcriptHeight));
-			paintPicker(frame, offsets.transcript + transcriptHeight - height, height, this.picker, this.theme);
+			const height = pickerHeight(this.picker.items.length, Math.min(8, Math.max(0, composerY - offsets.transcript)));
+			paintPicker(frame, composerY - height, height, this.picker, this.theme);
 		}
 		const card = this.visibleCard();
+		this.interactiveRegion = { x: composerX, y: card ? offsets.interactive : composerY, width: composerWidth, height: plan.interactive.height };
 		if (plan.interactive.owner === "card" && card) {
 			paintRequestCard({
 				frame,
@@ -613,24 +865,27 @@ export class App {
 		} else {
 			paintComposer({
 				frame,
-				x: 0,
-				y: offsets.interactive,
-				width: columns,
+				x: composerX,
+				y: composerY,
+				width: composerWidth,
 				height: plan.interactive.height,
 				draft: this.draft,
 				theme: this.theme,
-				caption: this.options.getStatus?.().model,
 				placeholder: "Type a message",
+				caption: this.options.getStatus ? `${this.options.getStatus().provider}/${this.options.getStatus().model}` : undefined,
+				focused: !this.browsing,
 				compact: plan.compact,
 			});
 		}
 		if (plan.status.height === 1) paintStatus(frame, offsets.status, segments, this.theme);
+		if (this.browsing || this.focus.hasParked) delete frame.cursor;
 		if (plan.shortcuts.height === 1) {
 			const routes = shortcutRoutes(this.routerState());
 			const hints: ShortcutHint[] = routes.map((route) => ({ keys: route.keys, label: route.label, ...(route.pinned ? { pinned: true } : {}) }));
 			paintShortcuts(frame, offsets.shortcuts, hints, this.theme);
 		}
-		return frame;
+		(this.selection ?? this.selectionFlash)?.paint(frame);
+		return this.surround(frame);
 	}
 
 	private paintTranscriptRegion(frame: TerminalFrame, top: number, height: number): void {
@@ -638,7 +893,10 @@ export class App {
 		const presentations = this.presentations(frame.columns);
 		let start = 0;
 		const spans: EntrySpan[] = presentations.map((presentation) => {
-			const span = { entryId: presentation.id, start, height: entryHeight(presentation.presentation) };
+			const span = { entryId: presentation.id, start, height: entryHeight(presentation.presentation), rowSources: [
+				...Array.from({ length: presentation.presentation.chrome.vpadTop }, () => undefined),
+				...presentation.presentation.rows.map((row) => row.source),
+			] };
 			start += span.height;
 			return span;
 		});
@@ -652,6 +910,40 @@ export class App {
 		for (const [index, span] of spans.entries()) {
 			if (span.start + span.height <= windowTop || span.start >= windowTop + height) continue;
 			paintEntry(frame, top + (span.start - windowTop), presentations[index]!.presentation, this.theme, { top, bottom: top + height });
+			if (this.browsing && span.entryId === this.selectedId) {
+				const view = presentations[index]!;
+				const y = Math.max(top, top + span.start + view.presentation.chrome.vpadTop - windowTop);
+				if (view.dense) {
+					for (let x = 1; x < frame.columns - 1; x++) {
+						const cell = frame.cells[y]![x]!;
+						cell.background = this.theme.color("dark_surface");
+					}
+				}
+				writeText(frame, view.dense ? 3 : 1, y, ">", { ...defaultStyle(), foreground: this.theme.color("status"), ...(view.dense ? { background: this.theme.color("dark_surface") } : {}) });
+			}
+		}
+		const selected = this.browsing ? presentations.findIndex((view) => view.id === this.selectedId) : -1;
+		if (selected >= 0) {
+			const unit = presentations[selected]!.selectionGroup;
+			const selectedSpans = spans.filter((_span, index) => index === selected || unit !== undefined && presentations[index]!.selectionGroup === unit);
+			const first = selectedSpans[0]!;
+			const last = selectedSpans.at(-1)!;
+			const firstIndex = spans.indexOf(first);
+			const firstChrome = presentations[firstIndex]!.presentation.chrome;
+			const start = top + first.start + firstChrome.vpadTop - windowTop;
+			const previousChrome = presentations[firstIndex - 1]?.presentation.chrome;
+			const hasTopGap = firstChrome.vpadTop > 0 || !previousChrome || (previousChrome.gapAfter ?? 0) > 0 || !previousChrome.surface && previousChrome.vpadBottom > 0;
+			const lastChrome = presentations.find((view) => view.id === last.entryId)!.presentation.chrome;
+			const lastPadding = lastChrome.vpadBottom + (lastChrome.gapAfter ?? 0);
+			const end = top + last.start + last.height - lastPadding - windowTop;
+			const style = { ...defaultStyle(), foreground: this.theme.color("prompt_border_active") };
+			const borderTop = hasTopGap ? start - 1 : start;
+			const borderBottom = lastPadding > 0 ? end : end - 1;
+			for (let y = Math.max(top, borderTop); y <= Math.min(top + height - 1, borderBottom); y++) {
+				const clipped = y === top && start < top || y === top + height - 1 && end >= top + height;
+				writeText(frame, 0, y, clipped ? "┆" : y === start - 1 ? "┌" : y === end ? "└" : "│", style);
+				writeText(frame, frame.columns - 1, y, clipped ? "┆" : y === start - 1 ? "┐" : y === end ? "┘" : "│", style);
+			}
 		}
 	}
 

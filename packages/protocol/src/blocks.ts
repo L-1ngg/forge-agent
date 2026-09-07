@@ -67,6 +67,8 @@ export interface EditBlockData {
 
 export interface ExecuteBlockData {
 	command: string;
+	/** Optional human-readable purpose; the actual command remains authoritative. */
+	description?: string;
 	stdout?: string;
 	stderr?: string;
 	exitCode?: number;

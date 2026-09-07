@@ -281,6 +281,7 @@ export function paintRequestCard(input: CardPaintInput): void {
 	const railStyle: CellStyle = { ...defaultStyle(), foreground: theme.color("accent_user"), background: surface };
 
 	const body = cardBodyRows(card.record.request, contentWidth, theme);
+	if (!focused && body[0]) body[0].spans.push({ text: " (parked)", style: { ...defaultStyle(), foreground: theme.color("muted") } });
 	const actions = requestCardActions(card.record.request);
 	const actionRows: EntryRow[] = actions.map((action, index) => {
 		const selected = focused && index === focusIndex;

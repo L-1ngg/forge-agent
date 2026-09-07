@@ -8,6 +8,42 @@ function decode(input: string): Key[] {
 	return keys;
 }
 
+test("mouse reports survive every byte split and do not become text or Escape", () => {
+	for (const report of ["\x1b[<64;10;5M", "\x1b[M" + String.fromCharCode(96, 42, 37)]) {
+		for (let split = 1; split < report.length; split++) {
+			const decoder = new KeyDecoder();
+			expect([...decoder.push(report.slice(0, split)), ...decoder.push(report.slice(split)), ...decoder.flush()]).toEqual([
+				{ type: "mouse", action: "up", x: 9, y: 4 },
+			]);
+		}
+	}
+	expect(decode("\x1b[<65;300;40M\x1b[<0;10;5M\x1b[<0;10;5m\x1b[<32;10;5M\x1b[<2;10;5Mx")).toEqual([
+		{ type: "mouse", action: "down", x: 299, y: 39 },
+		{ type: "mouse", action: "click", x: 9, y: 4 },
+		{ type: "mouse", action: "release", x: 9, y: 4 },
+		{ type: "mouse", action: "drag", x: 9, y: 4 },
+		{ type: "char", text: "x" },
+	]);
+	expect(decode("\x1b[<64;10;")).toEqual([{ type: "unknown", raw: "\x1b[<64;10;" }]);
+});
+
+test("legacy mouse coordinates remain raw bytes beside UTF-8 text at every split", () => {
+	for (const coordinate of [94, 95, 119, 190, 222]) {
+		const raw = Buffer.concat([Buffer.from("你好"), Buffer.from([27, 91, 77, 32, coordinate + 33, coordinate + 33]), Buffer.from("完成")]);
+		const expected: Key[] = [
+			{ type: "char", text: "你" }, { type: "char", text: "好" },
+			{ type: "mouse", action: "click", x: coordinate, y: coordinate },
+			{ type: "char", text: "完" }, { type: "char", text: "成" },
+		];
+		for (let split = 1; split < raw.length; split++) {
+			const decoder = new KeyDecoder();
+			expect([...decoder.push(raw.subarray(0, split)), ...decoder.push(raw.subarray(split)), ...decoder.flush()]).toEqual(expected);
+		}
+		const decoder = new KeyDecoder();
+		expect([...raw].flatMap((byte) => decoder.push(Buffer.from([byte])))).toEqual(expected);
+	}
+});
+
 test("printable text decodes per grapheme", () => {
 	expect(decode("a")).toEqual([{ type: "char", text: "a" }]);
 	expect(decode("你好")).toEqual([

@@ -35,6 +35,26 @@ test("thinking: streaming expands with rail, complete collapses to the duration 
 	const completeOut = presentEntry(complete, 60, theme);
 	expect(rowTexts(completeOut)).toEqual(["◆ Thought for 2.7s"]);
 	expect(completeOut.chrome.collapsed).toBe(true);
+	expect(completeOut.rows[0]!.spans[0]!.style.foreground).toEqual(theme.color("muted"));
+});
+
+test("collapsed tool markers distinguish command success from neutral file operations", () => {
+	for (const lifecycle of ["complete", "failed", "streaming"] as const) {
+		for (const name of ["read", "edit", "write", "bash", "custom"]) {
+			const entry: TranscriptEntry = { id: name, kind: "tool", toolCallId: name, name, args: { path: "file.ts", command: "pwd" }, content: "", lifecycle, displayMode: "collapsed" };
+			const slot = lifecycle === "failed" ? "accent_error" : name === "bash" ? lifecycle === "streaming" ? "accent_running" : "accent_success" : "muted";
+			expect(presentEntry(entry, 60, theme).rows[0]!.spans[0]!.style.foreground).toEqual(theme.color(slot));
+		}
+		const edit: TranscriptEntry = { id: "edit-block", kind: "edit", block: block(
+			{ id: "edit-block", kind: "edit", lifecycle, currentDisplayMode: "collapsed" },
+			{ path: "file.ts", additions: 0, removals: 0, hunks: [] }, {},
+		) };
+		expect(presentEntry(edit, 60, theme).rows[0]!.spans[0]!.style.foreground).toEqual(theme.color(lifecycle === "failed" ? "accent_error" : "muted"));
+		const execute: TranscriptEntry = { id: "exec-block", kind: "execute", block: block(
+			{ id: "exec-block", kind: "execute", lifecycle, currentDisplayMode: "collapsed" }, { command: "pwd" }, {},
+		) };
+		expect(presentEntry(execute, 60, theme).rows[0]!.spans[0]!.style.foreground).toEqual(theme.color(lifecycle === "failed" ? "accent_error" : lifecycle === "streaming" ? "accent_running" : "accent_success"));
+	}
 });
 
 test("thinking truncated mode keeps the tail behind a muted ellipsis", () => {
@@ -57,7 +77,7 @@ test("AC-29: execute truncates first/last and never duplicates toolResult conten
 		),
 	};
 	const out = presentEntry(entry, 60, theme);
-	expect(rowTexts(out)).toEqual(["Run ls", "1", "2", "… +3 lines", "6", "7", "8"]);
+	expect(rowTexts(out)).toEqual(["◆ Run ls", "1", "2", "… +3 lines", "6", "7", "8"]);
 	expect(out.rows[4]!.background).toEqual(theme.color("stdout_panel")); // marker row keeps the panel band
 });
 
@@ -68,7 +88,16 @@ test("failed execute turns the header to the error accent", () => {
 		block: block({ id: "e", kind: "execute", lifecycle: "failed", defaultDisplayMode: "collapsed", currentDisplayMode: "collapsed" }, { command: "bad", exitCode: 1, isError: true }, {}),
 	};
 	const out = presentEntry(entry, 60, theme);
-	expect(out.rows[0]!.spans[1]!.style.foreground).toEqual(theme.color("accent_error"));
+	expect(out.rows[0]!.spans.find((span) => span.text === "bad")!.style.foreground).toEqual(theme.color("accent_error"));
+});
+
+test("expanded execute preserves the entire command when its compact title is clipped", () => {
+	const command = `printf ${"a".repeat(90)} COMMAND_TAIL`;
+	const entry: TranscriptEntry = { id: "long", kind: "execute", block: block(
+		{ id: "long", kind: "execute", lifecycle: "complete", currentDisplayMode: "expanded" },
+		{ command, stdout: "OUTPUT" }, {},
+	) };
+	expect(rowTexts(presentEntry(entry, 40, theme)).join("\n")).toContain("COMMAND_TAIL");
 });
 
 test("edit shows +N/-M on the header and typed diff bands when expanded", () => {
@@ -90,7 +119,7 @@ test("edit shows +N/-M on the header and typed diff bands when expanded", () => 
 		),
 	};
 	const out = presentEntry(entry, 60, theme);
-	expect(rowTexts(out)[0]).toBe("Edit module.ts +1/-1"); // basename, not the full path
+	expect(rowTexts(out)[0]).toBe("◆ Edit module.ts +1/-1"); // basename, not the full path
 	expect(out.rows[1]!.background).toEqual(theme.color("diff_remove"));
 	expect(out.rows[2]!.background).toEqual(theme.color("diff_add"));
 	expect(rowTexts(out)[1]).toContain("- old()");

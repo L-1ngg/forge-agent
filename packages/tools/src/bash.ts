@@ -3,6 +3,7 @@ import type { HarnessTool } from "./types.ts";
 
 export interface BashInput {
 	command: string;
+	description?: string;
 	timeout_ms?: number;
 	max_output_bytes?: number;
 }
@@ -43,6 +44,7 @@ export const bashTool: HarnessTool<BashInput, BashOutput> = {
 		type: "object",
 		properties: {
 			command: { type: "string", minLength: 1, description: "Shell command to execute." },
+			description: { type: "string", description: "Short human-readable purpose shown in the tool call title." },
 			timeout_ms: { type: "integer", minimum: 1, maximum: 600000, description: "Kill the command after this many milliseconds." },
 			max_output_bytes: { type: "integer", minimum: 1024, maximum: 1048576, description: "Maximum combined UTF-8 bytes retained from stdout and stderr." },
 		},

@@ -105,6 +105,7 @@ test("crash path: a throwing paint still restores the terminal", () => {
 	expect(() => host.paint(frame)).toThrow("injected write failure");
 	expect(input.raw).toBe(false);
 	expect(output.chunks.at(-1)).toContain(LEAVE_ALT_SCREEN);
+	expect(output.chunks.at(-1)).toContain("\x1b[?1006l\x1b[?1000l");
 	expect(host.isStarted).toBe(false);
 	host.stop();
 	expect(output.count(LEAVE_ALT_SCREEN)).toBe(1);

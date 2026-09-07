@@ -57,6 +57,20 @@ test("execute block keeps its original command when a failed result has no detai
 	expect(end?.block).toMatchObject({ kind: "execute", lifecycle: "failed", data: { command: "false" } });
 });
 
+test("execute descriptions survive start and completion without replacing the command", async () => {
+	for (const command of ["printf ok", "false"]) {
+		const port = createPiTestPort({ tools: [bashTool], responses: [
+			{ toolCalls: [{ id: "described-exec", name: "bash", arguments: { command, description: "Check preview response" } }] }, { text: "done" },
+		] });
+		const events = [];
+		for await (const event of port.runTurn("check")) events.push(event);
+		for (const type of ["tool_execution_start", "tool_execution_end"]) {
+			const event = events.find((event) => event.type === type);
+			expect(event && "block" in event ? event.block : undefined).toMatchObject({ kind: "execute", data: { command, description: "Check preview response" } });
+		}
+	}
+});
+
 test("edit execution ends with a terminal block for both success and failure", async () => {
 	for (const fails of [false, true]) {
 		const port = createPiTestPort({
