@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { relative } from "node:path";
+import ts from "typescript";
 
 const root = new URL("../", import.meta.url);
 const packageNames = ["protocol", "tools", "core", "tui", "cli"] as const;
@@ -20,6 +21,17 @@ function importSpecifiers(source: string): string[] {
 		}
 	}
 	return specifiers;
+}
+
+function callsBlockingGlobal(source: string): boolean {
+ const file = ts.createSourceFile("source.ts", source, ts.ScriptTarget.Latest, true);
+ let found = false;
+ function visit(node: ts.Node): void {
+  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["prompt", "confirm"].includes(node.expression.text)) found = true;
+  ts.forEachChild(node, visit);
+ }
+ visit(file);
+ return found;
 }
 
 export async function findViolations(projectRoot: URL = root): Promise<string[]> {
@@ -60,7 +72,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			if (packageName === "core" && /\bui\s*\.\s*(?:prompt|confirm|ask)\s*\(/.test(source)) {
 				violations.push(`${displayPath} must not call UI blocking APIs directly`);
 			}
-			if (packageName === "core" && /(?:^|[^\w.])(?:prompt|confirm)\s*\(/m.test(source)) {
+			if (packageName === "core" && callsBlockingGlobal(source)) {
 				violations.push(`${displayPath} must not call prompt/confirm directly`);
 			}
 			for (const specifier of imports) {
@@ -78,7 +90,8 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				}
 				if (
 					(specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) &&
-					displayPath !== "packages/core/src/pi-port.ts"
+					displayPath !== "packages/core/src/pi-port.ts" &&
+					!/^packages\/core\/src\/runtime\/(agent|agent-loop|types)\.ts$/.test(displayPath)
 				) {
 					violations.push(`${displayPath} imports pi agent/model APIs outside packages/core/src/pi-port.ts`);
 				}

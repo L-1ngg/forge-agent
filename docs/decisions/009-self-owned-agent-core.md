@@ -5,7 +5,7 @@ created: 2026-09-05
 
 # ADR-009: 自研 Agent 执行内核
 
-> 状态:已批准(2026-09-05)。自研内核已提交,施工、自动化证据与剩余验收统一见 [自研执行内核](../phases/owned-core.md);输入与取消边界由 [ADR-010](010-input-ownership-and-interruption.md) 补充。2026-09-06 核对。
+> 状态:自行实现循环的方向由 operator 于 2026-09-08 批准的 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14) 取代，改为从固定源码建立本地维护的执行底座；输入归属与上下文合同不变。当前生产仍运行旧内核，待后续接入票切换。原决策已批准(2026-09-05)。自研内核已提交,施工、自动化证据与剩余验收统一见 [自研执行内核](../phases/owned-core.md);输入与取消边界由 [ADR-010](010-input-ownership-and-interruption.md) 补充。2026-09-06 核对。
 
 ## 背景
 
