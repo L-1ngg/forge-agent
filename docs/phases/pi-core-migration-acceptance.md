@@ -5,7 +5,7 @@ created: 2026-09-08
 
 # 本地执行内核接入验收
 
-> 状态:本地实现完成，提交前集成检查与审查(2026-09-08)。范围与 AC 定义归 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14) 及 #15–#26；施工接合见[迁移设计](pi-core-migration.md)。本地提交不代表远端 Issue 已关闭或版本已发布。
+> 状态:已完成，operator 已在 WSL 验收并授权推送与关闭对应 Issue(2026-09-08)。范围与 AC 定义归 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14) 及 #15–#26；施工接合见[迁移设计](pi-core-migration.md)。本地提交不代表远端 Issue 已关闭或版本已发布。
 
 ## 源码与版本
 
@@ -30,7 +30,13 @@ created: 2026-09-08
 | AC-MIG-08 | 原样差分的并行→串行反向实验在 `toolUse/all/false` 失败；接入后的 assistant 保存等待反向实验检测到保存未完成时 effects=1（应为 0），恢复后通过 |
 | AC-MIG-09 | `runtime-configuration`：模型流及完整工具批次 gate、accepted/applied、模型/prompt/thinking/tools 实际请求变化、无额外请求、失效 usage、无效更新回滚、释放取消；公开接口见 SDK |
 
-首次完整集成检查：469 pass / 0 fail，10,981 assertions，67 文件；随后增加保存等待反向用例并定向通过。双轴审查修复了 compact 存储失败后的 result/idle 悬空、SDK 队列模式缺口和两处架构文档陈述；公开 SDK 的 all/one-at-a-time 及 compact 故障回归先失败、修复后通过。真实 PTY 包含既有工具/授权/输入/取消/compact 工作流及新增 retry → success → 下一输入。最终提交完成后在该 SHA 再执行必要检查，最终 SHA 与结果以本轮交付报告为准。
+首次完整集成检查：469 pass / 0 fail，10,981 assertions，67 文件；随后增加保存等待反向用例并定向通过。双轴审查修复了 compact 存储失败后的 result/idle 悬空、SDK 队列模式缺口和两处架构文档陈述；公开 SDK 的 all/one-at-a-time 及 compact 故障回归先失败、修复后通过。真实 PTY 包含既有工具/授权/输入/取消/compact 工作流及新增 retry → success → 下一输入。最终代码提交 `33b7ce53274afcc7bc34c4e0b373e08bdae1ab80` 上的完整检查为 473 pass / 0 fail、11,064 assertions、67 文件；依赖门禁、五包及自动化脚本类型检查、SDK 示例类型检查通过，25 组源码行为差分通过。Standards 与 Spec 复审剩余问题各 0 项。
+
+## Operator 验收与交付授权
+
+2026-09-08，operator 反馈：“我以wsl验收过了，暂时没有发现bug”。这是用户在 WSL 的实际验收结果；未提供逐场景清单，不推断未说明的供应商、平台或长期使用覆盖。随后明确要求：“请你推送，并关闭对应的issue”，授权推送本轮提交并关闭父规格 #14 与子任务 #15–#26。
+
+启动旧会话时曾遇到 v3 文件被 v4 读取器拒绝的问题，已只读确认文件版本并说明新会话/副本转换方式；未由 Agent 删除、覆盖或原地转换用户会话。
 
 ## 反向验证复现
 
@@ -45,5 +51,5 @@ created: 2026-09-08
 - 回退应用时使用起点提交及其完整 lockfile，在独立 checkout 执行 `bun install --frozen-lockfile`；切换 SDK 宿主工具返回协议也需与旧提交匹配。不要仅回退循环文件而混用新会话层/旧模型依赖。
 - 原样 Core 基线提交只用于来源核查，不是最终 Forge 集成的产品回退点。恢复原产品使用实施起点，而非单独部署源码基线。
 - v4 中本轮新增 details 可被新版本完整重载；旧版本是否保留这些扩展字段不作保证。可靠回退采用保留的旧会话副本；取消、不确定工具效果和历史写入均不能自动重放或撤销。
-- 本轮不发布、不 push、不关闭远端 Issue，不覆盖 operator 会话，不运行收费模型。
+- 实施阶段不推送、不关闭远端 Issue；operator 的后续明确授权现允许推送与关闭 #14–#26。此次不发布版本，不覆盖 operator 会话，不由 Agent 运行收费模型。
 - 未验证：真实供应商多轮任务矩阵、macOS/Windows、Node.js/Python、npm 分发与人工长期使用。历史 Phase 1 / E1–E3 人工验收豁免仍为豁免，不能记作通过。Bun/WSL、本地 HTTP 与真实 PTY 不代表这些未测平台。

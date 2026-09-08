@@ -5,7 +5,7 @@ created: 2026-09-08
 
 # Pi Core 源码迁移与接入设计
 
-> 状态:本地实现完成，待交付审核(2026-09-08)。正式需求、任务范围及验收定义见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)；本文维护施工接合与回退设计，执行证据见[迁移验收](pi-core-migration-acceptance.md)。
+> 状态:已完成，operator 已在 WSL 验收(2026-09-08)。正式需求、任务范围及验收定义见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)；本文维护施工接合与回退设计，执行证据见[迁移验收](pi-core-migration-acceptance.md)。
 
 ## Why
 

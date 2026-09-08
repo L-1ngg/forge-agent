@@ -1,12 +1,11 @@
 # 通用 Agent — 规划
 
-> 状态:待本地执行内核接入交付审核(2026-09-08)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
+> 状态:待下一批设计(2026-09-08)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
 > 设计论证与历史研究见 [design-rationale.md](design-rationale.md)、[cat-cafe.md](cat-cafe.md) 和 [research/](research/)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
 ## 1. 当前行动项
 
-- Pi Agent Core 源码迁移规格与任务入口见 [GitHub #14](https://github.com/L-1ngg/forge-agent/issues/14)；架构与施工设计见 [ADR-015](decisions/015-pi-core-source-migration.md)、[迁移设计](phases/pi-core-migration.md)，源码研究见[对齐调查](research/pi-core-alignment-plan.md)。
 - TUI 主界面工作流的需求与任务进度见 [GitHub #1](https://github.com/L-1ngg/forge-agent/issues/1);施工设计与 WSL 跨流程验收见 [主界面工作流设计](phases/tui-main-workflow.md)。
 - [ ] 审核已提交的内核、SDK 与 ADR-010 修复;提交不等于人工交付验收,未测边界以对应施工图为准。
 - [ ] 对照内核施工图核定剩余真实任务验收,明确已记录的最小 SDK 烟测与完整多轮工具/session/取消验证的差别。
