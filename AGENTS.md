@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-通用单 Agent 项目(TypeScript + Bun),执行内核为自研 `ExecutionCore`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#architecture)。
+通用单 Agent 项目(TypeScript + Bun),执行内核为从固定 Pi 源码移植并本地维护的 `runtime/Agent`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#architecture)。
 
 ## 真相源层级
 
@@ -16,7 +16,7 @@
 |---|---|
 | 项目路线、优先级与当前阶段入口 | [docs/plan.md](docs/plan.md)(只放当前行动项与链接) |
 | Issue 规格、任务验收与任务状态 | GitHub Issues;与施工图的分工见 [issue-tracker.md](docs/agents/issue-tracker.md) |
-| 当前内核与 SDK 怎么施工、如何验收 | [自研内核](docs/phases/owned-core.md)、[SDK](docs/phases/sdk.md);历史阶段见 [docs/phases/](docs/phases/) |
+| 当前内核与 SDK 怎么施工、如何验收 | [内核接入](docs/phases/pi-core-migration.md)、[验收证据](docs/phases/pi-core-migration-acceptance.md);历史阶段见 [docs/phases/](docs/phases/) |
 | 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
 | 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
 | 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |

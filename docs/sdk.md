@@ -84,6 +84,8 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 `runTurn` 返回带只读 `id: symbol` 的单消费者异步事件流。同实例并发执行拒绝,不是自动排队。`steer(input, turn.id)` 与 `followUp(input, turn.id)` 只进入对应活动执行的两条 FIFO 队列,返回 `InputAcceptance`;未启动、已结束、取消或 id 过期时返回 `{ accepted: false }`,宿主应保留输入。已停用或已释放实例仍抛错。
 
+创建选项 `steeringMode` 与 `followUpMode` 分别选择 `"all"` 或 `"one-at-a-time"`，默认后者。`all` 在对应消费点一次取出该队列全部输入，`one-at-a-time` 每次取一个；steering 优先于 follow-up。
+
 接受结果为 `{ accepted: true, processed: Promise<boolean> }`:输入已进入模型上下文时解析为 `true`,结束时尚未处理则为 `false`。宿主保留原文,恢复未处理输入;`true` 不保证模型完成或持久化成功,不应自动重发以免重复工具副作用。干预结果需在并行消费事件时处理,不能在消费循环中等待未来输入处理而阻塞迭代收尾。
 
 跨 invocation 队列属于宿主。TUI 在等待期间持续接受输入,显示 FIFO,空输入框 Up 取回队尾编辑;Esc 停止续发并恢复草稿,Ctrl+Enter 仅在旧任务成功收尾后发送指定输入,其余待发原文恢复草稿。提交失败暂停队列,检查存储并重建实例后由宿主明确恢复。`agent_end` 仅表示执行终止,整个异步迭代正常完成才表示会话提交完成。
@@ -97,3 +99,60 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 默认未允许的工具调用需要授权。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
 
 每实例默认有独立权限记忆和请求总线。CLI 为兼容现有 TUI 显式传入独占 RequestBus,交互模式允许无限等待;SDK dispose 会关闭该总线,不得跨实例共享。请求观察、授权与释放不依赖 pi 类型。
+
+## 本地执行内核接口升级
+
+包名与 `createAgent` 不变。生产循环来自本地维护的固定 Agent 源码，Forge 会话层继续负责存储、权限、上下文与 usage。内部 `ExecutionCore`、`AgentRunner` 和旧权限适配工厂不再导出；宿主从 SDK 创建实例。
+
+```ts
+const turn = agent.runTurn("完成任务");
+for await (const event of turn) {
+  // 在这里展示或转发事件；不要等待尚未完成的 turn.result。
+}
+const result = await turn.result;
+await agent.waitForIdle();
+// result.status: success | error | aborted | length | deferred
+
+const continuation = agent.continue(); // 使用已有上下文，不添加 user 消息
+for await (const event of continuation) { /* 展示事件 */ }
+```
+
+`turn.result` 在消费与必要保存结算后完成；`waitForIdle()` 等待当前已获取 iterator 或手动压缩清理，不表示模型成功。`agent_end.outcome` 标明会话级最终结果；重试中间的 error 不是整个任务失败。`deferred` 为终态，没有后台轮询。惰性流需消费或获取 iterator 后关闭，未消费的流不会启动工作。
+
+自定义工具改用一套结构化返回值，旧 `{ ok, value, error }` 不再是工具 execute 协议：
+
+```ts
+import type { HarnessTool } from "@forge-agent/core/sdk";
+
+const lookup: HarnessTool<{ key: string }, { source: string }> = {
+  name: "lookup", label: "Lookup", description: "Look up a key",
+  parameters: {
+    type: "object", properties: { key: { type: "string" } },
+    required: ["key"], additionalProperties: false,
+  },
+  async execute({ key }, context) {
+    context.signal?.throwIfAborted();
+    context.onUpdate?.({ content: [{ type: "text", text: "Looking up" }], details: undefined });
+    return { content: [{ type: "text", text: key }], details: { source: "local" } };
+  },
+};
+```
+
+`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 同步规范化输入；旧 `toolInputRewrites` 可异步改写。执行前按调用顺序完成 schema 校验、改写、before hook、最终校验和授权，然后默认并行执行；`executionMode: "sequential"` 可指定单工具串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。
+
+普通任务和摘要共用 `retry` 配置，但计数独立。任务仅对临时故障重试，默认三次、2/4/8 秒；原错误响应保存在历史并从重试请求排除。已消费输入和完成工具结果复用，不重复用户输入、不重放工具。overflow 使用独立的一次上下文恢复，不能套入普通 retry。`retry` 事件提供 scheduled/attempt/end，取消会中止等待。
+
+```ts
+const receipt = await agent.updateConfiguration({
+  systemPrompt: "更新后的指令",
+  thinkingLevel: "low",
+  tools: [lookup],
+});
+// receipt.accepted === true；不等于新配置已用于当前响应。
+const application = await receipt.applied;
+// application.status: applied | canceled，revision 与 receipt 一致。
+```
+
+可更新 provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应或工具执行中接受更新后，整批沿用原配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
+
+源码基线、必要定制、验证与版本回退说明见[迁移验收](phases/pi-core-migration-acceptance.md)。

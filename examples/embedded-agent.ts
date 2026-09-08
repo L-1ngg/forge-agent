@@ -7,7 +7,8 @@ const markerTool: HarnessTool<object, { marker: string }> = {
 	description: "Return a fixed verification marker without external side effects.",
 	parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 	async execute() {
-		return { ok: true, value: { marker: "SDK_EMBEDDED_OK" } };
+		const details = { marker: "SDK_EMBEDDED_OK" };
+		return { content: [{ type: "text", text: JSON.stringify(details) }], details };
 	},
 };
 

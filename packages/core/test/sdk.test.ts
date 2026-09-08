@@ -60,7 +60,7 @@ test("SDK default permission waits for host response and dispose closes requests
 	let executions = 0;
 	const agent = await createAgent(options, (config) => createPiTestPort({
 		...config,
-		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { ok: true, value: "ok" }; } }],
+		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }],
 		responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }, { text: "done" }],
 	}));
 	const events = (async () => { for await (const event of agent.runTurn("hello")) void event; })();
@@ -116,7 +116,7 @@ test("SDK dispose cancels a pending permission without executing the tool", asyn
 	let executions = 0;
 	const agent = await createAgent(options, (config) => createPiTestPort({
 		...config,
-		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { ok: true, value: "ok" }; } }],
+		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }],
 		responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }],
 	}));
 	const iterator = agent.runTurn("hello")[Symbol.asyncIterator]();
@@ -139,7 +139,7 @@ test("SDK dispose waits for cooperative tool cleanup with paused event consumpti
 			await new Promise<void>((resolve) => { context.signal?.addEventListener("abort", () => resolve(), { once: true }); });
 			await Bun.sleep(5);
 			cleaned = true;
-			return { ok: true, value: "done" };
+			return { content: [{ type: "text", text: "done" }], details: "done" };
 		} }],
 		responses: [{ toolCalls: [{ id: "call", name: "hold", arguments: {} }] }],
 	}));

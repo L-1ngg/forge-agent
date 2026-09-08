@@ -92,12 +92,15 @@ This example reads `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and optional `FO
 | Package | Responsibility |
 |---|---|
 | `@forge-agent/protocol` | Events, requests, responses, and presentation data |
-| `@forge-agent/core` | ExecutionCore, model adapter, permissions, sessions, and SDK |
+| `@forge-agent/core` | Source-owned Agent runtime, model adapter, permissions, sessions, and SDK |
 | `@forge-agent/tools` | Tool contracts and built-in coding tools |
 | `@forge-agent/tui` | Cell compositor and terminal interaction; depends only on protocol and Node built-ins |
 | `@forge-agent/cli` | Configuration, credentials, tool/storage assembly, and TUI/headless entrypoints |
 
-The dependency gate keeps UI dependencies out of the core and restricts pi-ai imports to the model adapter. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
+The dependency gate keeps UI dependencies out of the core and restricts pi-ai imports to the model adapter, event projection, and source-owned runtime. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
+
+The execution runtime is maintained in this repository, derived from the fixed Pi Agent source recorded in [runtime provenance](packages/core/src/runtime/README.md). Forge owns the session policies, SDK, CLI and TUI. The SDK supports `continue()`, invocation results, awaited idle/disposal, native text/image tool results, transient task retries, and controlled configuration updates; see the [SDK guide](docs/sdk.en.md).
+
 
 ## Roadmap
 

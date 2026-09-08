@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { createAgent } from "../src/agent.ts";
-import { ExecutionCore, type ExecutionDriver } from "../src/execution-core.ts";
+import { createScriptedSession, type ScriptedDriver } from "./helpers/scripted-session.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 
 function gate() {
@@ -12,9 +12,9 @@ function gate() {
 }
 const answer: SessionMessage = { role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: 1, stopReason: "stop" };
 async function consume(events: AsyncIterable<SessionEvent>) { for await (const event of events) void event; }
-function fixture(stream: ExecutionDriver["stream"] = async () => answer) {
+function fixture(stream: ScriptedDriver["stream"] = async () => answer) {
 	let executions = 0;
-	const core = new ExecutionCore({ contextWindow: 1000, stream, async execute() { executions++; throw new Error("unexpected tool"); }, abortInteractions() {} });
+	const core = createScriptedSession({ contextWindow: 1000, stream, async execute() { executions++; throw new Error("unexpected tool"); }, abortInteractions() {} });
 	return { core, executions: () => executions };
 }
 const options = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };

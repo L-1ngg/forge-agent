@@ -22,7 +22,8 @@ const evidence: HarnessTool<{ cursor: string }, { page: number; evidence: string
 		const index = cursors.indexOf(cursor);
 		if (index !== toolCalls) throw new Error("Read each evidence cursor once in order");
 		toolCalls++;
-		return { ok: true, value: { page: index + 1, evidence: "Target database: analytics-db. Maximum batch size: 17. Preserve both constraints.\n" + "This is supporting audit material without additional requirements.\n".repeat(90), next: cursors[index + 1] ?? null } };
+		const details = { page: index + 1, evidence: "Target database: analytics-db. Maximum batch size: 17. Preserve both constraints.\n" + "This is supporting audit material without additional requirements.\n".repeat(90), next: cursors[index + 1] ?? null };
+		return { content: [{ type: "text", text: JSON.stringify(details) }], details };
 	},
 };
 const apiKey = await resolveSecret(config.apiKey);

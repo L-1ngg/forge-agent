@@ -1,3 +1,4 @@
+import { defineBuiltinTool } from "./define-builtin.ts";
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
@@ -18,7 +19,7 @@ export interface ReadOutput {
 	notice?: string;
 }
 
-export const readTool: HarnessTool<ReadInput, ReadOutput> = {
+export const readTool: HarnessTool<ReadInput, ReadOutput> = defineBuiltinTool({
 	name: "read",
 	label: "Read file",
 	description: "Read a UTF-8 text file, optionally selecting an one-based offset and line count, with a 2000-line / 50 KiB head preview.",
@@ -71,4 +72,4 @@ export const readTool: HarnessTool<ReadInput, ReadOutput> = {
 			return fileError(error, "path", "readable UTF-8 text file", "README.md");
 		}
 	},
-};
+}, output => output.content + (output.notice ? `\n${output.notice}` : ""));

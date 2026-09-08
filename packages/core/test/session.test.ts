@@ -1,8 +1,9 @@
+import { createTestAgent } from "./helpers/create-test-agent.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AgentRunner, createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
+import { createPiTestPort, loadConfig, RequestBus, resolveSecret, SessionSearch, SessionStore } from "../src/index.ts";
 import { MemorySessionStorage, messageEntry, sessionMessages, type SessionStorage } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
@@ -62,22 +63,22 @@ test("session search locates and reads only matching entries", async () => {
 	expect(await search.readEntry(first.id)).toMatchObject({ type: "message", message: { role: "user" } });
 });
 
-test("agent runner persists an aborted assistant without executing its calls", async () => {
+test("SDK session persists an aborted assistant without executing its calls", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "aborted.jsonl"), cwd);
-	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "partial", stopReason: "aborted" }] }), store);
+	const runner = await createTestAgent(createPiTestPort({ responses: [{ text: "partial", stopReason: "aborted" }] }), store);
 	for await (const _event of runner.runTurn("abort me")) {}
 	expect(store.messages()).toHaveLength(2);
 	expect(store.messages().at(-1)?.stopReason).toBe("aborted");
 });
 
-test("agent runner abort cancels pending blocking requests before aborting the port", async () => {
+test("SDK session abort cancels pending blocking requests before aborting the port", async () => {
 	const cwd = await temporaryDirectory();
 	const path = join(cwd, "session.jsonl");
 	const store = await SessionStore.open(path, cwd);
 	const bus = new RequestBus({ idPrefix: "runner", timeoutMs: 60_000 });
 	let portAborted = false;
-	const runner = new AgentRunner(
+	const runner = await createTestAgent(
 		{
 			async *runTurn() {
 				await bus.ask("permission", {
@@ -108,18 +109,19 @@ test("agent runner abort cancels pending blocking requests before aborting the p
 	bus.close();
 });
 
-test("agent runner persists steering and follow-up user messages in event order", async () => {
+test("SDK session persists steering and follow-up user messages in event order", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
 	const port = createPiTestPort({ responses: [{ text: "first" }, { text: "second" }, { text: "third" }] });
-	const runner = new AgentRunner(port, store);
+	const runner = await createTestAgent(port, store);
 	let queued = false;
 	const emitted = [];
-	for await (const event of runner.runTurn("initial")) {
+	const turn = runner.runTurn("initial");
+	for await (const event of turn) {
 		if (event.type === "message_delta" && !queued) {
 			queued = true;
-			runner.steer("steering");
-			runner.followUp("follow-up");
+			runner.steer("steering", turn.id);
+			runner.followUp("follow-up", turn.id);
 		}
 		if (event.type === "message_end") emitted.push(event.message);
 	}
@@ -131,15 +133,16 @@ test("agent runner persists steering and follow-up user messages in event order"
 	]);
 });
 
-test("agent runner retains a failed invocation including completed tool turns", async () => {
+test("SDK session retains a failed invocation including completed tool turns", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
 	let executions = 0;
 	const port = createPiTestPort({
+		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
 		tools: [{
 			name: "capture", label: "Capture", description: "Record execution.",
 			parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
-			async execute() { executions++; return { ok: true, value: "done" }; },
+			async execute() { executions++; return { content: [{ type: "text", text: "done" }], details: "done" }; },
 		}],
 		responses: [
 			{ text: "baseline" },
@@ -148,7 +151,7 @@ test("agent runner retains a failed invocation including completed tool turns", 
 			{ text: "recovered" },
 		],
 	});
-	const runner = new AgentRunner(port, store);
+	const runner = await createTestAgent(port, store);
 	for await (const _event of runner.runTurn("keep")) {}
 	const before = store.messages();
 	const usageBefore = port.getUsage?.()?.contextTokens;
@@ -163,10 +166,10 @@ test("agent runner retains a failed invocation including completed tool turns", 
 	]);
 });
 
-test("agent runner retains deferred messages without pending tool calls", async () => {
+test("SDK session retains deferred messages without pending tool calls", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "session.jsonl"), cwd);
-	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "pending remotely", stopReason: "deferred" }] }), store);
+	const runner = await createTestAgent(createPiTestPort({ responses: [{ text: "pending remotely", stopReason: "deferred" }] }), store);
 	for await (const _event of runner.runTurn("defer")) {}
 	expect(store.messages()).toHaveLength(2);
 	expect(store.messages().at(-1)?.stopReason).toBe("deferred");
@@ -200,11 +203,11 @@ test("JSONL storage adapter restores the active branch and commits through the m
 	expect(sessionMessages(await storage.load())).toEqual([]);
 });
 
-test("agent runner faults after commit failure and rejects subsequent runs and queued inputs", async () => {
+test("SDK session faults after commit failure and rejects subsequent runs and queued inputs", async () => {
 	const storage = new MemorySessionStorage();
 	const failure = new Error("injected commit failure");
 	let commits = 0;
-	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "answer" }] }), {
+	const runner = await createTestAgent(createPiTestPort({ responses: [{ text: "answer" }] }), {
 		load: async () => ({ entries: [], leafId: null }),
 		async append() { commits++; throw failure; },
 	});
@@ -214,17 +217,17 @@ test("agent runner faults after commit failure and rejects subsequent runs and q
 	expect(events.at(-1)).toBe("agent_end");
 	expect(commits).toBe(1);
 	await expect(run()).rejects.toThrow("recreate");
-	expect(() => runner.steer("stale")).toThrow("recreate");
-	expect(() => runner.followUp("stale")).toThrow("recreate");
+	expect(() => runner.steer("stale", Symbol("stale"))).toThrow("recreate");
+	expect(() => runner.followUp("stale", Symbol("stale"))).toThrow("recreate");
 	expect(commits).toBe(1);
-	const recreated = new AgentRunner(createPiTestPort({ responses: [{ text: "retry" }] }), storage);
+	const recreated = await createTestAgent(createPiTestPort({ responses: [{ text: "retry" }] }), storage);
 	for await (const _event of recreated.runTurn("fresh")) {}
 	expect((await storage.load()).entries).toHaveLength(2);
 });
 
-test("agent runner keeps saved messages when the consumer closes at agent_end", async () => {
+test("SDK session keeps saved messages when the consumer closes at agent_end", async () => {
 	let commits = 0;
-	const runner = new AgentRunner(createPiTestPort({ responses: [{ text: "uncommitted" }, { text: "committed" }] }), {
+	const runner = await createTestAgent(createPiTestPort({ responses: [{ text: "uncommitted" }, { text: "committed" }] }), {
 		load: async () => ({ entries: [], leafId: null }),
 		async append() { commits++; },
 	});

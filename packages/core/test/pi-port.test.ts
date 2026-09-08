@@ -20,7 +20,7 @@ function captureTool(executed: CaptureInput[]): HarnessTool<object, unknown> {
 		},
 		async execute(input) {
 			executed.push(input as CaptureInput);
-			return { ok: true, value: input };
+			return { content: [{ type: "text", text: typeof input === "string" ? input : JSON.stringify(input) }], details: input };
 		},
 	};
 }

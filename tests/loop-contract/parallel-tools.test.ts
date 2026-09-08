@@ -16,11 +16,12 @@ test("pi parallel tool settlement retains every result when one tool fails", asy
 		async execute(input) {
 			await Bun.sleep(input.fail ? 1 : 5);
 			return input.fail
-				? { ok: false, error: { error_code: "IO_ERROR", message: "scripted failure", field: "fail", expected: "false", example: "false", retryable: true } }
-				: { ok: true, value: "ok" };
+				? { content: [{ type: "text", text: "scripted failure" }], details: undefined, isError: true }
+				: { content: [{ type: "text", text: "ok" }], details: "ok" };
 		},
 	};
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool as HarnessTool<object, unknown>],
 		responses: [
 			{

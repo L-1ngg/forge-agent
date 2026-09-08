@@ -1,4 +1,4 @@
-import type { ToolOutcome } from "./errors.ts";
+import type { ImageBlock, TextBlock } from "@forge-agent/protocol";
 
 export interface ObjectSchema {
 	type: "object";
@@ -13,6 +13,7 @@ export interface ToolContext {
 	toolCallId?: string;
 	env?: Record<string, string | undefined>;
 	signal?: AbortSignal;
+	onUpdate?: (result: ToolResult<unknown>) => void;
 }
 
 export interface HarnessTool<TInput extends object, TOutput> {
@@ -20,5 +21,15 @@ export interface HarnessTool<TInput extends object, TOutput> {
 	label: string;
 	description: string;
 	parameters: ObjectSchema;
-	execute(input: TInput, context: ToolContext): Promise<ToolOutcome<TOutput>>;
+	prepareArguments?: (args: unknown) => TInput;
+	executionMode?: "parallel" | "sequential";
+	execute(input: TInput, context: ToolContext): Promise<ToolResult<TOutput>>;
+}
+
+/** Model content and display details are independent; progress uses the same shape. */
+export interface ToolResult<TDetails = unknown> {
+	content: (TextBlock | ImageBlock)[];
+	details: TDetails | undefined;
+	isError?: boolean;
+	terminate?: boolean;
 }

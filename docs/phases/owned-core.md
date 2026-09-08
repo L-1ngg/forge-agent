@@ -1,6 +1,6 @@
 # 自研执行内核施工图
 
-> 状态:代码已提交、自动化回归通过,完整内核验收待完成(2026-09-06)。内核替换为 `d2519aa`,SDK 与 ADR-010 修复为 `04db82b`;本批落实 [ADR-009](../decisions/009-self-owned-agent-core.md),不重开 Phase 2.2。
+> 状态:代码已提交、自动化回归通过,完整内核验收待完成(2026-09-06)。内核替换为 `d2519aa`,SDK 与 ADR-010 修复为 `04db82b`;本批落实 [ADR-009](../decisions/009-self-owned-agent-core.md),不重开 Phase 2.2。 当前执行路径与接口变更由[源码内核接入](pi-core-migration.md)承接，下文保留原批次的设计与证据。
 
 > 契约替代(2026-09-07):下文保留原批次历史。取消回滚、`length` 伪工具结果和 `AgentRunner` 整次提交已由 [上下文规格 #2](https://github.com/L-1ngg/forge-agent/issues/2) 的逐记录保存及有限上下文恢复取代；当前验收见 [上下文实现证据](context-management-acceptance.md)。
 

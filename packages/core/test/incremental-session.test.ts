@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgent } from "../src/agent.ts";
-import { ExecutionCore } from "../src/execution-core.ts";
+import { createScriptedSession } from "./helpers/scripted-session.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
@@ -10,8 +10,8 @@ test("cancellation while launching a batch saves started results but does not st
 	const storage = new MemorySessionStorage();
 	const executed: string[] = [];
 	let cancel = () => {};
-	const core = new ExecutionCore({
-		contextWindow: 100000, abortInteractions() {},
+	const core = createScriptedSession({
+		contextWindow: 100000, toolNames: ["first", "second", "write"], abortInteractions() {},
 		async stream() { return { role: "assistant", timestamp: 1, stopReason: "tool_use", content: ["first", "second"].map((id) => ({ type: "tool_call" as const, id, name: id, arguments: {} })) }; },
 		async execute(call) { executed.push(call.id); cancel(); return { message: { role: "toolResult", toolCallId: call.id, toolName: call.name, timestamp: 2, content: [{ type: "text", text: "formed" }] } }; },
 	});
@@ -19,7 +19,9 @@ test("cancellation while launching a batch saves started results but does not st
 	try {
 		for await (const _event of agent.runTurn("work")) {}
 		expect(executed).toEqual(["first"]);
-		expect(sessionMessages(await storage.load()).filter((message) => message.role === "toolResult").map((message) => message.toolCallId)).toEqual(["first"]);
+		const results = sessionMessages(await storage.load()).filter((message) => message.role === "toolResult");
+		expect(results.map(message => message.toolCallId)).toEqual(["first", "second"]);
+		expect(results[1]).toMatchObject({ isError: true, content: [{ type: "text", text: "Operation aborted" }] });
 	} finally { await agent.dispose(); }
 });
 
@@ -27,8 +29,8 @@ test("SDK storage failure before tool dispatch faults the instance without execu
 	const memory = new MemorySessionStorage();
 	let executions = 0;
 	let writes = 0;
-	const core = new ExecutionCore({
-		contextWindow: 10000, abortInteractions() {},
+	const core = createScriptedSession({
+		contextWindow: 10000, toolNames: ["write"], abortInteractions() {},
 		async stream() { return { role: "assistant", timestamp: 2, stopReason: "tool_use", content: [{ type: "tool_call", id: "side-effect", name: "write", arguments: {} }] }; },
 		async execute() { executions++; throw new Error("unexpected execution"); },
 	});
@@ -53,8 +55,8 @@ test("SDK reopen filters interrupted responses and projects missing results with
 	];
 	const storage = new MemorySessionStorage(history);
 	let request: readonly SessionMessage[] = [];
-	const core = new ExecutionCore({
-		contextWindow: 10000, abortInteractions() {},
+	const core = createScriptedSession({
+		contextWindow: 10000, toolNames: ["write"], abortInteractions() {},
 		async stream(messages) { request = messages; return { role: "assistant", timestamp: 5, content: [], stopReason: "stop" }; },
 		async execute() { throw new Error("must not replay"); },
 	});
@@ -73,8 +75,8 @@ test("SDK saves consumed input before the model and retains it after cancellatio
 	const storage = new MemorySessionStorage();
 	let started!: () => void;
 	const ready = new Promise<void>((resolve) => { started = resolve; });
-	const core = new ExecutionCore({
-		contextWindow: 10000,
+	const core = createScriptedSession({
+		contextWindow: 10000, toolNames: ["write"],
 		async stream(_messages, signal) {
 			started();
 			await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));

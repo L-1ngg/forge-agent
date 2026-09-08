@@ -1,3 +1,4 @@
+import { defineBuiltinTool } from "./define-builtin.ts";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
@@ -15,7 +16,7 @@ export interface EditOutput {
 	replacements: number;
 }
 
-export const editTool: HarnessTool<EditInput, EditOutput> = {
+export const editTool: HarnessTool<EditInput, EditOutput> = defineBuiltinTool({
 	name: "edit",
 	label: "Edit file",
 	description: "Replace an exact UTF-8 text fragment. A non-unique match is rejected unless replace_all is true.",
@@ -51,4 +52,4 @@ export const editTool: HarnessTool<EditInput, EditOutput> = {
 			return fileError(error, "path", "readable and writable UTF-8 text file", "src/index.ts");
 		}
 	},
-};
+}, output => `Replaced ${output.replacements} occurrence(s) in ${output.path}`);

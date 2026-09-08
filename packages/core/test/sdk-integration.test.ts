@@ -45,7 +45,7 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 				cwd: directory, systemPrompt: `host-${name}`, storage,
 				tools: [{ name: "capture", label: "Capture", description: "Return the host name.",
 					parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
-					async execute(input) { expect(input).toEqual({ value: "local" }); executed.push(name); return { ok: true, value: name }; },
+					async execute(input) { expect(input).toEqual({ value: "local" }); executed.push(name); return { content: [{ type: "text", text: name }], details: name }; },
 				}],
 			}));
 		}

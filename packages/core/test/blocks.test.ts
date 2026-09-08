@@ -48,6 +48,7 @@ test("digest omits a trailing placeholder for short values", () => {
 
 test("execute block keeps its original command when a failed result has no details", async () => {
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [bashTool],
 		responses: [{ stopReason: "stop", toolCalls: [{ id: "failed-exec", name: "bash", arguments: { command: "false" } }] }],
 	});
@@ -74,9 +75,11 @@ test("execute descriptions survive start and completion without replacing the co
 test("edit execution ends with a terminal block for both success and failure", async () => {
 	for (const fails of [false, true]) {
 		const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 			tools: [{ ...editTool, async execute() {
 				if (fails) throw new Error("edit failed");
-				return { ok: true, value: { path: "file", replacements: 1 } };
+				const details = { path: "file", replacements: 1 };
+		return { content: [{ type: "text", text: JSON.stringify(details) }], details };
 			} }],
 			responses: [{ toolCalls: [{ id: "edit", name: "edit", arguments: { path: "file", old_text: "old", new_text: "new" } }] }, { text: "done" }],
 		});

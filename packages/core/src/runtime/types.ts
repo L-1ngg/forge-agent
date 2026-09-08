@@ -149,6 +149,8 @@ export interface PrepareNextTurnContext extends ShouldStopAfterTurnContext {}
 type OptionalStreamOptions = { [K in keyof SimpleStreamOptions]: SimpleStreamOptions[K] | undefined };
 
 export interface AgentLoopConfig extends OptionalStreamOptions {
+	/** Host barrier after assistant persistence and before any tool preflight. Default: continue. */
+	shouldStopAfterResponse?: ((context: { message: AssistantMessage; context: AgentContext }) => boolean | Promise<boolean>) | undefined;
 	model: Model<any>;
 
 	/**

@@ -92,12 +92,15 @@ bun examples/embedded-agent.ts
 | 包 | 职责 |
 |---|---|
 | `@forge-agent/protocol` | 事件、请求、响应与展示数据 |
-| `@forge-agent/core` | ExecutionCore、模型适配、权限、会话与 SDK |
+| `@forge-agent/core` | 本地 Agent runtime、模型适配、权限、会话与 SDK |
 | `@forge-agent/tools` | 工具契约与内置 coding 工具 |
 | `@forge-agent/tui` | cell compositor 与终端交互,只依赖 protocol 和 Node 内置模块 |
 | `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
 
-依赖门禁禁止 core 引入 UI,pi-ai 仅允许从模型适配器导入。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
+依赖门禁禁止 core 引入 UI,pi-ai 仅允许从模型适配器、事件投影和本地 runtime 导入。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
+
+执行 runtime 来自固定 Pi Agent 源码，由本仓库维护，来源与接入差异见 [runtime 说明](packages/core/src/runtime/README.md)。会话策略、SDK、CLI/TUI 继续由 Forge 拥有。SDK 提供 `continue()`、执行结果、可等待空闲与释放、原生文本/图片工具结果、普通任务重试和受控配置更新，使用方式见 [SDK 指南](docs/sdk.md)。
+
 
 ## Roadmap
 

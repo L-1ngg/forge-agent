@@ -10,7 +10,7 @@ test("pi drains steering after the active tool turn", async () => {
 		parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 		async execute() {
 			await Bun.sleep(5);
-			return { ok: true, value: "done" };
+			return { content: [{ type: "text", text: "done" }], details: "done" };
 		},
 	};
 	const port = createPiTestPort({

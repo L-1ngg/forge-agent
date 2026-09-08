@@ -1,10 +1,11 @@
+import { createTestAgent } from "../../packages/core/test/helpers/create-test-agent.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import fc from "fast-check";
 import { response, type SessionEvent } from "../../packages/protocol/src/index.ts";
-import { AgentRunner, createPiTestPort, RequestBus, SessionStore, type AgentPort } from "../../packages/core/src/index.ts";
+import { createPiTestPort, RequestBus, SessionStore, type AgentPort } from "../../packages/core/src/index.ts";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
 
 function tool(execute: HarnessTool<object, unknown>["execute"]): HarnessTool<object, unknown> {
@@ -33,7 +34,8 @@ test("owned core preserves a length-limited response without preparing or execut
 	let executions = 0;
 	let rewrites = 0;
 	const port = createPiTestPort({
-		tools: [tool(async () => { executions++; return { ok: true, value: "unexpected" }; })],
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
+		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		toolInputRewrites: { capture: (input) => { rewrites++; return input; } },
 		responses: [
 			{ toolCalls: ["first", "second"].map((id) => ({ id, name: "capture", arguments: { value: "valid but truncated" } })), stopReason: "length" },
@@ -66,13 +68,14 @@ test("owned core settles unserializable results and waits for sibling tools befo
 	const finished = new Promise<void>((resolve) => { markFinished = resolve; });
 	let slowDone = false;
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
-			if (value !== "slow") return { ok: true, value: values[value] };
+			if (value !== "slow") return { content: [{ type: "text", text: "result" }], details: values[value] };
 			await gate;
 			slowDone = true;
 			markFinished();
-			return { ok: true, value: "completed" };
+			return { content: [{ type: "text", text: "completed" }], details: "completed" };
 		})],
 		responses: [
 			{ toolCalls: ["bigint", "circular", "toJSON", "slow"].map((id) => ({ id, name: "capture", arguments: { value: id } })), stopReason: "tool_use" },
@@ -108,7 +111,8 @@ test("owned core settles unserializable results and waits for sibling tools befo
 test.each([false, true])("owned core preserves batch termination semantics with mixed permissions: %s", async (mixed) => {
 	const executed: string[] = [];
 	const port = createPiTestPort({
-		tools: [tool(async (input) => { executed.push((input as { value: string }).value); return { ok: true, value: "ok" }; })],
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
+		tools: [tool(async (input) => { executed.push((input as { value: string }).value); return { content: [{ type: "text", text: "ok" }], details: "ok" }; })],
 		permission: { rules: [
 			{ tool: "capture", argsPattern: '{"value":"deny"}', effect: "deny", reason: "test deny" },
 			{ tool: "capture", argsPattern: '{"value":"allow"}', effect: "allow" },
@@ -126,6 +130,7 @@ test.each([false, true])("owned core preserves batch termination semantics with 
 
 test.each(["steer", "followUp"] as const)("owned core drains %s after an entirely denied batch without leaking it into the next invocation", async (queue) => {
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool(async () => { throw new Error("denied tool executed"); })],
 		permission: { rules: [{ tool: "capture", argsPattern: "*", effect: "deny", reason: "test deny" }] },
 		responses: [
@@ -154,7 +159,8 @@ test.each(["steer", "followUp"] as const)("owned core drains %s after an entirel
 test("owned core rejects unknown tools and invalid arguments without executing them", async () => {
 	let executions = 0;
 	const port = createPiTestPort({
-		tools: [tool(async () => { executions++; return { ok: true, value: "unexpected" }; })],
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
+		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		responses: [
 			{ toolCalls: [
 				{ id: "unknown", name: "missing", arguments: {} },
@@ -175,12 +181,13 @@ test("owned core rejects unknown tools and invalid arguments without executing t
 test("owned core settles thrown tool failures before the next assistant message", async () => {
 	const completed: string[] = [];
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
 			if (value === "fail") throw new Error("injected failure");
 			await Bun.sleep(10);
 			completed.push(value);
-			return { ok: true, value };
+			return { content: [{ type: "text", text: String(value) }], details: value };
 		})],
 		responses: [
 			{ toolCalls: ["first", "fail", "last"].map((value) => ({ id: value, name: "capture", arguments: { value } })), stopReason: "tool_use" },
@@ -203,9 +210,10 @@ test("owned core settles thrown tool failures before the next assistant message"
 test("owned core preserves one result per call across generated tool failures", async () => {
 	await fc.assert(fc.asyncProperty(fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }), async (failures) => {
 		const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 			tools: [tool(async (input) => {
 				if ((input as { value: string }).value === "fail") throw new Error("generated failure");
-				return { ok: true, value: "ok" };
+				return { content: [{ type: "text", text: "ok" }], details: "ok" };
 			})],
 			responses: [
 				{ toolCalls: failures.map((fail, index) => ({ id: `call-${index}`, name: "capture", arguments: { value: fail ? "fail" : "ok" } })), stopReason: "tool_use" },
@@ -246,6 +254,7 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 	let markStarted!: () => void;
 	const started = new Promise<void>((resolve) => { markStarted = resolve; });
 	const port = createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool(async (_input, context) => {
 			markStarted();
 			await new Promise<void>((resolve) => {
@@ -254,7 +263,7 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 			});
 			await Bun.sleep(10);
 			cleaned = true;
-			return { ok: true, value: "cancelled" };
+			return { content: [{ type: "text", text: "cancelled" }], details: "cancelled" };
 		})],
 		responses: [{ toolCalls: [{ id: "wait", name: "capture", arguments: { value: "wait" } }], stopReason: "tool_use" }, { echoLastUser: true }],
 	});
@@ -281,13 +290,14 @@ test("concurrent owned instances isolate permissions, tools, cancellation, and s
 		const secondStore = await SessionStore.open(join(directory, "second.jsonl"), directory);
 		const executed: string[] = [];
 		const makePort = (name: string, requestBus: RequestBus) => createPiTestPort({
+		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 			requestBus,
 			permission: {},
-			tools: [tool(async () => { executed.push(name); return { ok: true, value: name }; })],
+			tools: [tool(async () => { executed.push(name); return { content: [{ type: "text", text: name }], details: name }; })],
 			responses: [{ toolCalls: [{ id: "same-id", name: "capture", arguments: { value: name } }], stopReason: "tool_use" }, { echoLastUser: true }],
 		});
-		const first = new AgentRunner(makePort("first", firstBus), firstStore, firstBus);
-		const second = new AgentRunner(makePort("second", secondBus), secondStore, secondBus);
+		const first = await createTestAgent(makePort("first", firstBus), firstStore, firstBus);
+		const second = await createTestAgent(makePort("second", secondBus), secondStore, secondBus);
 		const firstRun = collect(first, "first-user");
 		const secondRun = collect(second, "second-user");
 		const firstRequest = await firstBus.requests()[Symbol.asyncIterator]().next();
@@ -300,8 +310,9 @@ test("concurrent owned instances isolate permissions, tools, cancellation, and s
 		expect(executed).toEqual(["second"]);
 		expect(firstEvents.filter((event) => event.type === "turn_end").at(-1)).toMatchObject({ stopReason: "aborted" });
 		expect(secondEvents.filter((event) => event.type === "turn_end").at(-1)).toMatchObject({ stopReason: "stop" });
-		expect(firstStore.messages().map((message) => message.role)).toEqual(["user", "assistant", "toolResult"]);
-		expect(firstStore.messages().at(-1)).toMatchObject({ toolCallId: "same-id", isError: true });
+		expect(firstStore.messages().map((message) => message.role)).toEqual(["user", "assistant", "toolResult", "assistant"]);
+		expect(firstStore.messages().at(-1)?.stopReason).toBe("aborted");
+		expect(firstStore.messages().find(message => message.role === "toolResult")).toMatchObject({ toolCallId: "same-id", isError: true });
 		expect(JSON.stringify(firstStore.messages())).toContain("first-user");
 		expect(JSON.stringify(firstStore.messages())).not.toContain("second-user");
 		expect(userTexts(secondEvents)).toEqual(["second-user"]);

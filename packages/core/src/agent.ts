@@ -1,7 +1,8 @@
+import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
 import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
 import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
-import { AgentRunner, type AgentPort, type InputAcceptance } from "./agent-runner.ts";
-import { createPiPort, type PiPortOptions } from "./pi-port.ts";
+import type { AgentPort, InputAcceptance, InputQueueOptions } from "./agent-port.ts";
+import { createPiPort, type PiPortOptions, type ToolHooks } from "./pi-port.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
 import { MemorySessionStorage, sessionMessages, type SessionStorage } from "./session-storage.ts";
@@ -9,7 +10,8 @@ import type { UsageTruthPoint } from "./usage.ts";
 import { resolveRetryPolicy, validateRequestLimits, type CompactionResult, type ContextSettings, type RetryPolicy } from "./context/compaction.ts";
 import { randomUUID } from "node:crypto";
 
-export interface CreateAgentOptions {
+export interface CreateAgentOptions extends InputQueueOptions {
+	toolHooks?: ToolHooks;
 	/** Shared task/summary routing identity; supply it to retain affinity across reopening. */
 	sessionId?: string;
 	context?: Partial<ContextSettings>;
@@ -23,21 +25,27 @@ export interface CreateAgentOptions {
 	systemPrompt: string;
 	cwd: string;
 	thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-	tools?: HarnessTool<object, unknown>[];
+	tools?: Array<HarnessTool<object, unknown>>;
 	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	permission?: PermissionContext;
 	storage?: SessionStorage;
 	requestBus?: RequestBus;
 }
 
+export type TurnResult = { status: "success" | "error" | "aborted" | "length" | "deferred" };
+
 export interface AgentTurn extends AsyncIterable<SessionEvent> {
 	readonly id: symbol;
+	readonly result: Promise<TurnResult>;
 }
 
 export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp"> {
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
 	configureContext(settings: Partial<ContextSettings>): void;
 	runTurn(input: string): AgentTurn;
+	continue(): AgentTurn;
+	waitForIdle(): Promise<void>;
+	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;
 	steer(input: string, expectedTurnId: symbol): InputAcceptance;
 	followUp(input: string, expectedTurnId: symbol): InputAcceptance;
 	readonly requests: AsyncIterable<RequestEnvelopeUnion>;
@@ -62,6 +70,8 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			systemPrompt: options.systemPrompt,
 			cwd: options.cwd,
 			thinkingLevel: options.thinkingLevel ?? "off",
+			...(options.steeringMode ? { steeringMode: options.steeringMode } : {}),
+			...(options.followUpMode ? { followUpMode: options.followUpMode } : {}),
 			...(options.context ? { context: options.context } : {}),
 			...(options.retry ? { retry: options.retry } : {}),
 			...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
@@ -69,12 +79,14 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
 			...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
 			...(options.tools ? { tools: options.tools } : {}),
+			...(options.toolHooks ? { toolHooks: options.toolHooks } : {}),
 			...(options.toolInputRewrites ? { toolInputRewrites: options.toolInputRewrites } : {}),
 			permission: { ...options.permission, memory: options.permission?.memory ?? new MemoryPermissionStore() },
 			requestBus,
 			history: sessionMessages(history),
 		});
-		return new HostedAgent(new AgentRunner(port, storage, requestBus), requestBus);
+		await port.setStorage?.(storage);
+		return new HostedAgent(port, requestBus);
 	} catch (error) {
 		if (!options.requestBus) requestBus.close();
 		throw error;
@@ -83,35 +95,46 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 
 class HostedAgent implements Agent {
 	readonly requests: AsyncIterable<RequestEnvelopeUnion>;
-	private active: { id: symbol; iterator: AsyncIterator<SessionEvent>; begun: boolean; canceled: boolean } | undefined;
+	private active: { id: symbol; iterator: AsyncIterator<SessionEvent>; begun: boolean; canceled: boolean; settled: Promise<void>; finish: (status?: TurnResult["status"]) => void } | undefined;
 	private disposed = false;
 	private faulted = false;
 	private disposing: Promise<void> | undefined;
 	private compacting: Promise<CompactionResult> | undefined;
 	private compactController: AbortController | undefined;
 
-	constructor(private runner: AgentRunner | undefined, private readonly bus: RequestBus) {
+	constructor(private runner: AgentPort | undefined, private readonly bus: RequestBus) {
 		this.requests = bus.requests();
 	}
 
-	runTurn(input: string): AgentTurn {
+	runTurn(input: string): AgentTurn { return this.startTurn(input); }
+	continue(): AgentTurn { return this.startTurn(); }
+	waitForIdle(): Promise<void> { return this.active?.settled ?? this.compacting?.then(() => { }) ?? Promise.resolve(); }
+	private startTurn(input?: string): AgentTurn {
 		this.assertAvailable();
 		if (this.compacting) throw new Error("Agent is compacting");
 		let started = false;
 		const id = Symbol("invocation");
+		let resolveResult!: (result: TurnResult) => void;
+		const result = new Promise<TurnResult>(resolve => { resolveResult = resolve; });
+		let status: TurnResult["status"] = "aborted";
 		return {
-			id,
+			id, result,
 			[Symbol.asyncIterator]: () => {
 				this.assertAvailable();
 				if (this.compacting) throw new Error("Agent is compacting");
 				if (started) throw new Error("A turn can only be consumed once");
 				if (this.active) throw new Error("Agent is already processing a turn");
 				started = true;
-				const iterator = this.runner!.runTurn(input)[Symbol.asyncIterator]();
-				const active = { id, iterator, begun: false, canceled: false };
+				const events = input === undefined ? this.runner!.continue?.() : this.runner!.runTurn(input);
+				if (!events) throw new Error("Agent does not support continuation");
+				const iterator = events[Symbol.asyncIterator]();
+				let resolveIdle!: () => void;
+				const settled = new Promise<void>(resolve => { resolveIdle = resolve; });
+				const active = { id, iterator, begun: false, canceled: false, settled, finish: (_status?: TurnResult["status"]) => { } };
 				this.active = active;
 				let closed = false;
-				const release = (): void => { closed = true; if (this.active === active) this.active = undefined; };
+				const release = (outcome?: TurnResult["status"]): void => { if (outcome) status = outcome; closed = true; if (this.active === active) this.active = undefined; resolveResult({ status }); resolveIdle(); };
+				active.finish = release;
 				return {
 					next: async () => {
 						if (closed || this.disposed) return { done: true, value: undefined };
@@ -120,16 +143,18 @@ class HostedAgent implements Agent {
 						active.begun = true;
 						try {
 							const result = await iterator.next();
+							if (!result.done && result.value.type === "agent_end" && result.value.outcome) status = result.value.outcome;
+							if (!result.done && result.value.type === "turn_end") { const reason = result.value.stopReason; status = reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success"; }
 							if (result.done) release();
 							return result;
-						} catch (error) { this.faulted = true; release(); throw error; }
+						} catch (error) { this.faulted = true; status = "error"; release(); throw error; }
 					},
 					return: async () => {
 						if (closed) return { done: true, value: undefined };
-						active.canceled = true;
-						if (this.active === active && active.begun) this.runner?.abort();
+						active.canceled = true; status = "aborted";
+						if (this.active === active && active.begun) { this.bus.abort(); this.runner?.abort(); }
 						try { return await iterator.return?.() ?? { done: true, value: undefined }; }
-						catch (error) { this.faulted = true; throw error; }
+						catch (error) { this.faulted = true; status = "error"; throw error; }
 						finally { release(); }
 					},
 				};
@@ -153,43 +178,54 @@ class HostedAgent implements Agent {
 	}
 	abort(): void {
 		if (this.disposed) return;
+		this.bus.abort();
 		if (this.compacting) { this.compactController?.abort(); this.runner?.abort(); }
 		if (!this.active) return;
 		this.active.canceled = true;
 		if (this.active.begun) this.runner?.abort();
 	}
-	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }
-	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); this.runner!.configureContext(settings); }
+	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage?.(); }
+	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); if (!this.runner!.configureContext) throw new Error("Context configuration is unavailable"); this.runner!.configureContext(settings); }
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult> {
 		this.assertAvailable();
 		if (this.compacting) throw new Error("Agent is compacting");
 		const controller = new AbortController();
 		this.compactController = controller;
 		const active = this.active;
-		if (active) { active.canceled = true; this.runner?.abort(); }
+		if (active) { active.canceled = true; this.bus.abort(); this.runner?.abort(); }
 		const running = (async () => {
 			try {
 				await active?.iterator.return?.();
+				active?.finish("aborted");
 				if (this.active === active) this.active = undefined;
 				if (this.disposed) throw new Error("Agent has been disposed");
+				if (!this.runner!.compact) throw new Error("Compaction is unavailable");
 				return await this.runner!.compact(instructions, emit, controller.signal);
-			} catch (error) { this.faulted = true; throw error; }
+			} catch (error) { this.faulted = true; active?.finish("error"); throw error; }
 			finally { this.compacting = undefined; this.compactController = undefined; }
 		})();
 		this.compacting = running;
 		return running;
 	}
+	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt> { this.assertAvailable(); if (!this.runner!.updateConfiguration) throw new Error("Configuration updates are unavailable"); return this.runner!.updateConfiguration(patch); }
 	respond(response: ResponseEnvelope): boolean { this.assertAvailable(); return this.bus.respond(response); }
 	dispose(): Promise<void> {
 		if (this.disposing) return this.disposing;
 		this.disposed = true;
 		this.compactController?.abort();
 		if (this.active) this.active.canceled = true;
-		this.runner?.abort();
 		this.bus.close();
+		this.runner?.abort();
 		const active = this.active;
+		const sessionDisposal = this.runner?.dispose?.();
 		this.disposing = (async () => {
-			try { await active?.iterator.return?.(); await this.compacting; }
+			try {
+				const settled = await Promise.allSettled([active?.iterator.return?.(), this.compacting, sessionDisposal]);
+				const failed = settled.find(result => result.status === "rejected");
+				if (failed?.status === "rejected") throw failed.reason;
+				active?.finish("aborted");
+			}
+			catch (error) { active?.finish("error"); throw error; }
 			finally { this.active = undefined; this.runner = undefined; }
 		})();
 		return this.disposing;

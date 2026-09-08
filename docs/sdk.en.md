@@ -95,6 +95,8 @@ Run `bun examples/context-acceptance.ts` for bounded live-provider acceptance us
 
 `steer(input, turn.id)` and `followUp(input, turn.id)` target the active invocation's separate FIFO queues. They return `{ accepted: false }` if execution has not started, has ended, is cancelling, or the ID is stale. A disposed or faulted instance throws. Hosts must retain input until its receipt resolves.
 
+Creation options `steeringMode` and `followUpMode` independently select `"all"` or `"one-at-a-time"` (default). `all` drains that queue at its consumption point; `one-at-a-time` takes one entry. Steering takes priority over follow-up.
+
 An accepted input returns `{ accepted: true, processed: Promise<boolean> }`. `true` means the input entered model context; `false` means it remained unprocessed when execution ended. Processing does not guarantee successful model completion or storage commit. Do not automatically resend processed input, which could repeat tool effects. Consume events concurrently with waiting on receipts; awaiting a future receipt inside the event loop can prevent the loop from advancing.
 
 Cross-invocation queuing belongs to the host. The TUI displays a FIFO queue; Up on an empty composer recalls its tail, Esc stops automatic continuation and restores drafts, and Ctrl+Enter replaces the active task after cleanup. Commit failures pause queued input. `agent_end` only signals execution termination: the async iterable must finish normally before the host can treat persistence as complete.
@@ -123,3 +125,60 @@ The host should stop its request-consumer task when disposal closes the stream a
 ## Validation Boundaries
 
 Automated tests use local HTTP providers, tool and storage fault injection, generated interleavings, and PTY interaction. They do not establish a stable public API, full real-provider coverage, long-task reliability, or filesystem crash consistency. Current internal acceptance evidence is in the [SDK construction record](phases/sdk.md) (Chinese).
+
+## Source-owned Runtime Interface Update
+
+The package name and `createAgent` remain unchanged. The local runtime derives from a fixed Agent source revision; Forge owns persistence, permissions, context policies and usage. Internal `ExecutionCore`, `AgentRunner` and the old permission adapter factory are removed. Hosts create instances through the SDK.
+
+```ts
+const turn = agent.runTurn("Complete the task");
+for await (const event of turn) {
+  // Display or forward events; do not await the unfinished turn.result here.
+}
+const result = await turn.result;
+await agent.waitForIdle();
+// result.status: success | error | aborted | length | deferred
+
+const continuation = agent.continue(); // Existing context, no additional user message
+for await (const event of continuation) { /* Display events */ }
+```
+
+`turn.result` settles after consumption and required persistence. `waitForIdle()` waits for the currently acquired iterator or manual compaction to settle; it does not indicate model success. `agent_end.outcome` reports the final session outcome; an intermediate error during retry is not the final failure. `deferred` is terminal, with no background polling. Consume the lazy stream, or acquire and close its iterator; an unconsumed stream starts no work.
+
+Custom tools now return one structured result shape. The previous `{ ok, value, error }` shape is no longer the execute protocol:
+
+```ts
+import type { HarnessTool } from "@forge-agent/core/sdk";
+
+const lookup: HarnessTool<{ key: string }, { source: string }> = {
+  name: "lookup", label: "Lookup", description: "Look up a key",
+  parameters: {
+    type: "object", properties: { key: { type: "string" } },
+    required: ["key"], additionalProperties: false,
+  },
+  async execute({ key }, context) {
+    context.signal?.throwIfAborted();
+    context.onUpdate?.({ content: [{ type: "text", text: "Looking up" }], details: undefined });
+    return { content: [{ type: "text", text: key }], details: { source: "local" } };
+  },
+};
+```
+
+`content` contains model-visible text/images. `details` is independently persisted for host display and must support JSON persistence and snapshotting. Return `isError: true` or throw for failures; `terminate: true` hints that execution should stop. Progress uses the same result shape; updates after settlement are ignored. `prepareArguments` synchronously normalizes input; `toolInputRewrites` may rewrite asynchronously. Schema validation, rewriting, before hooks, final validation and authorization finish serially in call order before parallel effects start. `executionMode: "sequential"` selects per-tool execution; `toolHooks.toolExecution` selects a batch policy. `beforeToolCall` returns block/reason/terminate; `afterToolCall` may override content/details/isError/terminate. Authorization, execution and after hooks observe the same final arguments. Failed preparation skips that effect; results persist in model call order.
+
+Task and summary retries share `retry` settings but have independent counters. Transient task failures retry three times by default, after 2/4/8 seconds. Original errors remain in history and are excluded from retry requests. Consumed input and completed tool results are reused without duplicate user messages or tool replay. Overflow uses the separate single context recovery allowance, not ordinary retry. `retry` events report scheduled/attempt/end; cancellation interrupts the wait.
+
+```ts
+const receipt = await agent.updateConfiguration({
+  systemPrompt: "Updated instructions",
+  thinkingLevel: "low",
+  tools: [lookup],
+});
+// receipt.accepted === true does not mean the current response uses the update.
+const application = await receipt.applied;
+// application.status: applied | canceled; revision matches the receipt.
+```
+
+Updates support provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow. Asynchronous validation failure rejects the update and preserves the previous configuration. Idle updates apply immediately. During execution, the current response and its complete tool batch retain their original configuration; the update applies before the next request. Manual summaries finish before updates apply. No extra model request is made solely to apply a configuration. Disposal or storage faults cancel pending updates. Await `applied` outside the event consumption loop. Tool schemas are snapshotted before acceptance; callback closures remain host-owned. Applying an update invalidates the current usage anchor while preserving historical last-call counters.
+
+See the [migration evidence](phases/pi-core-migration-acceptance.md) (Chinese) for provenance, local changes, verification and version rollback.

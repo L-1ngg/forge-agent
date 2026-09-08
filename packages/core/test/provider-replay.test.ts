@@ -1,8 +1,9 @@
+import { createTestAgent } from "./helpers/create-test-agent.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AgentRunner, createPiPort, SessionStore } from "../src/index.ts";
+import { createPiPort, SessionStore } from "../src/index.ts";
 
 test("provider thinking signatures survive session storage and replay over HTTP", async () => {
 	const requests: Array<{ messages: Array<{ role: string; content: unknown[] }> }> = [];
@@ -30,7 +31,7 @@ test("provider thinking signatures survive session storage and replay over HTTP"
 		const path = join(directory, "session.jsonl");
 		const store = await SessionStore.open(path, directory);
 		const options = { provider: "anthropic", model, apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: directory, systemPrompt: "test", thinkingLevel: "low" as const };
-		const first = new AgentRunner(await createPiPort(options), store);
+		const first = await createTestAgent(await createPiPort(options), store);
 		for await (const event of first.runTurn("first")) {
 			if (event.type === "message_end") expect(event.message.errorMessage).toBeUndefined();
 		}

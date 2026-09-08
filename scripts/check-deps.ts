@@ -91,6 +91,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (
 					(specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) &&
 					displayPath !== "packages/core/src/pi-port.ts" &&
+					displayPath !== "packages/core/src/event-projection.ts" &&
 					!/^packages\/core\/src\/runtime\/(agent|agent-loop|types)\.ts$/.test(displayPath)
 				) {
 					violations.push(`${displayPath} imports pi agent/model APIs outside packages/core/src/pi-port.ts`);

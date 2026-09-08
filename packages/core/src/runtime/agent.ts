@@ -96,6 +96,7 @@ function createMutableAgentState(
 
 /** Options for constructing an {@link Agent}. */
 export interface AgentOptions {
+	shouldStopAfterResponse?: AgentLoopConfig["shouldStopAfterResponse"];
 	initialState?: (Partial<Omit<AgentState, "pendingToolCalls" | "isStreaming" | "streamingMessage" | "errorMessage">>) | undefined;
 	convertToLlm?: ((messages: AgentMessage[]) => Message[] | Promise<Message[]>) | undefined;
 	transformContext?: ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>) | undefined;
@@ -176,6 +177,7 @@ export class Agent {
 	private readonly steeringQueue: PendingMessageQueue;
 	private readonly followUpQueue: PendingMessageQueue;
 
+	public shouldStopAfterResponse?: AgentLoopConfig["shouldStopAfterResponse"];
 	public convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	public transformContext?: ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>) | undefined;
 	public streamFunction: StreamFn;
@@ -217,6 +219,7 @@ export class Agent {
 		// Older compiled consumers may omit options or streamFn even though the current API requires them.
 		const runtimeOptions: Partial<AgentOptions> = options ?? {};
 		this._state = createMutableAgentState(runtimeOptions.initialState);
+		this.shouldStopAfterResponse = runtimeOptions.shouldStopAfterResponse;
 		this.convertToLlm = runtimeOptions.convertToLlm ?? defaultConvertToLlm;
 		this.transformContext = runtimeOptions.transformContext;
 		this.streamFunction = runtimeOptions.streamFn ?? getDefaultStreamFn();
@@ -447,6 +450,7 @@ export class Agent {
 		const shouldStopAfterTurn = this.shouldStopAfterTurn;
 		return {
 			model: this._state.model,
+			shouldStopAfterResponse: this.shouldStopAfterResponse,
 			reasoning: this._state.thinkingLevel === "off" ? undefined : this._state.thinkingLevel,
 			sessionId: this.sessionId,
 			onPayload: this.onPayload,

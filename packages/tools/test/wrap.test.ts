@@ -20,7 +20,7 @@ test("tool wrapper rewrites input before execute", async () => {
 			},
 			async execute(input) {
 				observed = input.path;
-				return { ok: true, value: input.path };
+				return { content: [{ type: "text", text: input.path }], details: input.path };
 			},
 		},
 		{
@@ -29,7 +29,7 @@ test("tool wrapper rewrites input before execute", async () => {
 	);
 
 	const result = await tool.execute({ path: "./src\\index.ts" }, { cwd: "/tmp" });
-	expect(result).toEqual({ ok: true, value: "src/index.ts" });
+	expect(result).toEqual({ content: [{ type: "text", text: "src/index.ts" }], details: "src/index.ts" });
 	expect(observed).toBe("src/index.ts");
 });
 
@@ -49,7 +49,7 @@ test("tool wrapper authorizes the rewritten input before execute", async () => {
 			},
 			async execute(input) {
 				observed = input.path;
-				return { ok: true, value: input.path };
+				return { content: [{ type: "text", text: input.path }], details: input.path };
 			},
 		},
 		{
@@ -81,7 +81,7 @@ test("a rejected rewritten input never reaches the underlying tool", async () =>
 			},
 			async execute() {
 				executions++;
-				return { ok: true, value: "executed" };
+				return { content: [{ type: "text", text: "executed" }], details: "executed" };
 			},
 		},
 		{

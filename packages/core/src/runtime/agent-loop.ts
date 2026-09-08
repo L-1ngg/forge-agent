@@ -219,6 +219,12 @@ async function runLoop(
 				return;
 			}
 
+			if (await config.shouldStopAfterResponse?.({ message, context: currentContext })) {
+				await emit({ type: "turn_end", message, toolResults: [] });
+				await emit({ type: "agent_end", messages: newMessages });
+				return;
+			}
+
 			// Check for tool calls
 			const toolCalls = message.content.filter((c) => c.type === "toolCall");
 

@@ -59,7 +59,7 @@ export interface AppRequestBus {
 	getTerminal?(requestId: string): RequestOutcome<RequestKind> | undefined;
 }
 
-/** Structural view of the core agent port; AgentRunner satisfies this. */
+/** Structural view of the core agent port; the Forge SDK agent satisfies this. */
 export interface AppPort {
 	compact?(instructions?: string, emit?: (event: SessionEvent) => void): Promise<unknown>;
 	runTurn(input: string): AsyncIterable<SessionEvent>;
@@ -547,13 +547,16 @@ export class App {
 			while (current !== undefined && this.started) {
 				this.repaint();
 				let inputProcessed = false;
+				let finalReason: string | undefined;
 				try {
 					for await (const event of this.options.port.runTurn(current)) {
 						if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "user") inputProcessed = true;
 						const reason = event.type === "turn_end" ? event.stopReason : event.type === "message_end" ? event.message.stopReason : undefined;
-						if (reason === "error" || (reason === "aborted" && !this.autoSendPaused)) this.pauseSending();
+						if (reason) finalReason = reason;
+						if (event.type === "agent_end" && event.outcome) finalReason = event.outcome;
 						this.handleEvent(event);
 					}
+					if (finalReason === "error" || (finalReason === "aborted" && !this.autoSendPaused)) this.pauseSending();
 				} catch (error) {
 					this.projector.addNotice(error instanceof Error ? error.message : String(error));
 					if (!inputProcessed) this.queued.unshift(current);
@@ -575,6 +578,7 @@ export class App {
 
 	private handleEvent(event: SessionEvent): void {
 		if (event.type === "compaction") this.projector.addNotice(`Context ${event.phase}${event.error ? ": " + event.error : ""}`);
+		if (event.type === "retry") this.projector.addNotice(`Model retry ${event.phase} #${event.attempt}${event.delayMs !== undefined ? ` in ${event.delayMs}ms` : ""}${event.outcome ? `: ${event.outcome}` : ""}`);
 		if (event.type === "recovery") this.projector.addNotice(`Context recovery: ${event.reason}`);
 		this.projector.apply(event);
 		if (event.type === "message_end" && event.message.errorMessage) this.projector.addNotice(event.message.errorMessage);

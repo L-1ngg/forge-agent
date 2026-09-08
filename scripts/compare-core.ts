@@ -10,6 +10,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { Agent } from "../packages/core/src/runtime/agent.ts";
 import type { AgentEvent, AgentTool, QueueMode } from "../packages/core/src/runtime/types.ts";
 
+const baseline = "3b4d961c384254e04168bfdc80a7a952db71d66a";
 const revision = "9767ba275f3e9a5ee0f5c5342249b629ab1b2282";
 const upstream = process.argv[2];
 if (!upstream) throw new Error("Usage: bun scripts/compare-core.ts /path/to/pristine/pi-checkout");
@@ -22,7 +23,11 @@ for (const name of ["agent.ts", "agent-loop.ts", "types.ts", "stream-fn.ts"]) {
  assert.equal(actual, original.stdout!.toString(), `Oracle source changed: ${name}`);
  // Type-only build adaptations must not change executable JavaScript.
  const compile = (source: string) => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText;
- if (!process.argv.includes("--behavior-only")) assert.equal(compile(readFileSync(resolve("packages/core/src/runtime", name), "utf8")), compile(actual), `Baseline has executable differences: ${name}`);
+ if (!process.argv.includes("--behavior-only")) {
+  const saved = Bun.spawnSync(["git", "show", `${baseline}:packages/core/src/runtime/${name}`]);
+  assert.equal(saved.exitCode, 0, "The independently committed baseline must be available");
+  assert.equal(compile(saved.stdout.toString()), compile(actual), `Baseline has executable differences: ${name}`);
+ }
 }
 // Isolate the four verified sources from upstream workspace resolution: both sides use
 // the exact same installed model transport, so the comparison isolates the core.
@@ -75,4 +80,4 @@ for (const reason of ["stop", "toolUse", "error", "aborted", "length", "deferred
  }
 }
 assert.deepEqual(await trace(Agent, "toolUse", "all", false, true), await trace(Oracle, "toolUse", "all", false, true));
-console.log(`${compared + 1} differential scripts passed; only timestamps normalized${process.argv.includes("--behavior-only") ? "" : "; executable baseline identical"}.`);
+console.log(`${compared + 1} differential scripts passed; only timestamps normalized${process.argv.includes("--behavior-only") ? "" : `; executable baseline ${baseline} identical; current default behavior compared`}.`);

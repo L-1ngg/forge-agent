@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createPermissionBeforeToolCall, MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
+import { createPiTestPort, MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
 import { RequestBus } from "../src/request-bus.ts";
 import { permissionScopeForToolCall, response } from "@forge-agent/protocol";
 import type { ToolCallBlock } from "@forge-agent/protocol";
@@ -122,52 +122,27 @@ test("remembered scopes treat wildcard characters in argument values literally",
 	expect(decide(different, { memory }).kind).toBe("ask");
 });
 
-test("beforeToolCall adapter blocks deny decisions and remembers only the scope shown for the call", async () => {
-	const blocked = createPermissionBeforeToolCall({ context: { mode: "deny-all" } });
-	const blockedResult = await blocked({
-		toolCall: { type: "toolCall", id: "call-1", name: "write", arguments: writeCall.arguments },
-		args: writeCall.arguments,
-	} as never);
-	expect(blockedResult).toMatchObject({ block: true, terminate: true });
-
-	const bus = new RequestBus({ idPrefix: "permission-test", timeoutMs: 1_000 });
-	const memory = new MemoryPermissionStore();
-	const context: PermissionContext = { memory };
-	const adapter = createPermissionBeforeToolCall({ context, requestBus: bus });
-	const pending = adapter({
-		toolCall: { type: "toolCall", id: "call-2", name: "write", arguments: writeCall.arguments },
-		args: writeCall.arguments,
-	} as never);
-	const request = (await bus.requests()[Symbol.asyncIterator]().next()).value;
-	expect(request.kind).toBe("permission");
-	bus.respond(response(request.id, { decision: "allow_always", scope: permissionScopeForToolCall(writeCall) }));
-	expect(await pending).toBeUndefined();
-	expect(memory.entries()).toHaveLength(1);
-	bus.close();
-
-	const widenedBus = new RequestBus({ idPrefix: "permission-widened", timeoutMs: 1_000 });
-	const widenedMemory = new MemoryPermissionStore();
-	const widenedAdapter = createPermissionBeforeToolCall({ context: { memory: widenedMemory }, requestBus: widenedBus });
-	const widenedPending = widenedAdapter({
-		toolCall: { type: "toolCall", id: "call-3", name: "write", arguments: writeCall.arguments },
-		args: writeCall.arguments,
-	} as never);
-	const widenedRequest = (await widenedBus.requests()[Symbol.asyncIterator]().next()).value;
-	widenedBus.respond(response(widenedRequest.id, { decision: "allow_always", scope: { tool: "write", argsPattern: "*" } }));
-	expect(await widenedPending).toMatchObject({ block: true, terminate: true, reason: expect.stringContaining("differs") });
-	expect(widenedMemory.entries()).toHaveLength(0);
-	widenedBus.close();
-
-	const dangerousBus = new RequestBus({ idPrefix: "permission-dangerous", timeoutMs: 1_000 });
-	const dangerousMemory = new MemoryPermissionStore();
-	const dangerousAdapter = createPermissionBeforeToolCall({ context: { memory: dangerousMemory }, requestBus: dangerousBus });
-	const dangerousPending = dangerousAdapter({
-		toolCall: { type: "toolCall", id: "call-dangerous", name: "bash", arguments: { command: "rm -rf tmp" } },
-		args: { command: "rm -rf tmp" },
-	} as never);
-	const dangerousRequest = (await dangerousBus.requests()[Symbol.asyncIterator]().next()).value;
-	dangerousBus.respond(response(dangerousRequest.id, { decision: "allow_always", scope: permissionScopeForToolCall({ name: "bash", arguments: { command: "rm -rf tmp" } } as never) }));
-	expect(await dangerousPending).toMatchObject({ block: true, terminate: true, reason: expect.stringContaining("unavailable") });
-	expect(dangerousMemory.entries()).toHaveLength(0);
-	dangerousBus.close();
+test("session tool policy blocks deny and remembers only the scope shown", async () => {
+ const invoke = async (context: PermissionContext, call = writeCall, requestBus?: RequestBus) => {
+  const port = createPiTestPort({ permission: context, ...(requestBus ? { requestBus } : {}),
+   tools: [{ name: call.name, label: "Policy fixture", description: "No effects", parameters: { type: "object", properties: Object.fromEntries(Object.keys(call.arguments).map(key => [key, { type: "string" }])), required: [], additionalProperties: false }, async execute() { return { content: [], details: {} }; } }],
+   responses: [{ toolCalls: [{ id: call.id, name: call.name, arguments: call.arguments }] }, { text: "done" }],
+  });
+  for await (const event of port.runTurn("policy")) if (event.type === "tool_execution_end") return event;
+  throw new Error("Missing tool outcome");
+ };
+ expect(await invoke({ mode: "deny-all" })).toMatchObject({ isError: true });
+ for (const scenario of ["exact", "widened", "dangerous"] as const) {
+  const bus = new RequestBus({ timeoutMs: 1000 }); const memory = new MemoryPermissionStore();
+  const call = scenario === "dangerous" ? { ...writeCall, name: "bash", arguments: { command: "rm -rf tmp" } } : writeCall;
+  try {
+   const pending = invoke({ memory }, call, bus);
+   const request = (await bus.requests()[Symbol.asyncIterator]().next()).value;
+   expect(request.kind).toBe("permission");
+   bus.respond(response(request.id, { decision: "allow_always", scope: scenario === "widened" ? { tool: "write", argsPattern: "*" } : permissionScopeForToolCall(call) }));
+   const result = await pending;
+   expect(result.isError).toBe(scenario !== "exact"); expect(memory.entries()).toHaveLength(scenario === "exact" ? 1 : 0);
+   if (scenario !== "exact") expect(result.content).toContain(scenario === "widened" ? "differs" : "unavailable");
+  } finally { bus.close(); }
+ }
 });

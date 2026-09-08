@@ -1,3 +1,8 @@
+import type { ConfigurationPatch, SessionAssembly } from "./configuration.ts";
+import type { AgentOptions as RuntimeOptions } from "./runtime/agent.ts";
+import type { AgentTool } from "./runtime/types.ts";
+import { fromSessionMessage, toSessionMessage, toPiStopReason } from "./event-projection.ts";
+import { AgentSession } from "./agent-session.ts";
 import {
 	InMemoryCredentialStore,
 	getSupportedThinkingLevels,
@@ -16,21 +21,21 @@ import {
 	type AssistantMessage,
 	type Message,
 	type Model,
-	type ToolResultMessage,
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { block, permissionScopeForToolCall, type BlockEnvelope, type ExecuteBlockData, type SessionContentBlock, type SessionEvent, type SessionMessage, type StopReason, type ToolCallBlock } from "@forge-agent/protocol";
-import { type HarnessTool, type ToolContext, type ToolInputRewrite } from "@forge-agent/tools";
-import { createEditBlockData } from "./diff.ts";
+import { permissionScopeForToolCall, type SessionMessage, type StopReason, type ToolCallBlock } from "@forge-agent/protocol";
+import { type HarnessTool, type ToolInputRewrite } from "@forge-agent/tools";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
-import type { AgentPort } from "./agent-runner.ts";
+import type { AgentPort, InputQueueOptions } from "./agent-port.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
-import { ExecutionCore } from "./execution-core.ts";
-import { SUMMARY_SYSTEM, resolveRetryPolicy, validateRequestLimits, type ContextSettings, type RetryPolicy } from "./context/compaction.ts";
+import { SUMMARY_SYSTEM, resolveRetryPolicy, validateRequestLimits, type ContextSettings, type RetryPolicy, type SummaryDriver } from "./context/compaction.ts";
 import { randomUUID } from "node:crypto";
 
-export interface PiPortOptions {
+export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" | "toolExecution">;
+
+export interface PiPortOptions extends InputQueueOptions {
+	toolHooks?: ToolHooks;
 	sessionId?: string;
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;
@@ -44,7 +49,7 @@ export interface PiPortOptions {
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	cwd: string;
 	history?: SessionMessage[];
-	tools?: HarnessTool<object, unknown>[];
+	tools?: Array<HarnessTool<object, unknown>>;
 	/**
 	 * Rewrite tool input before execution; permission checks observe the rewritten object.
 	 * The core emits `tool_execution_start` before this wrapper runs, so that event can
@@ -63,9 +68,9 @@ export interface PiTestResponse {
 	errorMessage?: string;
 }
 
-export interface PiTestPortOptions {
+export interface PiTestPortOptions extends InputQueueOptions {
 	responses: PiTestResponse[];
-	tools?: HarnessTool<object, unknown>[];
+	tools?: Array<HarnessTool<object, unknown>>;
 	/** Rewrite tool input before execution; permission checks observe the rewritten object. */
 	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	cwd?: string;
@@ -74,232 +79,7 @@ export interface PiTestPortOptions {
 	permission?: PermissionContext;
 }
 
-function stringify(value: unknown): string {
-	if (typeof value === "string") return value;
-	try {
-		return JSON.stringify(value) ?? String(value);
-	} catch {
-		return String(value);
-	}
-}
-
-function toProtocolStopReason(reason: AssistantMessage["stopReason"]): StopReason | undefined {
-	if (reason === "pending") return undefined;
-	if (reason === "toolUse") return "tool_use";
-	return reason;
-}
-
-function toPiStopReason(reason: StopReason | undefined): AssistantMessage["stopReason"] {
-	if (reason === undefined) return "stop";
-	if (reason === "tool_use") return "toolUse";
-	return reason;
-}
-
-function toSessionContent(message: Message): SessionContentBlock[] {
-	if (message.role === "user") {
-		if (typeof message.content === "string") return [{ type: "text", text: message.content }];
-		return message.content.map((block) => ({ ...block }));
-	}
-	if (message.role === "toolResult") {
-		return message.content.map((block) => ({ ...block }));
-	}
-	return message.content.map((block) => {
-		if (block.type === "text") return { type: "text" as const, text: block.text, ...(block.textSignature !== undefined ? { textSignature: block.textSignature } : {}) };
-		if (block.type === "thinking") return {
-			type: "thinking" as const, thinking: block.thinking,
-			...(block.thinkingSignature !== undefined ? { thinkingSignature: block.thinkingSignature } : {}),
-			...(block.redacted !== undefined ? { redacted: block.redacted } : {}),
-		};
-		return {
-			type: "tool_call" as const, id: block.id, name: block.name, arguments: block.arguments,
-			...(block.thoughtSignature !== undefined ? { thoughtSignature: block.thoughtSignature } : {}),
-			...(block.namespace !== undefined ? { namespace: block.namespace } : {}),
-		};
-	});
-}
-
-function toSessionMessage(message: Message): SessionMessage | undefined {
-	if (typeof message !== "object" || message === null || !("role" in message)) return undefined;
-	const standard = message as Message;
-	if (standard.role !== "user" && standard.role !== "assistant" && standard.role !== "toolResult") return undefined;
-	const base: SessionMessage = {
-		role: standard.role,
-		content: toSessionContent(standard),
-		timestamp: standard.timestamp,
-	};
-	if (standard.role === "assistant") {
-		const stopReason = toProtocolStopReason(standard.stopReason);
-		return {
-			...base,
-			provider: standard.provider,
-			model: standard.model,
-			api: standard.api,
-			usage: {
-				input: standard.usage.input,
-				output: standard.usage.output,
-				cacheRead: standard.usage.cacheRead,
-				cacheWrite: standard.usage.cacheWrite,
-				totalTokens: standard.usage.totalTokens,
-				cost: { ...standard.usage.cost },
-			},
-			...(stopReason !== undefined ? { stopReason } : {}),
-			...(standard.errorMessage ? { errorMessage: standard.errorMessage } : {}),
-		};
-	}
-	if (standard.role === "toolResult") {
-		return { ...base, toolCallId: standard.toolCallId, toolName: standard.toolName, isError: standard.isError };
-	}
-	return base;
-}
-
-function zeroUsage(): NonNullable<AssistantMessage["usage"]> {
-	return {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-		totalTokens: 0,
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-	};
-}
-
-function fromSessionMessage(message: SessionMessage, model: Model<string>): Message {
-	const textAndImages = message.content
-		.filter((block) => block.type === "text" || block.type === "image")
-		.map((block) => ({ ...block }));
-	if (message.role === "user") {
-		return { role: "user", content: textAndImages, timestamp: message.timestamp } satisfies UserMessage;
-	}
-	if (message.role === "toolResult") {
-		return {
-			role: "toolResult",
-			toolCallId: message.toolCallId ?? "unknown",
-			toolName: message.toolName ?? "unknown",
-			content: textAndImages,
-			isError: message.isError ?? false,
-			timestamp: message.timestamp,
-		} satisfies ToolResultMessage;
-	}
-	return {
-		role: "assistant",
-		content: message.content.filter((block) => block.type !== "image").map((block) => {
-			if (block.type === "text" || block.type === "thinking") return { ...block };
-			return { ...block, type: "toolCall" as const };
-		}),
-		api: message.api ?? model.api,
-		provider: message.provider ?? model.provider,
-		model: message.model ?? model.id,
-		usage: message.usage ? mergeUsage(message.usage) : zeroUsage(),
-		stopReason: toPiStopReason(message.stopReason),
-		...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
-		timestamp: message.timestamp,
-	} satisfies AssistantMessage;
-}
-
-function mergeUsage(usage: NonNullable<SessionMessage["usage"]>): NonNullable<AssistantMessage["usage"]> {
-	return {
-		input: usage.input,
-		output: usage.output,
-		cacheRead: usage.cacheRead,
-		cacheWrite: usage.cacheWrite,
-		totalTokens: usage.totalTokens,
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, ...(usage.cost ?? {}) },
-	};
-}
-
-type CommandPresentation = Pick<ExecuteBlockData, "command" | "description">;
-
-function decorateToolEvent(event: SessionEvent, commands: Map<string, CommandPresentation>, edits: Map<string, BlockEnvelope<"edit">>): SessionEvent {
-	if (event.type === "tool_execution_start") {
-		rememberToolCommand(commands, event.toolCallId, event.toolName, event.args);
-		const envelope = startToolBlock(event.toolCallId, event.toolName, event.args, event.timestamp);
-		if (envelope?.kind === "edit") edits.set(event.toolCallId, envelope as BlockEnvelope<"edit">);
-		return envelope ? { ...event, block: envelope } : event;
-	}
-	if (event.type === "tool_execution_end") {
-		const edit = edits.get(event.toolCallId);
-		let result: unknown;
-		try { result = JSON.parse(event.content); } catch { result = event.content; }
-		const envelope = edit
-			? { ...edit, lifecycle: event.isError ? "failed" as const : "complete" as const, updatedAt: event.timestamp }
-			: executeToolBlock(event.toolCallId, event.toolName, result, event.isError ? "failed" : "complete", event.timestamp, commands.get(event.toolCallId));
-		commands.delete(event.toolCallId);
-		edits.delete(event.toolCallId);
-		return envelope ? { ...event, block: envelope } : event;
-	}
-	return event;
-}
-
-function startToolBlock(toolCallId: string, toolName: string, args: unknown, timestamp: number): BlockEnvelope<"edit" | "execute"> | undefined {
-	const values = objectValue(args);
-	if (toolName === "edit" && typeof values.path === "string" && typeof values.old_text === "string" && typeof values.new_text === "string") {
-		return block(
-			{ id: toolCallId, kind: "edit", lifecycle: "streaming", defaultDisplayMode: "expanded", currentDisplayMode: "expanded", manualOverride: false, colorSlot: "accent_edit", createdAt: timestamp, updatedAt: timestamp },
-			createEditBlockData(values.path, values.old_text, values.new_text),
-			{ defaultDisplayMode: "expanded", respectManualFolds: true },
-		);
-	}
-	if (toolName !== "bash" || typeof values.command !== "string") return undefined;
-	return block(
-		{ id: toolCallId, kind: "execute", lifecycle: "streaming", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false, colorSlot: "accent_execute", createdAt: timestamp, updatedAt: timestamp },
-		{ command: values.command, ...(typeof values.description === "string" ? { description: values.description } : {}) },
-		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
-	);
-}
-
-function executeToolBlock(toolCallId: string, toolName: string, result: unknown, lifecycle: "streaming" | "complete" | "failed", timestamp: number, original?: CommandPresentation): BlockEnvelope<"execute"> | undefined {
-	if (toolName !== "bash") return undefined;
-	const wrapper = objectValue(result);
-	const details = objectValue(wrapper.details ?? result);
-	const content = Array.isArray(wrapper.content)
-		? wrapper.content.map((entry) => objectValue(entry).text).filter((entry): entry is string => typeof entry === "string").join("\n")
-		: "";
-	const structuredError = lifecycle === "failed" ? readableToolError(content) : undefined;
-	const data: ExecuteBlockData = {
-		command: typeof details.command === "string" ? details.command : original?.command ?? "bash",
-		...(original?.description !== undefined ? { description: original.description } : {}),
-		...(typeof details.stdout === "string" ? { stdout: details.stdout + (typeof details.notice === "string" ? "\n\n" + details.notice : "") } : content && structuredError === undefined ? { stdout: content } : {}),
-		...(typeof details.stderr === "string" ? { stderr: details.stderr } : structuredError !== undefined ? { stderr: structuredError } : {}),
-		...(typeof details.exitCode === "number" ? { exitCode: details.exitCode } : {}),
-		...(lifecycle === "failed" ? { isError: true } : {}),
-	};
-	return block(
-		{ id: toolCallId, kind: "execute", lifecycle, defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false, colorSlot: "accent_execute", updatedAt: timestamp },
-		data,
-		{ defaultDisplayMode: "truncated", firstLines: 2, lastLines: 3, respectManualFolds: true },
-	);
-}
-
-function rememberToolCommand(commands: Map<string, CommandPresentation>, toolCallId: string, toolName: string, args: unknown): void {
-	if (toolName !== "bash") return;
-	const { command, description } = objectValue(args);
-	if (typeof command === "string") commands.set(toolCallId, { command, ...(typeof description === "string" ? { description } : {}) });
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-	return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
-}
-
-/** forge-agent tools throw structured errors; show the human message instead of raw JSON. */
-function readableToolError(content: string): string | undefined {
-	try {
-		const value = objectValue(JSON.parse(content));
-		return typeof value.error_code === "string" && typeof value.message === "string" ? value.message : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-export interface PermissionHookOptions {
-	context: PermissionContext;
-	requestBus?: RequestBus;
-	/** Legacy escape hatch for callers that own a separate authorization path. */
-	skipTools?: ReadonlySet<string>;
-	/** Prepare the final tool input before permission is evaluated. */
-	prepareToolCall?: (toolCall: ToolCallBlock, signal?: AbortSignal) => Promise<ToolCallBlock>;
-	/** Retain an authorized final input for the matching tool execution. */
-	markPreparedInput?: (toolCall: ToolCallBlock) => void;
-}
+interface PermissionHookOptions { context: PermissionContext; requestBus?: RequestBus; }
 
 function makeToolCall(id: string, name: string, argumentsValue: unknown): ToolCallBlock {
 	return { type: "tool_call", id, name, arguments: argumentsValue as Record<string, unknown> };
@@ -339,32 +119,8 @@ async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookO
 	return { allowed: false, reason: result.reason ?? "Tool execution denied" };
 }
 
-export interface BeforeToolCallContext {
-	toolCall: { type: string; id: string; name: string; arguments: Record<string, unknown> };
-	args?: unknown;
-}
-
-export interface BeforeToolCallResult {
-	block: true;
-	reason: string;
-	terminate: true;
-}
-
-export function createPermissionBeforeToolCall(options: PermissionHookOptions): (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined> {
-	return async (context, signal) => {
-		if (options.skipTools?.has(context.toolCall.name)) return undefined;
-		const rawToolCall = makeToolCall(context.toolCall.id, context.toolCall.name, context.args ?? context.toolCall.arguments);
-		const toolCall = options.prepareToolCall ? await options.prepareToolCall(rawToolCall, signal) : rawToolCall;
-		const check = await checkPermission(toolCall, options, signal);
-		if (check.allowed) {
-			options.markPreparedInput?.(toolCall);
-			return undefined;
-		}
-		return { block: true, reason: check.reason, terminate: true };
-	};
-}
-
-interface ModelPortOptions {
+export interface ModelPortOptions extends InputQueueOptions {
+	toolHooks?: ToolHooks;
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;
 	maxTokens?: number;
@@ -375,117 +131,14 @@ interface ModelPortOptions {
 	systemPrompt: string;
 	thinkingLevel: PiPortOptions["thinkingLevel"];
 	history?: SessionMessage[];
-	tools?: HarnessTool<object, unknown>[];
+	tools?: Array<HarnessTool<object, unknown>>;
 	cwd: string;
 	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	permission?: PermissionContext;
 	requestBus?: RequestBus;
 }
 
-function createModelPort(options: ModelPortOptions): AgentPort {
-	const sessionId = options.sessionId ?? randomUUID();
-	const tools = options.tools ?? [];
-	const modelTools = tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: Type.Unsafe(tool.parameters) }));
-	const summaryThinking = (requested: "inherit" | "off") => requested === "off" && !getSupportedThinkingLevels(options.model).includes("off")
-		? { level: options.thinkingLevel, fallback: "Model does not support reasoning off; inherited task reasoning" }
-		: { level: requested === "off" ? "off" as const : options.thinkingLevel };
-	const core = new ExecutionCore({
-		contextWindow: options.contextWindow ?? options.model.contextWindow,
-		maxTokens: options.model.maxTokens,
-		...(options.retry ? { retry: options.retry } : {}),
-		summaryThinking,
-		isRetryable: (message) => isRetryableAssistantError(fromSessionMessage(message, options.model) as AssistantMessage),
-		isOverflow: (message) => isContextOverflow(fromSessionMessage(message, options.model) as AssistantMessage, options.contextWindow ?? options.model.contextWindow),
-		contextIdentity: JSON.stringify([options.model.provider, options.model.api, options.model.id, options.model.baseUrl, options.systemPrompt, modelTools]),
-		fixedText: options.systemPrompt + JSON.stringify(modelTools),
-		abortInteractions: () => { options.requestBus?.abort(); },
-		async summarize(request, signal) {
-			const thinking = summaryThinking(request.reasoning);
-			const stream = options.stream(options.model, {
-				systemPrompt: SUMMARY_SYSTEM,
-				messages: [{ role: "user", content: request.prompt, timestamp: Date.now() }],
-			}, { signal, sessionId, maxTokens: request.maxTokens, maxRetries: 0, cacheRetention: "none", ...(thinking.level !== "off" ? { reasoning: thinking.level } : {}) });
-			for await (const _event of stream) {}
-			const result = toSessionMessage(await stream.result());
-			if (!result) throw new Error("Provider did not return a summary");
-			return result;
-		},
-		async stream(messages, signal, emit) {
-			let started = false;
-			const stream = options.stream(options.model, {
-				systemPrompt: options.systemPrompt,
-				messages: messages.map((message) => fromSessionMessage(message, options.model)),
-				tools: modelTools,
-			}, { signal, sessionId, maxRetries: 0, ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}), ...(options.thinkingLevel !== "off" ? { reasoning: options.thinkingLevel } : {}) });
-			for await (const event of stream) {
-				if (!started && event.type !== "done" && event.type !== "error") {
-					started = true;
-					const message = toSessionMessage(event.partial);
-					if (message) emit({ type: "message_start", timestamp: Date.now(), message });
-				}
-				if (event.type === "text_delta" || event.type === "thinking_delta" || event.type === "toolcall_delta") {
-					emit({ type: "message_delta", timestamp: Date.now(), contentIndex: event.contentIndex, contentType: event.type === "text_delta" ? "text" : event.type === "thinking_delta" ? "thinking" : "tool_call", delta: event.delta });
-				}
-			}
-			const result = toSessionMessage(await stream.result());
-			if (!result) throw new Error("Provider did not return an assistant message");
-			if (!started) emit({ type: "message_start", timestamp: Date.now(), message: result });
-			return result;
-		},
-		async execute(call, signal) {
-			signal.throwIfAborted();
-			const index = tools.findIndex((tool) => tool.name === call.name);
-			const tool = tools[index];
-			const schema = modelTools[index];
-			if (!tool || !schema) throw new Error(`Tool ${call.name} not found`);
-			let input = validateToolArguments(schema, { ...call, type: "toolCall" }) as object;
-			const context: ToolContext = { cwd: options.cwd, toolCallId: call.id, signal };
-			const rewrite = options.toolInputRewrites?.[call.name];
-			if (rewrite) input = await rewrite(input, context);
-			signal.throwIfAborted();
-			input = validateToolArguments(schema, { ...call, type: "toolCall", arguments: input as Record<string, unknown> }) as object;
-			const finalCall = { ...call, arguments: input as Record<string, unknown> };
-			if (options.permission) {
-				const check = await checkPermission(finalCall, { context: options.permission, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
-				if (!check.allowed) return {
-					terminate: true,
-					message: { role: "toolResult", toolCallId: call.id, toolName: call.name, isError: true, timestamp: Date.now(), content: [{ type: "text", text: check.reason }] },
-				};
-			}
-			signal.throwIfAborted();
-			const outcome = await tool.execute(input, context);
-			return {
-				...(outcome.ok ? { details: outcome.value } : outcome.details !== undefined ? { details: outcome.details } : {}),
-				message: {
-					role: "toolResult", toolCallId: call.id, toolName: call.name, timestamp: Date.now(),
-					isError: !outcome.ok,
-					content: [{ type: "text", text: stringify(outcome.ok ? outcome.value : { ...outcome.error, ...(outcome.details !== undefined ? { details: outcome.details } : {}) }) }],
-				},
-			};
-		},
-	}, options.history, options.context);
-	return {
-		async *runTurn(input) {
-			const commands = new Map<string, CommandPresentation>();
-			const edits = new Map<string, BlockEnvelope<"edit">>();
-			try {
-				for await (const event of core.runTurn(input)) yield decorateToolEvent(event, commands, edits);
-			} finally {
-				commands.clear();
-				edits.clear();
-			}
-		},
-		steer: (input) => core.steer(input),
-		followUp: (input) => core.followUp(input),
-		abort: () => core.abort(),
-		getUsage: () => core.getUsage(),
-		setStorage: (storage) => core.setStorage(storage),
-		compact: (instructions, emit, signal) => core.compact(instructions, emit, signal),
-		configureContext: (settings) => core.configureContext(settings),
-	};
-}
-
-export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
+async function resolveModelOptions(options: PiPortOptions): Promise<ModelPortOptions> {
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
 	const credentials = new InMemoryCredentialStore();
@@ -498,12 +151,29 @@ export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 		throw new Error(`Provider is not configured: ${options.provider}. Set apiKey in .forge-agent/config.json, FORGE_AGENT_API_KEY, or the provider's API key environment variable.`);
 	}
 	const model = options.baseUrl ? { ...catalogModel, baseUrl: options.baseUrl } : catalogModel;
-	return createModelPort({ ...options, sessionId: options.sessionId ?? randomUUID(), model, stream: models.streamSimple.bind(models) });
+	return { ...options, sessionId: options.sessionId ?? randomUUID(), model, stream: models.streamSimple.bind(models) };
+}
+
+/** Assemble the single source-owned session runtime. */
+export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
+	let desired = snapshotOptions(options);
+	const assemble = async (configuration: PiPortOptions): Promise<SessionAssembly> => {
+		if (typeof configuration.systemPrompt !== "string" || !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(configuration.thinkingLevel)) throw new Error("Invalid model configuration");
+		const model = await resolveModelOptions(configuration);
+		return { options: model, toolset: prepareSessionTools(model), driver: createSummaryDriver(model) };
+	};
+	const initial = await assemble(desired);
+	return new AgentSession(initial, async (patch: ConfigurationPatch) => {
+		const next = snapshotOptions({ ...desired, ...patch });
+		const assembly = await assemble(next);
+		desired = next;
+		return assembly;
+	});
 }
 
 function lastUserText(messages: Message[]): string {
 	let message: UserMessage | undefined;
-	for (let index = messages.length - 1; index >= 0; index--) {
+	for (let index = messages.length - 1;index >= 0;index--) {
 		const candidate = messages[index];
 		if (candidate?.role === "user") {
 			message = candidate;
@@ -535,12 +205,89 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 	);
 	const models = createModels();
 	models.setProvider(faux.provider);
-	return createModelPort({
+	const configured: ModelPortOptions = {
 		...options,
 		model: faux.getModel(),
 		stream: models.streamSimple.bind(models),
 		systemPrompt: "execution contract test",
 		thinkingLevel: "off",
 		cwd: options.cwd ?? process.cwd(),
-	});
+	};
+	const assembly = { options: configured, toolset: prepareSessionTools(configured), driver: createSummaryDriver(configured) };
+	return new AgentSession(assembly, async () => { throw new Error("Scripted provider does not support model reconfiguration"); });
+}
+
+/** Bridge host cwd/error outcomes to native tool scheduling; preparation and policy
+ * remain serial preflight, never inside concurrently started execute promises. */
+function prepareSessionTools(options: ModelPortOptions) {
+	const prepared = new Map<string, object>();
+	const tools: AgentTool[] = (options.tools ?? []).map(tool => ({
+		name: tool.name, label: tool.label, description: tool.description, parameters: Type.Unsafe(tool.parameters),
+		...(tool.prepareArguments ? { prepareArguments: tool.prepareArguments } : {}),
+		...(tool.executionMode ? { executionMode: tool.executionMode } : {}),
+		async execute(id, _args, signal, onUpdate) {
+			signal?.throwIfAborted();
+			const input = prepared.get(id);
+			prepared.delete(id);
+			if (!input) throw new Error("Tool input has not been authorized");
+			const snapshot = <T>(result: T): T => { JSON.stringify(result); return structuredClone(result); };
+			return snapshot(await tool.execute(input, { cwd: options.cwd, toolCallId: id, ...(signal ? { signal } : {}), ...(onUpdate ? { onUpdate: result => onUpdate(snapshot(result)) } : {}) }));
+		},
+	}));
+	const beforeToolCall: NonNullable<RuntimeOptions["beforeToolCall"]> = async (context, signal) => {
+		signal?.throwIfAborted();
+		prepared.delete(context.toolCall.id);
+		const schema = tools.find(tool => tool.name === context.toolCall.name)!;
+		const nativeArgs = context.args as Record<string, unknown>;
+		let args = nativeArgs;
+		const rewrite = options.toolInputRewrites?.[context.toolCall.name];
+		if (rewrite) args = await rewrite(args, { cwd: options.cwd, toolCallId: context.toolCall.id, ...(signal ? { signal } : {}) }) as Record<string, unknown>;
+		args = validateToolArguments(schema, { ...context.toolCall, arguments: args });
+		const result = await options.toolHooks?.beforeToolCall?.({ ...context, args }, signal);
+		if (result?.block) return result;
+		signal?.throwIfAborted();
+		const finalArgs = structuredClone(validateToolArguments(schema, { ...context.toolCall, arguments: args }));
+		const finalCall = makeToolCall(context.toolCall.id, context.toolCall.name, finalArgs);
+		const check = await checkPermission(finalCall, { context: options.permission ?? {}, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
+		if (!check.allowed) return { block: true, reason: check.reason, terminate: true };
+		signal?.throwIfAborted();
+		prepared.set(context.toolCall.id, finalArgs);
+		// Native after hook sees the same values that were authorized and executed.
+		for (const key of Object.keys(nativeArgs)) delete nativeArgs[key];
+		Object.assign(nativeArgs, finalArgs);
+		return result;
+	};
+	const afterToolCall: NonNullable<RuntimeOptions["afterToolCall"]> = async (context, signal) => {
+		const isError = context.isError || ("isError" in context.result && context.result.isError === true);
+		const override = await options.toolHooks?.afterToolCall?.({ ...context, isError }, signal);
+		const result = { ...context.result, isError, ...Object.fromEntries(Object.entries(override ?? {}).filter(([, value]) => value !== undefined)) };
+		JSON.stringify(result);
+		return structuredClone(result);
+	};
+	return { tools, beforeToolCall, afterToolCall, ...(options.toolHooks?.toolExecution ? { toolExecution: options.toolHooks.toolExecution } : {}), clear: () => prepared.clear() };
+}
+
+function createSummaryDriver(options: ModelPortOptions): SummaryDriver & { isOverflow(message: SessionMessage): boolean } {
+	const summaryThinking = (requested: "inherit" | "off") => requested === "off" && !getSupportedThinkingLevels(options.model).includes("off")
+		? { level: options.thinkingLevel, fallback: "Model does not support reasoning off; inherited task reasoning" }
+		: { level: requested === "off" ? "off" as const : options.thinkingLevel };
+	return {
+		maxTokens: options.model.maxTokens,
+		...(options.retry ? { retry: options.retry } : {}),
+		summaryThinking,
+		isOverflow: message => isContextOverflow(fromSessionMessage(message, options.model) as AssistantMessage, options.contextWindow ?? options.model.contextWindow),
+		isRetryable: message => isRetryableAssistantError(fromSessionMessage(message, options.model) as AssistantMessage),
+		async summarize(request, signal) {
+			const thinking = summaryThinking(request.reasoning);
+			const stream = options.stream(options.model, { systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user", content: request.prompt, timestamp: Date.now() }] }, { signal, ...(options.sessionId ? { sessionId: options.sessionId } : {}), maxTokens: request.maxTokens, maxRetries: 0, cacheRetention: "none", ...(thinking.level !== "off" ? { reasoning: thinking.level } : {}) });
+			for await (const _event of stream) { }
+			const result = toSessionMessage(await stream.result());
+			if (!result) throw new Error("Provider did not return a summary");
+			return result;
+		},
+	};
+}
+
+function snapshotOptions(options: PiPortOptions): PiPortOptions {
+	return { ...options, ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 }

@@ -66,13 +66,14 @@ export async function runHeadless(
 		: undefined;
 	try {
 		for await (const event of port.runTurn(prompt)) {
-			if (event.type === "recovery") recovering = true;
+			if (event.type === "recovery" || (event.type === "retry" && event.phase === "scheduled")) recovering = true;
 			if (event.type === "turn_end" || event.type === "message_end") {
 				const reason = event.type === "turn_end" ? event.stopReason : event.message.stopReason;
 				if (reason === "error" || reason === "length") runExitCode = 1;
 				else if (reason === "aborted") runExitCode = 130;
 				else if (recovering && (reason === "stop" || reason === "tool_use")) { runExitCode = 0; recovering = false; }
 			}
+			if (event.type === "agent_end" && event.outcome) runExitCode = event.outcome === "error" || event.outcome === "length" ? 1 : event.outcome === "aborted" ? 130 : 0;
 			output(JSON.stringify(event));
 		}
 	} finally {

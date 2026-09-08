@@ -16,7 +16,7 @@
 | [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、存储、输入归属与生命周期契约;接口变化时同步 |
 | [GitHub 交付](phases/github-delivery.md) | 命名、CI、草稿预发布施工与验证 |
 | [release.md](release.md) | 英文手动源码预发布操作与失败处理 |
-| [phases/owned-core.md](phases/owned-core.md)、[phases/sdk.md](phases/sdk.md) | 自研内核与 SDK 的施工、自动化证据及未验收边界 |
+| [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与边界；旧批次保留在 owned-core/sdk 施工图 |
 | [phases/](phases/) | 各 Phase 施工图:路径 / tradeoff / 验收(**温层**) |
 | [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |
 | [research/](research/) | 固定源码快照的上游/专题深度调研(**冷层**,不是已批准 ADR) |

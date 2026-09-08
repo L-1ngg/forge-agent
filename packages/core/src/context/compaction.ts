@@ -217,7 +217,7 @@ export async function generateCompaction(plan: CompactionPlan, settings: Context
 	return { summary, ...(usages.length ? { usage: sumUsage(usages) } : {}) };
 }
 
-function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+export function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
 		if (signal.aborted) { reject(signal.reason); return; }
 		const aborted = () => { clearTimeout(timer); reject(signal.reason); };

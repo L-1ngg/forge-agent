@@ -1,3 +1,4 @@
+import { defineBuiltinTool } from "./define-builtin.ts";
 import { open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,7 +42,7 @@ async function openOutputLog(path: string): Promise<OutputLog> {
 }
 
 export function createBashTool(openLog: (path: string) => Promise<OutputLog> = openOutputLog): HarnessTool<BashInput, BashOutput> {
-return {
+return defineBuiltinTool<BashInput, BashOutput>({
 	name: "bash",
 	label: "Run command",
 	description: "Run a shell command. Return a combined 2000-line / 50 KiB tail preview; large output is saved to a system temporary log readable with Read.",
@@ -147,6 +148,6 @@ return {
 			context.signal?.removeEventListener("abort", onAbort);
 		}
 	},
-};
+}, output => output.stdout + output.stderr + (output.notice ? `\n${output.notice}` : ""));
 }
 export const bashTool = createBashTool();

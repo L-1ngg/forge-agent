@@ -1,3 +1,4 @@
+import { defineBuiltinTool } from "./define-builtin.ts";
 import { open, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
@@ -14,7 +15,7 @@ export interface WriteOutput {
 	bytesWritten: number;
 }
 
-export const writeTool: HarnessTool<WriteInput, WriteOutput> = {
+export const writeTool: HarnessTool<WriteInput, WriteOutput> = defineBuiltinTool({
 	name: "write",
 	label: "Write file",
 	description: "Write UTF-8 content to a file. Parent directories must already exist.",
@@ -65,4 +66,4 @@ export const writeTool: HarnessTool<WriteInput, WriteOutput> = {
 			return fileError(error, "path", "writable file path", "src/new.ts");
 		}
 	},
-};
+}, output => `Wrote ${output.bytesWritten} bytes to ${output.path}`);
