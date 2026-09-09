@@ -5,7 +5,7 @@ created: 2026-09-05
 
 # 通用内核与 SDK 边界
 
-> 状态:代码与自动化验证完成,已提交 `04db82b`(2026-09-06),包含 ADR-010 输入归属与取消修复;人工交付审核仍待确认。接入说明见 [SDK](../sdk.md)。 当前执行路径与接口变更由[源码内核接入](pi-core-migration.md)承接，下文保留原批次的设计与证据。
+> 状态:历史批次记录(2026-09-09)。截至 2026-09-06，代码与自动化验证完成，已提交 `04db82b`，包含 ADR-010 输入归属与取消修复；当时人工交付审核仍待确认。当前接入契约见 [SDK](../sdk.md)，执行路径与验收由[源码内核接入](pi-core-migration.md)及[迁移验收](pi-core-migration-acceptance.md)承接，下文保留原批次的设计与证据。
 
 > 契约替代(2026-09-07):下文 `appendTurn`、整次成功保存及取消丢弃执行历史为原批次合同，已由 [上下文规格 #2](https://github.com/L-1ngg/forge-agent/issues/2) 的 `load`/`append` 逐记录保存取代。当前接入以 [SDK](../sdk.md) 为准，验证见 [上下文实现证据](context-management-acceptance.md)。
 

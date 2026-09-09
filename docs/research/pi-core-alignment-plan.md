@@ -5,15 +5,15 @@ created: 2026-09-08
 
 # Pi 内核高保真对齐：调研与待确认方案
 
-> 状态:调研记录(2026-09-08)。operator 后续明确采用源码移植并允许接口调整；当前方向见 [ADR-015](../decisions/015-pi-core-source-migration.md)，接入设计见[迁移施工草稿](../phases/pi-core-migration.md)。下文差异、路线比较与验收候选保留为研究依据，不覆盖后续范围收敛。
+> 状态:历史调研记录(2026-09-09)。operator 后续明确采用源码移植并允许接口调整；当前方向见 [ADR-015](../decisions/015-pi-core-source-migration.md)，接入设计见[迁移施工](../phases/pi-core-migration.md)。下文差异、路线比较与验收候选保留为研究依据，不覆盖后续范围收敛。
 
 ## 当前结论与设计入口
 
-本项目已经具有 Pi 风格的模型—工具循环、steering/follow-up、消息事件和上下文管理，但**尚不是 Pi 内核的高保真复现**。差距主要在工具准备/调度、可等待事件、通用扩展接口、普通任务重试、状态与继续执行接口，以及工具结果表示；不只是文件命名或类结构不同。
+在下述固定基线中，本项目已经具有 Pi 风格的模型—工具循环、steering/follow-up、消息事件和上下文管理，但**尚不是 Pi 内核的高保真复现**。差距主要在工具准备/调度、可等待事件、通用扩展接口、普通任务重试、状态与继续执行接口，以及工具结果表示；不只是文件命名或类结构不同。
 
 operator 已在调研后的对话中选择：先复制 Pi Agent Core 源码、建立本地拥有的复现基线，后续再定制；本项目 CLI/TUI 保留，SDK/协议等接口允许随迁移改变。详细原话及方向只维护在 [ADR-015](../decisions/015-pi-core-source-migration.md)，不再把“是否直接依赖 npm Agent”或“是否严格兼容旧 SDK”作为待重复询问的问题。
 
-当前建议基准仍为标准 Pi `Agent + agent-loop` 的 `9767ba2`，会话接合参考 AgentSession。当前接入范围与接口设计见[迁移施工草稿](../phases/pi-core-migration.md)。旧循环仅作为行为参考和回退依据；不是继续逐项改造的主体。工具接口迁移与完整工具功能复制分开，原研究中建议对齐的 edit/write/bash 功能不自动成为此次必做项。
+当前建议基准仍为标准 Pi `Agent + agent-loop` 的 `9767ba2`，会话接合参考 AgentSession。当前接入范围与接口设计见[迁移施工](../phases/pi-core-migration.md)。旧循环仅作为行为参考和回退依据；不是继续逐项改造的主体。工具接口迁移与完整工具功能复制分开，原研究中建议对齐的 edit/write/bash 功能不自动成为此次必做项。
 
 ## 原始需求与研究边界
 
@@ -41,7 +41,7 @@ operator 在 2026-09-08 对话要求：
 
 Pi 的 Agent 负责执行状态、循环和工具；AgentSession 负责完整会话执行，包括持久化、压缩、重试、扩展接入和空闲判定。`coding-agent/src/core/sdk.ts` 实际装配 `new Agent` 与 `new AgentSession`。同一快照新增的 `packages/agent/src/harness/` 不是这条入口，不能同时抽取两套默认行为后称为“Pi 的原样设计”。参见[上游研究](pi-core-upstream-semantics.md)。
 
-当前 Forge 的 `ExecutionCore` 同时包含循环、历史/存储、usage 与自动/手动压缩；`pi-port.ts` 同时包含模型转换、工具权限、工具调用和展示事件装饰；`HostedAgent/AgentRunner` 管理公开迭代器、输入身份与释放。现有接口能用，但职责与 Pi 有明显差异。[ExecutionCore](../../packages/core/src/execution-core.ts)、[pi-port](../../packages/core/src/pi-port.ts)、[SDK 装配](../../packages/core/src/agent.ts)。
+当前 Forge 的 `ExecutionCore` 同时包含循环、历史/存储、usage 与自动/手动压缩；`pi-port.ts` 同时包含模型转换、工具权限、工具调用和展示事件装饰；`HostedAgent/AgentRunner` 管理公开迭代器、输入身份与释放。现有接口能用，但职责与 Pi 有明显差异。[ExecutionCore](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/execution-core.ts)、[pi-port](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/pi-port.ts)、[SDK 装配](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/agent.ts)。
 
 建议最终结构如下，名称仅为职责说明，不要求新增同名公共类：
 
@@ -84,7 +84,7 @@ flowchart TD
 | 配置与上下文投影 | transformContext → convertToLlm；可调整 model/system/tools/thinking 等 | 固定模型/工具装配，项目自有 projectMessages 与 usage identity | 对齐运行接口时维持投影顺序；动态变更在受控边界生效并使 usage 失效 |
 | 持久化 | coding-agent handler 参与可等待事件；SessionManager 为应用实现 | Forge await SessionStorage.append，失败停用；v4 会话 | 保留存储合同，不改成旁路 fire-and-forget，不承诺 Pi JSONL 兼容 |
 
-本表事实的上游逐行证据见[基础循环研究](pi-core-upstream-semantics.md)和[接入研究](pi-core-integration-surface.md)。Forge 主要依据为 [execution-core.ts](../../packages/core/src/execution-core.ts)、[pi-port.ts](../../packages/core/src/pi-port.ts)、[agent.ts](../../packages/core/src/agent.ts)、[工具类型](../../packages/tools/src/types.ts)、[事件协议](../../packages/protocol/src/events.ts)。
+本表事实的上游逐行证据见[基础循环研究](pi-core-upstream-semantics.md)和[接入研究](pi-core-integration-surface.md)。Forge 主要依据为 [execution-core.ts](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/execution-core.ts)、[pi-port.ts](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/pi-port.ts)、[agent.ts](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/core/src/agent.ts)、[工具类型](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/tools/src/types.ts)、[事件协议](https://github.com/L-1ngg/forge-agent/blob/34a5ebff17bbc77606c31c728f98a079de140ea2/packages/protocol/src/events.ts)。
 
 ### 已有上下文工程的保护面
 

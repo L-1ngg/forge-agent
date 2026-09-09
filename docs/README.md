@@ -1,29 +1,53 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-07)。
+> 状态:生效(2026-09-09)。
 > 设计借自 [clowder-ai](https://github.com/zts212653/clowder-ai)(commit 7188f73),取舍记录见 [decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 原则:文档领路,代码跟随;证据说话,不是信心说话。
 
 ## 导航
 
+从用途选择入口；当前行动项统一见 [plan.md](plan.md)。目录按文档职责组织，任务状态看文档自身状态行与对应 GitHub Issue。
+
+### 使用与接入
+
 | 文档 | 职责 |
 |---|---|
-| [英文 README](../README.md)、[中文 README](../README.zh-CN.md) | 使用入口、当前能力与路线摘要;双语内容一起维护 |
-| [plan.md](plan.md) | 项目路线、优先级与当前阶段入口(**热层**);已建 issue 的任务使用链接 |
-| [Issue tracker](agents/issue-tracker.md) | GitHub Issues 操作与规格、任务进度、施工图的职责边界 |
-| [Domain docs](agents/domain.md) | single-context 领域文档的读取与写入约定;根目录 `CONTEXT.md` 按需创建 |
-| [Triage labels](agents/triage-labels.md) | triage 角色到 GitHub 标签的映射 |
-| [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、存储、输入归属与生命周期契约;接口变化时同步 |
-| [GitHub 交付](phases/github-delivery.md) | 命名、CI、草稿预发布施工与验证 |
+| [英文 README](../README.md)、[中文 README](../README.zh-CN.md) | 使用入口、当前能力与路线摘要；双语内容一起维护 |
+| [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、存储、输入归属与生命周期契约；接口变化时同步 |
 | [release.md](release.md) | 英文手动源码预发布操作与失败处理 |
-| [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与边界；旧批次保留在 owned-core/sdk 施工图 |
-| [phases/](phases/) | 各 Phase 施工图:路径 / tradeoff / 验收(**温层**) |
-| [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据(**冷层**) |
-| [research/](research/) | 固定源码快照的上游/专题深度调研(**冷层**,不是已批准 ADR) |
-| [cat-cafe.md](cat-cafe.md) | cat-cafe-tutorials 失效模式附录(带证据标签) |
-| [SOP.md](SOP.md) | 开发协作流程:工作规则、改动分级、流程骨架、裁剪原则、验证纪律、review 交接 |
-| [lessons.md](lessons.md) | 教训库(LL-XXX),入库有质量门禁 |
-| [decisions/](decisions/) | ADR:已定决策,防重新争论 |
+
+### 现行设计与验收入口
+
+| 文档 | 职责 |
+|---|---|
+| [plan.md](plan.md) | 项目路线、优先级与当前行动项（**热层**）；已建 issue 的任务使用链接 |
+| [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与未测边界 |
+| [上下文管理](phases/context-management.md)、[上下文验收](phases/context-management-acceptance.md) | 上下文策略与专项证据；迁移后的接合验证见迁移验收 |
+| [TUI 主界面工作流](phases/tui-main-workflow.md) | 主界面交互设计与跨流程验收 |
+| [会话管理](phases/session-management.md) | 新会话、清屏与项目内恢复的施工及验收 |
+| [Markdown 渲染](phases/markdown-rendering.md) | 正文与详情渲染、流式显示及源码复制的施工与验收 |
+| [decisions/](decisions/) | ADR：已定决策及其替代关系，防重新争论 |
+
+### 历史施工与研究依据
+
+| 文档 | 职责 |
+|---|---|
+| [phases/](phases/) | 施工图全量目录（**温层**）；历史阶段与主题施工记录均保留 |
+| [旧内核批次](phases/owned-core.md)、[旧 SDK 批次](phases/sdk.md) | 原批次设计与证据；当前接口从上方 SDK 指南与内核接入阅读 |
+| [GitHub 交付](phases/github-delivery.md) | 命名、CI、草稿预发布的施工与验证记录 |
+| [design-rationale.md](design-rationale.md) | 跨调研综合后的设计论证与探测证据（**冷层**） |
+| [research/](research/) | 固定源码快照的上游/专题深度调研（**冷层**）；候选建议的采用范围以 ADR 与施工图为准 |
+| [cat-cafe.md](cat-cafe.md) | cat-cafe-tutorials 失效模式附录（带证据标签） |
+| [lessons.md](lessons.md) | 教训库（LL-XXX），入库有质量门禁 |
+
+### 协作约定
+
+| 文档 | 职责 |
+|---|---|
+| [SOP.md](SOP.md) | 工作规则、改动分级、流程骨架、裁剪原则、验证纪律与 review 交接 |
+| [Issue tracker](agents/issue-tracker.md) | GitHub Issues 操作与规格、任务进度、施工图的职责边界 |
+| [Domain docs](agents/domain.md) | single-context 领域文档的读取与写入约定；根目录 `CONTEXT.md` 按需创建 |
+| [Triage labels](agents/triage-labels.md) | triage 角色到 GitHub 标签的映射 |
 | [templates/](templates/) | ADR / feature doc / review request 模板 |
 
 ## 位置与命名规范
@@ -31,7 +55,7 @@
 | 位置 | 内容 | 命名 |
 |---|---|---|
 | `docs/decisions/` | 架构决策记录(ADR) | `NNN-slug.md`,三位数字递增,不重排不复用 |
-| `docs/phases/` | 阶段或功能施工图 | 历史阶段用 `phase-{N}.md`;当前按主题命名(如 `owned-core.md`、`sdk.md`),不另建一套数字路线 |
+| `docs/phases/` | 阶段或功能施工图 | 历史阶段用 `phase-{N}.md`;当前按主题命名(如 `session-management.md`、`markdown-rendering.md`),不另建一套数字路线 |
 | `docs/research/` | 固定快照的源码调研、可迁移结论与未决问题 | `{topic}.md` |
 | `docs/templates/` | 文档模板 | `{type}.md` |
 | `docs/agents/` | Skills 的项目配置 | `issue-tracker.md`、`domain.md`、`triage-labels.md` |

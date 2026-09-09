@@ -12,7 +12,7 @@ created: 2026-09-07
 
 在上下文管理的 pi 逐项对比第 9 项中，operator 询问“如果我想要改为pi的方案呢？”，在了解取消保留历史、未完成工具配对及执行中存储失败的影响后确认改为逐步持久化。
 
-当前 [AgentRunner](../../packages/core/src/agent-runner.ts) 收集整次 invocation 的消息，仅在正常结束、未取消且工具配对完整时调用 appendTurn。长任务中途停止会放弃本次过程记录，但已经发生的工具副作用不会回滚。随着任务内自动压缩和长工具循环引入，这一差异会增大。
+决策提出时的 [AgentRunner](https://github.com/L-1ngg/forge-agent/blob/36107fbfffb5a1df5204a3799ed171e2448c6156/packages/core/src/agent-runner.ts) 收集整次 invocation 的消息，仅在正常结束、未取消且工具配对完整时调用 appendTurn。长任务中途停止会放弃本次过程记录，但已经发生的工具副作用不会回滚。随着任务内自动压缩和长工具循环引入，这一差异会增大。
 
 pi 的 coding-agent 在 message_end 追加消息、压缩成功后追加 compaction 记录；首个 assistant 前存在延迟 flush，不能泛化为每个 token 或每个事件立即刷盘。固定证据见 [pi 调研](../research/pi-context-management.md)。本决策采用逐步保存方向，不强制复制上游缓冲细节或整个 AgentSession。
 
