@@ -5,7 +5,7 @@ created: 2026-09-09
 
 # 会话新建、清屏与恢复
 
-> 状态:已完成(2026-09-09)。产品规格与验收标准已发布到 [GitHub #27](https://github.com/L-1ngg/forge-agent/issues/27)，本文件记录实现与验证；已按 operator 的 implement 授权完成本地实现、自动化与真实 PTY 验证，尚未推送或发布。规格与任务归属遵循 [Issue tracker](../agents/issue-tracker.md)。
+> 状态:已完成(2026-09-09)。产品规格与验收标准已发布到 [GitHub #27](https://github.com/L-1ngg/forge-agent/issues/27)，本文件记录实现与验证；已按 operator 的 implement 授权完成本地实现、自动化与真实 PTY 验证；operator 已确认 WSL 下验证通过，尚未推送或发布。规格与任务归属遵循 [Issue tracker](../agents/issue-tracker.md)。
 
 ## Why
 
@@ -52,10 +52,14 @@ created: 2026-09-09
 - 反向验证：临时使新实例错误复用旧会话存储，TUI 上下文隔离回归失败；恢复实现后通过。
 - Ran：`bun run check` 完整通过，485 pass / 0 fail，70 个测试文件；含依赖边界、workspace 与 automation 类型检查。`bun run test:headless` 和 `bun run typecheck:examples` 均通过。
 - Standards / Spec 两轴初审分别发现 1 / 2 项问题（共享一项压缩保存故障保护问题）。已修复压缩故障不阻止切换及原 cwd 删除后会话丢失的问题，新增两项先红后绿回归；最终两轴复审均无剩余可执行问题。
-- Not run / Why：没有调用外部真实 provider，状态与故障使用本地可控 HTTP 复现；未执行 macOS、断电或 operator 长期人工使用验收，本轮环境为 WSL/Linux。
+- Not run / Why：Agent 自动化与 PTY 验证没有调用外部真实 provider，状态与故障使用本地可控 HTTP 复现；未执行 macOS 或断电验证，也未记录长期使用验收，本轮环境为 WSL/Linux。operator 的模型/provider 与逐项测试场景未提供，不推定其覆盖范围。
 - Risk：JSONL 沿用非断电事务存储边界；不配合取消的工具可能延长切换等待。大型项目的旧文件发现仍使用目录扫描，尚无大规模性能基准。
 
 验证定位：`packages/cli/test/session-host.test.ts` 覆盖持久化、项目归属和上下文恢复；`packages/cli/test/session-ui.test.ts` 覆盖真实宿主与 App 输入/显示/故障切换；`tests/tui-integration/session-management.test.ts` 直接启动 CLI 并通过 Bun.Terminal 操作。既有 SDK runtime-session、session-conversion 与增量保存回归随完整套件运行。
+
+## Operator 人工验证
+
+2026-09-09，operator 针对实现提交 `4a7cd20` 反馈：“上述实现我以wsl下验证通过”。据此记录本次实现的 WSL 人工验证通过；未提供逐项测试清单、模型/provider 或长期使用时长，不将此反馈扩展为其他平台、外部 provider 矩阵或断电验证通过。
 
 ## 本轮施工选择
 
