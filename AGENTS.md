@@ -18,14 +18,14 @@
 | Issue 规格、任务验收与任务状态 | GitHub Issues;与施工图的分工见 [issue-tracker.md](docs/agents/issue-tracker.md) |
 | 当前内核与 SDK 怎么施工、如何验收 | [内核接入](docs/phases/pi-core-migration.md)、[验收证据](docs/phases/pi-core-migration-acceptance.md);历史阶段见 [docs/phases/](docs/phases/) |
 | 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
-| 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md)、[docs/cat-cafe.md](docs/cat-cafe.md) |
+| 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md) |
 | 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |
 | 踩过的坑 | [docs/lessons.md](docs/lessons.md) |
 | 怎么协作、怎么写文档 | [docs/SOP.md](docs/SOP.md)、[docs/README.md](docs/README.md) |
 
 ## 工作规则
 
-详见 [docs/SOP.md](docs/SOP.md)。摘要:方向 > 速度;最小改动;证据说话(报告 Ran / Not run / Why / Risk);中/大走流程骨架(Entry → Design → Batches → Verify → Release → Rollback → Learn);保留能说「不」的环节,裁掉仪式;引用 cat-cafe 结论连证据标签一起引;单一真相源,发现矛盾先指出;状态行同步。
+详见 [docs/SOP.md](docs/SOP.md)。摘要:方向 > 速度;最小改动;证据说话(报告 Ran / Not run / Why / Risk);中/大走流程骨架(Entry → Design → Batches → Verify → Release → Rollback → Learn);保留能说「不」的环节,裁掉仪式;单一真相源,发现矛盾先指出;状态行同步。
 
 ## 写文档时
 

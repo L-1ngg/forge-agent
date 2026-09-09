@@ -247,7 +247,7 @@ human text / structured tool / teammate output
        release exact run -> drain again
 ```
 
-所有路径都必须汇入 `persist TeamMessage + Delivery`;TUI 不直接调用某个 `Agent.prompt()`,mention parser 也不直接执行。这延续 [cat-cafe.md](../cat-cafe.md) 已审的「单一执行入口」结论。
+所有路径都必须汇入 `persist TeamMessage + Delivery`;TUI 不直接调用某个 `Agent.prompt()`,mention parser 也不直接执行。这延续 [cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md) 已审的「单一执行入口」结论。
 
 ### 5.2 建议 canonical events
 

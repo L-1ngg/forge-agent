@@ -28,7 +28,7 @@ DSL 已被 [design-rationale D 节「明确不做」](../design-rationale.md)收
 
 1. 决策链是纯函数,可表驱动测试、可解释给用户看、可属性测试 —— 与 Phase 1 把 abort 抽成纯函数状态机是同一手法。
 2. 危险清单(`rm` / `chmod` / `kill` / `git push`)**从不认记住的前缀**,即使存在匹配的 always-allow 规则仍然提示。
-3. 记住的授权键必须含被授权的**对象**(工具 + 具体参数模式),不能只记工具名。丢作用域正是 F24 事故的形状 —— 「可以合入」是真的,只是说的是另一个 PR([cat-cafe.md](../cat-cafe.md) F.1 ③)。
+3. 记住的授权键必须含被授权的**对象**(工具 + 具体参数模式),不能只记工具名。丢作用域正是 F24 事故的形状 —— 「可以合入」是真的,只是说的是另一个 PR([cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md) F.1 ③)。
 4. 当没有任何可记住的规则能阻止再次提示时,**不提供 Always allow 行**,而不是存一条不起作用的规则。
 5. mode 只有 `default` / `accept-edits` / `deny-all`;`plan` 不在枚举里预留。
 

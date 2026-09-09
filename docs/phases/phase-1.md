@@ -106,7 +106,7 @@ my-coding-harness/
 
 **路径**:`packages/tools/src/{read,write,edit,bash}.ts`、`errors.ts`、`index.ts`
 
-**内容**:4 个工具,纪律来自 cat-cafe F.5(已审,锚点 `res:knowledge-engineering-skills-mcp.md:300-321`):
+**内容**:4 个工具,纪律来自[历史研究 F.5](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md)(已审,锚点 `res:knowledge-engineering-skills-mcp.md:300-321`):
 - 入参 schema:能 `enum` 不用自由文本、`additionalProperties: false`、必填字段最小化但必填即无歧义。
 - 错误统一形状:`{ error_code(稳定枚举), message, field, expected, example, retryable }`。
 - 自测法:删掉 schema 字段描述只留类型,工具应变难用——变难用说明描述本来就不够结构化(留给模型自己判断的部分过多)。

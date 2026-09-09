@@ -6,7 +6,7 @@ created: 2026-09-01
 # Phase 2 施工图 — TUI 升到 grok 水准 + permission 流水线
 
 > 状态:M1-M6 代码与自动化验收已完成;后续 TUI 重写与阶段关闭见 [phase-2.2.md](./phase-2.2.md)。AC-14 仍未实测;operator 已确认 E1-E3 暂缓实测、按豁免处理。2026-09-06 核对。Owner:operator。
-> 历史设计论证见 [design-rationale.md](../design-rationale.md) A / C.4,TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md)。失效模式出处见 [cat-cafe.md](../cat-cafe.md)。
+> 历史设计论证见 [design-rationale.md](../design-rationale.md) A / C.4,TUI 底座见 [ADR-005](../decisions/005-tui-own-compositor.md)。失效模式出处见 [cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md)。
 > 本文档是 Phase 2 M1-M6 的历史施工图;当前 SDK 与输入契约见 [SDK 施工图](sdk.md)。工作项格式延续 [phase-1.md](./phase-1.md):**路径 / tradeoff / 验收**;流程骨架见 [SOP.md](../SOP.md),本 Phase 实例见 §5。
 
 ---
@@ -110,7 +110,7 @@ M2 × M3 汇合 ─→ blocking card(permission 卡片是第一张真卡)
   1. 确认前就显示**究竟会记住什么**(规则原文,不是「记住此选择」)。
   2. 危险清单(`rm` / `chmod` / `kill` / `git push`)**从不认记住的前缀**——即使存在匹配的 always-allow 规则,仍然提示。
   3. **当没有任何可记住的规则能阻止再次提示时,不提供 Always allow 行**,而不是存一条不起作用的规则。
-- **授权作用域随对象验证**([cat-cafe.md](../cat-cafe.md) F.1 ③ 教训):记住的授权键必须含被授权的**对象**(工具 + 具体参数模式),不能只记工具名。丢作用域正是 F24 事故的形状——「可以合入」是真的,只是说的是另一个 PR。
+- **授权作用域随对象验证**([cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md) F.1 ③ 教训):记住的授权键必须含被授权的**对象**(工具 + 具体参数模式),不能只记工具名。丢作用域正是 F24 事故的形状——「可以合入」是真的,只是说的是另一个 PR。
 - **mode 只做 Phase 2 需要的**:`default` / `accept-edits` / `deny-all`。`plan` mode 是 Phase 3,枚举里**不预留**——预留一个没有实现的模式值比以后加一个更贵。
 
 **Tradeoff**:规则匹配用**显式前缀 / glob 规则表**,**放弃**正则与自定义 DSL。理由:clowder 的 predicate DSL 是本项目 D 节明确不做的东西——「一条规则一个家,且选那个能说『不』的家」;可执行的家在 `decide()` 这个纯函数里,不在配置语言里。代价:表达力有上限,复杂策略要改代码。触发重估:出现第三个「规则表写不出来」的真实需求。
@@ -171,7 +171,7 @@ M2 × M3 汇合 ─→ blocking card(permission 卡片是第一张真卡)
 
 **内容**:
 
-- **context 用量在真相点计算**([cat-cafe.md](../cat-cafe.md) F.1 ②):展示的必须是当前 context 的实际装配结果,**不是上一次 API 调用返回的缓存快照**。这条不是打磨,它是 Phase 3 压缩阈值(0.80 / 0.88)能不能起作用的前提——用量算错,压缩机制一次也跑不起来。
+- **context 用量在真相点计算**([cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md) F.1 ②):展示的必须是当前 context 的实际装配结果,**不是上一次 API 调用返回的缓存快照**。这条不是打磨,它是 Phase 3 压缩阈值(0.80 / 0.88)能不能起作用的前提——用量算错,压缩机制一次也跑不起来。
 - **诚实性三条**(grok 第二优先):`cost` 低于 $0.005 直接隐藏(避免误导的 `$0.00`);算不出的字段**省略而非发占位符**;运行计数**只活在 status line**,transcript 永不重述。
 - 语义色槽表:Component 只查槽名(`accent_thinking` / `accent_plan`),不写颜色。
 

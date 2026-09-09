@@ -1,5 +1,6 @@
 # 设计论证 — 综合分析与探测证据
 
+> 状态:历史设计论证(2026-09-09)。文中 F 节编号及 cat-cafe 结论可查[原研究快照](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md)。当前内核方向见 [ADR-015](decisions/015-pi-core-source-migration.md)。
 > [plan.md](./plan.md) 的支撑材料。行动项不在这里。2026-09-05 起当前定位以 [ADR-008](decisions/008-general-agent-positioning.md) 为准:单 Agent 内核与 SDK、独立应用、派生定制并存;本文旧 Team 与阶段安排仅作历史论证。
 
 ---
@@ -278,7 +279,7 @@ grok 大部分设计天然行导向——block、card 都是流式往下堆,直�
 
 四个机制,全部来自 clowder:
 
-1. **`@mention` 行首路由** —— 打 `@reviewer 看下这个 diff`,消息投进那个 teammate 的 inbox;teammate 之间也走同一条路。**路由逻辑归 `core`**,不能在 TUI 里,否则以后 web UI 要重实现。源码事实修正:固定 commit 的 Clowder 还支持显式 `targetCats`,所以“唯一通信原语”的旧表述不成立;本项目是否采用 structured target first 仍待 Phase 2.5 ADR/operator 定案,见 [research/clowder-ai.md](./research/clowder-ai.md) §4。
+1. **`@mention` 行首路由** —— 打 `@reviewer 看下这个 diff`,消息投进那个 teammate 的 inbox;teammate 之间也走同一条路。**路由逻辑归 `core`**,不能在 TUI 里,否则以后 web UI 要重实现。源码事实修正:固定 commit 的 Clowder 还支持显式 `targetCats`,所以“唯一通信原语”的旧表述不成立;本项目是否采用 structured target first 仍待 Phase 2.5 ADR/operator 定案,见 [research/clowder-ai.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/research/clowder-ai.md) §4。
 2. **`rename()` 抢锁** —— 收件箱取信用原子 rename 拿租约。同文件系统下这是真原子操作,不需要 Redis 的 Lua CAS。clowder 自己的 file outbox 才是可保留的那部分。
 3. **task board 的 `TaskItem` 形状** —— `{ id, title, why, owner, status: todo|doing|blocked|done, subjectKey }`。`subjectKey` 是去重键(同一件事别开两张卡),`why` 强制写动机。类型定义直接搬,只是存 JSONL 而非 Redis。
 4. **`requireDifferentFamily`** —— 「评审者不能是作者」两行配置就成立,两个模型也能跑。(⚠️ 名字是本项目起的;概念证据在 cat-cafe 12 课「review 必须跨家族」+ F088 三个 P1,→ F.2、F.9)

@@ -1,8 +1,7 @@
 # Lessons Learned — 教训库
 
-> 状态:启用(2026-08-31),暂无条目。
+> 状态:启用(2026-09-09),暂无条目。
 > 目的:沉淀可复用、可验证、可追溯的教训,避免 AI 协作者重复踩坑。
-> 机制借自 clowder-ai `docs/public-lessons.md`(见 [decisions/001-doc-system.md](decisions/001-doc-system.md)),研究出处为 [cat-cafe.md 的 F.3](cat-cafe.md#f3-skill-与记忆三处净增量);本项目入库规则以本文为准。
 
 ## ID 规则
 

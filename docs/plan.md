@@ -1,7 +1,7 @@
 # 通用 Agent — 规划
 
 > 状态:待下一批设计(2026-09-09)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
-> 设计论证与历史研究见 [design-rationale.md](design-rationale.md)、[cat-cafe.md](cat-cafe.md) 和 [research/](research/)。
+> 设计论证与历史研究见 [design-rationale.md](design-rationale.md) 和 [research/](research/)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
 ## 1. 当前行动项

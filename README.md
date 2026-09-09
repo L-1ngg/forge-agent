@@ -144,7 +144,7 @@ bun run typecheck:examples
 
 Maintainers can create [source prerelease drafts](docs/release.md) after dual-platform verification. Publishing a draft is a separate manual step.
 
-Design references: [pi](https://github.com/earendil-works/pi), [grok-build](https://github.com/xai-org/grok-build), and [clowder-ai](https://github.com/zts212653/clowder-ai). Their licenses apply to their own code; the local pi-ai patch retains upstream attribution.
+Design references: [pi](https://github.com/earendil-works/pi) and [grok-build](https://github.com/xai-org/grok-build). Their licenses apply to their own code; the local pi-ai patch retains upstream attribution.
 
 ## License
 
