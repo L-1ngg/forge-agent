@@ -1,6 +1,6 @@
 # Markdown 渲染施工
 
-> 状态:待人工验收(2026-09-09)。任务规格及唯一 AC 定义见 [#28](https://github.com/L-1ngg/forge-agent/issues/28),架构见 [ADR-016](../decisions/016-markdown-rendering.md)。
+> 状态:已完成(2026-09-09,operator 确认 WSL 人工验收通过)。任务规格及唯一 AC 定义见 [#28](https://github.com/L-1ngg/forge-agent/issues/28),架构见 [ADR-016](../decisions/016-markdown-rendering.md)。
 
 ## Entry 与 Design
 
@@ -20,7 +20,7 @@
 
 按 #28 Testing Decisions 复用现有最高集成边界,不重复要求用户确认。分批跑相关测试与类型检查,最后执行 `bun run check`、`bun run test:headless`。功能断言必须经历旧实现失败的反向证据。
 
-代码提交不等于人工交付。AC-12 必须记录 Windows Terminal + WSL 实际视觉/交互操作;当前未验证,之前会话管理验收不继承。人工未验收时保留 issue 打开,报告风险。
+代码提交不等于人工交付。operator 已针对本实现确认 WSL 验收通过并授权关闭 Issue,本次确认独立于之前会话管理的验收;原话及证据边界见下文。
 
 ## Rollback 与 Learn
 
@@ -34,8 +34,9 @@
 - Ran:最初跨行加粗、表格、代码续行/高亮、LaTeX 原文与链接更新测试经历 red → green;审查新增的嵌套引用/列表代码与表格、键盘选区复制亦先复现失败再修复。键盘/鼠标流式快照与暂停阅读回归通过。
 - Ran:两轴 WIP review 已复核闭合。Spec 修复嵌套代码/表格源范围与键盘选区/快照,Standards 两项局部重复建议已消除。
 - Golden:仅 `assistant-md-80` 与 `transcript-stack-80x16` 各 6 个 cell 的前景色改变,来自 `const` 关键字及数字 `1` 的高亮;逐 cell 核对后更新,无布局偏移。
-- Not run / Why:AC-12 的 Windows Terminal 人工视觉、真实宿主点击链接与粘贴验收未执行;本轮只有 PTY 与假宿主剪贴板证据,不能代替 operator 桌面操作。其他平台亦未实测。
-- Risk:实际字体、宿主超链接手势和剪贴板交付仍需按下方入口确认。单列极窄内容区无法容纳双宽字素时显示占位符,复制仍保留原始字素。issue 保持打开,不宣称人工交付完成。
+- Operator:2026-09-09,operator 针对实现提交 `f361e54` 反馈“我都wsl验收通过了，你可以关闭这些issue了”。结合此前确认的 Windows Terminal + WSL 环境,记录本功能人工验收通过。用户未提供本次逐项操作记录或版本信息,不补写这些细节。
+- Not run / Why:Agent 自身只执行 PTY 与假宿主剪贴板验证;其他平台未实测。operator 的人工验收与 Agent 自动化证据分别记录。
+- Risk:单列极窄内容区无法容纳双宽字素时显示占位符,复制仍保留原始字素。不将本次 WSL 验收扩展为其他平台验证。
 
 ## Windows Terminal + WSL 手工入口
 
@@ -47,4 +48,4 @@
 4. 返回输入框,输入任意文本并回车重放流式样例;打开详情并上滚暂停,观察后续追加及 resize 是否保留阅读位置。
 5. 按终端的超链接打开手势检查目标地址;`Ctrl+C` 退出,检查正常终端输入恢复。
 
-验收记录须附 Windows Terminal 版本、上述步骤结果及失败样例。PTY 自动化不代表用户宿主已通过这组人工检查。
+上述步骤保留用于复测;本次以 operator 明确验收反馈记录通过,未要求其补交逐项记录。PTY 自动化本身不代表人工验收。
