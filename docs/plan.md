@@ -1,11 +1,12 @@
 # 通用 Agent — 规划
 
-> 状态:待下一批设计(2026-09-08)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
+> 状态:待下一批设计(2026-09-09)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
 > 设计论证与历史研究见 [design-rationale.md](design-rationale.md)、[cat-cafe.md](cat-cafe.md) 和 [research/](research/)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
 ## 1. 当前行动项
 
+- assistant 正文与详情的 Markdown 渲染规格见 [GitHub #28](https://github.com/L-1ngg/forge-agent/issues/28)，施工与验收入口见 [Markdown 渲染](phases/markdown-rendering.md)。
 - 会话新建、清屏与项目内恢复的规格见 [GitHub #27](https://github.com/L-1ngg/forge-agent/issues/27)，施工入口见 [会话管理](phases/session-management.md)。
 - TUI 主界面工作流的需求与任务进度见 [GitHub #1](https://github.com/L-1ngg/forge-agent/issues/1);施工设计与 WSL 跨流程验收见 [主界面工作流设计](phases/tui-main-workflow.md)。
 - [ ] 审核已提交的内核、SDK 与 ADR-010 修复;提交不等于人工交付验收,未测边界以对应施工图为准。
