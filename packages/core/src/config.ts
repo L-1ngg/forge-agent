@@ -23,7 +23,6 @@ export interface HarnessConfig {
 	thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	permissionMode: PermissionMode;
 	ui: HarnessUiConfig;
-	sessionPath?: string;
 }
 
 export interface LoadConfigOptions {
@@ -50,7 +49,7 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "sessionPath", "context", "retry", "maxTokens", "contextWindow"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);

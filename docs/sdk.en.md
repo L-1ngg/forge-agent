@@ -61,6 +61,8 @@ A successful append must be reloadable. A write failure stops new scheduling and
 
 The CLI uses v4 through `SessionStore.asStorage()`. Older formats require a separate converted copy. Neither `processed` nor `message_end` acknowledges durability; normal iterator completion awaits all necessary writes.
 
+`SessionStore.open` accepts `create: false` for discovery and resume validation without creating missing files. `store.appendable` indicates whether in-place appends are allowed; a false value requires a verified copy before continuing. CLI session selection does not change the SDK's custom `storage` or `sessionId` support; `--session` and `sessionPath` are no longer CLI entry points.
+
 ## Context Management
 
 The creation option `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }` defaults to `true`, `16384`, `20000`, and `"inherit"`. Update it while idle with `agent.configureContext(partial)`. Every task request checks whether estimated context strictly exceeds `contextWindow - reserveTokens`; recent tokens guide legal cut selection rather than imposing a final context cap.

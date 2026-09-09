@@ -47,6 +47,7 @@ import { DetailView } from "./detail-view.ts";
 import { entryDetail } from "./transcript/detail.ts";
 import { transcriptViews } from "./transcript/groups.ts";
 import { TextSelection } from "./text-selection.ts";
+import { SessionMenu, type AppSessionSummary } from "./session-menu.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -73,7 +74,22 @@ export interface AppCompletionSource {
 	applyCompletion(input: string, cursor: number, item: InputCompletionItem, prefix: string): { input: string; cursor: number };
 }
 
+export interface AppSession {
+	id: string;
+	port: AppPort;
+	requestBus: AppRequestBus;
+	history: readonly SessionMessage[];
+	hasHistory(): boolean;
+}
+export interface AppSessionHost {
+	readonly current: AppSession;
+	list(): Promise<{ sessions: AppSessionSummary[]; diagnostics: string[] }>;
+	switchTo(id?: string, beforeRelease?: () => Promise<void>): Promise<AppSession>;
+	dispose(): Promise<void>;
+}
+
 export interface AppOptions {
+	sessions?: AppSessionHost;
 	port: AppPort;
 	/** main is an alias for alt until an inline host is implemented. */
 	host: AppHostMode;
@@ -101,8 +117,18 @@ export class App {
 	private readonly draft: EditorState = createEditor();
 	private readonly projector = new TranscriptProjector();
 	private readonly scroll = new ScrollState();
-	private readonly focus = new FocusStack<RequestCardRecord>();
+	private focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
+	private session: AppSession | undefined;
+	private sessionMenu: SessionMenu | undefined;
+	private menuLoading = false;
+	private menuVersion = 0;
+	private pendingTarget: string | undefined;
+	private switchTask: Promise<void> | undefined;
+	private switching = false;
+	private readonly savedDrafts = new Map<string, string>();
+	private executionError: unknown;
+	private generation = 0;
 	private running = false;
 	private compactTask: Promise<void> | undefined;
 	private browsing = false;
@@ -129,7 +155,8 @@ export class App {
 	private resolveStopped: (() => void) | undefined;
 
 	constructor(private readonly options: AppOptions) {
-		for (const message of options.history ?? []) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
+		this.session = options.sessions?.current;
+		for (const message of this.session?.history ?? options.history ?? []) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
 		this.theme = createTheme({ ...(options.env ? { env: options.env } : {}) });
 		this.host = new Host({
 			...(options.stdin ? { stdin: options.stdin } : {}),
@@ -163,12 +190,15 @@ export class App {
 		clearTimeout(this.feedbackTimer);
 		this.pauseSending();
 		this.suggestionVersion++;
+		this.menuVersion++;
 		try {
-			if (this.running || this.compactTask) this.options.port.abort?.();
+			if (this.running || this.compactTask) this.port.abort?.();
 			this.requestBus.close();
 			this.host.stop();
 			await this.runTask;
 			await this.compactTask;
+			await this.options.sessions?.dispose();
+			await this.switchTask;
 		} finally {
 			this.resolveStopped?.();
 		}
@@ -202,14 +232,21 @@ export class App {
 
 	private handleKey(key: Key): void {
 		if (!this.started) return;
-		if (key.type === "mouse") {
-			this.handleMouse(key);
-			return;
-		}
 		if (isCtrlC(key)) {
 			void this.stop();
 			return;
 		}
+		if (this.menuLoading && key.type === "escape") { this.menuVersion++; this.menuLoading = false; this.repaint(); return; }
+		if (this.switching || this.menuLoading) return;
+		if (this.sessionMenu) {
+			const action = this.sessionMenu.handleKey(key);
+			if (action?.type === "cancel") { this.sessionMenu = undefined; this.pendingTarget = undefined; }
+			if (action?.type === "select") { this.sessionMenu = undefined; this.requestSwitch(action.id); }
+			if (action?.type === "discard") { this.sessionMenu = undefined; this.beginSwitch(this.pendingTarget); }
+			this.repaint();
+			return;
+		}
+		if (key.type === "mouse") { this.handleMouse(key); return; }
 		if (this.viewer) {
 			const action = this.viewer.handleKey(key);
 			if (action?.type === "close") this.viewer = undefined;
@@ -280,7 +317,7 @@ export class App {
 			return;
 		}
 		if (key.type === "escape") {
-			if (nextEscStep(this.routerState()) === "abort_turn") { this.pauseSending(); this.options.port.abort?.(); }
+			if (nextEscStep(this.routerState()) === "abort_turn") { this.pauseSending(); this.port.abort?.(); }
 			this.repaint();
 			return;
 		}
@@ -319,7 +356,7 @@ export class App {
 		if (key.type === "escape") {
 			if (nextEscStep(this.routerState()) === "abort_turn") {
 				this.pauseSending();
-				this.options.port.abort?.();
+				this.port.abort?.();
 			}
 			this.repaint();
 			return;
@@ -456,7 +493,13 @@ export class App {
 			this.repaint();
 			return;
 		}
-		const input = submitEditor(this.draft);
+		let input = submitEditor(this.draft);
+		const [firstLine, ...rest] = input.split("\n");
+		if (["/new", "/resume"].includes(firstLine!.trim()) && rest.length) {
+			input = firstLine!.trim();
+			const remaining = rest.join("\n");
+			replaceEditor(this.draft, remaining, remaining.length);
+		}
 		this.suggestionVersion++;
 		this.picker = undefined;
 		if (this.dispatchCommand(input)) {
@@ -477,11 +520,12 @@ export class App {
 		const input = isEditorEmpty(this.draft) ? undefined : submitEditor(this.draft);
 		this.suggestionVersion++;
 		this.picker = undefined;
+		if (input && this.dispatchCommand(input)) { this.repaint(); return; }
 		if (this.running) {
 			this.autoSendPaused = true;
 			if (this.replacement !== undefined) this.queued.push(this.replacement);
 			this.replacement = input;
-			this.options.port.abort?.();
+			this.port.abort?.();
 			this.repaint();
 			return;
 		}
@@ -509,13 +553,15 @@ export class App {
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
+		if (command === "/new") { this.requestSwitch(); return true; }
+		if (command === "/resume") { void this.openSessions(); return true; }
 		if (command === "/compact" || command.startsWith("/compact ")) {
 			if (this.compactTask) return true;
-			if (!this.options.port.compact) { this.projector.addNotice("Compaction unavailable"); return true; }
+			if (!this.port.compact) { this.projector.addNotice("Compaction unavailable"); return true; }
 			this.pauseSending();
-			this.options.port.abort?.();
-			this.compactTask = this.options.port.compact(command.slice(8).trim() || undefined, (event) => this.handleEvent(event))
-				.then(() => {}, (error: unknown) => { this.projector.addNotice(error instanceof Error ? error.message : String(error)); })
+			this.port.abort?.();
+			this.compactTask = this.port.compact(command.slice(8).trim() || undefined, (event) => this.handleEvent(event))
+				.then(() => {}, (error: unknown) => { this.executionError = error; this.projector.addNotice(error instanceof Error ? error.message : String(error)); })
 				.finally(() => { this.compactTask = undefined; this.pauseSending(); this.repaint(); });
 			return true;
 		}
@@ -529,16 +575,82 @@ export class App {
 			this.expandedGroups.clear();
 			this.scroll.jumpToEnd();
 			this.previousTranscript = undefined;
+			this.projector.addNotice("已清屏，上下文仍保留");
 			return true;
 		}
 		if (command === "/help") {
-			this.projector.addNotice("/help · /clear · /quit · @file to mention");
+			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /quit · @file to mention");
 			return true;
 		}
 		return false;
 	}
 
+	private async openSessions(): Promise<void> {
+		const sessions = this.options.sessions;
+		if (!sessions) { this.projector.addNotice("Session switching unavailable"); return; }
+		const version = ++this.menuVersion;
+		this.menuLoading = true;
+		try {
+			const result = await sessions.list();
+			if (this.started && version === this.menuVersion) this.sessionMenu = new SessionMenu("list", result.sessions, result.diagnostics, this.session?.id);
+		} catch (error) { if (this.started && version === this.menuVersion) this.projector.addNotice(String(error)); }
+		finally { if (version === this.menuVersion) this.menuLoading = false; this.repaint(); }
+	}
+
+	private requestSwitch(id?: string): void {
+		if (!this.options.sessions || !this.session) { this.projector.addNotice("Session switching unavailable"); return; }
+		if (id === this.session.id || this.switching) return;
+		if (!this.session.hasHistory() && (!isEditorEmpty(this.draft) || this.queued.length || this.replacement)) {
+			this.pendingTarget = id;
+			this.sessionMenu = new SessionMenu("discard");
+			return;
+		}
+		this.beginSwitch(id);
+	}
+
+	private beginSwitch(id?: string): void {
+		const sessions = this.options.sessions;
+		const old = this.session;
+		if (!sessions || !old || this.switching) return;
+		this.switching = true;
+		this.suggestionVersion++;
+		this.picker = undefined;
+		this.switchTask = (async () => {
+			try {
+				const next = await sessions.switchTo(id, async () => {
+					this.projector.addNotice("正在结束当前任务…");
+					this.pauseSending();
+					this.port.abort?.();
+					this.repaint();
+					await this.runTask;
+					await this.compactTask;
+					if (this.executionError !== undefined) throw this.executionError;
+				});
+				if (!this.started) return;
+				if (old.hasHistory()) this.savedDrafts.set(old.id, editorText(this.draft));
+				this.generation++;
+				this.session = next;
+				this.focus = new FocusStack<RequestCardRecord>();
+				this.cards.clear();
+				this.projector.clear();
+				for (const message of next.history) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
+				this.selectedId = undefined; this.viewer = undefined; this.browsing = false;
+				this.expandedGroups.clear(); this.scroll.jumpToEnd(); this.previousTranscript = undefined;
+				this.selection = undefined; this.selectionFlash = undefined; this.lastClick = undefined;
+				this.feedback = undefined; this.copyVersion++; clearTimeout(this.feedbackTimer);
+				this.queued.length = 0; this.replacement = undefined; this.autoSendPaused = true;
+				const draft = this.savedDrafts.get(next.id) ?? "";
+				this.savedDrafts.delete(next.id);
+				replaceEditor(this.draft, draft, draft.length);
+				this.submitted = next.hasHistory();
+				void this.consumeRequests(); void this.consumeTerminals();
+			} catch (error) { if (this.started) this.projector.addNotice(`会话切换失败：${error instanceof Error ? error.message : String(error)}`); }
+			finally { this.switching = false; this.switchTask = undefined; this.pendingTarget = undefined; this.repaint(); }
+		})();
+	}
+
 	private async runTurn(input: string): Promise<void> {
+		this.executionError = undefined;
 		this.submitted = true;
 		this.running = true;
 		this.autoSendPaused = false;
@@ -549,7 +661,7 @@ export class App {
 				let inputProcessed = false;
 				let finalReason: string | undefined;
 				try {
-					for await (const event of this.options.port.runTurn(current)) {
+					for await (const event of this.port.runTurn(current)) {
 						if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "user") inputProcessed = true;
 						const reason = event.type === "turn_end" ? event.stopReason : event.type === "message_end" ? event.message.stopReason : undefined;
 						if (reason) finalReason = reason;
@@ -558,9 +670,14 @@ export class App {
 					}
 					if (finalReason === "error" || (finalReason === "aborted" && !this.autoSendPaused)) this.pauseSending();
 				} catch (error) {
+					this.executionError = error;
 					this.projector.addNotice(error instanceof Error ? error.message : String(error));
-					if (!inputProcessed) this.queued.unshift(current);
+					if (!inputProcessed) { this.queued.unshift(current); inputProcessed = true; }
 					this.pauseSending();
+				}
+				if (this.switching) {
+					if (!inputProcessed) this.queued.unshift(current);
+					this.pauseSending(); break;
 				}
 				if (this.autoSendPaused) {
 					this.restoreInputs(this.queued.splice(0));
@@ -766,7 +883,7 @@ export class App {
 	}
 
 	private statusSegments(): string[] {
-		const usage = this.options.port.getUsage?.();
+		const usage = this.port.getUsage?.();
 		const cost = usage?.costUsd;
 		return buildStatusSegments({
 			...(cost !== undefined ? { cost } : {}),
@@ -819,7 +936,7 @@ export class App {
 		return pending.flatMap((input) => wrapText(input, Math.max(1, columns - 2)));
 	}
 	private activityLines(columns: number): string[] {
-		return [...this.queueLines(columns), ...(this.compactTask ? ["compacting"] : this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
+		return [...(this.switching ? ["正在切换会话…"] : this.menuLoading ? ["正在读取会话…"] : []), ...this.queueLines(columns), ...(this.compactTask ? ["compacting"] : this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
 	}
 
 	/** Compose the current frame. Pure w.r.t. the terminal; exposed for tests. */
@@ -830,6 +947,7 @@ export class App {
 	private composeFrame(): TerminalFrame {
 		const { columns, rows } = this.screen();
 		const frame = createFrame(columns, rows);
+		if (this.sessionMenu) { this.sessionMenu.paint(frame, this.theme); return this.surround(frame); }
 		if (this.viewer) {
 			const entry = this.projector.getEntry(this.viewer.entryId);
 			if (entry) this.viewer.update(entryDetail(entry));
@@ -842,7 +960,7 @@ export class App {
 		const offsets = layoutOffsets(plan);
 		const transcriptHeight = plan.transcript.height;
 		if (plan.header.height === 1) {
-			const contextLabel = this.contextLabel(this.options.port.getUsage?.());
+			const contextLabel = this.contextLabel(this.port.getUsage?.());
 			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(contextLabel ? { contextLabel } : {}) }, this.theme);
 		}
 		const entries = this.projector.getEntries();
@@ -967,11 +1085,13 @@ export class App {
 	}
 
 	private async consumeRequests(): Promise<void> {
+		const bus = this.requestBus;
+		const generation = this.generation;
 		try {
-			for await (const envelope of this.requestBus.requests()) {
-				if (!this.started) return;
+			for await (const envelope of bus.requests()) {
+				if (!this.started || generation !== this.generation) return;
 				const card = new RequestCard(envelope);
-				const terminal = this.requestBus.getTerminal?.(envelope.id);
+				const terminal = bus.getTerminal?.(envelope.id);
 				if (terminal) {
 					card.terminal(terminal);
 					this.projector.addNotice(archivedCardLine(card.record));
@@ -983,14 +1103,16 @@ export class App {
 				this.repaint();
 			}
 		} catch {
-			await this.stop();
+			if (generation === this.generation && !this.switching) await this.stop();
 		}
 	}
 
 	private async consumeTerminals(): Promise<void> {
+		const bus = this.requestBus;
+		const generation = this.generation;
 		try {
-			for await (const outcome of this.requestBus.terminals()) {
-				if (!this.started) return;
+			for await (const outcome of bus.terminals()) {
+				if (!this.started || generation !== this.generation) return;
 				const card = this.cards.get(outcome.requestId);
 				if (!card) continue;
 				if (card.record.state === "resolved") continue;
@@ -1001,12 +1123,13 @@ export class App {
 				this.repaint();
 			}
 		} catch {
-			await this.stop();
+			if (generation === this.generation && !this.switching) await this.stop();
 		}
 	}
 
+	private get port(): AppPort { return this.session?.port ?? this.options.port; }
 	private get requestBus(): AppRequestBus {
-		return this.options.requestBus;
+		return this.session?.requestBus ?? this.options.requestBus;
 	}
 }
 

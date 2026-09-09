@@ -184,4 +184,4 @@ bun test tests/loop-contract/owned-core.test.ts \
 
 ## 恢复工作
 
-跨 session 的最短入口见[迁移交接](../../review-notes/2026-09-08-pi-core-alignment-review-request.md)。方向已进一步收敛，按 ADR-015 和迁移施工草稿继续对齐接入设计，不重新询问旧 D1–D4。研究 Goal 完成不代表施工 Goal 已开始，远端操作仍需对应授权。
+2026-09-08 更新：本阶段临时交接稿在实现与验收完成后按 operator 要求清理。后续维护入口见[迁移验收记录](../phases/pi-core-migration-acceptance.md)及 [ADR-015](../decisions/015-pi-core-source-migration.md)。

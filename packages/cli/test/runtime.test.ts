@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { modelResponse } from "../../core/test/helpers/model-response.ts";
 
-test("real CLI retries after a read effect and reopens the saved session", async () => {
+test("real CLI retries after a read effect and starts an independent session on restart", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "forge-cli-runtime-"));
 	const requests: string[] = [];
 	const server = Bun.serve({
@@ -28,6 +28,6 @@ test("real CLI retries after a read effect and reopens the saved session", async
 		expect(first.events.filter(event => event.type === "tool_execution_start")).toHaveLength(1);
 		expect(first.events.filter(event => event.type === "retry" && event.phase === "scheduled")).toHaveLength(1);
 		expect(first.events.at(-1)).toMatchObject({ type: "agent_end", outcome: "success" });
-		const second = await run(); expect(second.code).toBe(0); expect(requests).toHaveLength(4); expect(requests[3]).toContain("READ_EFFECT");
+		const second = await run(); expect(second.code).toBe(0); expect(requests).toHaveLength(4); expect(requests[3]).not.toContain("READ_EFFECT");
 	} finally { server.stop(true); await rm(directory, { recursive: true, force: true }); }
 });

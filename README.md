@@ -52,7 +52,15 @@ Configuration loads from `~/.config/forge-agent/config.json` (or `$XDG_CONFIG_HO
 }
 ```
 
-Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive and unknown top-level fields are rejected. Sessions default to `.forge-agent/session.jsonl`; use `--session PATH` to select another file.
+Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive and unknown top-level fields are rejected. Each launch starts a new conversation. Nothing is saved until the first message is consumed; conversation files then live under `.forge-agent/sessions/` at the Git worktree root (or the launch directory outside Git). `--session` and the `sessionPath` config key have been removed; use `/resume` to reopen history.
+
+- `/clear` clears the visible transcript and keeps the current model context, with an explicit notice.
+- `/new` starts an independent conversation with the current model, tools and configuration. During a task it cancels and waits for tool/persistence cleanup before switching; a save failure stops the switch.
+- `/resume` lists this project's conversations, newest activity first, with the first question and time. Use Up/Down and Enter to select, Esc to return. Browsing does not interrupt a running task; selecting another conversation does.
+- A Git worktree and its subdirectories share history; separate worktrees are isolated. Existing default `.forge-agent/session.jsonl` files in the project remain discoverable and are never overwritten or automatically converted.
+- Unsent text and queued input from saved conversations are kept in memory for this process. Returning to the conversation restores them as an editable draft, without sending. They are not saved on exit. To switch while retaining editor text, put `/new` or `/resume` on a separate first line; an empty conversation with a draft asks before discarding it (`y` confirms, `n` or Esc cancels).
+
+Restoring a conversation rebuilds its history and model context; it does not replay interrupted tools. Tools must cooperate with cancellation; switching can wait for their cleanup. A damaged conversation is reported and requires a verified copy using the SDK conversion workflow before it can be resumed.
 
 ## Embed an Agent
 

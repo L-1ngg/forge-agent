@@ -6,6 +6,7 @@
 
 ## 1. 当前行动项
 
+- 会话新建、清屏与项目内恢复的规格见 [GitHub #27](https://github.com/L-1ngg/forge-agent/issues/27)，施工入口见 [会话管理](phases/session-management.md)。
 - TUI 主界面工作流的需求与任务进度见 [GitHub #1](https://github.com/L-1ngg/forge-agent/issues/1);施工设计与 WSL 跨流程验收见 [主界面工作流设计](phases/tui-main-workflow.md)。
 - [ ] 审核已提交的内核、SDK 与 ADR-010 修复;提交不等于人工交付验收,未测边界以对应施工图为准。
 - [ ] 对照内核施工图核定剩余真实任务验收,明确已记录的最小 SDK 烟测与完整多轮工具/session/取消验证的差别。

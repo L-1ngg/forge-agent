@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,7 +16,8 @@ async function runCli(config: Record<string, unknown>, env: Record<string, strin
 		const timer = setTimeout(() => child.kill(), 5000);
 		try {
 			const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-			const session = Bun.file(join(directory, ".forge-agent", "session.jsonl"));
+			const names = await readdir(join(directory, ".forge-agent", "sessions")).catch(() => []);
+			const session = Bun.file(join(directory, ".forge-agent", "sessions", names[0] ?? "absent"));
 			return { stdout, stderr, exitCode, events: stdout.trim().split("\n").map((line) => JSON.parse(line)), session: await session.exists() ? await session.text() : undefined };
 		} finally {
 			clearTimeout(timer);
@@ -79,3 +80,10 @@ for (const credentialSource of ["apiKey", "XAI_API_KEY"] as const) {
 		}
 	});
 }
+
+test("CLI rejects legacy sessionPath instead of silently restoring a fixed conversation", async () => {
+	const result = await runCli({ provider: "xai", model: "grok-4.6", sessionPath: "old.jsonl" });
+	expect(result.exitCode).toBe(1);
+	expect(result.stdout).toContain("sessionPath");
+	expect(result.session).toBeUndefined();
+});

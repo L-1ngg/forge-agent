@@ -18,7 +18,7 @@ export interface SessionTreeNode {
 }
 
 export interface SessionDiagnostic { line: number; message: string; }
-export interface SessionOpenOptions { leafId?: string | null; onDiagnostic?: (diagnostic: SessionDiagnostic) => void; }
+export interface SessionOpenOptions { create?: boolean; leafId?: string | null; onDiagnostic?: (diagnostic: SessionDiagnostic) => void; }
 
 function parseSession(text: string, allowOld = false): { header: SessionHeader; entries: SessionEntry[]; diagnostics: SessionDiagnostic[]; appendable: boolean } {
 	const records: unknown[] = [];
@@ -46,7 +46,7 @@ export class SessionStore implements SessionStorage {
 	private state: SessionState;
 	private writing: Promise<void> = Promise.resolve();
 	private faulted = false;
-	private constructor(readonly path: string, readonly header: SessionHeader, entries: SessionEntry[], readonly diagnostics: readonly SessionDiagnostic[] = [], private readonly appendable = true) {
+	private constructor(readonly path: string, readonly header: SessionHeader, entries: SessionEntry[], readonly diagnostics: readonly SessionDiagnostic[] = [], readonly appendable = true) {
 		this.state = { entries, leafId: entries.at(-1)?.id ?? null };
 	}
 	static async open(path: string, cwd: string, options: SessionOpenOptions = {}): Promise<SessionStore> {
@@ -58,6 +58,7 @@ export class SessionStore implements SessionStorage {
 			store.validateBranch();
 			return store;
 		} catch (error) {
+			if (options.create === false) throw error;
 			if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) throw error;
 			await mkdir(dirname(path), { recursive: true });
 			const header: SessionHeader = { type: "session", version: 4, id: randomUUID(), timestamp: new Date().toISOString(), cwd };

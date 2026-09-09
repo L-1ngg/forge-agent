@@ -37,7 +37,7 @@ FORGE_AGENT_PROVIDER=xai FORGE_AGENT_MODEL=grok-4.6 FORGE_AGENT_API_KEY=secret b
 
 ## 存储
 
-默认每实例使用独立内存。宿主可传入 `storage`，记录类型由 `@forge-agent/core/sdk` 导出：
+默认每实例使用独立内存。CLI 的新建/恢复由 CLI 宿主管理，不改变 SDK 的 `storage` 和 `sessionId` 接入能力；CLI 不再提供 `--session` 或 `sessionPath`。宿主可传入 `storage`，记录类型由 `@forge-agent/core/sdk` 导出：
 
 ```ts
 interface SessionStorage {
@@ -76,7 +76,7 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 临时日志没有配额、TTL、退出删除或自动扫描，生命周期由系统或用户管理；文件消失不妨碍会话加载。自定义工具负责自己的截断与续读，内核不重新分配整批结果额度。正文限额不包含额外状态和路径说明。
 
-旧 v3 数据通过 `SessionStore.convertCopy(source, target, cwd, options?)` 显式转成 v4 副本，目标存在即失败；损坏或无换行文件要继续追加也使用此入口。open 的 onDiagnostic 回调报告坏 JSON 行，leafId 可选择分支；不可解释的选中父链或摘要边界拒绝加载。回退使用保留的旧文件及匹配旧二进制，关闭自动压缩不会使 v4 变回旧格式。
+旧 v3 数据通过 `SessionStore.convertCopy(source, target, cwd, options?)` 显式转成 v4 副本，目标存在即失败；损坏或无换行文件要继续追加也使用此入口。open 的 onDiagnostic 回调报告坏 JSON 行，leafId 可选择分支；`create: false` 禁止在文件缺失时创建，适合只读发现和恢复验证；`store.appendable` 表示文件是否允许原地追加，false 时必须使用已验证副本；不可解释的选中父链或摘要边界拒绝加载。回退使用保留的旧文件及匹配旧二进制，关闭自动压缩不会使 v4 变回旧格式。
 
 受控真实 provider 验收示例：`bun examples/context-acceptance.ts`，显式读取宿主配置、限制实验请求和时间，并清理本次临时会话。
 
