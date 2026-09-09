@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionHost } from "../src/session-host.ts";
@@ -50,7 +50,10 @@ test("resume discovery shares a worktree, isolates projects, and never overwrite
 		await git("init", root);
 		await git("-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial");
 		await git("-C", root, "worktree", "add", "--detach", other);
-		const legacyPath = join(sub, ".forge-agent", "session.jsonl");
+		// Exercise path aliases on Linux too (macOS tmpdir commonly aliases /private/var).
+		const alias = join(base, "repo-alias");
+		await symlink(root, alias, "dir");
+		const legacyPath = join(alias, "src", ".forge-agent", "session.jsonl");
 		const legacy = await SessionStore.open(legacyPath, sub);
 		await legacy.append(messageEntry({ role: "user", content: [{ type: "text", text: "legacy question" }], timestamp: 100 }, null));
 		const before = await readFile(legacyPath, "utf8");
@@ -60,13 +63,17 @@ test("resume discovery shares a worktree, isolates projects, and never overwrite
 		expect((await hosts[1]!.list()).sessions.map(item => item.title)).toEqual(["legacy question"]);
 		expect((await hosts[2]!.list()).sessions).toEqual([]);
 		expect((await hosts[3]!.list()).sessions).toEqual([]);
-		await hosts[0]!.switchTo(legacyPath);
+		const discovered = await hosts[0]!.list();
+		expect(discovered.diagnostics).toEqual([]);
+		const legacyId = discovered.sessions[0]!.id;
+		expect(legacyId).toBe(await realpath(legacyPath));
+		await hosts[0]!.switchTo(legacyId);
 		expect(await readFile(legacyPath, "utf8")).toBe(before);
 		// A damaged, non-appendable target must not replace the active instance.
 		await hosts[0]!.switchTo();
 		const active = hosts[0]!.current.id;
 		await writeFile(legacyPath, before.trimEnd());
-		await expect(hosts[0]!.switchTo(legacyPath)).rejects.toThrow();
+		await expect(hosts[0]!.switchTo(legacyId)).rejects.toThrow("Session contains damaged records");
 		expect(hosts[0]!.current.id).toBe(active);
 	} finally { for (const host of hosts) await host.dispose(); await rm(base, { recursive: true, force: true }); }
 });
@@ -85,7 +92,11 @@ test("resuming a compacted session rebuilds summary context and keeps the full v
 		await store.append(old); await store.append(recent);
 		await store.append({ type: "compaction", id: "summary", parentId: recent.id, timestamp: new Date(3).toISOString(), summary: "SAVED_SUMMARY", firstKeptEntryId: recent.id, tokensBefore: 100 });
 		host = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local", baseUrl: server.url.toString(), systemPrompt: "test" });
-		await host.switchTo(store.path);
+		const discovered = await host.list();
+		expect(discovered.diagnostics).toEqual([]);
+		expect(discovered.sessions).toHaveLength(1);
+		expect(discovered.sessions[0]!.id).toBe(await realpath(store.path));
+		await host.switchTo(discovered.sessions[0]!.id);
 		expect(JSON.stringify(host.current.history)).toContain("ORIGINAL_OLD");
 		for await (const _ of host.current.port.runTurn("continue")) { }
 		expect(bodies[0]).toContain("SAVED_SUMMARY"); expect(bodies[0]).toContain("RECENT_TEXT"); expect(bodies[0]).not.toContain("ORIGINAL_OLD");
