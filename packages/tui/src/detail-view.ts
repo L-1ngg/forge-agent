@@ -1,3 +1,5 @@
+import { renderMarkdown } from "./markdown.ts";
+import type { EntryRow } from "./transcript/types.ts";
 import { backspace, createEditor, editorText, insertText, replaceEditor } from "./editor.ts";
 import { defaultStyle, setCursor, writeText, type TerminalFrame } from "./frame.ts";
 import type { Key } from "./keys.ts";
@@ -6,7 +8,7 @@ import { truncateToWidth, wrapText, visibleWidth } from "./width.ts";
 import type { EntryDetail } from "./transcript/detail.ts";
 
 type ViewerAction = { type: "close" } | { type: "copy"; text: string } | undefined;
-interface VisualRow { source: number; text: string; continuation: boolean; offset: number }
+interface VisualRow { source: number; text: string; continuation: boolean; offset: number; rendered?: EntryRow }
 
 /** Owns only the independent reader; the main view retains its own draft and anchor. */
 export class DetailView {
@@ -16,6 +18,7 @@ export class DetailView {
 	private wrap = true;
 	private follow: boolean;
 	private selection: number | undefined;
+	private selectionSnapshot: { rows: VisualRow[]; lines: string[] } | undefined;
 	private query = "";
 	private filter = "";
 	private input: "search" | "filter" | undefined;
@@ -63,7 +66,7 @@ export class DetailView {
 				case "q": if (this.selection === undefined) return { type: "close" }; break;
 				case "j": this.move(1); break;
 				case "k": this.move(-1); break;
-				case "w": this.wrap = !this.wrap; this.top = 0; break;
+				case "w": if (this.detail.kind !== "assistant") { this.wrap = !this.wrap; this.top = 0; } break;
 				case "F": if (this.detail.live) this.follow = !this.follow; break;
 				case "/": case "f":
 					this.input = key.text === "/" ? "search" : "filter";
@@ -71,10 +74,24 @@ export class DetailView {
 					break;
 				case "n": this.find(1); break;
 				case "N": this.find(-1); break;
-				case "v": case "V": this.selection = this.selection === undefined ? this.line : undefined; this.follow = false; break;
+				case "v": case "V":
+					this.selection = this.selection === undefined ? this.line : undefined;
+					this.selectionSnapshot = this.selection === undefined ? undefined : { rows: this.visual, lines: [...this.detail.lines] };
+					this.follow = false;
+					break;
 				case "y": {
+					if (this.detail.kind === "assistant" && this.selection === undefined) return { type: "copy", text: this.detail.lines.join("\n") };
 					const start = Math.min(this.line, this.selection ?? this.line);
 					const end = Math.max(this.line, this.selection ?? this.line);
+					if (this.detail.kind === "assistant" && this.selectionSnapshot) {
+						const ranges = this.selectionSnapshot.rows.filter(row => row.source >= start && row.source <= end).flatMap(row => row.rendered?.spans.flatMap(span => span.style.source ? [span.style.source] : []) ?? []);
+						if (ranges.length) {
+							const from = Math.min(...ranges.map(range => range.copyStart ?? range.start));
+							const to = Math.max(...ranges.map(range => range.copyEnd ?? range.end));
+							return { type: "copy", text: ranges[0]!.document.text.slice(from, to) };
+						}
+						return { type: "copy", text: this.selectionSnapshot.lines.slice(start, end + 1).join("\n") };
+					}
 					return { type: "copy", text: this.detail.lines.slice(start, end + 1).filter((line) => !this.filter || line.toLowerCase().includes(this.filter.toLowerCase())).join("\n") };
 				}
 				case "Y": return { type: "copy", text: this.detail.metadata };
@@ -127,7 +144,9 @@ export class DetailView {
 		const numbered = this.detail.firstLine !== undefined;
 		const gutter = numbered ? String(this.detail.firstLine! + this.detail.lines.length - 1).length + 2 : 0;
 		const width = Math.max(1, frame.columns - 2 - gutter);
-		this.visual = this.detail.lines.flatMap((text, source) => {
+		this.visual = this.detail.kind === "assistant" ? renderMarkdown(this.detail.lines.join("\n"), width, theme).map(rendered => ({
+			source: rendered.source?.line ?? 0, offset: rendered.source?.column ?? 0, text: rendered.spans.map(span => span.text).join(""), continuation: false, rendered,
+		})).filter(row => !this.filter || row.text.toLowerCase().includes(this.filter.toLowerCase())) : this.detail.lines.flatMap((text, source) => {
 			if (this.filter && !text.toLowerCase().includes(this.filter.toLowerCase())) return [];
 			let consumed = 0;
 			return (this.wrap ? wrapText(text, width) : [truncateToWidth(text.slice(this.column), width)]).map((part, index) => {
@@ -151,13 +170,16 @@ export class DetailView {
 			const background = selected ? theme.color("surface") : defaultStyle().background;
 			if (numbered) writeText(frame, 1, row + 1, value.continuation ? " ".repeat(gutter) : `${String(this.detail.firstLine! + value.source).padStart(gutter - 2)}  `, muted);
 			const foreground = this.detail.kind === "edit" ? theme.color(value.text.startsWith("+") ? "success" : value.text.startsWith("-") ? "error" : "status") : style.foreground;
-			writeText(frame, 1 + gutter, row + 1, value.text, { ...style, foreground, background, attributes: { ...style.attributes, inverse: selected, underline: match || value.source === this.line } });
+			if (value.rendered) {
+				let x = 1 + gutter;
+				for (const span of value.rendered.spans) x = writeText(frame, x, row + 1, span.text, { ...span.style, attributes: { ...span.style.attributes, inverse: selected, underline: span.style.attributes.underline || match } });
+			} else writeText(frame, 1 + gutter, row + 1, value.text, { ...style, foreground, background, attributes: { ...style.attributes, inverse: selected, underline: match || value.source === this.line } });
 		}
 		if (!this.visual.length) writeText(frame, 1, 1, this.filter ? "No matches" : "No output", muted);
 		const matches = this.query ? this.matches().length : undefined;
 		const status = feedback ?? `${this.line + (this.detail.firstLine ?? 1)}/${this.detail.lines.length}  ${this.wrap ? "wrap" : "nowrap"}${this.detail.live ? this.follow ? "  following" : "  paused" : ""}${this.filter ? `  filter: ${this.filter}` : ""}${matches !== undefined ? `  ${matches} matches` : ""}`;
 		writeText(frame, 1, Math.max(0, frame.rows - 2), truncateToWidth(status, Math.max(1, frame.columns - 2)), muted);
-		const footer = this.input ? `${this.input === "search" ? "/" : "filter: "}${editorText(this.queryDraft)}` : "esc:back  ctrl+c:quit  /:search  f:filter  y:copy  w:wrap";
+		const footer = this.input ? `${this.input === "search" ? "/" : "filter: "}${editorText(this.queryDraft)}` : `esc:back  ctrl+c:quit  /:search  f:filter  y:copy${this.detail.kind === "assistant" ? "" : "  w:wrap"}`;
 		writeText(frame, 1, Math.max(0, frame.rows - 1), truncateToWidth(footer, Math.max(1, frame.columns - 2)), muted);
 		if (this.input) setCursor(frame, Math.min(frame.columns - 1, 1 + visibleWidth(footer)), frame.rows - 1, "bar");
 	}

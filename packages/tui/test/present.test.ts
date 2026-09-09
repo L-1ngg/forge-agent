@@ -144,6 +144,6 @@ test("long code, thinking and execute output wrap without losing content", () =>
 	for (const entry of entries) {
 		const rows = rowTexts(presentEntry(entry, 20, theme));
 		expect(rows.every((row) => visibleWidth(row) <= 20)).toBe(true);
-		expect(rows.join("")).toContain(text);
+		expect(rows.map(row => entry.kind === "assistant" ? row.replace(/^↪ /, "") : row).join("")).toContain(text);
 	}
 });

@@ -95,6 +95,8 @@ bun examples/embedded-agent.ts
 
 示例宿主读取 `FORGE_AGENT_PROVIDER`、`FORGE_AGENT_MODEL` 及可选的 `FORGE_AGENT_API_KEY` / `FORGE_AGENT_BASE_URL`。长期宿主接入前先读 [存储、权限与生命周期](docs/sdk.md)。
 
+assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮。窄表格回退为带列名的记录,长代码行折行并显示续行标记。Forge 的复制操作保留 Markdown 原文,LaTeX 保持原文。可运行 `bun scripts/markdown-preview.ts` 查看固定样例,不调用模型或保存会话。
+
 ## 架构
 
 | 包 | 职责 |
@@ -102,7 +104,7 @@ bun examples/embedded-agent.ts
 | `@forge-agent/protocol` | 事件、请求、响应与展示数据 |
 | `@forge-agent/core` | 本地 Agent runtime、模型适配、权限、会话与 SDK |
 | `@forge-agent/tools` | 工具契约与内置 coding 工具 |
-| `@forge-agent/tui` | cell compositor 与终端交互,只依赖 protocol 和 Node 内置模块 |
+| `@forge-agent/tui` | cell compositor 与终端交互;依赖 protocol、Node 内置模块及纯 Markdown/高亮库 |
 | `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
 
 依赖门禁禁止 core 引入 UI,pi-ai 仅允许从模型适配器、事件投影和本地 runtime 导入。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。

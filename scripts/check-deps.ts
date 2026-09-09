@@ -58,7 +58,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			violations.push("packages/tools/package.json must not depend on @forge-agent/core");
 		}
 		if (packageName === "tui") {
-			const allowed = new Set(["@forge-agent/protocol"]);
+			const allowed = new Set(["@forge-agent/protocol", "marked", "lowlight"]);
 			for (const dependency of dependencies) {
 				if (!allowed.has(dependency)) violations.push(`packages/tui/package.json has forbidden dependency ${dependency}`);
 			}
@@ -85,7 +85,7 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (packageName === "tools" && specifier === "@forge-agent/core") {
 					violations.push(`${displayPath} must not import @forge-agent/core`);
 				}
-				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol") {
+				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol" && specifier !== "marked" && specifier !== "lowlight") {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (

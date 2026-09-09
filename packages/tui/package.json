@@ -8,7 +8,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@forge-agent/protocol": "workspace:*"
+    "@forge-agent/protocol": "workspace:*",
+    "lowlight": "3.3.0",
+    "marked": "18.0.11"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",

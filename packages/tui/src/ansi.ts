@@ -65,8 +65,14 @@ export function paintDiff(previous: TerminalFrame | null, next: TerminalFrame, o
 		if (run.length === 0) return;
 		out.push(cursorPosition(x, y));
 		let current: CellStyle | null = null;
+		let hyperlink: string | undefined;
 		for (const cell of run) {
 			if (cell.width === 0) continue;
+			const target = cell.hyperlink?.replace(/[\x00-\x20\x7f-\x9f]/g, "");
+			if (target !== hyperlink) {
+				out.push(`\x1b]8;;${target ?? ""}\x1b\\`);
+				hyperlink = target;
+			}
 			if (current === null || !styleEquals(current, cell)) {
 				out.push(styleToSgr(cell));
 				current = cell;
@@ -74,6 +80,7 @@ export function paintDiff(previous: TerminalFrame | null, next: TerminalFrame, o
 			}
 			out.push(cell.attributes.hidden ? " " : cell.grapheme);
 		}
+		if (hyperlink) out.push("\x1b]8;;\x1b\\");
 	};
 
 	if (previous === null || previous.columns !== next.columns || previous.rows !== next.rows) {

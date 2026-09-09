@@ -65,7 +65,7 @@ export function entryDetail(entry: TranscriptEntry): EntryDetail {
 					...hunk.lines.map((line) => `${line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}${line.content}`)])] };
 		}
 		case "thinking": return { ...base, title: "Thought", metadata: "", lines: (entry.block.data as ThinkingBlockData).markdown.split("\n") };
-		case "assistant": return { ...base, title: "Assistant", metadata: "", lines: entry.markdown.split("\n") };
+		case "assistant": return { ...base, title: "Assistant", metadata: "", lines: entry.markdown.split("\n"), live: entry.lifecycle === "streaming" };
 		case "user": return { ...base, title: "User", metadata: "", lines: entry.text.split("\n") };
 		case "notice": return { ...base, title: "Notice", metadata: "", lines: entry.text.split("\n") };
 	}

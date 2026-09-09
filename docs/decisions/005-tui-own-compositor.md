@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # ADR-005: TUI 自有 TerminalFrame compositor,移除 pi-tui
 
-> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](./006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](./007-no-compile-grok-reference.md) 修订;自有 compositor 与依赖边界仍有效。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
+> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](./006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](./007-no-compile-grok-reference.md) 修订;自有 compositor 仍有效;Markdown 自写及依赖边界由 [ADR-016](016-markdown-rendering.md) 定向修订。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
 > 参与者:operator(发起,选择 1A/2A/3A)、Grok(起草)
 
 ## 背景

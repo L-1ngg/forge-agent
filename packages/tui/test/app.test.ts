@@ -1192,3 +1192,108 @@ async function waitFor(condition: () => boolean): Promise<void> {
 	}
 	throw new Error("condition not met in time");
 }
+
+test("assistant details render Markdown and both views copy original emphasis", async () => {
+	const body = "**COPY_THIS_TEXT**";
+	const { app, input, output } = createApp({ history: [{ role: "assistant", timestamp: 1, content: [{ type: "text", text: body }] }] });
+	await app.start();
+	try {
+		for (const detail of [false, true]) {
+			if (detail) input.emit(Buffer.from("\r"));
+			const frame = app.composeFrameForTest();
+			const lines = frameToText(frame).split("\n");
+			const row = lines.findIndex(line => line.includes("COPY_THIS_TEXT"));
+			expect(lines[row]).not.toContain("**");
+			const x = lines[row]!.indexOf("COPY_THIS_TEXT") + 1;
+			input.emit(Buffer.from(`\x1b[<0;${x};${row + 1}M\x1b[<32;${x + 3};${row + 1}M\x1b[<0;${x + 3};${row + 1}m`));
+			await Bun.sleep(0);
+			expect(output.chunks.slice(-8).join("")).toContain(`\x1b]52;c;${Buffer.from(body).toString("base64")}\x07`);
+		}
+	} finally { await app.stop(); }
+});
+
+test("Markdown source selection spans wrapped plain text, tables and code without screen decorations", async () => {
+	for (const body of ["> | A | B |\n> | --- | --- |\n> | x | y |", "- | A | B |\n  | --- | --- |\n  | x | y |", "> ```ts\n> const x = 1;\n> const y = 2;\n> ```", "- ```ts\n  const x = 1;\n  const y = 2;\n  ```", "abcdefghijklmnopqrstuvwx", "> hello\n> world", "```ts\nconst answer = 42;\n```", "| Name | State |\n| --- | --- |\n| Markdown | ready |", "before\r\nafter"]) {
+		const { app, input, output } = createApp({ history: [{ role: "assistant", timestamp: 1, content: [{ type: "text", text: body }] }] });
+		await app.start();
+		try {
+			input.emit(Buffer.from("\t\r"));
+			const frame = app.composeFrameForTest();
+			const rows = frame.cells.map((cells, y) => ({ cells, y })).filter(row => row.cells.some(cell => cell.source));
+			expect(rows.length).toBeGreaterThan(0);
+			const first = rows[0]!, last = rows.at(-1)!;
+			const x1 = first.cells.findIndex(cell => cell.source);
+			const x2 = last.cells.length - 1 - [...last.cells].reverse().findIndex(cell => cell.source);
+			input.emit(Buffer.from(`\x1b[<0;${x1 + 1};${first.y + 1}M\x1b[<32;${x2 + 1};${last.y + 1}M\x1b[<0;${x2 + 1};${last.y + 1}m`));
+			await Bun.sleep(0);
+			const expected = body;
+			expect(output.text.includes(`\x1b]52;c;${Buffer.from(expected).toString("base64")}\x07`)).toBe(true);
+		} finally { await app.stop(); }
+	}
+});
+
+test("streaming Markdown preserves a selection snapshot and paused assistant detail through reflow", async () => {
+	let advance: (() => void) | undefined;
+	const first = "**COPY_THIS_TEXT" + Array.from({ length: 45 }, (_, i) => `\nLINE_${i} content`).join("");
+	const final = first + "**\n\n| Name | State |\n| --- | --- |\n| final | ready |";
+	const { app, input, output } = createApp({ port: {
+		async *runTurn() {
+			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
+			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: first };
+			await new Promise<void>(resolve => { advance = resolve; });
+			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: final.slice(first.length) };
+			yield { type: "message_end", timestamp: 4, message: { role: "assistant", content: [{ type: "text", text: final }], timestamp: 1 } };
+		}, abort() { advance?.(); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("go\r")); await waitFor(() => advance !== undefined);
+		input.emit(Buffer.from("draft\t\r"));
+		input.emit(Buffer.from("k".repeat(35)));
+		const before = frameToText(app.composeFrameForTest()).match(/LINE_\d+/)?.[0];
+		expect(before).toBeDefined();
+		const text = frameToText(app.composeFrameForTest()).split("\n");
+		const y = text.findIndex(line => line.includes(before!));
+		const x = text[y]!.indexOf(before!);
+		input.emit(Buffer.from(`\x1b[<0;${x + 1};${y + 1}M`));
+		advance!(); await Bun.sleep(10);
+		input.emit(Buffer.from(`\x1b[<32;${x + before!.length};${y + 1}M\x1b[<0;${x + before!.length};${y + 1}m`));
+		await Bun.sleep(0);
+		expect(output.text).toContain(`\x1b]52;c;${Buffer.from(before!).toString("base64")}\x07`);
+		expect(frameToText(app.composeFrameForTest()).match(/LINE_\d+/)?.[0]).toBe(before);
+		output.columns = 40; output.rows = 12;
+		expect(frameToText(app.composeFrameForTest()).match(/LINE_\d+/)?.[0]).toBe(before);
+		input.emit(Buffer.from("q"));
+		expect(frameToText(app.composeFrameForTest())).toContain("draft");
+	} finally { advance?.(); await app.stop(); }
+});
+
+test("assistant detail keyboard selection copies complete fenced source", async () => {
+	const body = "```ts\nconst x = 1;\n```";
+	const { app, input, output } = createApp({ history: [{ role: "assistant", timestamp: 1, content: [{ type: "text", text: body }] }] });
+	await app.start();
+	try {
+		input.emit(Buffer.from("\t\rvy")); await Bun.sleep(0);
+		expect(output.text).toContain(`\x1b]52;c;${Buffer.from(body).toString("base64")}\x07`);
+	} finally { await app.stop(); }
+});
+
+test("assistant detail keyboard selection freezes the selected streaming source", async () => {
+	let advance: (() => void) | undefined;
+	const { app, input, output } = createApp({ port: {
+		async *runTurn() {
+			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
+			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: "hello" };
+			await new Promise<void>(resolve => { advance = resolve; });
+			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: " appended" };
+		}, abort() { advance?.(); },
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("go\r")); await waitFor(() => advance !== undefined);
+		input.emit(Buffer.from("\t\rv"));
+		advance!(); await Bun.sleep(10);
+		input.emit(Buffer.from("y")); await Bun.sleep(0);
+		expect(output.text).toContain(`\x1b]52;c;${Buffer.from("hello").toString("base64")}\x07`);
+	} finally { advance?.(); await app.stop(); }
+});

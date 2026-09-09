@@ -95,6 +95,8 @@ bun examples/embedded-agent.ts
 
 This example reads `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and optional `FORGE_AGENT_API_KEY` / `FORGE_AGENT_BASE_URL`. See [storage, permission handling, and lifecycle](docs/sdk.en.md) before embedding it in a long-lived application.
 
+Assistant replies render Markdown in both the transcript and detail view, including tables and code highlighting. Narrow tables switch to labelled records; long code lines wrap with a continuation marker. Forge copy actions preserve Markdown source. LaTeX remains literal. To try a fixed sample without a model or saved session, run `bun scripts/markdown-preview.ts`.
+
 ## Architecture
 
 | Package | Responsibility |
@@ -102,7 +104,7 @@ This example reads `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and optional `FO
 | `@forge-agent/protocol` | Events, requests, responses, and presentation data |
 | `@forge-agent/core` | Source-owned Agent runtime, model adapter, permissions, sessions, and SDK |
 | `@forge-agent/tools` | Tool contracts and built-in coding tools |
-| `@forge-agent/tui` | Cell compositor and terminal interaction; depends only on protocol and Node built-ins |
+| `@forge-agent/tui` | Cell compositor and terminal interaction; protocol, Node built-ins, and pure Markdown/highlighting dependencies |
 | `@forge-agent/cli` | Configuration, credentials, tool/storage assembly, and TUI/headless entrypoints |
 
 The dependency gate keeps UI dependencies out of the core and restricts pi-ai imports to the model adapter, event projection, and source-owned runtime. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.

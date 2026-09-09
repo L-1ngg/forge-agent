@@ -66,3 +66,16 @@ test("hidden cells paint as blanks", () => {
 	writeText(frame, 0, 0, "s", { ...red, attributes: { ...red.attributes, hidden: true } });
 	expect(paintDiff(null, frame)).not.toContain("s");
 });
+
+test("hyperlink-only changes repaint targets and close OSC 8 before unrelated text", () => {
+	const before = createFrame(8, 1);
+	writeText(before, 0, 0, "docs", { ...defaultStyle(), hyperlink: "https://old.example" });
+	const after = createFrame(8, 1);
+	writeText(after, 0, 0, "docs", { ...defaultStyle(), hyperlink: "https://new.example" });
+	const out = paintDiff(before, after);
+	expect(out).toContain("\x1b]8;;https://new.example\x1b\\");
+	expect(out).toContain("docs\x1b]8;;\x1b\\");
+	const plain = createFrame(8, 1);
+	writeText(plain, 0, 0, "docs");
+	expect(paintDiff(after, plain)).toContain("docs");
+});

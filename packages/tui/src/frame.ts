@@ -20,7 +20,20 @@ export function defaultAttributes(): CellAttributes {
 	return { bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, hidden: false, strikethrough: false };
 }
 
+/** Original content snapshot. Identity separates adjacent messages with identical text. */
+export interface SourceDocument { text: string }
+export interface SourceRange {
+	document: SourceDocument;
+	start: number;
+	end: number;
+	/** Expand ambiguous selections to a complete Markdown construct. */
+	copyStart?: number;
+	copyEnd?: number;
+}
+
 export interface CellStyle {
+	source?: SourceRange;
+	hyperlink?: string;
 	foreground: TerminalColor;
 	background: TerminalColor;
 	attributes: CellAttributes;
@@ -31,6 +44,8 @@ export function defaultStyle(): CellStyle {
 }
 
 export interface TerminalCell {
+	source?: SourceRange;
+	hyperlink?: string;
 	grapheme: string;
 	/** 0 marks a continuation cell covered by the wide grapheme to its left. */
 	width: 0 | 1 | 2;
@@ -66,8 +81,12 @@ export function createFrame(columns: number, rows: number, style: CellStyle = de
 	return { columns, rows, cells };
 }
 
+function styledCell(grapheme: string, width: 0 | 1 | 2, style: CellStyle): TerminalCell {
+	return { grapheme, width, foreground: style.foreground, background: style.background, attributes: { ...style.attributes }, ...(style.source ? { source: style.source } : {}), ...(style.hyperlink ? { hyperlink: style.hyperlink } : {}) };
+}
+
 export function blankCell(style: CellStyle = defaultStyle()): TerminalCell {
-	return { grapheme: " ", width: 1, foreground: style.foreground, background: style.background, attributes: { ...style.attributes } };
+	return styledCell(" ", 1, style);
 }
 
 export function cloneFrame(frame: TerminalFrame): TerminalFrame {
@@ -105,11 +124,11 @@ export function writeGrapheme(frame: TerminalFrame, x: number, y: number, graphe
 	if (width === 2) {
 		if (x + 1 >= frame.columns) return x; // clipped: a wide grapheme is never split
 		repairWideAt(frame, x + 1, y);
-		frame.cells[y]![x] = { grapheme, width: 2, foreground: style.foreground, background: style.background, attributes: { ...style.attributes } };
-		frame.cells[y]![x + 1] = { grapheme: "", width: 0, foreground: style.foreground, background: style.background, attributes: { ...style.attributes } };
+		frame.cells[y]![x] = styledCell(grapheme, 2, style);
+		frame.cells[y]![x + 1] = styledCell("", 0, style);
 		return x + 2;
 	}
-	frame.cells[y]![x] = { grapheme, width: 1, foreground: style.foreground, background: style.background, attributes: { ...style.attributes } };
+	frame.cells[y]![x] = styledCell(grapheme, 1, style);
 	return x + 1;
 }
 
@@ -124,9 +143,12 @@ function repairWideAt(frame: TerminalFrame, x: number, y: number): void {
 /** Write text from (x, y), clipped at the frame's right edge; returns the end column. */
 export function writeText(frame: TerminalFrame, x: number, y: number, text: string, style: CellStyle = defaultStyle()): number {
 	let cursor = x;
+	let offset = 0;
 	for (const grapheme of graphemes(text)) {
 		if (cursor >= frame.columns) break;
-		cursor = writeGrapheme(frame, cursor, y, grapheme, style);
+		const source = style.source;
+		cursor = writeGrapheme(frame, cursor, y, grapheme, source ? { ...style, source: { ...source, start: Math.min(source.end, source.start + offset), end: Math.min(source.end, source.start + offset + grapheme.length) } } : style);
+		offset += grapheme.length;
 	}
 	return cursor;
 }
@@ -170,6 +192,7 @@ function cellEquals(left: TerminalCell, right: TerminalCell): boolean {
 	return (
 		left.grapheme === right.grapheme &&
 		left.width === right.width &&
+		left.hyperlink === right.hyperlink &&
 		colorEquals(left.foreground, right.foreground) &&
 		colorEquals(left.background, right.background) &&
 		attributesEqual(left.attributes, right.attributes)

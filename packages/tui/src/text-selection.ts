@@ -1,4 +1,4 @@
-import type { TerminalFrame } from "./frame.ts";
+import type { SourceDocument, TerminalFrame } from "./frame.ts";
 
 interface Point { x: number; y: number }
 
@@ -22,13 +22,26 @@ export class TextSelection {
 	text(): string {
 		if (!this.moved) return "";
 		const [start, end] = this.range();
-		const lines: string[] = [];
+		const parts: { document?: SourceDocument; start: number; end: number; text: string }[] = [];
 		for (let y = start.y; y <= end.y; y++) {
 			const left = y === start.y ? start.x : this.bounds.left;
 			const right = y === end.y ? end.x + 1 : this.bounds.right;
-			lines.push(this.snapshot.cells[y]?.slice(left, right).map((cell) => cell.grapheme).join("").trimEnd() ?? "");
+			const cells = this.snapshot.cells[y]?.slice(left, right) ?? [];
+			const mapped = cells.filter(cell => cell.source);
+			if (mapped.length) {
+				for (const cell of mapped) {
+					const source = cell.source!;
+					const from = source.copyStart ?? source.start, to = source.copyEnd ?? source.end;
+					const last = parts.at(-1);
+					if (last?.document === source.document) { last.start = Math.min(last.start, from); last.end = Math.max(last.end, to); }
+					else parts.push({ document: source.document, start: from, end: to, text: "" });
+				}
+			} else {
+				const text = cells.map(cell => cell.grapheme).join("").trimEnd();
+				if (text || !parts.at(-1)?.document) parts.push({ start: 0, end: 0, text });
+			}
 		}
-		return lines.join("\n");
+		return parts.map(part => part.document ? part.document.text.slice(part.start, part.end) : part.text).join("\n");
 	}
 
 	paint(frame: TerminalFrame): void {
