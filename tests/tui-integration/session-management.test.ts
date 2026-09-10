@@ -33,7 +33,7 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 			throw new Error(`PTY timeout: ${output.slice(-1000)}`);
 		};
 		const send = (command: string) => { output = ""; terminal.write(`\x1b[200~${command}\x1b[201~\r`); };
-		return { child, terminal, wait, send, output: () => output };
+		return { child, terminal, wait, send, clear: () => { output = ""; }, output: () => output };
 	};
 	try {
 		const empty = launch();
@@ -57,6 +57,10 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		expect(requests[2]).not.toContain("PTY_OLD");
 		live.send("/resume");
 		await live.wait(() => live.output().includes("选择会话"));
+		live.terminal.write("\x05");
+		await live.wait(() => live.output().includes("最近对话"));
+		expect(requests).toHaveLength(3);
+		live.terminal.write("\x1b"); await Bun.sleep(60);
 		live.terminal.write("\x1b[B\r");
 		await live.wait(() => live.output().includes("PTY_FOLLOWUP"));
 		hold = true;
@@ -64,6 +68,9 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		await live.wait(() => requests.length === 4);
 		live.send("/resume");
 		await live.wait(() => live.output().includes("选择会话"));
+		live.terminal.write("\x05");
+		await live.wait(() => live.output().includes("最近对话"));
+		live.terminal.write("\x1b"); await Bun.sleep(60);
 		live.terminal.write("\x1b");
 		await Bun.sleep(80);
 		expect(requests).toHaveLength(4);
@@ -73,13 +80,39 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		live.terminal.write("\x03");
 		expect(await live.child.exited).toBe(0);
 		expect(await files()).toHaveLength(2);
+		// Add synthetic long recent text so narrow-terminal scrolling has observable endpoints.
+		const { SessionStore, messageEntry } = await import("../../packages/core/src/index.ts");
+		for (const name of await files()) {
+			const path = join(cwd, ".forge-agent", "sessions", name);
+			if (!(await readFile(path, "utf8")).includes("PTY_RUNNING")) continue;
+			const store = await SessionStore.open(path, cwd);
+			await store.append(messageEntry({ role: "user", content: [{ type: "text", text: "PREVIEW_TOP\n" + Array.from({ length: 30 }, (_, i) => `row ${i}`).join("\n") + "\nPREVIEW_BOTTOM" }], timestamp: Date.now() }, store.getLeafId()));
+		}
 		const reopened = launch();
 		await reopened.wait(() => reopened.output().includes("Type a message"));
 		expect(reopened.output()).not.toContain("PTY_OLD");
+		reopened.terminal.resize(40, 16);
+		reopened.clear();
+		// Enter and Escape are decoded in one input batch: Escape runs while list() awaits I/O.
+		reopened.terminal.write("\x1b[200~/resume\x1b[201~\r\x1b\x00\x1b[200~LOADING_EXIT_DRAFT\x1b[201~");
+		await reopened.wait(() => reopened.output().includes("LOADING_EXIT_DRAFT"));
+		await Bun.sleep(80);
+		expect(reopened.output()).not.toContain("选择会话");
+		reopened.terminal.write("\x7f".repeat("LOADING_EXIT_DRAFT".length));
 		reopened.send("/resume");
 		await reopened.wait(() => reopened.output().includes("PTY_OLD"));
-		reopened.terminal.write("\r");
-		await reopened.wait(() => reopened.output().includes("PTY_RUNNING"));
+		reopened.terminal.write("\x05");
+		await reopened.wait(() => reopened.output().includes("最近对话"));
+		await reopened.wait(() => reopened.output().includes("saved answer"));
+		expect(reopened.output()).not.toContain("PREVIEW_BOTTOM");
+		reopened.clear(); reopened.terminal.write("\x1b[6~".repeat(10));
+		await reopened.wait(() => reopened.output().includes("PREVIEW_BOTTOM"));
+		reopened.clear(); reopened.terminal.write("\x1b[5~".repeat(10));
+		await reopened.wait(() => reopened.output().includes("saved answer"));
+		expect(reopened.output()).not.toContain("PREVIEW_BOTTOM");
+		expect(requests).toHaveLength(4);
+		reopened.clear(); reopened.terminal.write("\r");
+		await reopened.wait(() => reopened.output().includes("PREVIEW_BOTTOM"));
 		reopened.terminal.write("\x03");
 		expect(await reopened.child.exited).toBe(0);
 		expect(await files()).toHaveLength(2);

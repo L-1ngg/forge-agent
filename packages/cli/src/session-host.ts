@@ -1,9 +1,11 @@
 import { createAgent, createPiPort, RequestBus, SessionStore, type Agent, type AgentPort, type CreateAgentOptions, type PiPortOptions, type SessionEntry, type SessionState, type SessionStorage } from "@forge-agent/core";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+export interface SessionPreviewMessage { role: "user" | "assistant"; text: string; truncated: boolean; stopReason?: string; }
+export interface SessionPreview { id: string; revision: string; messages: SessionPreviewMessage[]; }
 export interface SessionSummary { id: string; title: string; updatedAt: number; }
 export interface SessionView {
 	id: string;
@@ -15,6 +17,19 @@ export interface SessionView {
 
 type HostOptions = Omit<CreateAgentOptions, "storage" | "sessionId" | "requestBus"> & { requestTimeoutMs?: number | null };
 type PortFactory = (options: PiPortOptions) => AgentPort | Promise<AgentPort>;
+
+async function fileRevision(path: string): Promise<string> {
+	const info = await stat(path);
+	return `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}`;
+}
+function excerpt(text: string, limit: number): { text: string; truncated: boolean } {
+	let result = "", length = 0;
+	for (const character of text) {
+		if (length++ === limit) return { text: result, truncated: true };
+		result += character;
+	}
+	return { text: result, truncated: false };
+}
 
 async function projectRoot(cwd: string): Promise<string> {
 	const path = await realpath(cwd);
@@ -49,6 +64,8 @@ export class SessionHost {
 	private switching = false;
 	private closed = false;
 	private operation: Promise<SessionView> | undefined;
+	private available = new Set<string>();
+	private summaries = new Map<string, { revision: string; summary?: SessionSummary; diagnostics: string[] }>();
 	private constructor(private readonly root: string, private readonly options: HostOptions, private readonly factory: PortFactory) { }
 	static async create(options: HostOptions, factory: PortFactory = createPiPort): Promise<SessionHost> {
 		const host = new SessionHost(await projectRoot(options.cwd), options, factory);
@@ -90,20 +107,47 @@ export class SessionHost {
 		};
 		await visit(this.root);
 		const sessions: SessionSummary[] = [];
+		const discovered = new Set(files);
+		for (const file of this.summaries.keys()) if (!discovered.has(file)) this.summaries.delete(file);
 		for (const file of files) {
 			try {
-				const store = await SessionStore.open(file, this.options.cwd, { create: false });
 				// Managed files belong to this project even if their original tool cwd was removed.
 				if (!managed.has(file) && await projectRoot(dirname(dirname(file))) !== this.root) continue;
-				const messages = store.messages();
-				const first = messages.find(message => message.role === "user");
-				if (!first) continue;
-				if (!store.appendable) diagnostics.push(`${file}: damaged records; convert a verified copy before resuming`);
-				sessions.push({ id: file, title: first.content.flatMap(part => part.type === "text" ? [part.text] : []).join(" ").replace(/\s+/g, " ").slice(0, 160) || "Untitled conversation", updatedAt: messages.reduce((latest, message) => Math.max(latest, message.timestamp), 0) });
-			} catch (error) { diagnostics.push(`${file}: ${error instanceof Error ? error.message : String(error)}`); }
+				const revision = await fileRevision(file);
+				let cached = this.summaries.get(file);
+				if (!cached || cached.revision !== revision) {
+					const store = await SessionStore.open(file, this.options.cwd, { create: false });
+					const messages = store.messages();
+					const first = messages.find(message => message.role === "user");
+					const title = first?.content.flatMap(part => part.type === "text" ? [part.text] : []).join(" ").replace(/\s+/g, " ").trim() ?? "";
+					cached = { revision, diagnostics: store.appendable ? [] : [`${file}: damaged records; convert a verified copy before resuming`], ...(first ? { summary: { id: file, title: excerpt(title, 160).text || "无文本会话", updatedAt: messages.reduce((latest, message) => Math.max(latest, message.timestamp), 0) } } : {}) };
+					// Do not cache a read that raced an append or replacement.
+					if (await fileRevision(file) === revision) this.summaries.set(file, cached);
+					else this.summaries.delete(file);
+				}
+				diagnostics.push(...cached.diagnostics);
+				if (cached.summary) sessions.push({ ...cached.summary });
+			} catch (error) { this.summaries.delete(file); diagnostics.push(`${file}: ${error instanceof Error ? error.message : String(error)}`); }
 		}
+		this.available = new Set(sessions.map(session => session.id));
 		return { sessions: sessions.sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)), diagnostics };
 	}
+	async preview(id: string, cached?: SessionPreview): Promise<SessionPreview> {
+		if (!this.available.has(id)) throw new Error("Session is not available in this project");
+		const revision = await fileRevision(id);
+		if (cached?.id === id && cached.revision === revision) return cached;
+		const store = await SessionStore.open(id, this.options.cwd, { create: false });
+		const messages: SessionPreviewMessage[] = [];
+		for (const message of store.messages().reverse()) {
+			if (message.role !== "user" && message.role !== "assistant") continue;
+			const text = message.content.flatMap(part => part.type === "text" ? [part.text] : part.type === "image" ? ["[图片]"] : []).join("\n").trim();
+			if (!text) continue;
+			messages.unshift({ role: message.role, ...excerpt(text, 500), ...(message.stopReason ? { stopReason: message.stopReason } : {}) });
+			if (messages.length === 6) break;
+		}
+		return { id, revision: await fileRevision(id) === revision ? revision : "", messages };
+	}
+
 	switchTo(id?: string, beforeRelease: () => Promise<void> = async () => {}): Promise<SessionView> {
 		if (this.closed) return Promise.reject(new Error("Session host is closed"));
 		if (this.switching) return Promise.reject(new Error("A session switch is already in progress"));
@@ -126,6 +170,7 @@ export class SessionHost {
 	}
 	async dispose(): Promise<void> {
 		this.closed = true;
+		this.summaries.clear(); this.available.clear();
 		this.view.port.abort();
 		await this.operation?.catch(() => {});
 		await this.view.port.dispose();

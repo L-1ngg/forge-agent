@@ -47,7 +47,7 @@ import { DetailView } from "./detail-view.ts";
 import { entryDetail } from "./transcript/detail.ts";
 import { transcriptViews } from "./transcript/groups.ts";
 import { TextSelection } from "./text-selection.ts";
-import { SessionMenu, type AppSessionSummary } from "./session-menu.ts";
+import { SessionMenu, type AppSessionPreview, type AppSessionSummary } from "./session-menu.ts";
 
 export type AppHostMode = "main" | "alt";
 
@@ -84,6 +84,7 @@ export interface AppSession {
 export interface AppSessionHost {
 	readonly current: AppSession;
 	list(): Promise<{ sessions: AppSessionSummary[]; diagnostics: string[] }>;
+	preview?(id: string, cached?: AppSessionPreview): Promise<AppSessionPreview>;
 	switchTo(id?: string, beforeRelease?: () => Promise<void>): Promise<AppSession>;
 	dispose(): Promise<void>;
 }
@@ -236,12 +237,12 @@ export class App {
 			void this.stop();
 			return;
 		}
-		if (this.menuLoading && key.type === "escape") { this.menuVersion++; this.menuLoading = false; this.repaint(); return; }
-		if (this.switching || this.menuLoading) return;
+		if (this.switching) return;
 		if (this.sessionMenu) {
 			const action = this.sessionMenu.handleKey(key);
-			if (action?.type === "cancel") { this.sessionMenu = undefined; this.pendingTarget = undefined; }
-			if (action?.type === "select") { this.sessionMenu = undefined; this.requestSwitch(action.id); }
+			if (action?.type === "cancel") { this.menuVersion++; this.menuLoading = false; this.sessionMenu = undefined; this.pendingTarget = undefined; }
+			if (action?.type === "select") { this.menuVersion++; this.sessionMenu = undefined; this.requestSwitch(action.id); }
+			if (action?.type === "preview") void this.loadSessionPreview(this.sessionMenu!, action.id, action.revision);
 			if (action?.type === "discard") { this.sessionMenu = undefined; this.beginSwitch(this.pendingTarget); }
 			this.repaint();
 			return;
@@ -590,11 +591,22 @@ export class App {
 		if (!sessions) { this.projector.addNotice("Session switching unavailable"); return; }
 		const version = ++this.menuVersion;
 		this.menuLoading = true;
+		const menu = new SessionMenu("list", [], [], this.session?.id, true);
+		this.sessionMenu = menu;
+		this.repaint();
 		try {
 			const result = await sessions.list();
-			if (this.started && version === this.menuVersion) this.sessionMenu = new SessionMenu("list", result.sessions, result.diagnostics, this.session?.id);
-		} catch (error) { if (this.started && version === this.menuVersion) this.projector.addNotice(String(error)); }
+			if (this.started && version === this.menuVersion) menu.setList(result.sessions, result.diagnostics);
+		} catch (error) { if (this.started && version === this.menuVersion) menu.setList([], [String(error)]); }
 		finally { if (version === this.menuVersion) this.menuLoading = false; this.repaint(); }
+	}
+
+	private async loadSessionPreview(menu: SessionMenu, id: string, revision: number): Promise<void> {
+		try {
+			const preview = await this.options.sessions?.preview?.(id, menu.cachedPreview(id));
+			if (this.started && this.sessionMenu === menu) menu.setPreview(id, revision, preview, preview ? undefined : "当前宿主不支持预览");
+		} catch (error) { if (this.started && this.sessionMenu === menu) menu.setPreview(id, revision, undefined, error instanceof Error ? error.message : String(error)); }
+		if (this.started && this.sessionMenu === menu) this.repaint();
 	}
 
 	private requestSwitch(id?: string): void {
