@@ -1,0 +1,850 @@
+{
+  "metadata": {
+    "fixtureVersion": 2,
+    "fixtureSha256": "975ef35be4befaecde7a4df3fd54d0682bdb0e4054d6fe463adf88b3a794f743",
+    "implementationSha256": "63e4453abd82e996c5e8a63d83a9d7991b93d61c01b2d5c79b5b7896c104505e",
+    "baselineHead": "149cac7ee1e6aa37fa5c23193387b093e80a78e0",
+    "provider": "xai",
+    "model": "grok-4.6",
+    "thinking": "off",
+    "contextWindow": 32000,
+    "maxTokens": 2048,
+    "reserveTokens": 4096,
+    "keepRecentTokens": 256,
+    "split": "holdout",
+    "repeats": 3,
+    "pricing": {
+      "input": 2,
+      "output": 6,
+      "cacheRead": 0.5,
+      "cacheWrite": 0
+    },
+    "schedule": [
+      "holdout-correction/0/pi",
+      "holdout-correction/0/adaptive",
+      "holdout-correction/1/adaptive",
+      "holdout-correction/1/pi",
+      "holdout-correction/2/pi",
+      "holdout-correction/2/adaptive"
+    ],
+    "scoring": "All exact JSON fields port/marker/target, deployed=false, recorded=true and zero side effects are separate constraint checks. exact-evidence also requires a valid source and, for adaptive, a successful read returning the hidden selected row after compaction. Partial usage is reported separately and excluded from total-token comparisons. Independent blinded semantic review is separate.",
+    "limitations": "Synthetic saved histories and configuration artifacts; declared small window, not physical overflow; single provider, no statistical significance claim."
+  },
+  "rows": [
+    {
+      "task": "holdout-correction",
+      "repeat": 0,
+      "strategy": "pi",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": false,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "Original Request"
+      },
+      "response": "{\n  \"port\": 9107,\n  \"marker\": \"REV-24-保持原样\",\n  \"target\": \"config-8.json\",\n  \"deployed\": false,\n  \"recorded\": true,\n  \"source\": \"Original Request\"\n}",
+      "error": "",
+      "elapsedMs": 80172.39482900001,
+      "calls": [
+        {
+          "input": 3023,
+          "output": 996,
+          "cacheRead": 2688,
+          "cost": 0.00799,
+          "elapsedMs": 16562.353986000002,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1392,
+          "output": 191,
+          "cacheRead": 256,
+          "cost": 0.003546,
+          "elapsedMs": 3639.6183950000013,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 4572,
+          "output": 3380,
+          "cacheRead": 128,
+          "cost": 0.029232,
+          "elapsedMs": 59916.372248,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "54698c4c-fdea-4da3-bbba-0546a8391efa",
+          "beforeTokens": 6248,
+          "timestamp": 1789212415991
+        },
+        {
+          "type": "compaction",
+          "operationId": "54698c4c-fdea-4da3-bbba-0546a8391efa",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212432591,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 335,
+            "output": 996,
+            "cacheRead": 2688,
+            "cacheWrite": 0,
+            "totalTokens": 4019,
+            "cost": {
+              "input": 0.00067,
+              "output": 0.005976,
+              "cacheRead": 0.001344,
+              "cacheWrite": 0,
+              "total": 0.00799
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "54698c4c-fdea-4da3-bbba-0546a8391efa",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212436223,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1136,
+            "output": 191,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 1583,
+            "cost": {
+              "input": 0.0022719999999999997,
+              "output": 0.001146,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.003546
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "54698c4c-fdea-4da3-bbba-0546a8391efa",
+          "beforeTokens": 6248,
+          "timestamp": 1789212436224,
+          "afterTokens": 6704,
+          "usage": {
+            "input": 1471,
+            "output": 1187,
+            "cacheRead": 2944,
+            "cacheWrite": 0,
+            "totalTokens": 5602,
+            "cost": {
+              "input": 0.0029419999999999997,
+              "output": 0.007122000000000001,
+              "cacheRead": 0.001472,
+              "cacheWrite": 0,
+              "total": 0.011536000000000001
+            }
+          }
+        }
+      ],
+      "totalTokens": 13554,
+      "measuredTokens": 13554,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.040768
+    },
+    {
+      "task": "holdout-correction",
+      "repeat": 0,
+      "strategy": "adaptive",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": true,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "evidence"
+      },
+      "response": "{\"port\":9107,\"marker\":\"REV-24-保持原样\",\"target\":\"config-8.json\",\"deployed\":false,\"recorded\":true,\"source\":\"evidence\"}",
+      "error": "",
+      "elapsedMs": 36888.60851400001,
+      "calls": [
+        {
+          "input": 6262,
+          "output": 2809,
+          "cacheRead": 128,
+          "cost": 0.029186,
+          "elapsedMs": 35486.775211,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1721,
+          "output": 39,
+          "cacheRead": 0,
+          "cost": 0.003676,
+          "elapsedMs": 1379.5223029999906,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "873f09f3-64e7-4274-972e-14cf0c9d932c",
+          "beforeTokens": 6383,
+          "timestamp": 1789212496159
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "873f09f3-64e7-4274-972e-14cf0c9d932c",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "timestamp": 1789212496163,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 3,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "873f09f3-64e7-4274-972e-14cf0c9d932c",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "afterTokens": 1437,
+          "timestamp": 1789212531660,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 35498,
+          "action": "rebuild",
+          "usage": {
+            "input": 6134,
+            "output": 2809,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9071,
+            "cost": {
+              "input": 0.012268,
+              "output": 0.016854,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.029186000000000004
+            }
+          }
+        }
+      ],
+      "totalTokens": 10831,
+      "measuredTokens": 10831,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.032862
+    },
+    {
+      "task": "holdout-correction",
+      "repeat": 1,
+      "strategy": "adaptive",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": true,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "evidence"
+      },
+      "response": "{\"port\":9107,\"marker\":\"REV-24-保持原样\",\"target\":\"config-8.json\",\"deployed\":false,\"recorded\":true,\"source\":\"evidence\"}",
+      "error": "",
+      "elapsedMs": 35137.779511999994,
+      "calls": [
+        {
+          "input": 7080,
+          "output": 2809,
+          "cacheRead": 128,
+          "cost": 0.030822,
+          "elapsedMs": 33643.48700600001,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1721,
+          "output": 39,
+          "cacheRead": 128,
+          "cost": 0.003484,
+          "elapsedMs": 1479.6382060000033,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "83be6df4-c700-4cc2-9b3b-158a9a5863cf",
+          "beforeTokens": 6383,
+          "timestamp": 1789212533047
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "83be6df4-c700-4cc2-9b3b-158a9a5863cf",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "timestamp": 1789212533049,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 2,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "83be6df4-c700-4cc2-9b3b-158a9a5863cf",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "afterTokens": 1437,
+          "timestamp": 1789212566699,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 33650,
+          "action": "rebuild",
+          "usage": {
+            "input": 6952,
+            "output": 2809,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9889,
+            "cost": {
+              "input": 0.013904,
+              "output": 0.016854,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.030822000000000002
+            }
+          }
+        }
+      ],
+      "totalTokens": 11649,
+      "measuredTokens": 11649,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.034305999999999996
+    },
+    {
+      "task": "holdout-correction",
+      "repeat": 1,
+      "strategy": "pi",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": false,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "REV-24-保持原样"
+      },
+      "response": "{\n  \"port\": 9107,\n  \"marker\": \"REV-24-保持原样\",\n  \"target\": \"config-8.json\",\n  \"deployed\": false,\n  \"recorded\": true,\n  \"source\": \"REV-24-保持原样\"\n}",
+      "error": "",
+      "elapsedMs": 54279.47362100001,
+      "calls": [
+        {
+          "input": 3319,
+          "output": 1264,
+          "cacheRead": 128,
+          "cost": 0.01403,
+          "elapsedMs": 20453.321954999992,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1660,
+          "output": 454,
+          "cacheRead": 128,
+          "cost": 0.005852,
+          "elapsedMs": 7511.092700000008,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 4476,
+          "output": 1746,
+          "cacheRead": 128,
+          "cost": 0.019236,
+          "elapsedMs": 26299.773766,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "6d219617-9d74-4e82-bad0-70d0acfdd9ca",
+          "beforeTokens": 6248,
+          "timestamp": 1789212568186
+        },
+        {
+          "type": "compaction",
+          "operationId": "6d219617-9d74-4e82-bad0-70d0acfdd9ca",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212588641,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 3191,
+            "output": 1264,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 4583,
+            "cost": {
+              "input": 0.006382,
+              "output": 0.0075840000000000005,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.014029999999999999
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "6d219617-9d74-4e82-bad0-70d0acfdd9ca",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212596155,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1532,
+            "output": 454,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 2114,
+            "cost": {
+              "input": 0.003064,
+              "output": 0.002724,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.0058519999999999996
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "6d219617-9d74-4e82-bad0-70d0acfdd9ca",
+          "beforeTokens": 6248,
+          "timestamp": 1789212596156,
+          "afterTokens": 6641,
+          "usage": {
+            "input": 4723,
+            "output": 1718,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 6697,
+            "cost": {
+              "input": 0.009446,
+              "output": 0.010308000000000001,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.019881999999999997
+            }
+          }
+        }
+      ],
+      "totalTokens": 12919,
+      "measuredTokens": 12919,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.039118
+    },
+    {
+      "task": "holdout-correction",
+      "repeat": 2,
+      "strategy": "pi",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": false,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "Original Request"
+      },
+      "response": "{\n  \"port\": 9107,\n  \"marker\": \"REV-24-保持原样\",\n  \"target\": \"config-8.json\",\n  \"deployed\": false,\n  \"recorded\": true,\n  \"source\": \"Original Request\"\n}",
+      "error": "",
+      "elapsedMs": 65709.30797100003,
+      "calls": [
+        {
+          "input": 1124,
+          "output": 930,
+          "cacheRead": 128,
+          "cost": 0.007636,
+          "elapsedMs": 13477.264347000018,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1326,
+          "output": 107,
+          "cacheRead": 128,
+          "cost": 0.003102,
+          "elapsedMs": 2940.6664959999907,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 4495,
+          "output": 3067,
+          "cacheRead": 128,
+          "cost": 0.0272,
+          "elapsedMs": 49282.56902799997,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "18b77ade-5a88-4ea4-bf42-324b7fdf2b9f",
+          "beforeTokens": 6248,
+          "timestamp": 1789212622466
+        },
+        {
+          "type": "compaction",
+          "operationId": "18b77ade-5a88-4ea4-bf42-324b7fdf2b9f",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212635943,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 996,
+            "output": 930,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 2054,
+            "cost": {
+              "input": 0.001992,
+              "output": 0.00558,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.0076359999999999996
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "18b77ade-5a88-4ea4-bf42-324b7fdf2b9f",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789212638881,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1198,
+            "output": 107,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 1433,
+            "cost": {
+              "input": 0.0023959999999999997,
+              "output": 0.000642,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.0031019999999999997
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "18b77ade-5a88-4ea4-bf42-324b7fdf2b9f",
+          "beforeTokens": 6248,
+          "timestamp": 1789212638882,
+          "afterTokens": 6634,
+          "usage": {
+            "input": 2194,
+            "output": 1037,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 3487,
+            "cost": {
+              "input": 0.0043879999999999995,
+              "output": 0.006222,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.010738
+            }
+          }
+        }
+      ],
+      "totalTokens": 11049,
+      "measuredTokens": 11049,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.037938
+    },
+    {
+      "task": "holdout-correction",
+      "repeat": 2,
+      "strategy": "adaptive",
+      "completed": true,
+      "checks": {
+        "noNewEffects": true,
+        "deploymentState": true,
+        "latestPort": true,
+        "exactMarker": true,
+        "latestTarget": true,
+        "recordedState": true
+      },
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "lookupSuccesses": 0,
+      "lookupErrors": 0,
+      "requiredFragmentRead": false,
+      "retrievals": [],
+      "evidenceCorrect": true,
+      "artifact": {
+        "port": 9107,
+        "marker": "REV-24-保持原样",
+        "target": "config-8.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "evidence"
+      },
+      "response": "{\"port\":9107,\"marker\":\"REV-24-保持原样\",\"target\":\"config-8.json\",\"deployed\":false,\"recorded\":true,\"source\":\"evidence\"}",
+      "error": "",
+      "elapsedMs": 60721.24049299996,
+      "calls": [
+        {
+          "input": 4735,
+          "output": 4249,
+          "cacheRead": 128,
+          "cost": 0.034772,
+          "elapsedMs": 59511.438795000024,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary",
+          "status": 200
+        },
+        {
+          "input": 1492,
+          "output": 39,
+          "cacheRead": 128,
+          "cost": 0.003026,
+          "elapsedMs": 1192.8200979999965,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task",
+          "status": 200
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "3198ff79-e3db-4dee-b329-d888070f84e1",
+          "beforeTokens": 6383,
+          "timestamp": 1789212688176
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "3198ff79-e3db-4dee-b329-d888070f84e1",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "timestamp": 1789212688177,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 1,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "3198ff79-e3db-4dee-b329-d888070f84e1",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "afterTokens": 1187,
+          "timestamp": 1789212747697,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 59519,
+          "action": "rebuild",
+          "usage": {
+            "input": 4607,
+            "output": 4249,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 8984,
+            "cost": {
+              "input": 0.009214,
+              "output": 0.025494,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.034772000000000004
+            }
+          }
+        }
+      ],
+      "totalTokens": 10515,
+      "measuredTokens": 10515,
+      "unknownUsageCalls": 0,
+      "costUsd": 0.037798
+    }
+  ],
+  "costUsd": 0.22279000000000013,
+  "requests": 15
+}

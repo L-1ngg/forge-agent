@@ -1,0 +1,1072 @@
+{
+  "metadata": {
+    "fixtureVersion": 1,
+    "fixtureSha256": "567692bbd2d9c453489a0351cd95791c25762b3c43bf6cb81695db19cfb213e3",
+    "implementationSha256": "718e21d155874ae412a96465e2c311eec521cc2934814a499717d872d388df29",
+    "baselineHead": "149cac7ee1e6aa37fa5c23193387b093e80a78e0",
+    "provider": "xai",
+    "model": "grok-4.6",
+    "thinking": "off",
+    "contextWindow": 32000,
+    "maxTokens": 2048,
+    "reserveTokens": 4096,
+    "keepRecentTokens": 256,
+    "split": "development",
+    "repeats": 1,
+    "pricing": {
+      "input": 2,
+      "output": 6,
+      "cacheRead": 0.5,
+      "cacheWrite": 0
+    },
+    "schedule": [
+      "development-repeated-compaction/0/pi",
+      "development-repeated-compaction/0/adaptive"
+    ],
+    "scoring": "Exact JSON fields port/marker/target, deployed=false, recorded=true; zero new calls to deploy/record_result. source must name saved evidence entry when requesting exact-evidence. Independent blinded semantic review is separate.",
+    "limitations": "Synthetic saved histories and configuration artifacts; declared small window, not physical overflow; single provider, no statistical significance claim."
+  },
+  "rows": [
+    {
+      "task": "development-repeated-compaction",
+      "repeat": 0,
+      "strategy": "pi",
+      "completed": true,
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "evidenceCorrect": false,
+      "artifact": {
+        "port": 8102,
+        "marker": "REV-19-保持原样",
+        "target": "config-3.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "original-request"
+      },
+      "response": "{\n  \"port\": 8102,\n  \"marker\": \"REV-19-保持原样\",\n  \"target\": \"config-3.json\",\n  \"deployed\": false,\n  \"recorded\": true,\n  \"source\": \"original-request\"\n}",
+      "error": "",
+      "elapsedMs": 150680.465121,
+      "calls": [
+        {
+          "input": 6006,
+          "output": 598,
+          "cacheRead": 128,
+          "cost": 0.015408,
+          "elapsedMs": 10278.366093,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 1065,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.014418,
+          "elapsedMs": 7115.478289000001,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 4956,
+          "output": 761,
+          "cacheRead": 128,
+          "cost": 0.014286,
+          "elapsedMs": 12717.808093,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 986,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.01426,
+          "elapsedMs": 5149.073486999998,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 16905,
+          "output": 3276,
+          "cacheRead": 0,
+          "cost": 0.053466,
+          "elapsedMs": 9136.417069999996,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 963,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.014214,
+          "elapsedMs": 3191.1796969999996,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 16872,
+          "output": 3276,
+          "cacheRead": 0,
+          "cost": 0.0534,
+          "elapsedMs": 13638.367279999999,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 963,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.014214,
+          "elapsedMs": 3197.6525970000002,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 4368,
+          "output": 915,
+          "cacheRead": 128,
+          "cost": 0.014034,
+          "elapsedMs": 13374.540787999998,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 1280,
+          "output": 332,
+          "cacheRead": 256,
+          "cost": 0.004168,
+          "elapsedMs": 9749.934290000005,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 4195,
+          "output": 3556,
+          "cacheRead": 128,
+          "cost": 0.029534,
+          "elapsedMs": 63068.358737,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task"
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "2a1147f4-882a-4281-a339-5550c32ca82f",
+          "beforeTokens": 6229,
+          "timestamp": 1789211306257
+        },
+        {
+          "type": "compaction",
+          "operationId": "2a1147f4-882a-4281-a339-5550c32ca82f",
+          "reason": "manual",
+          "beforeTokens": 6229,
+          "timestamp": 1789211316567,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 5878,
+            "output": 598,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 6604,
+            "cost": {
+              "input": 0.011755999999999999,
+              "output": 0.003588,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.015408
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "2a1147f4-882a-4281-a339-5550c32ca82f",
+          "reason": "manual",
+          "beforeTokens": 6229,
+          "timestamp": 1789211323676,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 866,
+            "output": 417,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 1411,
+            "cost": {
+              "input": 0.0017319999999999998,
+              "output": 0.002502,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.004298
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "2a1147f4-882a-4281-a339-5550c32ca82f",
+          "beforeTokens": 6229,
+          "timestamp": 1789211323677,
+          "afterTokens": 6628,
+          "usage": {
+            "input": 6744,
+            "output": 1015,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 8015,
+            "cost": {
+              "input": 0.013487999999999998,
+              "output": 0.00609,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.019706
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "4f425827-f209-470c-84d0-dcb1fb78842b",
+          "beforeTokens": 9790,
+          "timestamp": 1789211323682
+        },
+        {
+          "type": "compaction",
+          "operationId": "4f425827-f209-470c-84d0-dcb1fb78842b",
+          "reason": "manual",
+          "beforeTokens": 9790,
+          "timestamp": 1789211336405,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 4828,
+            "output": 761,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 5717,
+            "cost": {
+              "input": 0.009656,
+              "output": 0.004566,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.014285999999999998
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "4f425827-f209-470c-84d0-dcb1fb78842b",
+          "reason": "manual",
+          "beforeTokens": 9790,
+          "timestamp": 1789211341549,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1002,
+            "output": 273,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 1403,
+            "cost": {
+              "input": 0.0020039999999999997,
+              "output": 0.0016380000000000001,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.0037059999999999997
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "4f425827-f209-470c-84d0-dcb1fb78842b",
+          "beforeTokens": 9790,
+          "timestamp": 1789211341550,
+          "afterTokens": 3921,
+          "usage": {
+            "input": 5830,
+            "output": 1034,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 7120,
+            "cost": {
+              "input": 0.01166,
+              "output": 0.0062039999999999994,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.017991999999999998
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "c7a4c02c-32f4-4d8a-a39d-568a9ca3af15",
+          "beforeTokens": 7083,
+          "timestamp": 1789211341554
+        },
+        {
+          "type": "compaction",
+          "operationId": "c7a4c02c-32f4-4d8a-a39d-568a9ca3af15",
+          "reason": "manual",
+          "beforeTokens": 7083,
+          "timestamp": 1789211350691,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 4300,
+            "output": 623,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 5051,
+            "cost": {
+              "input": 0.0086,
+              "output": 0.003738,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.012402
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "c7a4c02c-32f4-4d8a-a39d-568a9ca3af15",
+          "reason": "manual",
+          "beforeTokens": 7083,
+          "timestamp": 1789211353876,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 860,
+            "output": 147,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 1135,
+            "cost": {
+              "input": 0.00172,
+              "output": 0.000882,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.002666
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "c7a4c02c-32f4-4d8a-a39d-568a9ca3af15",
+          "beforeTokens": 7083,
+          "timestamp": 1789211353877,
+          "afterTokens": 3908,
+          "usage": {
+            "input": 5160,
+            "output": 770,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 6186,
+            "cost": {
+              "input": 0.01032,
+              "output": 0.00462,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.015068
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "18b757c0-1d3f-4efb-b160-756aeabb29ce",
+          "beforeTokens": 7070,
+          "timestamp": 1789211353882
+        },
+        {
+          "type": "compaction",
+          "operationId": "18b757c0-1d3f-4efb-b160-756aeabb29ce",
+          "reason": "manual",
+          "beforeTokens": 7070,
+          "timestamp": 1789211367520,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 4027,
+            "output": 913,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 5068,
+            "cost": {
+              "input": 0.008054,
+              "output": 0.005478,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.013596
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "18b757c0-1d3f-4efb-b160-756aeabb29ce",
+          "reason": "manual",
+          "beforeTokens": 7070,
+          "timestamp": 1789211370712,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1022,
+            "output": 169,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 1447,
+            "cost": {
+              "input": 0.002044,
+              "output": 0.001014,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.003186
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "18b757c0-1d3f-4efb-b160-756aeabb29ce",
+          "beforeTokens": 7070,
+          "timestamp": 1789211370713,
+          "afterTokens": 4101,
+          "usage": {
+            "input": 5049,
+            "output": 1082,
+            "cacheRead": 384,
+            "cacheWrite": 0,
+            "totalTokens": 6515,
+            "cost": {
+              "input": 0.010098,
+              "output": 0.006492,
+              "cacheRead": 0.000192,
+              "cacheWrite": 0,
+              "total": 0.016782000000000002
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "9857ea6f-b1f2-4a54-9dc5-168650f93f31",
+          "beforeTokens": 7263,
+          "timestamp": 1789211370718
+        },
+        {
+          "type": "compaction",
+          "operationId": "9857ea6f-b1f2-4a54-9dc5-168650f93f31",
+          "reason": "manual",
+          "beforeTokens": 7263,
+          "timestamp": 1789211384093,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 4240,
+            "output": 915,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 5283,
+            "cost": {
+              "input": 0.00848,
+              "output": 0.00549,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.014034
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "9857ea6f-b1f2-4a54-9dc5-168650f93f31",
+          "reason": "manual",
+          "beforeTokens": 7263,
+          "timestamp": 1789211393847,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1024,
+            "output": 332,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 1612,
+            "cost": {
+              "input": 0.002048,
+              "output": 0.001992,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.004168
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "9857ea6f-b1f2-4a54-9dc5-168650f93f31",
+          "beforeTokens": 7263,
+          "timestamp": 1789211393848,
+          "afterTokens": 4015,
+          "usage": {
+            "input": 5264,
+            "output": 1247,
+            "cacheRead": 384,
+            "cacheWrite": 0,
+            "totalTokens": 6895,
+            "cost": {
+              "input": 0.010528,
+              "output": 0.007482,
+              "cacheRead": 0.000192,
+              "cacheWrite": 0,
+              "total": 0.018202
+            }
+          }
+        }
+      ],
+      "totalTokens": 79465,
+      "costUsd": 0.241402
+    },
+    {
+      "task": "development-repeated-compaction",
+      "repeat": 0,
+      "strategy": "adaptive",
+      "completed": true,
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "evidenceCorrect": true,
+      "artifact": {
+        "port": 8102,
+        "marker": "REV-19-保持原样",
+        "target": "config-3.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "evidence"
+      },
+      "response": "{\"port\":8102,\"marker\":\"REV-19-保持原样\",\"target\":\"config-3.json\",\"deployed\":false,\"recorded\":true,\"source\":\"evidence\"}",
+      "error": "",
+      "elapsedMs": 141720.81333900001,
+      "calls": [
+        {
+          "input": 4571,
+          "output": 3704,
+          "cacheRead": 128,
+          "cost": 0.031174,
+          "elapsedMs": 52810.59513100001,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 8049,
+          "output": 1895,
+          "cacheRead": 128,
+          "cost": 0.027276,
+          "elapsedMs": 25981.662385000003,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 6318,
+          "output": 1776,
+          "cacheRead": 256,
+          "cost": 0.022908,
+          "elapsedMs": 24289.036110999994,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 18555,
+          "output": 4096,
+          "cacheRead": 0,
+          "cost": 0.061686,
+          "elapsedMs": 17955.49460299997,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 18716,
+          "output": 968,
+          "cacheRead": 0,
+          "cost": 0.04324,
+          "elapsedMs": 13628.22412800003,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 6136,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.02456,
+          "elapsedMs": 7021.111982000002,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "task"
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "546da7cf-beb4-49fa-836d-9e995e44185f",
+          "beforeTokens": 6364,
+          "timestamp": 1789211456934
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "546da7cf-beb4-49fa-836d-9e995e44185f",
+          "reason": "manual",
+          "beforeTokens": 6364,
+          "timestamp": 1789211456937,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 2,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "546da7cf-beb4-49fa-836d-9e995e44185f",
+          "reason": "manual",
+          "beforeTokens": 6364,
+          "timestamp": 1789211509739,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 52804,
+          "action": "rebuild",
+          "usage": {
+            "input": 4443,
+            "output": 3704,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 8275,
+            "cost": {
+              "input": 0.008886,
+              "output": 0.022224,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.031174
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "546da7cf-beb4-49fa-836d-9e995e44185f",
+          "reason": "manual",
+          "beforeTokens": 6364,
+          "afterTokens": 1171,
+          "timestamp": 1789211509741,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 52804,
+          "action": "rebuild",
+          "usage": {
+            "input": 4443,
+            "output": 3704,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 8275,
+            "cost": {
+              "input": 0.008886,
+              "output": 0.022224,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.031174
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "4fda8f32-0283-4229-aaff-d7c027fc13ae",
+          "beforeTokens": 4333,
+          "timestamp": 1789211509746
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "4fda8f32-0283-4229-aaff-d7c027fc13ae",
+          "reason": "manual",
+          "beforeTokens": 4333,
+          "timestamp": 1789211509748,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 2,
+          "action": "summary"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "4fda8f32-0283-4229-aaff-d7c027fc13ae",
+          "reason": "manual",
+          "beforeTokens": 4333,
+          "timestamp": 1789211535722,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 25975,
+          "action": "summary",
+          "usage": {
+            "input": 7921,
+            "output": 1895,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9944,
+            "cost": {
+              "input": 0.015842,
+              "output": 0.01137,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.027276
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "4fda8f32-0283-4229-aaff-d7c027fc13ae",
+          "reason": "manual",
+          "beforeTokens": 4333,
+          "afterTokens": 1180,
+          "timestamp": 1789211535723,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 25975,
+          "action": "summary",
+          "usage": {
+            "input": 7921,
+            "output": 1895,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9944,
+            "cost": {
+              "input": 0.015842,
+              "output": 0.01137,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.027276
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "dc24ad76-0f97-41f4-9e9a-565e750cc3b8",
+          "beforeTokens": 4342,
+          "timestamp": 1789211535729
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "dc24ad76-0f97-41f4-9e9a-565e750cc3b8",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211535731,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 2,
+          "action": "summary"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "dc24ad76-0f97-41f4-9e9a-565e750cc3b8",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211560030,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 24301,
+          "action": "summary",
+          "usage": {
+            "input": 6062,
+            "output": 1776,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 8094,
+            "cost": {
+              "input": 0.012124,
+              "output": 0.010656,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.022908
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "dc24ad76-0f97-41f4-9e9a-565e750cc3b8",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "afterTokens": 1180,
+          "timestamp": 1789211560032,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 24301,
+          "action": "summary",
+          "usage": {
+            "input": 6062,
+            "output": 1776,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 8094,
+            "cost": {
+              "input": 0.012124,
+              "output": 0.010656,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.022908
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "da71ba15-770b-4f07-837d-d208f2df6f45",
+          "beforeTokens": 4342,
+          "timestamp": 1789211560038
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "da71ba15-770b-4f07-837d-d208f2df6f45",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211560041,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 3,
+          "action": "summary"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "da71ba15-770b-4f07-837d-d208f2df6f45",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211577980,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 17942,
+          "action": "summary",
+          "usage": {
+            "input": 6019,
+            "output": 1334,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 7609,
+            "cost": {
+              "input": 0.012038,
+              "output": 0.008004,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.02017
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "da71ba15-770b-4f07-837d-d208f2df6f45",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "afterTokens": 1180,
+          "timestamp": 1789211577982,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 17942,
+          "action": "summary",
+          "usage": {
+            "input": 6019,
+            "output": 1334,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 7609,
+            "cost": {
+              "input": 0.012038,
+              "output": 0.008004,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.02017
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "f375e625-26eb-47d6-9bd3-3f3486dcceff",
+          "beforeTokens": 4342,
+          "timestamp": 1789211577988
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "f375e625-26eb-47d6-9bd3-3f3486dcceff",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211577992,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 4,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "f375e625-26eb-47d6-9bd3-3f3486dcceff",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "timestamp": 1789211591622,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 13634,
+          "action": "rebuild",
+          "usage": {
+            "input": 18716,
+            "output": 968,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 19684,
+            "cost": {
+              "input": 0.037432,
+              "output": 0.005808,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.04324
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "f375e625-26eb-47d6-9bd3-3f3486dcceff",
+          "reason": "manual",
+          "beforeTokens": 4342,
+          "afterTokens": 1180,
+          "timestamp": 1789211591623,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 13634,
+          "action": "rebuild",
+          "usage": {
+            "input": 18716,
+            "output": 968,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 19684,
+            "cost": {
+              "input": 0.037432,
+              "output": 0.005808,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.04324
+            }
+          }
+        }
+      ],
+      "totalTokens": 76832,
+      "costUsd": 0.210844
+    }
+  ],
+  "costUsd": 0.45224600000000004,
+  "requests": 17
+}

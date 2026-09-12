@@ -1,4 +1,5 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
+import { validateAdaptive, type AdaptiveCheckpoint } from "./context/checkpoint.ts";
 import { randomUUID } from "node:crypto";
 
 interface EntryIdentity {
@@ -11,6 +12,7 @@ export interface MessageEntry extends EntryIdentity {
 	message: SessionMessage;
 }
 export interface CompactionEntry extends EntryIdentity {
+	adaptive?: AdaptiveCheckpoint;
 	type: "compaction";
 	summary: string;
 	firstKeptEntryId: string;
@@ -53,6 +55,7 @@ export function selectedBranch(state: SessionState): SessionEntry[] {
 		const boundary = branch.findIndex((candidate) => candidate.id === entry.firstKeptEntryId);
 		const kept = branch[boundary];
 		if (boundary < previousBoundary || boundary < 0 || boundary >= index || kept?.type !== "message" || kept.message.role === "toolResult") throw new Error("Invalid compaction retained boundary in selected branch");
+		if (entry.adaptive !== undefined) validateAdaptive(entry.adaptive, branch.slice(0, index));
 		previousBoundary = boundary;
 	}
 	return branch;

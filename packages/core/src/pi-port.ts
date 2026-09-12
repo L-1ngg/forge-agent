@@ -24,6 +24,7 @@ import {
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { thinkingBudgetForLevel } from "@earendil-works/pi-ai/api/simple-options";
 import { permissionScopeForToolCall, type SessionMessage, type StopReason, type ToolCallBlock } from "@forge-agent/protocol";
 import { type HarnessTool, type ToolInputRewrite } from "@forge-agent/tools";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
@@ -219,7 +220,7 @@ export function createPiTestPort(options: PiTestPortOptions): AgentPort {
 
 /** Bridge host cwd/error outcomes to native tool scheduling; preparation and policy
  * remain serial preflight, never inside concurrently started execute promises. */
-function prepareSessionTools(options: ModelPortOptions) {
+export function prepareSessionTools(options: ModelPortOptions) {
 	const prepared = new Map<string, object>();
 	const tools: AgentTool[] = (options.tools ?? []).map(tool => ({
 		name: tool.name, label: tool.label, description: tool.description, parameters: Type.Unsafe(tool.parameters),
@@ -273,6 +274,13 @@ function createSummaryDriver(options: ModelPortOptions): SummaryDriver & { isOve
 		: { level: requested === "off" ? "off" as const : options.thinkingLevel };
 	return {
 		maxTokens: options.model.maxTokens,
+		outputTokens(requested, reasoning) {
+			const level = summaryThinking(reasoning).level;
+			const compat: unknown = Reflect.get(options.model, "compat");
+			const adaptiveThinking = !!compat && typeof compat === "object" && "forceAdaptiveThinking" in compat && compat.forceAdaptiveThinking === true;
+			const budgeted = options.model.api === "anthropic-messages" || (options.model.api === "bedrock-converse-stream" && options.model.id.includes("anthropic"));
+			return Math.min(options.model.maxTokens, requested + (budgeted && level !== "off" && !adaptiveThinking ? thinkingBudgetForLevel(level) : 0));
+		},
 		...(options.retry ? { retry: options.retry } : {}),
 		summaryThinking,
 		isOverflow: message => isContextOverflow(fromSessionMessage(message, options.model) as AssistantMessage, options.contextWindow ?? options.model.contextWindow),

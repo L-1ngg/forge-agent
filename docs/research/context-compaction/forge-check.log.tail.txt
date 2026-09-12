@@ -1,0 +1,8 @@
+(pass) agentLoopContinue with AgentMessage > should throw when context has no messages [0.15ms]
+(pass) agentLoopContinue with AgentMessage > should continue from existing context without emitting user message events [0.44ms]
+(pass) agentLoopContinue with AgentMessage > should allow custom message types as last message (caller responsibility) [0.55ms]
+
+ 561 pass
+ 0 fail
+ 11690 expect() calls
+Ran 561 tests across 75 files. [29.51s]

@@ -1,0 +1,125 @@
+{
+  "version": 2,
+  "cases": [
+    {
+      "id": "development-long-log",
+      "split": "development",
+      "kind": "long-log",
+      "initialPort": 8100,
+      "port": 8100,
+      "marker": "REV-17-保持原样",
+      "target": "config-1.json",
+      "rounds": 1
+    },
+    {
+      "id": "development-correction",
+      "split": "development",
+      "kind": "correction",
+      "initialPort": 8101,
+      "port": 9101,
+      "marker": "REV-18-保持原样",
+      "target": "config-2.json",
+      "rounds": 1
+    },
+    {
+      "id": "development-repeated-compaction",
+      "split": "development",
+      "kind": "repeated-compaction",
+      "initialPort": 8102,
+      "port": 8102,
+      "marker": "REV-19-保持原样",
+      "target": "config-3.json",
+      "rounds": 5
+    },
+    {
+      "id": "development-exact-evidence",
+      "split": "development",
+      "kind": "exact-evidence",
+      "initialPort": 8103,
+      "port": 8103,
+      "marker": "16f82ba71614992c",
+      "target": "config-4.json",
+      "rounds": 1
+    },
+    {
+      "id": "development-recorded-effect",
+      "split": "development",
+      "kind": "recorded-effect",
+      "initialPort": 8104,
+      "port": 8104,
+      "marker": "REV-21-保持原样",
+      "target": "config-5.json",
+      "rounds": 1
+    },
+    {
+      "id": "development-task-switch",
+      "split": "development",
+      "kind": "task-switch",
+      "initialPort": 8105,
+      "port": 8105,
+      "marker": "REV-22-保持原样",
+      "target": "report-6.json",
+      "rounds": 1
+    },
+    {
+      "id": "holdout-long-log",
+      "split": "holdout",
+      "kind": "long-log",
+      "initialPort": 8106,
+      "port": 8106,
+      "marker": "REV-23-保持原样",
+      "target": "config-7.json",
+      "rounds": 1
+    },
+    {
+      "id": "holdout-correction",
+      "split": "holdout",
+      "kind": "correction",
+      "initialPort": 8107,
+      "port": 9107,
+      "marker": "REV-24-保持原样",
+      "target": "config-8.json",
+      "rounds": 1
+    },
+    {
+      "id": "holdout-repeated-compaction",
+      "split": "holdout",
+      "kind": "repeated-compaction",
+      "initialPort": 8108,
+      "port": 8108,
+      "marker": "REV-25-保持原样",
+      "target": "config-9.json",
+      "rounds": 5
+    },
+    {
+      "id": "holdout-exact-evidence",
+      "split": "holdout",
+      "kind": "exact-evidence",
+      "initialPort": 8109,
+      "port": 8109,
+      "marker": "a7a55c077b690eff",
+      "target": "config-10.json",
+      "rounds": 1
+    },
+    {
+      "id": "holdout-recorded-effect",
+      "split": "holdout",
+      "kind": "recorded-effect",
+      "initialPort": 8110,
+      "port": 8110,
+      "marker": "REV-27-保持原样",
+      "target": "config-11.json",
+      "rounds": 1
+    },
+    {
+      "id": "holdout-task-switch",
+      "split": "holdout",
+      "kind": "task-switch",
+      "initialPort": 8111,
+      "port": 8111,
+      "marker": "REV-28-保持原样",
+      "target": "report-12.json",
+      "rounds": 1
+    }
+  ]
+}

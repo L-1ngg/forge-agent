@@ -1,0 +1,300 @@
+{
+  "metadata": {
+    "fixtureVersion": 1,
+    "fixtureSha256": "567692bbd2d9c453489a0351cd95791c25762b3c43bf6cb81695db19cfb213e3",
+    "implementationSha256": "402e04697f1aa4814d8be380d8ccba823ffc29e31c33ba2e56c34af9b166b573",
+    "baselineHead": "149cac7ee1e6aa37fa5c23193387b093e80a78e0",
+    "provider": "xai",
+    "model": "grok-4.6",
+    "thinking": "off",
+    "contextWindow": 32000,
+    "maxTokens": 2048,
+    "reserveTokens": 4096,
+    "keepRecentTokens": 256,
+    "split": "development",
+    "repeats": 1,
+    "pricing": {
+      "input": 2,
+      "output": 6,
+      "cacheRead": 0.5,
+      "cacheWrite": 0
+    },
+    "schedule": [
+      "development-correction/0/pi",
+      "development-correction/0/adaptive"
+    ],
+    "scoring": "Exact JSON fields port/marker/target, deployed=false, recorded=true; zero new calls to deploy/record_result. source must name saved evidence entry when requesting exact-evidence. Independent blinded semantic review is separate.",
+    "limitations": "Synthetic saved histories and configuration artifacts; declared small window, not physical overflow; single provider, no statistical significance claim."
+  },
+  "rows": [
+    {
+      "task": "development-correction",
+      "repeat": 0,
+      "strategy": "pi",
+      "completed": true,
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "evidenceCorrect": false,
+      "artifact": {
+        "port": 9101,
+        "marker": "REV-18-保持原样",
+        "target": "config-2.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "Original Request"
+      },
+      "response": "```json\n{\"port\":9101,\"marker\":\"REV-18-保持原样\",\"target\":\"config-2.json\",\"deployed\":false,\"recorded\":true,\"source\":\"Original Request\"}\n```",
+      "error": "",
+      "elapsedMs": 71271.27751999999,
+      "calls": [
+        {
+          "input": 3057,
+          "output": 1500,
+          "cacheRead": 128,
+          "cost": 0.014922,
+          "elapsedMs": 24571.618559000002,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 1065,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.014418,
+          "elapsedMs": 3298.4260799999975,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "summary"
+        },
+        {
+          "input": 4620,
+          "output": 2552,
+          "cacheRead": 128,
+          "cost": 0.02436,
+          "elapsedMs": 43343.80158099999,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "task"
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "ff260895-7b1a-412e-8131-06fc3dac9509",
+          "beforeTokens": 6248,
+          "timestamp": 1789211090985
+        },
+        {
+          "type": "compaction",
+          "operationId": "ff260895-7b1a-412e-8131-06fc3dac9509",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789211115598,
+          "phase": "attempt",
+          "attempt": 1,
+          "usage": {
+            "input": 2929,
+            "output": 1500,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 4557,
+            "cost": {
+              "input": 0.0058579999999999995,
+              "output": 0.009000000000000001,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.014922
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "operationId": "ff260895-7b1a-412e-8131-06fc3dac9509",
+          "reason": "manual",
+          "beforeTokens": 6248,
+          "timestamp": 1789211118889,
+          "phase": "attempt",
+          "attempt": 2,
+          "usage": {
+            "input": 1768,
+            "output": 179,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 2075,
+            "cost": {
+              "input": 0.0035359999999999996,
+              "output": 0.001074,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.004673999999999999
+            }
+          },
+          "thinking": "off",
+          "error": "Model does not support reasoning off; inherited task reasoning"
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "reason": "manual",
+          "operationId": "ff260895-7b1a-412e-8131-06fc3dac9509",
+          "beforeTokens": 6248,
+          "timestamp": 1789211118890,
+          "afterTokens": 6775,
+          "usage": {
+            "input": 4697,
+            "output": 1679,
+            "cacheRead": 256,
+            "cacheWrite": 0,
+            "totalTokens": 6632,
+            "cost": {
+              "input": 0.009394,
+              "output": 0.010074000000000001,
+              "cacheRead": 0.000128,
+              "cacheWrite": 0,
+              "total": 0.019596
+            }
+          }
+        }
+      ],
+      "totalTokens": 14842,
+      "costUsd": 0.0537
+    },
+    {
+      "task": "development-correction",
+      "repeat": 0,
+      "strategy": "adaptive",
+      "completed": true,
+      "constraintPass": true,
+      "effects": 0,
+      "lookupCalls": 0,
+      "evidenceCorrect": true,
+      "artifact": {
+        "port": 9101,
+        "marker": "REV-18-保持原样",
+        "target": "config-2.json",
+        "deployed": false,
+        "recorded": true,
+        "source": "evidence"
+      },
+      "response": "{\"port\":9101,\"marker\":\"REV-18-保持原样\",\"target\":\"config-2.json\",\"deployed\":false,\"recorded\":true,\"source\":\"evidence\"}",
+      "error": "",
+      "elapsedMs": 75762.46858500001,
+      "calls": [
+        {
+          "input": 4263,
+          "output": 5496,
+          "cacheRead": 128,
+          "cost": 0.04131,
+          "elapsedMs": 74333.532992,
+          "model": "grok-4.6-build",
+          "usageReported": true,
+          "kind": "summary"
+        },
+        {
+          "input": 6416,
+          "output": 2048,
+          "cacheRead": 0,
+          "cost": 0.02512,
+          "elapsedMs": 1406.8375919999962,
+          "model": "grok-4.6",
+          "usageReported": false,
+          "kind": "task"
+        }
+      ],
+      "compactions": [
+        {
+          "type": "compaction",
+          "phase": "start",
+          "reason": "manual",
+          "operationId": "6b678706-0e0b-481c-a75b-1f03cc00d2e7",
+          "beforeTokens": 6383,
+          "timestamp": 1789211162251
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "6b678706-0e0b-481c-a75b-1f03cc00d2e7",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "timestamp": 1789211162255,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 3,
+          "action": "rebuild"
+        },
+        {
+          "type": "compaction",
+          "phase": "attempt",
+          "operationId": "6b678706-0e0b-481c-a75b-1f03cc00d2e7",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "timestamp": 1789211236598,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 74346,
+          "action": "rebuild",
+          "usage": {
+            "input": 4135,
+            "output": 5496,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9759,
+            "cost": {
+              "input": 0.00827,
+              "output": 0.032976,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.04131
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "phase": "end",
+          "operationId": "6b678706-0e0b-481c-a75b-1f03cc00d2e7",
+          "reason": "manual",
+          "beforeTokens": 6383,
+          "afterTokens": 1241,
+          "timestamp": 1789211236600,
+          "strategy": "adaptive",
+          "contextEstimated": true,
+          "inputBudget": 27904,
+          "modelCalls": 1,
+          "generations": 1,
+          "elapsedMs": 74346,
+          "action": "rebuild",
+          "usage": {
+            "input": 4135,
+            "output": 5496,
+            "cacheRead": 128,
+            "cacheWrite": 0,
+            "totalTokens": 9759,
+            "cost": {
+              "input": 0.00827,
+              "output": 0.032976,
+              "cacheRead": 0.000064,
+              "cacheWrite": 0,
+              "total": 0.04131
+            }
+          }
+        }
+      ],
+      "totalTokens": 18223,
+      "costUsd": 0.06643
+    }
+  ],
+  "costUsd": 0.12012999999999999,
+  "requests": 5
+}

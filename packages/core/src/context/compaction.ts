@@ -1,8 +1,9 @@
 import type { SessionEvent, SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { selectedBranch, type CompactionEntry, type MessageEntry, type SessionState } from "../session-storage.ts";
+import { adaptiveMessages } from "./adaptive.ts";
 import { estimateContextTokens } from "../usage.ts";
 
-export interface ContextSettings { enabled: boolean; reserveTokens: number; keepRecentTokens: number; summaryReasoning: "inherit" | "off"; }
+export interface ContextSettings { strategy?: "pi" | "adaptive"; enabled: boolean; reserveTokens: number; keepRecentTokens: number; summaryReasoning: "inherit" | "off"; }
 export const DEFAULT_CONTEXT: ContextSettings = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, summaryReasoning: "inherit" };
 export interface RetryPolicy { enabled: boolean; maxRetries: number; baseDelayMs: number; }
 export const DEFAULT_RETRY: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 2000 };
@@ -22,6 +23,7 @@ export interface CompactionResult { status: "complete" | "skipped" | "error"; op
 export interface SummaryRequest { prompt: string; maxTokens: number; reasoning: "inherit" | "off"; }
 export interface SummaryDriver {
 	maxTokens?: number;
+	outputTokens?(requested: number, reasoning: "inherit" | "off"): number;
 	retry?: Partial<RetryPolicy>;
 	isRetryable?(message: SessionMessage): boolean;
 	wait?(ms: number, signal: AbortSignal): Promise<void>;
@@ -39,7 +41,12 @@ export function contextView(state: SessionState): ContextView {
 	if (start < 0 || start >= index || branch[start]?.type !== "message") throw new Error("Invalid compaction retained boundary");
 	return { previous, entries: branch.slice(start).filter((entry): entry is MessageEntry => entry.type === "message") };
 }
-export function buildContext(state: SessionState): SessionMessage[] {
+export function buildContext(state: SessionState, strategy: "pi" | "adaptive" = "pi"): SessionMessage[] {
+	if (strategy === "adaptive") {
+		const branch = selectedBranch(state);
+		if ([...branch].reverse().find(entry => entry.type === "compaction")?.adaptive) return adaptiveMessages(state);
+		return structuredClone(branch.flatMap(entry => entry.type === "message" ? [entry.message] : []));
+	}
 	const view = contextView(state);
 	return structuredClone([
 		...(view.previous ? [{ role: "user" as const, content: [{ type: "text" as const, text: view.previous.summary }], timestamp: Date.parse(view.previous.timestamp) }] : []),

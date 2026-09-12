@@ -58,10 +58,21 @@ interface EventBase {
 	timestamp: number;
 }
 
+export interface CompactionMetrics {
+	strategy?: "adaptive";
+	contextEstimated?: boolean;
+	inputBudget?: number;
+	modelCalls?: number;
+	generations?: number;
+	elapsedMs?: number;
+	action?: "selection" | "summary" | "rebuild";
+	stopReason?: string;
+}
+
 export type SessionEvent =
 	| (EventBase & { type: "configuration"; phase: "accepted" | "applied"; revision: number })
 	| (EventBase & { type: "retry"; phase: "scheduled" | "attempt" | "end"; attempt: number; delayMs?: number; error?: string; outcome?: "success" | "error" | "aborted" })
-	| (EventBase & { type: "compaction"; phase: "start" | "end" | "error" | "skipped" | "retry" | "attempt"; operationId: string; reason: string; beforeTokens: number; afterTokens?: number; error?: string; attempt?: number; delayMs?: number; thinking?: string; usage?: TokenUsage })
+	| (EventBase & CompactionMetrics & { type: "compaction"; phase: "start" | "end" | "error" | "skipped" | "retry" | "attempt"; operationId: string; reason: string; beforeTokens: number; afterTokens?: number; error?: string; attempt?: number; delayMs?: number; thinking?: string; usage?: TokenUsage })
 	| (EventBase & { type: "recovery"; operationId: string; reason: string; attempt: number })
 	| (EventBase & { type: "agent_start" })
 	| (EventBase & { type: "agent_end"; outcome?: "success" | "error" | "aborted" | "length" | "deferred" })

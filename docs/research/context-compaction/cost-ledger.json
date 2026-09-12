@@ -1,0 +1,133 @@
+{
+  "entries": [
+    {
+      "file": "development/correction.json",
+      "sha256": "a9f93d90524cf461667399ed17d73ff43983397b7a6ec0cff0ea222efe2d0f96",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.324198,
+      "unknownUsageCalls": 5
+    },
+    {
+      "file": "development/exact-evidence-v2.json",
+      "sha256": "5ac7ac194a7f40f837b1639bb2be9ced3fad4dbf6dd39213c69786757eac33f1",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.38531200000000015,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "development/exact-evidence.json",
+      "sha256": "4aedc54de4d78e59882603ee30432c3f14973f21ae761235f8271483e326a39d",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.478126,
+      "unknownUsageCalls": 8
+    },
+    {
+      "file": "development/long-log.json",
+      "sha256": "3f9b9402bf8ecd027fb6d465a0c2648fb3bd54f0e7a0dc6050d8c937d423c5a6",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.4502620000000001,
+      "unknownUsageCalls": 5
+    },
+    {
+      "file": "development/recorded-effect.json",
+      "sha256": "05cf6b4bb59ee89da8e27ae8500c2788dd11d192d4981c7a1dac68b5573759d3",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.34821199999999997,
+      "unknownUsageCalls": 7
+    },
+    {
+      "file": "development/repeated-compaction.json",
+      "sha256": "73fa18f47b451acb6e343b9e05a4af629f1bcb26f94b1ef35e2e53c57b0845f4",
+      "rows": 6,
+      "chargedOrReservedUsd": 1.1405500000000002,
+      "unknownUsageCalls": 15
+    },
+    {
+      "file": "development/task-switch.json",
+      "sha256": "20062a601217550a3fc8182a5ac8acc764b3be6deafbe7bad8ca63f8d0448a74",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.3239960000000001,
+      "unknownUsageCalls": 5
+    },
+    {
+      "file": "holdout/correction.json",
+      "sha256": "ed88258acf3faa5dccdcc46913aa26771edb5531103596fcf72e59dab38d9b10",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.22279000000000013,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "holdout/exact-evidence.json",
+      "sha256": "120fe9a3dc4a0285feddd10ab4a4539cf96319d46207c29da3118cd437a6fc01",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.34294999999999987,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "holdout/long-log.json",
+      "sha256": "e4e3dab32fc7528a4d34cd805d06f6b99eb17b342748b5a91cb35f4ad44854a6",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.235468,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "holdout/recorded-effect.json",
+      "sha256": "d5cf3e594597b4c2a63bfab23c6b2f799ed14f8cdf9bc65a368edec292d8e381",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.25899999999999995,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "holdout/repeated-compaction.json",
+      "sha256": "baf603c8a2cdc0280466c90fa0f66f1ef371d489633933d39d7da8d9fdd2bfd4",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.744426,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "holdout/task-switch.json",
+      "sha256": "05b28a0cf25fed95bb00342e0c35761985e1b0a17fd72b828236950e29755ff3",
+      "rows": 6,
+      "chargedOrReservedUsd": 0.273462,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "probes/forge-context-exact-adaptive-probe.json",
+      "sha256": "b3b12555250bc7bd51c7d06d2a5ac8b4246c0bfe65a364b2de81d002d1ac90e7",
+      "rows": 1,
+      "chargedOrReservedUsd": 0.06416,
+      "unknownUsageCalls": 0
+    },
+    {
+      "file": "probes/forge-context-exact-v2-probe.json",
+      "sha256": "d4bd6cbdca0dead266651b44782f172ee617affc00a2fc6916e656bfaba7b59e",
+      "rows": 1,
+      "chargedOrReservedUsd": 0.303432,
+      "unknownUsageCalls": 4
+    },
+    {
+      "file": "probes/forge-context-probe-2.json",
+      "sha256": "5fac6af5ac153ee123ca9774cda62446449375096dec77aa1b2716d046233d2b",
+      "rows": 2,
+      "chargedOrReservedUsd": 0.12012999999999999,
+      "unknownUsageCalls": 2
+    },
+    {
+      "file": "probes/forge-context-probe.json",
+      "sha256": "40246e40c626db1418f25733f580619938b4e6504e2c7ee24e9b92a33b61924a",
+      "rows": 2,
+      "chargedOrReservedUsd": 0.472332,
+      "unknownUsageCalls": 5
+    },
+    {
+      "file": "probes/forge-context-rebuild-probe.json",
+      "sha256": "c87e020646dc5b2a6b45c64a33639e01358c0ca821da44fd936e05059740e7f0",
+      "rows": 2,
+      "chargedOrReservedUsd": 0.45224600000000004,
+      "unknownUsageCalls": 8
+    }
+  ],
+  "totalChargedOrReservedUsd": 6.941052000000001,
+  "budgetUsd": 10,
+  "note": "Probe and development costs include failed and superseded fixtures. Missing usage retains reservation upper bound; values are catalog estimates, not provider invoices."
+}

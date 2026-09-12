@@ -1,0 +1,22 @@
+[
+  {
+    "injected": "config",
+    "result": "rejected",
+    "expectedError": "Mixed or missing configuration"
+  },
+  {
+    "injected": "implementation",
+    "result": "rejected",
+    "expectedError": "equivalence proof mismatch"
+  },
+  {
+    "injected": "score",
+    "result": "rejected",
+    "expectedError": "Scoring mismatch"
+  },
+  {
+    "injected": "duplicate",
+    "result": "rejected",
+    "expectedError": "Unexpected or duplicate run"
+  }
+]

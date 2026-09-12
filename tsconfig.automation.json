@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["scripts/release-*.ts", "scripts/compare-core.ts", "scripts/session-resume-benchmark.ts"]
+  "include": ["scripts/release-*.ts", "scripts/compare-core.ts", "scripts/session-resume-benchmark.ts", "scripts/context-compaction-*.ts"]
 }

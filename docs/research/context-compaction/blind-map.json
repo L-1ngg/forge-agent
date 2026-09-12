@@ -1,0 +1,182 @@
+{
+  "07c48b418705": [
+    "holdout-correction",
+    "pi",
+    0
+  ],
+  "dc7a723f9617": [
+    "holdout-correction",
+    "adaptive",
+    0
+  ],
+  "a09fc357ab9a": [
+    "holdout-correction",
+    "adaptive",
+    1
+  ],
+  "e6e231ad35e7": [
+    "holdout-correction",
+    "pi",
+    1
+  ],
+  "d96a7ee574cb": [
+    "holdout-correction",
+    "pi",
+    2
+  ],
+  "db4f97331f0f": [
+    "holdout-correction",
+    "adaptive",
+    2
+  ],
+  "b7f8955f6b8d": [
+    "holdout-exact-evidence",
+    "pi",
+    0
+  ],
+  "b5f536b99d4c": [
+    "holdout-exact-evidence",
+    "adaptive",
+    0
+  ],
+  "975f5ab9f990": [
+    "holdout-exact-evidence",
+    "adaptive",
+    1
+  ],
+  "c34dfcdd5c45": [
+    "holdout-exact-evidence",
+    "pi",
+    1
+  ],
+  "8922f2561225": [
+    "holdout-exact-evidence",
+    "pi",
+    2
+  ],
+  "ab0fcb08fe83": [
+    "holdout-exact-evidence",
+    "adaptive",
+    2
+  ],
+  "90306da6e9ce": [
+    "holdout-long-log",
+    "pi",
+    0
+  ],
+  "6b82e7dd3f9f": [
+    "holdout-long-log",
+    "adaptive",
+    0
+  ],
+  "2b34f830be2f": [
+    "holdout-long-log",
+    "adaptive",
+    1
+  ],
+  "06e4a20d521f": [
+    "holdout-long-log",
+    "pi",
+    1
+  ],
+  "e56066bac091": [
+    "holdout-long-log",
+    "pi",
+    2
+  ],
+  "64316aeda34a": [
+    "holdout-long-log",
+    "adaptive",
+    2
+  ],
+  "ff89eecc1d0e": [
+    "holdout-recorded-effect",
+    "pi",
+    0
+  ],
+  "1c8f95ef2545": [
+    "holdout-recorded-effect",
+    "adaptive",
+    0
+  ],
+  "79a8cfa93d5c": [
+    "holdout-recorded-effect",
+    "adaptive",
+    1
+  ],
+  "68c6eb51b319": [
+    "holdout-recorded-effect",
+    "pi",
+    1
+  ],
+  "ccbc8031d7b7": [
+    "holdout-recorded-effect",
+    "pi",
+    2
+  ],
+  "425de9bf7408": [
+    "holdout-recorded-effect",
+    "adaptive",
+    2
+  ],
+  "9ebc9bf4b8cd": [
+    "holdout-repeated-compaction",
+    "pi",
+    0
+  ],
+  "162b3a820f62": [
+    "holdout-repeated-compaction",
+    "adaptive",
+    0
+  ],
+  "ff66c52c3135": [
+    "holdout-repeated-compaction",
+    "adaptive",
+    1
+  ],
+  "6babbcb891d9": [
+    "holdout-repeated-compaction",
+    "pi",
+    1
+  ],
+  "5c6328b21485": [
+    "holdout-repeated-compaction",
+    "pi",
+    2
+  ],
+  "de6331b36e11": [
+    "holdout-repeated-compaction",
+    "adaptive",
+    2
+  ],
+  "bf28501f44df": [
+    "holdout-task-switch",
+    "pi",
+    0
+  ],
+  "cd2d1e5a6126": [
+    "holdout-task-switch",
+    "adaptive",
+    0
+  ],
+  "7b23a7098970": [
+    "holdout-task-switch",
+    "adaptive",
+    1
+  ],
+  "c259ed0b6092": [
+    "holdout-task-switch",
+    "pi",
+    1
+  ],
+  "fad6c0d02a20": [
+    "holdout-task-switch",
+    "pi",
+    2
+  ],
+  "ee29283ebf3c": [
+    "holdout-task-switch",
+    "adaptive",
+    2
+  ]
+}

@@ -66,6 +66,20 @@ interface SessionStorage {
 
 ## 上下文管理
 
+`context.strategy` 默认为 `"pi"`，保留下述原有压缩行为。显式设置 `"adaptive"` 可启用 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 的增强策略，例如 `context: { strategy: "adaptive", reserveTokens: 16384, keepRecentTokens: 20000 }`。它不意味着在所有模型或任务上质量更好。
+
+增强策略保留未归档用户输入及最新完整交互单元，先尝试裁剪可找回的旧工具正文和选择相关材料；需要时由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
+
+增强压缩在第 4 次增量更新、任务切换或无效检查点/无进展时尝试从原文重建；每次操作最多 2 次逻辑生成、4 次实际模型请求（包括临时重试）。超大摘要输入、保护状态放不下、引用无效或最终无进展均返回错误，不发布损坏检查点；自动路径阻止该次过预算任务请求，取消和存储失败继续遵循既有生命周期。
+
+`adaptive` 的 task `maxTokens` 未指定时显式取 `min(4096, model.maxTokens)`；它与 `pi` 的 provider 默认不同。预算包括 system、工具定义、状态、摘要与消息，预留 `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`；有效输出计入适用 provider 的额外 thinking 预算。启发式计数不保证供应商物理窗口一定足够。摘要输入也单独预检，输出最多 4096 tokens（还受模型和窗口限制）。
+
+增强策略注册保留工具名 `read_context`。它经过现有权限和 tool hooks，只能读取当前分支已保存消息；宿主同名工具配置会被拒绝。输入 `entryId`、`offset`（默认 0）和 `limit`（默认/最大 4096）以 Unicode code point 为单位；正文最多 16 KiB，`nextOffset` 支持长单行续读。元数据也计入后续上下文。图片只报告占位，无法找回工具原先未保存的正文；不存在、越界或外分支引用明确报错。需要自动找回的宿主应通过已有 permission 配置允许该工具。
+
+增强 compaction 使用 v4 记录的可选 `adaptive` 版本化载荷；重开时验证引用与状态替代关系。无增强载荷的旧历史仍可读取。同一新版 SDK 切回 `pi` 时采用可读降级摘要与合法后缀，再启用 `adaptive` 时从原始消息重建视图；不承诺旧 SDK 能复现增强投影。自动压缩关闭不移除原文工具，也不禁用手动压缩。
+
+增强 `compaction` 事件补充 `strategy`、`action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。以下固定阈值、两段摘要和失败续发规则描述 `pi` 策略。
+
 创建选项支持 `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }`，默认分别为 `true`、`16384`、`20000`、`"inherit"`。`agent.configureContext(partial)` 在空闲时更新这些设置。每次任务模型请求前，仅当当前估算严格超过 `contextWindow - reserveTokens` 时主动压缩；近期保留量用于选择合法切点，不是压缩后的硬上限。
 
 `contextWindow` 可覆盖本地容量声明，默认采用模型元数据；降低该值可测试触发流程，不证明供应商物理窗口超限。`maxTokens` 是普通任务的宿主输出配置，与压缩 reserve 分开，默认沿用 provider 适配。`getUsage()` 的 `contextEstimated` 区分有效 usage 与估算。模型、system、tools、分支或投影改变后失效，摘要 usage 不作为任务锚点。
