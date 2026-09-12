@@ -9,6 +9,8 @@ created: 2026-09-07
 
 需求规格与任务进度见 [GitHub #1](https://github.com/L-1ngg/forge-agent/issues/1)。本文继续维护整体施工设计、AC-UI 跨流程验收与验证证据。
 
+保持本页交互行为的内部职责调整见[主界面工具浏览 module 深化](transcript-browser.md)。
+
 ## Why
 
 operator 原话:

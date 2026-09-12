@@ -27,10 +27,7 @@ import { paintShortcuts, type ShortcutHint } from "./dock.ts";
 import { createTheme, type Theme } from "./theme.ts";
 import { isCtrlC, type Key } from "./keys.ts";
 import { TranscriptProjector } from "./transcript/projector.ts";
-import type { TranscriptEntry } from "./transcript/types.ts";
-import { presentEntry } from "./transcript/present.ts";
-import { computeEntryLayout, entryHeight, paintEntry } from "./transcript/entry-shell.ts";
-import { ScrollState, type EntrySpan } from "./scroll.ts";
+import { TranscriptBrowser } from "./transcript/browser.ts";
 import { FocusStack } from "./focus-stack.ts";
 import { nextEscStep, resolveKeyOwner, shortcutRoutes, type InputRouterState } from "./input-router.ts";
 import {
@@ -45,7 +42,6 @@ import { paintWelcome, welcomeHeight } from "./welcome.ts";
 import { paintPicker, pickerHeight, type PickerState } from "./picker.ts";
 import { DetailView } from "./detail-view.ts";
 import { entryDetail } from "./transcript/detail.ts";
-import { transcriptViews } from "./transcript/groups.ts";
 import { TextSelection } from "./text-selection.ts";
 import { SessionMenu, type AppSessionPreview, type AppSessionSummary } from "./session-menu.ts";
 
@@ -117,7 +113,7 @@ export class App {
 	private readonly theme: Theme;
 	private readonly draft: EditorState = createEditor();
 	private readonly projector = new TranscriptProjector();
-	private readonly scroll = new ScrollState();
+	private readonly browser: TranscriptBrowser;
 	private focus = new FocusStack<RequestCardRecord>();
 	private readonly cards = new Map<string, RequestCard>();
 	private session: AppSession | undefined;
@@ -133,10 +129,7 @@ export class App {
 	private running = false;
 	private compactTask: Promise<void> | undefined;
 	private browsing = false;
-	private selectedId: string | undefined;
 	private viewer: DetailView | undefined;
-	private lastClick: { id: string; at: number } | undefined;
-	private readonly expandedGroups = new Set<string>();
 	private submitted = false;
 	private selection: TextSelection | undefined;
 	private selectionFlash: TextSelection | undefined;
@@ -150,7 +143,6 @@ export class App {
 	private runTask: Promise<void> | undefined;
 	private picker: PickerState | undefined;
 	private suggestionVersion = 0;
-	private previousTranscript: { spans: EntrySpan[]; totalRows: number; height: number } | undefined;
 	private started = false;
 	private stoppedPromise: Promise<void> | undefined;
 	private resolveStopped: (() => void) | undefined;
@@ -159,6 +151,7 @@ export class App {
 		this.session = options.sessions?.current;
 		for (const message of this.session?.history ?? options.history ?? []) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
 		this.theme = createTheme({ ...(options.env ? { env: options.env } : {}) });
+		this.browser = new TranscriptBrowser(this.projector, this.theme);
 		this.host = new Host({
 			...(options.stdin ? { stdin: options.stdin } : {}),
 			...(options.stdout ? { stdout: options.stdout } : {}),
@@ -212,8 +205,6 @@ export class App {
 	private routerState(): InputRouterState {
 		const top = this.focus.top();
 		const parked = this.focus.parkedTop();
-		const selected = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
-		const group = this.selectedId?.startsWith("group:") ?? false;
 		return {
 			cardFocused: this.focus.active,
 			cardParked: !this.focus.active && this.focus.hasParked,
@@ -221,8 +212,8 @@ export class App {
 			cardSubInput: this.focus.active && !!top && requestCardActions(top.request)[this.focus.focusIndex] === "answer_text",
 			editorFocused: !this.browsing,
 			running: this.running || this.compactTask !== undefined,
-			selectedCanView: group || !!selected,
-			selectedCanFold: group || !!selected && ["tool", "thinking", "execute", "edit"].includes(selected.kind),
+			selectedCanView: this.browser.canView,
+			selectedCanFold: this.browser.canFold,
 		};
 	}
 
@@ -287,7 +278,7 @@ export class App {
 		if (result.action === "park" && result.card) {
 			this.cards.get(result.card.id)?.park();
 			this.browsing = true;
-			this.selectedId ??= this.presentations(this.screen().columns).at(-1)?.id;
+			this.transcript().enter();
 			this.repaint();
 			return;
 		}
@@ -322,19 +313,19 @@ export class App {
 			this.repaint();
 			return;
 		}
-		if (key.type === "pageUp") this.scrollPage(1);
-		else if (key.type === "pageDown") this.scrollPage(-1);
+		if (key.type === "pageUp") this.transcript().scrollPage(1);
+		else if (key.type === "pageDown") this.transcript().scrollPage(-1);
 		else if (key.type === "enter" || (key.type === "ctrl" && key.key === "f")) this.openDetail();
 		else if (key.type === "arrow") {
-			if (key.direction === "up" || key.direction === "down") this.selectEntry(key.direction === "up" ? -1 : 1);
-			else this.foldSelected(key.direction === "left" ? "collapsed" : "expanded");
+			if (key.direction === "up" || key.direction === "down") this.transcript().moveSelection(key.direction === "up" ? -1 : 1);
+			else this.transcript().fold(key.direction === "left" ? "collapsed" : "expanded");
 		} else if (key.type === "char") {
-			if (key.text === "j" || key.text === "k") this.selectEntry(key.text === "k" ? -1 : 1);
-			else if (key.text === "e") this.foldSelected();
-			else if (key.text === "h" || key.text === "l") this.foldSelected(key.text === "h" ? "collapsed" : "expanded");
-			else if (key.text === "G") this.scroll.jumpToEnd();
+			if (key.text === "j" || key.text === "k") this.transcript().moveSelection(key.text === "k" ? -1 : 1);
+			else if (key.text === "e") this.transcript().fold();
+			else if (key.text === "h" || key.text === "l") this.transcript().fold(key.text === "h" ? "collapsed" : "expanded");
+			else if (key.text === "G") this.browser.jumpToEnd();
 			else if (key.text === "y" || key.text === "Y") {
-				const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+				const entry = this.browser.selectedEntry;
 				if (entry) { const detail = entryDetail(entry); this.copyText(key.text === "Y" ? detail.metadata : detail.lines.join("\n")); }
 			}
 		}
@@ -345,7 +336,7 @@ export class App {
 		if (this.picker && this.handlePickerKey(key)) return;
 		if (key.type === "tab") {
 			this.browsing = true;
-			this.selectedId ??= this.presentations(this.screen().columns).at(-1)?.id;
+			this.transcript().enter();
 			this.suggestionVersion++;
 			this.repaint();
 			return;
@@ -401,10 +392,10 @@ export class App {
 				moveEnd(this.draft);
 				break;
 			case "pageUp":
-				this.scrollPage(1);
+				this.transcript().scrollPage(1);
 				break;
 			case "pageDown":
-				this.scrollPage(-1);
+				this.transcript().scrollPage(-1);
 				break;
 			default:
 				return;
@@ -572,10 +563,7 @@ export class App {
 		}
 		if (command === "/clear") {
 			this.projector.clear();
-			this.selectedId = undefined;
-			this.expandedGroups.clear();
-			this.scroll.jumpToEnd();
-			this.previousTranscript = undefined;
+			this.browser.reset();
 			this.projector.addNotice("已清屏，上下文仍保留");
 			return true;
 		}
@@ -646,9 +634,8 @@ export class App {
 				this.cards.clear();
 				this.projector.clear();
 				for (const message of next.history) this.projector.apply({ type: "message_end", message, timestamp: message.timestamp });
-				this.selectedId = undefined; this.viewer = undefined; this.browsing = false;
-				this.expandedGroups.clear(); this.scroll.jumpToEnd(); this.previousTranscript = undefined;
-				this.selection = undefined; this.selectionFlash = undefined; this.lastClick = undefined;
+				this.browser.reset(); this.viewer = undefined; this.browsing = false;
+				this.selection = undefined; this.selectionFlash = undefined;
 				this.feedback = undefined; this.copyVersion++; clearTimeout(this.feedbackTimer);
 				this.queued.length = 0; this.replacement = undefined; this.autoSendPaused = true;
 				const draft = this.savedDrafts.get(next.id) ?? "";
@@ -715,26 +702,8 @@ export class App {
 		this.repaint();
 	}
 
-	private selectEntry(delta: number): void {
-		const entries = this.presentations(this.screen().columns);
-		const current = entries.findIndex((entry) => entry.id === this.selectedId);
-		this.selectedId = entries[Math.max(0, Math.min(entries.length - 1, current + delta))]?.id;
-		const metrics = this.transcriptMetrics();
-		const span = metrics.spans.find((item) => item.entryId === this.selectedId);
-		if (!span) return;
-		const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
-		if (span.start < top || span.start >= top + metrics.viewportHeight) this.setTranscriptTop(span.start);
-	}
-
 	private openDetail(): void {
-		this.scroll.hold();
-		const group = this.presentations(this.screen().columns).find((view) => view.id === this.selectedId)?.members;
-		if (group) {
-			for (const member of group) this.expandedGroups.add(member.id);
-			this.selectedId = group[0]?.id;
-			return;
-		}
-		const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
+		const entry = this.transcript().openDetail();
 		if (entry) this.viewer = new DetailView(entry.id, entryDetail(entry));
 	}
 
@@ -750,47 +719,13 @@ export class App {
 		});
 	}
 
-	private setTranscriptTop(top: number): void {
-		const metrics = this.transcriptMetrics();
-		const max = Math.max(0, metrics.totalRows - metrics.viewportHeight);
-		this.scroll.scrollBy(max - top - this.scroll.offset, max);
-		this.scroll.hold();
-		this.previousTranscript = undefined;
-	}
-
-	private foldSelected(mode?: "collapsed" | "expanded"): void {
-		if (this.selectedId?.startsWith("group:")) {
-			const metrics = this.transcriptMetrics();
-			const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
-			const members = this.presentations(this.screen().columns).find((view) => view.id === this.selectedId)?.members ?? [];
-			const close = mode === "collapsed" || mode === undefined && members.some((member) => this.expandedGroups.has(member.id));
-			for (const member of members) {
-				if (close) this.expandedGroups.delete(member.id);
-				else this.expandedGroups.add(member.id);
-			}
-			this.setTranscriptTop(top);
-			return;
-		}
-		const entry = this.selectedId ? this.projector.getEntry(this.selectedId) : undefined;
-		if (!entry) return;
-		if (entry.kind !== "tool" && entry.kind !== "thinking" && entry.kind !== "execute" && entry.kind !== "edit") return;
-		const metrics = this.transcriptMetrics();
-		const top = Math.max(0, metrics.totalRows - metrics.viewportHeight - this.scroll.offset);
-		const current = entry.kind === "tool" ? entry.displayMode : entry.block.currentDisplayMode ?? entry.block.defaultDisplayMode ?? entry.block.fold.defaultDisplayMode ?? "expanded";
-		const next = mode ?? (current === "collapsed" ? entry.kind === "tool" && entry.name === "read" ? "truncated" : "expanded" : "collapsed");
-		const previousStart = metrics.spans.find((span) => span.entryId === entry.id)?.start ?? 0;
-		this.projector.setEntryDisplayState(entry.id, next, true);
-		const nextStart = this.transcriptMetrics().spans.find((span) => span.entryId === entry.id)?.start ?? previousStart;
-		this.setTranscriptTop(top + nextStart - previousStart);
-	}
-
 	private handleMouse(key: Extract<Key, { type: "mouse" }>): void {
 		const screen = this.screen();
 		key = { ...key, x: key.x - screen.x, y: key.y - screen.y };
 		if (key.action === "release" || key.action === "drag") {
 			if (this.selection) {
 				this.selection.move(key);
-				if (this.selection.moved) this.lastClick = undefined;
+				if (this.selection.moved) this.browser.cancelClick();
 				if (key.action === "release") {
 					this.copyText(this.selection.text());
 					this.selectionFlash = this.selection.moved ? this.selection : undefined;
@@ -808,7 +743,8 @@ export class App {
 		}
 		const plan = this.layoutPlan(screen.columns, screen.rows, this.statusSegments().length > 0);
 		const offsets = layoutOffsets(plan);
-		const { totalRows, viewportHeight, spans } = this.transcriptMetrics();
+		const browser = this.transcript();
+		const viewportHeight = plan.transcript.height;
 		if (key.x >= this.host.columns || key.y >= this.host.rows) return;
 		const card = this.visibleCard();
 		const interactive = this.interactiveRegion;
@@ -821,28 +757,16 @@ export class App {
 		if (card && key.y >= offsets.interactive && key.y < offsets.interactive + plan.interactive.height) {
 			if (key.action === "up" || key.action === "down") card.bodyOffset = Math.max(0, card.bodyOffset + (key.action === "down" ? 3 : -3));
 		} else if (key.action === "up" || key.action === "down") {
-			this.scroll.scrollBy(key.action === "up" ? 3 : -3, Math.max(0, totalRows - viewportHeight));
-			this.scroll.hold();
+			browser.scrollBy(key.action === "up" ? 3 : -3);
 		} else if (!this.picker && key.y >= offsets.transcript && key.y < offsets.transcript + viewportHeight) {
-			const windowTop = Math.max(0, totalRows - viewportHeight - this.scroll.offset);
-			const targetRow = windowTop + key.y - offsets.transcript;
-			const span = spans.find((candidate) => candidate.start <= targetRow && targetRow < candidate.start + candidate.height);
-			const entry = span && this.presentations(screen.columns).find((view) => view.id === span.entryId);
-			if (entry) {
+			const hit = browser.click(key.y - offsets.transcript, Date.now());
+			if (hit) {
 				if (this.focus.active) {
 					const parked = this.focus.park();
 					if (parked) this.cards.get(parked.id)?.park();
 				}
 				this.browsing = true;
-				this.selectedId = entry.id;
-				this.scroll.hold();
-				const now = Date.now();
-				if (span?.start === targetRow && this.lastClick?.id === entry.id && now - this.lastClick.at <= 400) {
-					this.foldSelected(); this.lastClick = undefined;
-				} else this.lastClick = span?.start === targetRow ? { id: entry.id, at: now } : undefined;
-				const source = this.projector.getEntry(entry.id);
-				const textEntry = source?.kind === "assistant" || source?.kind === "user" || source?.kind === "notice";
-				if (span && (targetRow > span.start || textEntry) && key.x >= 3) this.startSelection(key, offsets.transcript, offsets.transcript + viewportHeight, 3);
+				if (hit.selectText && key.x >= 3) this.startSelection(key, offsets.transcript, offsets.transcript + viewportHeight, 3);
 			}
 		}
 		this.repaint();
@@ -856,42 +780,11 @@ export class App {
 		this.selection = new TextSelection(point, snapshot, { top, bottom, left, right: columns - (this.viewer ? 1 : 2) });
 	}
 
-	private scrollPage(direction: 1 | -1): void {
-		const { totalRows, viewportHeight } = this.transcriptMetrics();
-		this.scroll.pageBy(direction, viewportHeight, Math.max(0, totalRows - viewportHeight));
-		this.scroll.hold();
-	}
-
-	private transcriptMetrics(): { totalRows: number; viewportHeight: number; spans: EntrySpan[] } {
+	private transcript(): TranscriptBrowser {
 		const { columns, rows } = this.screen();
-		const segments = this.statusSegments();
-		const plan = this.layoutPlan(columns, rows, segments.length > 0);
-		const presentations = this.presentations(columns);
-		let start = 0;
-		const spans: EntrySpan[] = presentations.map((presentation) => {
-			const height = entryHeight(presentation.presentation);
-			const span = { entryId: presentation.id, start, height, rowSources: [
-				...Array.from({ length: presentation.presentation.chrome.vpadTop }, () => undefined),
-				...presentation.presentation.rows.map((row) => row.source),
-			] };
-			start += height;
-			return span;
-		});
-		return { totalRows: start, viewportHeight: plan.transcript.height, spans };
-	}
-
-	private presentations(columns: number) {
-		const views = transcriptViews(this.projector.getEntries(), columns, this.theme, this.expandedGroups);
-		for (const view of views) {
-			if (view.members?.some((member) => this.expandedGroups.has(member.id))) {
-				for (const member of view.members) this.expandedGroups.add(member.id);
-			}
-		}
-		if (this.selectedId && !views.some((view) => view.id === this.selectedId)) {
-			const memberId = this.selectedId.startsWith("group:") ? this.selectedId.slice(6) : this.selectedId;
-			this.selectedId = views.find((view) => view.id === memberId || view.members?.some((member) => member.id === memberId))?.id;
-		}
-		return views;
+		const plan = this.layoutPlan(columns, rows, this.statusSegments().length > 0);
+		this.browser.update(columns, plan.transcript.height);
+		return this.browser;
 	}
 
 	private statusSegments(): string[] {
@@ -988,7 +881,8 @@ export class App {
 			composerWidth = Math.min(75, Math.max(4, columns - 2));
 			composerX = Math.max(0, Math.floor((columns - composerWidth) / 2));
 		} else {
-			this.paintTranscriptRegion(frame, offsets.transcript, transcriptHeight);
+			this.browser.update(columns, transcriptHeight);
+			this.browser.paint(frame, offsets.transcript, this.browsing);
 		}
 		const activityLines = this.activityLines(columns);
 		for (let row = 0; row < plan.activity.height; row++) {
@@ -1035,65 +929,6 @@ export class App {
 		}
 		(this.selection ?? this.selectionFlash)?.paint(frame);
 		return this.surround(frame);
-	}
-
-	private paintTranscriptRegion(frame: TerminalFrame, top: number, height: number): void {
-		if (height <= 0) return;
-		const presentations = this.presentations(frame.columns);
-		let start = 0;
-		const spans: EntrySpan[] = presentations.map((presentation) => {
-			const span = { entryId: presentation.id, start, height: entryHeight(presentation.presentation), rowSources: [
-				...Array.from({ length: presentation.presentation.chrome.vpadTop }, () => undefined),
-				...presentation.presentation.rows.map((row) => row.source),
-			] };
-			start += span.height;
-			return span;
-		});
-		const totalRows = start;
-		if (this.previousTranscript) this.scroll.captureAnchor(this.previousTranscript.spans, this.previousTranscript.totalRows, this.previousTranscript.height);
-		this.scroll.restoreAnchor(spans, totalRows, height);
-		this.previousTranscript = { spans, totalRows, height };
-		const maxOffset = Math.max(0, totalRows - height);
-		if (this.scroll.offset > maxOffset) this.scroll.scrollBy(0, maxOffset);
-		const windowTop = Math.max(0, totalRows - height - Math.min(this.scroll.offset, maxOffset));
-		for (const [index, span] of spans.entries()) {
-			if (span.start + span.height <= windowTop || span.start >= windowTop + height) continue;
-			paintEntry(frame, top + (span.start - windowTop), presentations[index]!.presentation, this.theme, { top, bottom: top + height });
-			if (this.browsing && span.entryId === this.selectedId) {
-				const view = presentations[index]!;
-				const y = Math.max(top, top + span.start + view.presentation.chrome.vpadTop - windowTop);
-				if (view.dense) {
-					for (let x = 1; x < frame.columns - 1; x++) {
-						const cell = frame.cells[y]![x]!;
-						cell.background = this.theme.color("dark_surface");
-					}
-				}
-				writeText(frame, view.dense ? 3 : 1, y, ">", { ...defaultStyle(), foreground: this.theme.color("status"), ...(view.dense ? { background: this.theme.color("dark_surface") } : {}) });
-			}
-		}
-		const selected = this.browsing ? presentations.findIndex((view) => view.id === this.selectedId) : -1;
-		if (selected >= 0) {
-			const unit = presentations[selected]!.selectionGroup;
-			const selectedSpans = spans.filter((_span, index) => index === selected || unit !== undefined && presentations[index]!.selectionGroup === unit);
-			const first = selectedSpans[0]!;
-			const last = selectedSpans.at(-1)!;
-			const firstIndex = spans.indexOf(first);
-			const firstChrome = presentations[firstIndex]!.presentation.chrome;
-			const start = top + first.start + firstChrome.vpadTop - windowTop;
-			const previousChrome = presentations[firstIndex - 1]?.presentation.chrome;
-			const hasTopGap = firstChrome.vpadTop > 0 || !previousChrome || (previousChrome.gapAfter ?? 0) > 0 || !previousChrome.surface && previousChrome.vpadBottom > 0;
-			const lastChrome = presentations.find((view) => view.id === last.entryId)!.presentation.chrome;
-			const lastPadding = lastChrome.vpadBottom + (lastChrome.gapAfter ?? 0);
-			const end = top + last.start + last.height - lastPadding - windowTop;
-			const style = { ...defaultStyle(), foreground: this.theme.color("prompt_border_active") };
-			const borderTop = hasTopGap ? start - 1 : start;
-			const borderBottom = lastPadding > 0 ? end : end - 1;
-			for (let y = Math.max(top, borderTop); y <= Math.min(top + height - 1, borderBottom); y++) {
-				const clipped = y === top && start < top || y === top + height - 1 && end >= top + height;
-				writeText(frame, 0, y, clipped ? "┆" : y === start - 1 ? "┌" : y === end ? "└" : "│", style);
-				writeText(frame, frame.columns - 1, y, clipped ? "┆" : y === start - 1 ? "┐" : y === end ? "┘" : "│", style);
-			}
-		}
 	}
 
 	private async consumeRequests(): Promise<void> {
