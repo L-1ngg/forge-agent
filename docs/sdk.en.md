@@ -59,7 +59,9 @@ Cancellation retains formed records and waits for started writes and tools. It d
 
 A successful append must be reloadable. A write failure stops new scheduling and faults the instance. Inspect actual storage before recreating it; do not blindly retry a potentially partial append or allow concurrent writers. JSONL has no power-loss or partial-write transaction guarantee. External tool effects are never rolled back.
 
-The CLI uses v4 through `SessionStore.asStorage()`. Older formats require a separate converted copy. Neither `processed` nor `message_end` acknowledges durability; normal iterator completion awaits all necessary writes.
+`SessionStore.create(path, cwd, id?)` synchronously prepares new file storage without writing. Its first `append()` creates the directories and exclusively writes the header and first entry. `load()` does not create a file. `saved` becomes `true` after successfully creating or opening the file; it is not a live existence check. `SessionStore.open(path, cwd)` still creates a missing file immediately by default; use `{ create: false }` when resuming. A first-write collision or I/O failure faults the instance without overwriting or automatically retrying. Omitting `id` generates an identity; pass `store.header.id` as `createAgent`'s `sessionId` to retain that routing identity.
+
+The CLI uses v4 `SessionStore` instances as its storage. Older formats require a separate converted copy. Neither `processed` nor `message_end` acknowledges durability; normal iterator completion awaits all necessary writes.
 
 `SessionStore.open` accepts `create: false` for discovery and resume validation without creating missing files. `store.appendable` indicates whether in-place appends are allowed; a false value requires a verified copy before continuing. CLI session selection does not change the SDK's custom `storage` or `sessionId` support; `--session` and `sessionPath` are no longer CLI entry points.
 

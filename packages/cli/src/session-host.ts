@@ -1,7 +1,7 @@
-import { createAgent, createPiPort, RequestBus, SessionStore, type Agent, type AgentPort, type CreateAgentOptions, type PiPortOptions, type SessionEntry, type SessionState, type SessionStorage } from "@forge-agent/core";
+import { createAgent, createPiPort, RequestBus, SessionStore, type Agent, type AgentPort, type CreateAgentOptions, type PiPortOptions } from "@forge-agent/core";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 export interface SessionPreviewMessage { role: "user" | "assistant"; text: string; truncated: boolean; stopReason?: string; }
@@ -43,21 +43,6 @@ async function directoryEntries(path: string) {
 	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
 }
 
-/** No file exists until the first consumed input is committed. */
-class NewSessionStorage implements SessionStorage {
-	private store: SessionStore | undefined;
-	constructor(readonly path: string, private readonly cwd: string, private readonly id: string) { }
-	load(): Promise<SessionState> { return this.store?.load() ?? Promise.resolve({ entries: [], leafId: null }); }
-	get saved(): boolean { return this.store !== undefined; }
-	async append(entry: SessionEntry): Promise<void> {
-		if (this.store) return this.store.append(entry);
-		await mkdir(dirname(this.path), { recursive: true });
-		const header = { type: "session", version: 4, id: this.id, cwd: this.cwd, timestamp: new Date().toISOString() };
-		await writeFile(this.path, `${JSON.stringify(header)}\n${JSON.stringify(entry)}\n`, { flag: "wx" });
-		this.store = await SessionStore.open(this.path, this.cwd);
-	}
-}
-
 /** CLI owns selection and instance lifetime; core continues to own execution and commits. */
 export class SessionHost {
 	private view!: SessionView;
@@ -79,11 +64,11 @@ export class SessionHost {
 		if (store && !store.appendable) throw new Error("Session contains damaged records; convert a verified copy before resuming");
 		const id = store?.header.id ?? randomUUID();
 		const file = path ?? join(this.root, ".forge-agent", "sessions", `${id}.jsonl`);
-		const storage = store ?? new NewSessionStorage(file, this.options.cwd, id);
+		const storage = store ?? SessionStore.create(file, this.options.cwd, id);
 		const requestBus = new RequestBus({ timeoutMs: this.options.requestTimeoutMs ?? null });
 		try {
 			const port = await createAgent({ ...this.options, sessionId: id, storage, requestBus }, this.factory);
-			return { id: file, port, requestBus, history: store?.messages() ?? [], hasHistory: () => store !== undefined || storage instanceof NewSessionStorage && storage.saved };
+			return { id: file, port, requestBus, history: store?.messages() ?? [], hasHistory: () => storage.saved };
 		} catch (error) { requestBus.close(); throw error; }
 	}
 	async list(): Promise<{ sessions: SessionSummary[]; diagnostics: string[] }> {

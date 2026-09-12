@@ -46,9 +46,16 @@ export class SessionStore implements SessionStorage {
 	private state: SessionState;
 	private writing: Promise<void> = Promise.resolve();
 	private faulted = false;
+	private persisted = false;
 	private constructor(readonly path: string, readonly header: SessionHeader, entries: SessionEntry[], readonly diagnostics: readonly SessionDiagnostic[] = [], readonly appendable = true) {
 		this.state = { entries, leafId: entries.at(-1)?.id ?? null };
 	}
+	/** Prepare a new session without touching the filesystem until its first append. */
+	static create(path: string, cwd: string, id: string = randomUUID()): SessionStore {
+		return new SessionStore(path, { type: "session", version: 4, id, cwd, timestamp: new Date().toISOString() }, []);
+	}
+	/** A file was successfully opened or written; not a live filesystem existence check. */
+	get saved(): boolean { return this.persisted; }
 	static async open(path: string, cwd: string, options: SessionOpenOptions = {}): Promise<SessionStore> {
 		try {
 			const parsed = parseSession(await readFile(path, "utf8"));
@@ -56,14 +63,14 @@ export class SessionStore implements SessionStorage {
 			const store = new SessionStore(path, parsed.header, parsed.entries, parsed.diagnostics, parsed.appendable);
 			if (options.leafId !== undefined) store.state.leafId = options.leafId;
 			store.validateBranch();
+			store.persisted = true;
 			return store;
 		} catch (error) {
 			if (options.create === false) throw error;
 			if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) throw error;
-			await mkdir(dirname(path), { recursive: true });
-			const header: SessionHeader = { type: "session", version: 4, id: randomUUID(), timestamp: new Date().toISOString(), cwd };
-			await writeFile(path, `${JSON.stringify(header)}\n`, { encoding: "utf8", flag: "wx" });
-			return new SessionStore(path, header, []);
+			const store = SessionStore.create(path, cwd);
+			await store.writeRecords([]);
+			return store;
 		}
 	}
 	static async convertCopy(source: string, target: string, cwd: string, options: SessionOpenOptions = {}): Promise<SessionStore> {
@@ -76,6 +83,7 @@ export class SessionStore implements SessionStorage {
 		copy.validateBranch();
 		await mkdir(dirname(target), { recursive: true });
 		await writeFile(target, [header, ...parsed.entries].map((entry) => JSON.stringify(entry)).join("\n") + "\n", { encoding: "utf8", flag: "wx" });
+		copy.persisted = true;
 		return copy;
 	}
 	private validateBranch(): void {
@@ -103,13 +111,23 @@ export class SessionStore implements SessionStorage {
 			if (!this.appendable) throw new Error("Session requires an appendable copy; use SessionStore.convertCopy");
 			if (this.state.entries.some((existing) => existing.id === saved.id)) throw new Error("Duplicate session entry id");
 			selectedBranch({ entries: [...this.state.entries, saved], leafId: saved.id });
-			try { await appendFile(this.path, `${JSON.stringify(saved)}\n`, "utf8"); }
+			try { await this.writeRecords([saved]); }
 			catch (error) { this.faulted = true; throw error; }
 			this.state.entries.push(saved);
 			this.state.leafId = saved.id;
 		});
 		this.writing = writing.catch(() => {});
 		return writing;
+	}
+	private async writeRecords(entries: readonly SessionEntry[]): Promise<void> {
+		if (this.persisted) {
+			await appendFile(this.path, entries.map(entry => JSON.stringify(entry)).join("\n") + "\n", "utf8");
+			return;
+		}
+		await mkdir(dirname(this.path), { recursive: true });
+		this.header.timestamp = new Date().toISOString();
+		await writeFile(this.path, [this.header, ...entries].map(entry => JSON.stringify(entry)).join("\n") + "\n", { encoding: "utf8", flag: "wx" });
+		this.persisted = true;
 	}
 	getTree(): SessionTreeNode[] {
 		const nodes = new Map(this.state.entries.map((entry) => [entry.id, { entry: structuredClone(entry), children: [] as SessionTreeNode[] }]));

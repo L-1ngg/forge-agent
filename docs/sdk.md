@@ -50,7 +50,9 @@ interface SessionStorage {
 
 `append()` 成功必须可重载；开始后的写入必须等待结算。任何保存失败停止新调度并停用实例，不盲重试可能部分完成的写入。宿主检查实际状态后重建，同一会话不得有多个并发写实例。JSONL 不保证断电或部分写入事务性；工具外部副作用不会回滚。
 
-完整历史调用缺结果时，仅在请求中补“执行及副作用未知”的错误提示，不改历史、不重放工具。CLI 通过 `SessionStore.asStorage()` 使用 v4。旧格式必须转换为独立副本，不能直接覆盖源文件。`processed` 和 `message_end` 都不是持久化确认，正常迭代结束才保证必要写入已完成。
+`SessionStore.create(path, cwd, id?)` 同步准备新文件存储，首次 `append()` 才创建目录并以排他方式写入 header 和首条记录。`load()` 不触发落盘；`saved` 在成功创建或打开文件后为 `true`，不是实时文件存在性检查。`SessionStore.open(path, cwd)` 仍默认立即创建缺失文件；恢复时使用 `{ create: false }`。首次写入冲突或 I/O 失败后实例停用，不覆盖或自动重试。省略 `id` 时生成新身份；需要保留路由身份时，将 `store.header.id` 作为 `createAgent` 的 `sessionId` 传入。
+
+完整历史调用缺结果时，仅在请求中补“执行及副作用未知”的错误提示，不改历史、不重放工具。CLI 使用 v4 `SessionStore` 实例作为存储。旧格式必须转换为独立副本，不能直接覆盖源文件。`processed` 和 `message_end` 都不是持久化确认，正常迭代结束才保证必要写入已完成。
 
 ## 上下文管理
 

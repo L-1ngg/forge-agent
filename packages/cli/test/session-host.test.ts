@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, realpath, rm, symlink } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionHost } from "../src/session-host.ts";
@@ -7,8 +7,10 @@ import { SessionHost } from "../src/session-host.ts";
 test("empty startup and new sessions stay ephemeral; consumed input survives restart and resume", async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "forge-sessions-"));
 	const requests: unknown[] = [];
+	const savedAtRequest: string[] = [];
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 		requests.push(await request.json());
+		savedAtRequest.push(await readFile(host!.current.id, "utf8"));
 		return new Response(JSON.stringify({ error: { message: "test failure" } }), { status: 400 });
 	} });
 	const options = { cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local", baseUrl: server.url.toString(), systemPrompt: "test", retry: { enabled: false } };
@@ -22,6 +24,8 @@ test("empty startup and new sessions stay ephemeral; consumed input survives res
 		expect((await host.list()).sessions).toEqual([]);
 		expect(await readdir(cwd)).toEqual([]);
 		for await (const _ of host.current.port.runTurn("remember this question")) { }
+		expect(savedAtRequest[0]).toContain("remember this question");
+		expect(host.current.hasHistory()).toBe(true);
 		const saved = host.current.id;
 		expect((await host.list()).sessions.map(item => item.title)).toEqual(["remember this question"]);
 		await host.dispose();
@@ -31,6 +35,7 @@ test("empty startup and new sessions stay ephemeral; consumed input survives res
 		expect(host.current.history[0]?.content).toEqual([{ type: "text", text: "remember this question" }]);
 		for await (const _ of host.current.port.runTurn("next")) { }
 		expect(JSON.stringify(requests[1])).toContain("remember this question");
+		expect(savedAtRequest[1]).toContain('"text":"next"');
 	} finally { await host?.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
 });
 

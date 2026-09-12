@@ -20,7 +20,7 @@ created: 2026-09-09
 ## 施工方向
 
 - **TUI**：在 `packages/tui/src/app.ts` 处理命令、选择器和切换状态；通过宿主接口请求会话切换。清屏不操作 Core 历史。
-- **CLI 宿主**：在 `packages/cli/src/` 管理会话发现、路径、延迟创建与实例切换。`main.ts` 已通过 `SessionHost` 完成装配，具体接口见本轮施工选择。
+- **CLI 宿主**：在 `packages/cli/src/` 管理会话发现、路径、新会话策略与实例切换。`main.ts` 已通过 `SessionHost` 完成装配；文件延迟创建交给 `SessionStore`，具体调整见[首次落盘职责收敛](session-first-write.md)。
 - **Core / SDK**：优先复用创建、取消、等待收尾、存储与释放契约；不引入 slash command 解析。延迟创建不得降低 `SessionStorage.append()` 成功后可重载的保证。
 - **资源释放**：当前 SDK 的 `dispose()` 还会释放实例拥有的请求总线，切换需连同权限请求订阅与界面事件绑定重新装配，不能只替换消息数组。
 - **保存范围**：保持原始消息、压缩记录及未知工具副作用的既有语义；恢复不自动重放工具。
@@ -64,7 +64,7 @@ created: 2026-09-09
 ## 本轮施工选择
 
 - CLI 新增 SessionHost，公开 current/list/switchTo/dispose；TUI 通过结构化会话视图接入，不依赖 Core 包。switchTo 先只读验证目标、创建未执行的候选实例，再通知 TUI 暂停输入队列并等待执行流收尾，释放旧实例后发布新视图。退出与切换串行结算，失败销毁候选实例。
-- 每个项目根的 `.forge-agent/sessions/` 保存独立 v4 JSONL。首次 append 以排他创建写入 header 和首条 entry，此前无文件副作用；后续复用 SessionStore。header 使用稳定会话身份，cwd 保留实际工作目录；恢复不改变当前工具 cwd。
+- 每个项目根的 `.forge-agent/sessions/` 保存独立 v4 JSONL。`SessionStore.create()` 准备未落盘实例，首次 append 以排他创建写入 header 和首条 entry，此前无文件副作用；首次与后续写入共用 SessionStore 的追加队列。header 使用稳定会话身份，cwd 保留实际工作目录；恢复不改变当前工具 cwd。
 - Git 项目根使用规范化 worktree 根，非 Git 使用规范化启动目录。恢复扫描新目录及项目内旧 `.forge-agent/session.jsonl`，跳过依赖和 Git 元数据目录；按旧文件所在目录核对项目归属，新目录按受管项目根归属，原 header cwd 仅是历史工具目录。列表从消息时间提取最近活动，不因读取更新时间。旧格式/损坏会话报告诊断，不原地修复。
 - TUI 保持一个终端 Host，切换更新 Agent 和请求总线；事件订阅绑定会话代次，避免旧事件污染。恢复选择器使用上下键/Enter/Esc，明确空列表、读取错误和当前会话；原会话未提交输入按身份在内存暂存。
 - 命令行可在独立首行输入 `/new` 或 `/resume`，其余编辑内容作为未提交草稿保留；因此空会话有草稿的确认可从键盘到达，不要求额外快捷键。
