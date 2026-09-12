@@ -39,7 +39,7 @@ export interface AgentTurn extends AsyncIterable<SessionEvent> {
 	readonly result: Promise<TurnResult>;
 }
 
-export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp"> {
+export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp" | "setStorage"> {
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
 	configureContext(settings: Partial<ContextSettings>): void;
 	runTurn(input: string): AgentTurn;
@@ -56,14 +56,26 @@ export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp">
 
 export type AgentOptions = CreateAgentOptions;
 
+function assertPortCapabilities(port: unknown): asserts port is AgentPort {
+	const methods = {
+		runTurn: true, continue: true, steer: true, followUp: true, abort: true,
+		dispose: true, getUsage: true, setStorage: true, compact: true,
+		configureContext: true, updateConfiguration: true,
+	} satisfies Record<keyof AgentPort, true>;
+	const object = port !== null && (typeof port === "object" || typeof port === "function");
+	const missing = Object.keys(methods).filter(name => !object || typeof Reflect.get(port, name) !== "function");
+	if (missing.length) throw new TypeError(`Agent factory must provide callable methods: ${missing.join(", ")}`);
+}
+
 export async function createAgent(options: CreateAgentOptions, portFactory: (options: PiPortOptions) => AgentPort | Promise<AgentPort> = createPiPort): Promise<Agent> {
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
 	const storage = options.storage ?? new MemorySessionStorage();
 	const requestBus = options.requestBus ?? new RequestBus();
+	let port: AgentPort | undefined;
 	try {
 		const history = await storage.load();
-		const port = await portFactory({
+		port = await portFactory({
 			sessionId: options.sessionId ?? randomUUID(),
 			provider: options.provider,
 			model: options.model,
@@ -85,10 +97,18 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			requestBus,
 			history: sessionMessages(history),
 		});
-		await port.setStorage?.(storage);
+		assertPortCapabilities(port);
+		await port.setStorage(storage);
 		return new HostedAgent(port, requestBus);
 	} catch (error) {
 		if (!options.requestBus) requestBus.close();
+		const cleanupErrors: unknown[] = [];
+		// A rejected dynamic adapter may itself be missing lifecycle methods.
+		try { if (typeof port?.abort === "function") port.abort(); }
+		catch (cleanupError) { cleanupErrors.push(cleanupError); }
+		try { if (typeof port?.dispose === "function") await port.dispose(); }
+		catch (cleanupError) { cleanupErrors.push(cleanupError); }
+		if (cleanupErrors.length) throw new AggregateError([error, ...cleanupErrors], "Agent creation failed and cleanup was incomplete", { cause: error });
 		throw error;
 	}
 }
@@ -125,8 +145,7 @@ class HostedAgent implements Agent {
 				if (started) throw new Error("A turn can only be consumed once");
 				if (this.active) throw new Error("Agent is already processing a turn");
 				started = true;
-				const events = input === undefined ? this.runner!.continue?.() : this.runner!.runTurn(input);
-				if (!events) throw new Error("Agent does not support continuation");
+				const events = input === undefined ? this.runner!.continue() : this.runner!.runTurn(input);
 				const iterator = events[Symbol.asyncIterator]();
 				let resolveIdle!: () => void;
 				const settled = new Promise<void>(resolve => { resolveIdle = resolve; });
@@ -184,8 +203,8 @@ class HostedAgent implements Agent {
 		this.active.canceled = true;
 		if (this.active.begun) this.runner?.abort();
 	}
-	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage?.(); }
-	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); if (!this.runner!.configureContext) throw new Error("Context configuration is unavailable"); this.runner!.configureContext(settings); }
+	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }
+	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); this.runner!.configureContext(settings); }
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult> {
 		this.assertAvailable();
 		if (this.compacting) throw new Error("Agent is compacting");
@@ -199,7 +218,6 @@ class HostedAgent implements Agent {
 				active?.finish("aborted");
 				if (this.active === active) this.active = undefined;
 				if (this.disposed) throw new Error("Agent has been disposed");
-				if (!this.runner!.compact) throw new Error("Compaction is unavailable");
 				return await this.runner!.compact(instructions, emit, controller.signal);
 			} catch (error) { this.faulted = true; active?.finish("error"); throw error; }
 			finally { this.compacting = undefined; this.compactController = undefined; }
@@ -207,7 +225,7 @@ class HostedAgent implements Agent {
 		this.compacting = running;
 		return running;
 	}
-	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt> { this.assertAvailable(); if (!this.runner!.updateConfiguration) throw new Error("Configuration updates are unavailable"); return this.runner!.updateConfiguration(patch); }
+	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt> { this.assertAvailable(); return this.runner!.updateConfiguration(patch); }
 	respond(response: ResponseEnvelope): boolean { this.assertAvailable(); return this.bus.respond(response); }
 	dispose(): Promise<void> {
 		if (this.disposing) return this.disposing;
@@ -217,7 +235,7 @@ class HostedAgent implements Agent {
 		this.bus.close();
 		this.runner?.abort();
 		const active = this.active;
-		const sessionDisposal = this.runner?.dispose?.();
+		const sessionDisposal = this.runner?.dispose();
 		this.disposing = (async () => {
 			try {
 				const settled = await Promise.allSettled([active?.iterator.return?.(), this.compacting, sessionDisposal]);

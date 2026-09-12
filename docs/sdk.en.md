@@ -4,6 +4,16 @@
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
+## Custom Execution Implementations
+
+Normally, use the default `createAgent(options)`. A factory supplied as the second argument must return a complete `AgentPort` (import its type from `@forge-agent/core`), or a Promise of one. Required methods are `runTurn`, `continue`, `steer`, `followUp`, `abort`, `dispose`, `getUsage`, `setStorage`, `compact`, `configureContext`, and `updateConfiguration`.
+
+TypeScript checks the complete type. Creation also checks that every method is callable, rejecting missing or non-callable methods with a `TypeError`. It then awaits `setStorage(storage)` before returning the Agent, including when using default memory storage. `setStorage` is an assembly capability, not part of the returned Agent's host interface. These checks do not run models or tools and cannot prove implementation semantics: `getUsage()` may return `undefined`, and configuration updates may reject unsupported settings.
+
+If capability validation or storage attachment fails after the factory returns, creation attempts `abort()` and then awaits `dispose()`, even if abort throws. It first closes an internally created RequestBus; it does not explicitly close an externally supplied bus on assembly failure (the adapter remains responsible for its own cancellation behavior). Bus ownership on disposal after successful creation is unchanged. Successful cleanup preserves the original creation error. If cleanup also fails, an `AggregateError` retains the original error in `cause` and `errors[0]`, followed by cleanup errors. A factory that throws before returning an instance must clean up resources it has not handed over.
+
+Local UI/headless tests may keep their smaller interfaces. Tests using the full SDK creation path should use production sessions with controlled models. See the [assembly design and verification](phases/agent-assembly.md) (Chinese).
+
 ## Create an Instance
 
 In a consuming workspace package, declare `"@forge-agent/core": "workspace:*"`. Then use:

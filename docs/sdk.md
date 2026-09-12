@@ -4,6 +4,16 @@
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
+## 自定义执行实现
+
+通常直接使用默认 `createAgent(options)`。若传入第二个参数 factory，它必须返回完整的 `AgentPort`（类型从 `@forge-agent/core` 导入），或返回该实例的 Promise。必需方法为 `runTurn`、`continue`、`steer`、`followUp`、`abort`、`dispose`、`getUsage`、`setStorage`、`compact`、`configureContext`、`updateConfiguration`。
+
+TypeScript 检查完整类型；创建时还会检查每个方法是否为函数，缺失或非函数立即报 `TypeError`。通过后等待 `setStorage(storage)` 完成，才返回 Agent；省略 storage 时也会接入默认内存存储。`setStorage` 仅用于装配，不在已创建 Agent 的宿主接口中。检查不会执行模型或工具，也不保证自定义方法的语义正确：`getUsage()` 可以返回 `undefined`，配置更新可以拒绝不支持的配置。
+
+factory 返回实例后，能力检查或存储接入失败会尝试 `abort()`，随后等待 `dispose()`；abort 报错也会继续释放。内部创建的 RequestBus 会先关闭，外部传入的总线不会由失败装配主动关闭（adapter 自身取消行为仍由其实现决定）。成功返回后的 dispose 总线归属规则不变。清理成功时原样抛出创建错误；清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误，后续项为清理错误。factory 在返回实例前抛错时，应自行清理尚未交付的资源。
+
+局部 UI/headless 测试可以继续使用各自的小接口；经过完整 SDK 创建路径的测试应使用生产会话配合可控模型。设计及验证见[完整 Agent 装配契约](phases/agent-assembly.md)。
+
 ## 创建实例
 
 ```ts

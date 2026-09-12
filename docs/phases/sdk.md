@@ -9,6 +9,8 @@ created: 2026-09-05
 
 > 契约替代(2026-09-07):下文 `appendTurn`、整次成功保存及取消丢弃执行历史为原批次合同，已由 [上下文规格 #2](https://github.com/L-1ngg/forge-agent/issues/2) 的 `load`/`append` 逐记录保存取代。当前接入以 [SDK](../sdk.md) 为准，验证见 [上下文实现证据](context-management-acceptance.md)。
 
+> 后续装配收紧(2026-09-12):完整能力检查、存储接入等待与失败清理见[完整 Agent 装配契约](agent-assembly.md)。
+
 ## Why
 
 落实通用 Agent 路线的第二批。立项时 CLI 自行装配 SessionStore、RequestBus、权限与 pi-port,AgentRunner 直接依赖具体 JSONL 存储。外部宿主需要重复这套装配,也没有明确的释放与失败后复用契约。

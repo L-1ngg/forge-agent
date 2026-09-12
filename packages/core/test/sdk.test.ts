@@ -4,6 +4,7 @@ import { createAgent, type CreateAgentOptions } from "../src/agent.ts";
 import { createPiTestPort } from "../src/pi-port.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
 import { response } from "@forge-agent/protocol";
+import { createScriptedSession } from "./helpers/scripted-session.ts";
 
 const options: CreateAgentOptions = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };
 
@@ -103,13 +104,19 @@ test("SDK stale iterator return cannot cancel a newer invocation", async () => {
 
 test("SDK disposed unstarted iterators cannot launch a model", async () => {
 	let runs = 0;
-	const agent = await createAgent(options, () => ({
-		async *runTurn() { runs++; }, steer() { return { accepted: false }; }, followUp() { return { accepted: false }; }, abort() {},
-	}));
+	const storage = new MemorySessionStorage();
+	const session = createScriptedSession({
+		contextWindow: 10000,
+		async stream() { runs++; return { role: "assistant", content: [], stopReason: "stop", timestamp: 1 }; },
+		async execute() { throw new Error("Unexpected tool execution"); },
+		abortInteractions() {},
+	});
+	const agent = await createAgent({ ...options, storage }, () => session);
 	const iterator = agent.runTurn("first")[Symbol.asyncIterator]();
 	await agent.dispose();
 	expect((await iterator.next()).done).toBe(true);
 	expect(runs).toBe(0);
+	expect((await storage.load()).entries).toEqual([]);
 });
 
 test("SDK dispose cancels a pending permission without executing the tool", async () => {

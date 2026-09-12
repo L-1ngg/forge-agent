@@ -9,16 +9,17 @@ export interface InputQueueOptions { steeringMode?: InputQueueMode; followUpMode
 
 export type InputAcceptance = { accepted: false } | { accepted: true; processed: Promise<boolean> };
 
+/** Complete session execution contract accepted by createAgent. */
 export interface AgentPort {
-	updateConfiguration?(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;
-	dispose?(): Promise<void> | void;
+	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;
+	dispose(): Promise<void> | void;
 	runTurn(input: string): AsyncIterable<SessionEvent>;
-	continue?(): AsyncIterable<SessionEvent>;
+	continue(): AsyncIterable<SessionEvent>;
 	steer(input: string): InputAcceptance;
 	followUp(input: string): InputAcceptance;
 	abort(): void;
-	getUsage?(): UsageTruthPoint | undefined;
-	setStorage?(storage: SessionStorage): Promise<void>;
-	compact?(instructions?: string, emit?: (event: SessionEvent) => void, signal?: AbortSignal): Promise<CompactionResult>;
-	configureContext?(settings: Partial<ContextSettings>): void;
+	getUsage(): UsageTruthPoint | undefined;
+	setStorage(storage: SessionStorage): Promise<void>;
+	compact(instructions?: string, emit?: (event: SessionEvent) => void, signal?: AbortSignal): Promise<CompactionResult>;
+	configureContext(settings: Partial<ContextSettings>): void;
 }

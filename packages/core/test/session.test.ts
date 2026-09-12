@@ -77,36 +77,31 @@ test("SDK session abort cancels pending blocking requests before aborting the po
 	const path = join(cwd, "session.jsonl");
 	const store = await SessionStore.open(path, cwd);
 	const bus = new RequestBus({ idPrefix: "runner", timeoutMs: 60_000 });
-	let portAborted = false;
-	const runner = await createTestAgent(
-		{
-			async *runTurn() {
-				await bus.ask("permission", {
-					toolCall: { type: "tool_call", id: "call-1", name: "write", arguments: { path: "file.txt" } },
-				});
-				yield { type: "agent_end", timestamp: 1 };
-			},
-			steer() { return { accepted: false }; },
-			followUp() { return { accepted: false }; },
-			abort() {
-				portAborted = true;
-			},
-		},
-		store,
-		bus,
-	);
+	let pendingAtAbort: number | undefined;
+	let executions = 0;
+	const port = createPiTestPort({
+		requestBus: bus,
+		tools: [{ name: "write", label: "Write", description: "Controlled write", parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+			async execute() { executions++; return { content: [{ type: "text", text: "written" }], details: undefined }; } }],
+		responses: [{ toolCalls: [{ id: "call-1", name: "write", arguments: {} }] }],
+	});
+	const abort = port.abort.bind(port);
+	port.abort = () => { pendingAtAbort = bus.pendingCount; abort(); };
+	const runner = await createTestAgent(port, store, bus);
 	const eventsPromise = (async () => {
 		const events = [];
 		for await (const event of runner.runTurn("needs permission")) events.push(event);
 		return events;
 	})();
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect((await bus.requests()[Symbol.asyncIterator]().next()).done).toBe(false);
+	expect(bus.pendingCount).toBe(1);
 	runner.abort();
-	expect(await eventsPromise).toEqual([{ type: "agent_end", timestamp: 1 }]);
-	expect(portAborted).toBe(true);
+	expect((await eventsPromise).at(-1)).toMatchObject({ type: "agent_end", outcome: "aborted" });
+	expect(pendingAtAbort).toBe(0);
+	expect(executions).toBe(0);
 	expect(bus.pendingCount).toBe(0);
-	expect(store.getEntries()).toHaveLength(0);
-	bus.close();
+	expect(store.messages()[0]).toMatchObject({ role: "user", content: [{ type: "text", text: "needs permission" }] });
+	await runner.dispose();
 });
 
 test("SDK session persists steering and follow-up user messages in event order", async () => {
