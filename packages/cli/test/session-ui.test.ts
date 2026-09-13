@@ -144,7 +144,7 @@ test("manual compaction persistence failure prevents new session activation", as
 	const { rename, mkdir } = await import("node:fs/promises");
 	const cwd = await mkdtemp(join(tmpdir(), "forge-compact-switch-"));
 	let calls = 0;
-	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return modelResponse(); } });
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return modelResponse([], "end_turn", calls <= 2 ? `work-${calls} `.repeat(1000) : JSON.stringify({ states: [], claims: [], taskChanged: false })); } });
 	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local", baseUrl: server.url.toString(), systemPrompt: "test", context: { keepRecentTokens: 1 } });
 	const input = new Input();
 	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} } });
@@ -153,10 +153,12 @@ test("manual compaction persistence failure prevents new session activation", as
 		await app.start();
 		input.send("COMPACT_ME\r");
 		await until(() => calls === 1 && !screen().includes("working"));
+		input.send("RECENT_GOAL\r");
+		await until(() => calls === 2 && !screen().includes("working"));
 		const active = sessions.current.id;
 		await rename(active, `${active}.saved`); await mkdir(active);
 		input.send("/compact\r");
-		await until(() => calls > 1 && !screen().includes("compacting"));
+		await until(() => calls > 2 && !screen().includes("compacting"));
 		input.send("/new\r");
 		await until(() => screen().includes("会话切换失败"));
 		expect(sessions.current.id).toBe(active);

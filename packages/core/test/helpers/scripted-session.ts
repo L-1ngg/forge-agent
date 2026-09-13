@@ -19,7 +19,14 @@ export function createScriptedSession(driver: ScriptedDriver, history: readonly 
 	const model = { id: "script", name: "script", api: "faux", provider: "faux", baseUrl: "", reasoning: false, input: ["text" as const], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: driver.contextWindow, maxTokens: driver.maxTokens ?? 1000 };
 	const assembly: SessionAssembly = {
 		options: {
-			model, cwd: process.cwd(), systemPrompt: "", thinkingLevel: "off", context, history: [...history], stream(_model, request, options) {
+			model, tools: (driver.toolNames ?? []).map(name => ({
+				name, label: name, description: "fixture", parameters: { type: "object" as const, properties: {}, required: [], additionalProperties: false as const },
+				async execute(args, context) {
+					if (!context.toolCallId) throw new Error("Missing runtime tool call id");
+					const result = await driver.execute({ type: "tool_call", name, id: context.toolCallId, arguments: args as Record<string, unknown> }, context.signal ?? new AbortController().signal);
+					return { content: result.message.content.filter(block => block.type === "text" || block.type === "image"), details: result.details, ...(result.terminate !== undefined ? { terminate: result.terminate } : {}) };
+				}
+			})), permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] }, cwd: process.cwd(), systemPrompt: "", thinkingLevel: "off", context, history: [...history], stream(_model, request, options) {
 				const stream = new EventStream<AssistantMessageEvent, AssistantMessage>(event => event.type === "done" || event.type === "error", event => { if (event.type === "done") return event.message; if (event.type === "error") return event.error; throw new Error("Unexpected result"); });
 				const signal = options?.signal ?? new AbortController().signal;
 				const partial = fromSessionMessage({ role: "assistant", content: [], timestamp: 0, stopReason: "stop" }, model) as AssistantMessage;
@@ -42,14 +49,7 @@ export function createScriptedSession(driver: ScriptedDriver, history: readonly 
 				return stream;
 			}
 		},
-		toolset: {
-			clear() { }, tools: (driver.toolNames ?? []).map(name => ({
-				name, label: name, description: "fixture", parameters: { type: "object" }, async execute(id, args, signal) {
-					const result = await driver.execute({ type: "tool_call", name, id, arguments: args as Record<string, unknown> }, signal ?? new AbortController().signal);
-					return { content: result.message.content.filter(block => block.type === "text" || block.type === "image"), details: result.details, ...(result.terminate !== undefined ? { terminate: result.terminate } : {}) };
-				}
-			}))
-		},
+		toolset: { clear() {}, tools: [] },
 		driver: { ...driver, isOverflow: message => driver.isOverflow?.(message) ?? false },
 	};
 	const session = new AgentSession(assembly, async () => { throw new Error("Scripted session has no model catalog"); });

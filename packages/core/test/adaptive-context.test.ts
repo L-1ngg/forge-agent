@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { createAgent, MemorySessionStorage, type CreateAgentOptions } from "@forge-agent/core/sdk";
 import { gate, modelResponse } from "./helpers/model-response.ts";
 
-const options = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "task-system", cwd: process.cwd(), maxTokens: 512, contextWindow: 32000, context: { strategy: "adaptive", reserveTokens: 1024, keepRecentTokens: 100 } } satisfies CreateAgentOptions;
+const options = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "task-system", cwd: process.cwd(), maxTokens: 512, contextWindow: 32000, context: { reserveTokens: 1024, keepRecentTokens: 100 } } satisfies CreateAgentOptions;
 const msg = (role: "user" | "assistant", text: string): SessionMessage => ({ role, content: [{ type: "text", text }], timestamp: 1, ...(role === "assistant" ? { stopReason: "stop" } : {}) });
 
 test("SDK restores sourced constraints after adaptive compaction without replacing raw history", async () => {
@@ -123,7 +123,7 @@ test("SDK retains constraints across five incremental compactions and rebuilds f
 test("oversized protected context stops automatic task dispatch instead of looping", async () => {
 	let requests = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
-	const agent = await createAgent({ ...options, contextWindow: 2000, baseUrl: server.url.toString() });
+	const agent = await createAgent({ ...options, contextWindow: 2000, context: {}, baseUrl: server.url.toString() });
 	try {
 		const turn = agent.runTurn("Critical constraint ".repeat(2000)); for await (const _event of turn) { }
 		expect((await turn.result).status).toBe("error"); expect(requests).toBe(0);
@@ -161,14 +161,6 @@ test("one SDK invocation compresses completed tool batches without replaying sid
 	finally { await agent.dispose(); server.stop(true); }
 });
 
-test("switching from pi to adaptive restores original history before the next task", async () => {
-	const storage = new MemorySessionStorage([msg("user", "Unabridged constraint: use 9090"), msg("assistant", "notes ".repeat(3000)), msg("user", "Continue")]);
-	const requests: string[] = [];
-	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.text()); return modelResponse(); } });
-	const agent = await createAgent({ ...options, context: { ...options.context, strategy: "pi" }, storage, baseUrl: server.url.toString() });
-	try { expect((await agent.compact()).status).toBe("complete"); agent.configureContext({ strategy: "adaptive" }); for await (const _event of agent.runTurn("Continue")) { } expect(requests.at(-1)).toContain("Unabridged constraint: use 9090"); }
-	finally { await agent.dispose(); server.stop(true); }
-});
 
 test.each(["removed", "rewritten", "version"] as const)("reopening rejects %s persisted task state", async mode => {
 	const storage = new MemorySessionStorage([msg("user", "Do not deploy."), msg("assistant", "notes ".repeat(3000)), msg("user", "continue")]);
@@ -299,12 +291,9 @@ test.each([{ query: " " }, { query: "x".repeat(201) }, { query: "one two three f
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("search tool conflicts are atomic across creation, strategy and configuration updates", async () => {
+test("search tool conflicts are atomic across creation and configuration updates", async () => {
 	const tool = { name: "search_context", label: "Host search", description: "Host-owned search", parameters: { type: "object" as const, properties: {}, required: [], additionalProperties: false as const }, async execute() { return { content: [], details: {} }; } };
 	await expect(createAgent({ ...options, tools: [tool] })).rejects.toThrow("reserved");
-	const pi = await createAgent({ ...options, context: { ...options.context, strategy: "pi" }, tools: [tool] });
-	try { expect(() => pi.configureContext({ strategy: "adaptive" })).toThrow("reserved"); }
-	finally { await pi.dispose(); }
 	const requests: string[] = [];
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.text()); return modelResponse(); } });
 	const agent = await createAgent({ ...options, baseUrl: server.url.toString() });
@@ -313,4 +302,28 @@ test("search tool conflicts are atomic across creation, strategy and configurati
 		for await (const _event of agent.runTurn("Continue")) { }
 		expect(requests[0]).toContain("task-system"); expect(requests[0]).not.toContain("must not apply"); expect(requests[0]).not.toContain("Host-owned search");
 	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test.each([undefined, {}])("SDK defaults to adaptive tools and output budget with context=%j", async context => {
+	const requests: Array<{ max_tokens?: number; tools?: Array<{ name: string }> }> = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.json() as typeof requests[number]); return modelResponse(); } });
+	const agent = await createAgent({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", cwd: process.cwd(), systemPrompt: "default policy", ...(context ? { context } : {}), thinkingLevel: "off", baseUrl: server.url.toString() });
+	try {
+		agent.configureContext({ keepRecentTokens: 100 });
+		for await (const _event of agent.runTurn("Continue")) { }
+		expect(requests[0]?.tools?.map(tool => tool.name)).toContain("search_context");
+		expect(requests[0]?.tools?.map(tool => tool.name)).toContain("read_context");
+		expect(requests[0]?.max_tokens).toBe(4096);
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+
+test("removed context.strategy is rejected instead of silently selecting a policy", async () => {
+	for (const strategy of ["pi", "adaptive"]) {
+		const context = JSON.parse(JSON.stringify({ strategy }));
+		await expect(createAgent({ ...options, context })).rejects.toThrow("Invalid context settings");
+	}
+	const agent = await createAgent(options);
+	try { expect(() => agent.configureContext(JSON.parse('{"strategy":"pi"}'))).toThrow("Invalid context settings"); }
+	finally { await agent.dispose(); }
 });

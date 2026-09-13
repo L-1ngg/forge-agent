@@ -5,6 +5,9 @@ created: 2026-09-07
 
 # 上下文管理方案
 
+> 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，仅运行 adaptive；双策略复现需使用对应历史提交。
+
+
 > 状态:默认 pi 策略的历史施工与验收快照(2026-09-07) | Owner:operator / Codex | [实现证据](context-management-acceptance.md)
 
 本文的“未推送”和验收数量记录当时状态。当前 opt-in adaptive 见 [ADR-017](../decisions/017-evidence-backed-context-compaction.md)，短检查点与分支搜索见[后续施工与验证](context-notes-search.md)。下方无累计调用帽、不提供内核原文工具等条款只适用于原 pi 策略。

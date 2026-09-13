@@ -14,7 +14,7 @@ const answer: SessionMessage = { role: "assistant", content: [{ type: "text", te
 async function consume(events: AsyncIterable<SessionEvent>) { for await (const event of events) void event; }
 function fixture(stream: ScriptedDriver["stream"] = async () => answer) {
 	let executions = 0;
-	const core = createScriptedSession({ contextWindow: 1000, stream, async execute() { executions++; throw new Error("unexpected tool"); }, abortInteractions() {} });
+	const core = createScriptedSession({ contextWindow: 100000, stream, async execute() { executions++; throw new Error("unexpected tool"); }, abortInteractions() {} });
 	return { core, executions: () => executions };
 }
 const options = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };

@@ -79,7 +79,7 @@ test("SDK configuration waits for manual summary and applies to the following ta
 	const { MemorySessionStorage } = await import("@forge-agent/core/sdk");
 	const storage = new MemorySessionStorage([
 		{ role: "user", content: [{ type: "text", text: "old goal ".repeat(100) }], timestamp: 1 },
-		{ role: "assistant", content: [{ type: "text", text: "old answer" }], timestamp: 2, stopReason: "stop" },
+		{ role: "assistant", content: [{ type: "text", text: "old answer ".repeat(1000) }], timestamp: 2, stopReason: "stop" },
 		{ role: "user", content: [{ type: "text", text: "recent" }], timestamp: 3 },
 	]);
 	const started = gate(); const release = gate();
@@ -88,7 +88,7 @@ test("SDK configuration waits for manual summary and applies to the following ta
 		hostname: "127.0.0.1", port: 0, async fetch(request) {
 			requests.push(await request.json() as typeof requests[number]);
 			if (requests.length === 1) { started.resolve(); await release.promise; }
-			return modelResponse();
+			return modelResponse([], "end_turn", requests.length === 1 ? JSON.stringify({ states: [], claims: [], taskChanged: false }) : "saved answer");
 		}
 	});
 	const agent = await createAgent({ ...settings, baseUrl: server.url.toString(), storage, context: { enabled: false, keepRecentTokens: 1 } });

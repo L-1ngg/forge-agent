@@ -22,7 +22,8 @@
 |---|---|
 | [plan.md](plan.md) | 项目路线、优先级与当前行动项（**热层**）；已建 issue 的任务使用链接 |
 | [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与未测边界 |
-| [Pi 上下文策略](phases/context-management.md)、[原验收](phases/context-management-acceptance.md) | 默认 pi 策略的历史设计与证据 |
+| [Pi 上下文策略](phases/context-management.md)、[原验收](phases/context-management-acceptance.md) | 已移除 pi 策略的历史设计与证据 |
+| [默认启用 adaptive](decisions/018-adaptive-default.md) | CLI/SDK 默认策略与旧会话恢复行为 |
 | [Adaptive 施工图](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md) | 独立状态、证据、预算及首次真实模型对照 |
 | [短检查点与历史搜索](phases/context-notes-search.md) | 当前 adaptive 投影与 search_context、软件验证、输入估算和未测质量边界 |
 | [TUI 主界面工作流](phases/tui-main-workflow.md) | 主界面交互设计与跨流程验收 |

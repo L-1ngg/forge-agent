@@ -12,7 +12,7 @@ Forge Agent combines a self-owned execution core, an embeddable Bun SDK, and a t
 ## Current Capabilities
 
 - **Owned execution loop:** model streaming, tool execution, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence.
-- **Long tasks:** automatic or manual context compaction and bounded overflow recovery; optional adaptive compaction adds sourced task notes, branch history search, and original-text retrieval. Read/Bash provide bounded previews and temporary command logs.
+- **Long tasks:** automatic or manual context compaction and bounded overflow recovery; default adaptive compaction provides sourced task notes, branch history search, and original-text retrieval. Read/Bash provide bounded previews and temporary command logs.
 - **Embeddable SDK:** independent instances with host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
 - **Coding CLI:** read, write, edit, and shell tools; interactive TUI or JSON event output for scripts.
 - **Terminal interface:** streaming transcript, tool and diff views, permission cards, queued input, and a cell-based renderer.
@@ -65,19 +65,19 @@ Restoring a conversation rebuilds its history and model context; it does not rep
 
 ## Context Management
 
-The default `pi` strategy uses history summaries and recent original messages. To retain long-task constraints and retrieve saved evidence on demand, add the following field to your existing `.forge-agent/config.json` and restart the CLI:
+CLI and SDK use `adaptive` by default, including short task notes, history search/read, and request budgets. No opt-in is required. The following optional configuration makes the defaults explicit:
 
 ```json
 {
   "context": {
-    "strategy": "adaptive"
+    "enabled": true
   }
 }
 ```
 
-For SDK use, pass the same `context` option to `createAgent`, or call `agent.configureContext({ strategy: "adaptive" })` while idle. No model change is required.
+SDK `createAgent` also uses adaptive when `context` is omitted or empty. Existing CLI processes must be restarted to load the new default and configuration. No model change is required.
 
-Adaptive compaction sends concise task states and evidence IDs to the model while retaining full evidence in session history and checkpoints. The model can use `search_context` to locate records in the current branch, then `read_context` to retrieve original text. Both tools follow existing permissions and never replay historical tools. Compaction enforces input/output budgets and bounded rebuild attempts. Switch back to `pi` to stop adaptive compaction while preserving raw history.
+Adaptive compaction sends concise task states and evidence IDs to the model while retaining full evidence in session history and checkpoints. The model can use `search_context` to locate records in the current branch, then `read_context` to retrieve original text. Both tools follow existing permissions and never replay historical tools. Compaction enforces input/output budgets and bounded rebuild attempts. Old pi sessions reconstruct their adaptive view from original branch history; failures do not silently fall back to pi. The old pi strategy and `context.strategy` selector have been removed.
 
 Adaptive does not guarantee lower token use or cost for every task. The initial [real-model comparison](docs/phases/adaptive-context-compaction-acceptance.md) and the later [software checks and material-size estimates](docs/phases/context-notes-search.md) for short notes/search are separate evidence; the new projection has not yet received a fresh real-model quality and total-cost evaluation. See the [SDK context guide](docs/sdk.en.md#context-management) for settings, permissions, and compatibility.
 

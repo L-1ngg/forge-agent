@@ -24,7 +24,7 @@
 ### 第四批 — 长任务可靠性
 
 - 围绕真实任务继续验证上下文管理、恢复、执行约束及质量/成本。
-- 默认 pi 的设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；显式 adaptive 的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
+- 当前默认 adaptive 见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；adaptive 的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
 - 知识库按场景接入,不默认开启持久记忆或新增检索基础设施。

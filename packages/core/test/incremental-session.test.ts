@@ -30,7 +30,7 @@ test("SDK storage failure before tool dispatch faults the instance without execu
 	let executions = 0;
 	let writes = 0;
 	const core = createScriptedSession({
-		contextWindow: 10000, toolNames: ["write"], abortInteractions() {},
+		contextWindow: 100000, toolNames: ["write"], abortInteractions() {},
 		async stream() { return { role: "assistant", timestamp: 2, stopReason: "tool_use", content: [{ type: "tool_call", id: "side-effect", name: "write", arguments: {} }] }; },
 		async execute() { executions++; throw new Error("unexpected execution"); },
 	});
@@ -56,7 +56,7 @@ test("SDK reopen filters interrupted responses and projects missing results with
 	const storage = new MemorySessionStorage(history);
 	let request: readonly SessionMessage[] = [];
 	const core = createScriptedSession({
-		contextWindow: 10000, toolNames: ["write"], abortInteractions() {},
+		contextWindow: 100000, toolNames: ["write"], abortInteractions() {},
 		async stream(messages) { request = messages; return { role: "assistant", timestamp: 5, content: [], stopReason: "stop" }; },
 		async execute() { throw new Error("must not replay"); },
 	});
@@ -76,7 +76,7 @@ test("SDK saves consumed input before the model and retains it after cancellatio
 	let started!: () => void;
 	const ready = new Promise<void>((resolve) => { started = resolve; });
 	const core = createScriptedSession({
-		contextWindow: 10000, toolNames: ["write"],
+		contextWindow: 100000, toolNames: ["write"],
 		async stream(_messages, signal) {
 			started();
 			await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));

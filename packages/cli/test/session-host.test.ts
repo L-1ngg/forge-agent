@@ -83,7 +83,7 @@ test("resume discovery shares a worktree, isolates projects, and never overwrite
 	} finally { for (const host of hosts) await host.dispose(); await rm(base, { recursive: true, force: true }); }
 });
 
-test("resuming a compacted session rebuilds summary context and keeps the full visible history", async () => {
+test("default adaptive resume reconstructs old pi sessions from original history", async () => {
 	const { SessionStore, messageEntry } = await import("@forge-agent/core");
 	const { modelResponse } = await import("../../core/test/helpers/model-response.ts");
 	const cwd = await mkdtemp(join(tmpdir(), "forge-resume-summary-"));
@@ -104,7 +104,8 @@ test("resuming a compacted session rebuilds summary context and keeps the full v
 		await host.switchTo(discovered.sessions[0]!.id);
 		expect(JSON.stringify(host.current.history)).toContain("ORIGINAL_OLD");
 		for await (const _ of host.current.port.runTurn("continue")) { }
-		expect(bodies[0]).toContain("SAVED_SUMMARY"); expect(bodies[0]).toContain("RECENT_TEXT"); expect(bodies[0]).not.toContain("ORIGINAL_OLD");
+		expect(bodies[0]).not.toContain("SAVED_SUMMARY"); expect(bodies[0]).toContain("RECENT_TEXT"); expect(bodies[0]).toContain("ORIGINAL_OLD");
+		expect(bodies[0]).toContain("search_context"); expect(bodies[0]).toContain("read_context");
 	} finally { await host?.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
 });
 

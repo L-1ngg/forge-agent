@@ -66,14 +66,9 @@ interface SessionStorage {
 
 ## 上下文管理
 
-`context.strategy` 默认为 `"pi"`，保留下述原有压缩行为。显式设置 `"adaptive"` 可启用 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 的增强策略，例如 `context: { strategy: "adaptive", reserveTokens: 16384, keepRecentTokens: 20000 }`。它不意味着在所有模型或任务上质量更好。
+上下文管理统一使用 adaptive：[ADR-018](decisions/018-adaptive-default.md) 的带证据短检查点、相关性选择、历史搜索/读取与请求预算。旧 pi 策略及 `context.strategy` 已删除，传入该字段会报错；省略 `context` 或传 `{}` 即使用增强策略。
 
-| 策略 | 默认启用 | 主要行为 |
-|---|---|---|
-| `pi` | 是 | 历史摘要与近期原文；沿用原有恢复合同 |
-| `adaptive` | 否 | 带证据的短检查点、相关性选择、历史搜索/读取、预算与有限重建 |
-
-CLI 可在配置文件的 `context` 字段使用相同设置；SDK 在创建时传入，或在空闲时通过 `configureContext` 切换。搜索和读取仍需宿主权限允许，策略选择本身不授予权限。
+CLI 配置与 SDK 创建选项均支持 `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }`，默认分别为 `true`、`16384`、`20000`、`"inherit"`。SDK 可在空闲时通过 `configureContext` 更新。搜索和读取仍需宿主权限允许，启用压缩不授予权限。
 
 ### Adaptive：状态与预算
 
@@ -83,7 +78,7 @@ adaptive 发送给任务模型的检查点采用短投影：状态/结论的类�
 
 增强压缩在第 4 次增量更新、任务切换或无效检查点/无进展时尝试从原文重建；每次操作最多 2 次逻辑生成、4 次实际模型请求（包括临时重试）。超大摘要输入、保护状态放不下、引用无效或最终无进展均返回错误，不发布损坏检查点；自动路径阻止该次过预算任务请求，取消和存储失败继续遵循既有生命周期。
 
-`adaptive` 的 task `maxTokens` 未指定时显式取 `min(4096, model.maxTokens)`；它与 `pi` 的 provider 默认不同。预算包括 system、工具定义、状态、摘要与消息，预留 `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`；有效输出计入适用 provider 的额外 thinking 预算。启发式计数不保证供应商物理窗口一定足够。摘要输入也单独预检，输出最多 4096 tokens（还受模型和窗口限制）。
+`adaptive` 的 task `maxTokens` 未指定时显式取 `min(4096, model.maxTokens)`。预算包括 system、工具定义、状态、摘要与消息，预留 `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`；有效输出计入适用 provider 的额外 thinking 预算。启发式计数不保证供应商物理窗口一定足够。摘要输入也单独预检，输出最多 4096 tokens（还受模型和窗口限制）。
 
 ### 查找与读取历史
 
@@ -93,25 +88,23 @@ adaptive 发送给任务模型的检查点采用短投影：状态/结论的类�
 
 ### 兼容与事件
 
-增强 compaction 使用 v4 记录的可选 `adaptive` 版本化载荷；重开时验证引用与状态替代关系。无增强载荷的旧历史仍可读取。同一新版 SDK 切回 `pi` 时采用可读降级摘要与合法后缀，再启用 `adaptive` 时从原始消息重建视图；不承诺旧 SDK 能复现增强投影。自动压缩关闭不移除原文工具，也不禁用手动压缩。
+增强 compaction 使用 v4 记录的可选 `adaptive` 版本化载荷；重开时验证引用与状态替代关系。无增强载荷的旧历史默认从原始分支消息恢复 adaptive 视图，不沿用旧 pi 摘要，也不因预算或提取失败自动回退 pi。不再提供策略切换。自动压缩关闭不移除原文工具，也不禁用手动压缩。
 
 增强 `compaction` 事件补充 `strategy`、`action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。
 
 当前短投影的软件验证和费用估算边界见[后续验证记录](phases/context-notes-search.md)；不要将首次 adaptive 的旧保留集结果视为新投影的质量验收。
 
-### Pi：原有压缩行为
+### 自动压缩与恢复
 
-创建选项支持 `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }`，默认分别为 `true`、`16384`、`20000`、`"inherit"`。`agent.configureContext(partial)` 在空闲时更新这些设置。每次任务模型请求前，仅当当前估算严格超过 `contextWindow - reserveTokens` 时主动压缩；近期保留量用于选择合法切点，不是压缩后的硬上限。
+每次任务请求前，当前上下文超过输入预算时先压缩；压缩失败阻止该次请求。overflow 和可恢复 length 在连续失败链中共享一次恢复机会；保留失败记录，不重放已执行工具，不因 usage 报超限重新生成成功答案。`enabled: false` 关闭自动压缩及超限恢复，仍可手动压缩和读取历史。
 
-摘要使用主任务模型、认证和路由，关闭缓存保留与工具定义。最多顺序生成历史和 turn-prefix 两段摘要后直接拼接。默认继承主任务推理；`summaryReasoning: "off"` 在模型支持时关闭，否则继承并报告回退。顶层 `retry` 配置为 `{ enabled, maxRetries, baseDelayMs }`，默认 `true/3/2000`；摘要仅对分类为临时故障的响应重试当前失败段，默认等待 2/4/8 秒，没有底层叠加重试或累计摘要次数帽。
-
-主动压缩失败保留旧视图并允许任务请求。overflow 与符合 Pi 条件的 length 共用连续失败链的一次压缩恢复，失败的部分输出保留在历史，恢复不重放工具。成功答案即使用量超窗也不重新生成。`enabled: false` 同时禁用自动压缩和自动恢复，手动压缩仍可用。
+摘要使用主任务模型与路由，隔离任务 system，不传工具定义或缓存保留。`summaryReasoning: "off"` 在模型支持时关闭推理，否则继承。临时重试与最多两次逻辑生成共享四次模型请求上限。Provider 错误在重试策略结束后直接停止，不触发检查点重建。
 
 普通到达输出上限的 `length` 正文保留给后续请求，截断工具调用不执行也不投影。被分类为上下文恢复失败尝试的 `length` 保存 `contextExcluded` 标记，重开后同样只保留原记录。headless 在成功恢复后返回成功退出码；未恢复的 error/length 返回 1，取消返回 130。
 
 ### 共用 API 与计量
 
-`contextWindow` 可覆盖本地容量声明，默认采用模型元数据；降低该值可测试触发流程，不证明供应商物理窗口超限。`maxTokens` 是普通任务的宿主输出配置，与压缩 reserve 分开，省略时 pi 沿用 provider 适配，adaptive 使用上方的显式输出预留。`getUsage()` 的 `contextEstimated` 区分有效 usage 与估算。模型、system、tools、分支或投影改变后失效，摘要 usage 不作为任务锚点。
+`contextWindow` 可覆盖本地容量声明，默认采用模型元数据；降低该值可测试触发流程，不证明供应商物理窗口超限。`maxTokens` 是普通任务的宿主输出配置，与压缩 reserve 分开，省略时使用上方的显式输出预留。`getUsage()` 的 `contextEstimated` 区分有效 usage 与估算。模型、system、tools、分支或投影改变后失效，摘要 usage 不作为任务锚点。
 
 历史 user/toolResult 可携带 `{ type: "image", data: base64, mimeType }`，请求保留图片，启发式按每张 1024 tokens 估算，摘要仅序列化图片占位。`sessionId` 在任务与摘要的 pi-ai 调用间保持一致；默认每实例生成，宿主可传稳定 ID，CLI 使用会话 header ID。是否发送 HTTP affinity 字段由 provider 适配和缓存设置决定，`cacheRetention: "none"` 可能抑制这些字段。
 

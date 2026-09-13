@@ -282,7 +282,6 @@ function createSummaryDriver(options: ModelPortOptions): SummaryDriver & { isOve
 			return Math.min(options.model.maxTokens, requested + (budgeted && level !== "off" && !adaptiveThinking ? thinkingBudgetForLevel(level) : 0));
 		},
 		...(options.retry ? { retry: options.retry } : {}),
-		summaryThinking,
 		isOverflow: message => isContextOverflow(fromSessionMessage(message, options.model) as AssistantMessage, options.contextWindow ?? options.model.contextWindow),
 		isRetryable: message => isRetryableAssistantError(fromSessionMessage(message, options.model) as AssistantMessage),
 		async summarize(request, signal) {

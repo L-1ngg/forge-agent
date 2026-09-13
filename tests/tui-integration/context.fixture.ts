@@ -4,10 +4,12 @@ import { App } from "../../packages/tui/src/index.ts";
 const bus = new RequestBus({ timeoutMs: null });
 const storage = new MemorySessionStorage([
 	{ role: "user", timestamp: 1, content: [{ type: "text", text: "ORIGINAL_GOAL" }] },
-	{ role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "PREVIOUS_WORK" }] },
+	{ role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "PREVIOUS_WORK ".repeat(1000) }] },
 	{ role: "user", timestamp: 3, content: [{ type: "text", text: "RECENT_GOAL" }] },
 ]);
-const agent = await createAgent({ provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd(), storage, requestBus: bus, context: { keepRecentTokens: 1 } }, (options) => createPiTestPort({ ...options, responses: [{ text: "PRIVATE_CHECKPOINT_SUMMARY" }, { text: "AFTER_COMPACT" }] }));
+const sourceId = (await storage.load()).entries[1]!.id;
+const checkpoint = JSON.stringify({ states: [], claims: [{ kind: "inference", text: "PRIVATE_CHECKPOINT_SUMMARY", sources: [{ entryId: sourceId, quote: "PREVIOUS_WORK" }] }], taskChanged: false });
+const agent = await createAgent({ provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd(), storage, requestBus: bus, context: { keepRecentTokens: 1 } }, (options) => createPiTestPort({ ...options, responses: [{ text: checkpoint }, { text: "AFTER_COMPACT" }] }));
 const app = new App({
 	host: "alt", requestBus: bus, cwd: process.cwd(), homeDir: process.cwd(),
 	port: {

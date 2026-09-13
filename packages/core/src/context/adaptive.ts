@@ -136,8 +136,10 @@ export async function compactAdaptive(state: SessionState, settings: ContextSett
 				}
 				if (!response) throw new Error("compaction_call_limit");
 				signal.throwIfAborted();
+				// Provider failures are settled by retry policy; rebuilding cannot repair them.
+				if (response.stopReason === "error" || response.stopReason === "aborted") throw new Error(response.errorMessage ?? "summary_provider_error");
 				try {
-					if (["error", "aborted", "length"].includes(response.stopReason ?? "") || response.content.some(block => block.type === "tool_call")) throw new Error("incomplete_checkpoint");
+					if (response.stopReason === "length" || response.content.some(block => block.type === "tool_call")) throw new Error("incomplete_checkpoint");
 					const parsed = parseCheckpoint(JSON.parse(evidenceText(response)), history, old);
 					checkpoint = parsed;
 					if (parsed.taskChanged && !rebuild) { rebuildReason = "task_changed"; if (metrics.modelCalls >= 4) throw new Error("compaction_call_limit"); continue; }

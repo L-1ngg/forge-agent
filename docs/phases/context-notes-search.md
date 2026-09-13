@@ -5,11 +5,14 @@ created: 2026-09-13
 
 # 短检查点与分支历史搜索
 
+> 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，仅运行 adaptive；双策略复现需使用对应历史提交。
+
+
 > 状态:已交付并完成双平台软件验证(2026-09-13)。来源：operator 要求按照“短工作笔记”和“轻量历史搜索”两项方案优化 adaptive。
 
 ## 设计与边界
 
-这是 ADR-017 的局部增强，保留其持久化证据、状态校验、权限和调用预算。默认策略仍为 pi。完整检查点继续保存 quote、状态 ID、替代关系；仅 adaptive 的模型上下文使用精简投影：active 状态的 kind/text/source IDs、摘要结论 kind/text/source IDs，以及既有实际执行 ledger。不截断状态文本，不删约束。降级 summary 继续保存原来的完整可读内容，避免 pi 缺少找回工具时失去证据。摘要生成仍产出完整来源，不能据此宣称摘要生成成本下降。
+这是 ADR-017 的局部增强，保留其持久化证据、状态校验、权限和调用预算。该次交付默认策略为 pi；当前已由 [ADR-018](../decisions/018-adaptive-default.md) 改为默认 adaptive。完整检查点继续保存 quote、状态 ID、替代关系；仅 adaptive 的模型上下文使用精简投影：active 状态的 kind/text/source IDs、摘要结论 kind/text/source IDs，以及既有实际执行 ledger。不截断状态文本，不删约束。降级 summary 继续保存原来的完整可读内容，避免 pi 缺少找回工具时失去证据。摘要生成仍产出完整来源，不能据此宣称摘要生成成本下降。
 
 新增内核工具 search_context，沿用 read_context 权限/hooks/取消链。只扫描当前选中分支的已保存原始 message，不搜索 compaction 摘要，不读取文件或其他会话。输入 query（1–200 Unicode code points，大小写不敏感的字面词项，空白分词，最多 8 项），可选 role=user/assistant/toolResult 和 limit（默认 5，最大 10）。全部词项需命中同一消息；英文大小写不敏感，中文按字面子串，不宣称语义搜索或理解“最后一次纠正”。结果按历史从新到旧返回，附 entryId、role、isError、围绕首个命中位置的 offset/text（最多 256 code points），可用于 read_context 继续读取。最新记录的含义为分支顺序，不信任时间戳。限量结果附 hasMore，不承诺完整检索或稳定翻页游标。
 

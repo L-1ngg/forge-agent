@@ -12,7 +12,7 @@ Forge Agent 提供自研执行内核、可嵌入的 Bun SDK 与终端应用。�
 ## 当前能力
 
 - **自研执行循环:**模型流、工具执行、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
-- **长任务:**自动或手动上下文压缩、有限超限恢复；可选 adaptive 策略提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
+- **长任务:**自动或手动上下文压缩、有限超限恢复；默认 adaptive 策略提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
 - **可嵌入 SDK:**实例独立,工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
 - **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
 - **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。
@@ -65,19 +65,19 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 
 ## 上下文管理
 
-默认 `pi` 策略使用历史摘要与近期原文。需要保留长任务约束并按需查回证据时，可在已有 `.forge-agent/config.json` 中加入以下字段，重启 CLI 后启用 `adaptive`：
+CLI 与 SDK 默认使用 `adaptive`，包括短检查点、历史搜索/读取与请求预算，无需额外开启。以下可选配置只是显式写出默认值：
 
 ```json
 {
   "context": {
-    "strategy": "adaptive"
+    "enabled": true
   }
 }
 ```
 
-SDK 在 `createAgent` 中传入相同的 `context` 选项，或在空闲时调用 `agent.configureContext({ strategy: "adaptive" })`。无需更换模型。
+SDK 的 `createAgent` 省略 `context` 或传空对象时也使用 adaptive。已运行的 CLI 需重启才能加载新默认值和配置，无需更换模型。
 
-`adaptive` 向模型提供简短的任务状态和证据 ID，完整证据仍保存在会话历史与检查点中。模型可用 `search_context` 找到当前分支的相关记录，再用 `read_context` 查看原文；两者均受现有权限策略控制，不重新执行历史工具。压缩有输入/输出预算和有限重建次数；切回 `pi` 可停止增强压缩，原始历史保留。
+`adaptive` 向模型提供简短的任务状态和证据 ID，完整证据仍保存在会话历史与检查点中。模型可用 `search_context` 找到当前分支的相关记录，再用 `read_context` 查看原文；两者均受现有权限策略控制，不重新执行历史工具。压缩有输入/输出预算和有限重建次数；旧 pi 会话从原始分支历史恢复 adaptive 视图，失败不自动回退 pi。旧 pi 策略与 `context.strategy` 选择项已删除。
 
 它不保证所有任务都省 Token 或更便宜。首次 adaptive 的[真实模型对照](docs/phases/adaptive-context-compaction-acceptance.md)与后续短检查点/搜索的[软件验证及材料大小估算](docs/phases/context-notes-search.md)是不同证据；新投影尚未重新完成真实模型质量和总费用评估。完整参数、权限和兼容边界见 [SDK 上下文指南](docs/sdk.md#上下文管理)。
 

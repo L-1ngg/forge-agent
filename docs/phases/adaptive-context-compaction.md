@@ -5,6 +5,9 @@ created: 2026-09-12
 
 # 可追溯上下文压缩施工图
 
+> 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，仅运行 adaptive；双策略复现需使用对应历史提交。
+
+
 > 状态:已完成(2026-09-12) | Owner:operator / Codex
 
 ## Why

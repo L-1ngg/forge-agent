@@ -20,7 +20,7 @@ test("multiple compactions and branches reload in order and reject invalid retai
 	const latest = messageEntry({ role: "user", timestamp: 4, content: [{ type: "text", text: "latest" }] }, checkpoint.id);
 	await store.append(latest);
 	await store.append({ ...checkpoint, id: "compact-2", parentId: latest.id, summary: "summary-2", firstKeptEntryId: latest.id });
-	expect(buildContext(await (await SessionStore.open(store.path, dir)).load()).map((message) => message.content)).toEqual([[{ type: "text", text: "summary-2" }], [{ type: "text", text: "latest" }]]);
+	expect(buildContext(await (await SessionStore.open(store.path, dir)).load()).map((message) => message.content)).toEqual([[{ type: "text", text: "old" }], [{ type: "text", text: "kept" }], [{ type: "text", text: "latest" }]]);
 	await expect(store.append({ ...checkpoint, id: "regression", parentId: "compact-2", firstKeptEntryId: first.id })).rejects.toThrow("boundary");
 	store.branch(second.id);
 	const toolResult = messageEntry({ role: "toolResult", toolCallId: "missing", timestamp: 5, content: [] }, second.id);

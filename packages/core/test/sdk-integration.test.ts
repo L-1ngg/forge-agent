@@ -72,7 +72,7 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 		expect(JSON.stringify(await secondStorage.load())).not.toContain("first-prompt");
 		expect(JSON.stringify(await firstStorage.load())).not.toContain("second-prompt");
 		expect(requests).toHaveLength(3);
-		for (const request of requests) expect(request.tools.map((tool) => tool.name)).toEqual(["capture"]);
+		for (const request of requests) expect(request.tools.map((tool) => tool.name)).toEqual(["capture", "read_context", "search_context"]);
 		expect(JSON.stringify(requests[0]!.system)).toContain("host-");
 		expect(await readdir(directory)).toEqual([".forge-agent"]);
 		expect(await readdir(join(directory, ".forge-agent"))).toEqual(["config.json"]);

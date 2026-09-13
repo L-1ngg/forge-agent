@@ -5,6 +5,9 @@ created: 2026-09-12
 
 # 可追溯上下文压缩验收
 
+> 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，仅运行 adaptive；双策略复现需使用对应历史提交。
+
+
 > 状态:已通过本次限定验收(2026-09-12)。任务状态与 AC 原文见 [Issue #31](https://github.com/L-1ngg/forge-agent/issues/31)。
 
 施工选择见[施工图](adaptive-context-compaction.md)和 [ADR-017](../decisions/017-evidence-backed-context-compaction.md)。本记录区分软件合同与真实模型质量，不将受控摘要、压缩率或 Agent 审阅当作人工运行验收。

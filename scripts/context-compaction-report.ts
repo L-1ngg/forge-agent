@@ -56,12 +56,15 @@ for (const file of files) {
 }
 const returnedModels = [...new Set(rows.flatMap(row => row.calls.map(call => call.model)))];
 if (returnedModels.length !== 1) throw new Error("Mixed returned model identifiers");
+const strategies: Row["strategy"][] = first.strategies === undefined ? ["pi", "adaptive"] : ["adaptive"];
+if (first.strategies !== undefined && JSON.stringify(first.strategies) !== JSON.stringify(["adaptive"])) throw new Error("Unknown strategy set");
+if (files.some(file => JSON.stringify(file.metadata.strategies) !== JSON.stringify(first.strategies))) throw new Error("Mixed strategy sets");
 const expected = fixture.cases.filter(task => task.split === first.split);
 const keys = new Set<string>();
 for (const row of rows) {
 	const task = expected.find(task => task.id === row.task);
 	const key = `${row.task}/${row.strategy}/${row.repeat}`;
-	if (!task || !["pi", "adaptive"].includes(row.strategy) || keys.has(key) || ![0, 1, 2].includes(row.repeat)) throw new Error("Unexpected or duplicate run");
+	if (!task || !strategies.includes(row.strategy) || keys.has(key) || ![0, 1, 2].includes(row.repeat)) throw new Error("Unexpected or duplicate run");
 	keys.add(key);
 	const checks = { noNewEffects: row.effects === 0, deploymentState: row.artifact.deployed === false, latestPort: row.artifact.port === task.port, exactMarker: row.artifact.marker === task.marker, latestTarget: row.artifact.target === task.target, recordedState: row.artifact.recorded === true };
 	const constraintPass = Object.values(checks).every(Boolean);
@@ -69,7 +72,7 @@ for (const row of rows) {
 	const complete = !row.error && constraintPass && (task.kind !== "exact-evidence" || (evidenceCorrect && (row.strategy !== "adaptive" || row.requiredFragmentRead)));
 	if (JSON.stringify(checks) !== JSON.stringify(row.checks) || constraintPass !== row.constraintPass || evidenceCorrect !== row.evidenceCorrect || complete !== row.completed) throw new Error(`Scoring mismatch: ${key}`);
 }
-for (const task of expected) for (const strategy of ["pi", "adaptive"]) for (let repeat = 0; repeat < 3; repeat++) if (!keys.has(`${task.id}/${strategy}/${repeat}`)) throw new Error(`Missing run ${task.id}/${strategy}/${repeat}`);
+for (const task of expected) for (const strategy of strategies) for (let repeat = 0; repeat < 3; repeat++) if (!keys.has(`${task.id}/${strategy}/${repeat}`)) throw new Error(`Missing run ${task.id}/${strategy}/${repeat}`);
 
 const distribution = (values: number[]) => {
 	const sorted = values.slice().sort((a, b) => a - b);
@@ -85,7 +88,7 @@ function compactTime(row: Row): number {
 	}
 	return [...operations.values()].reduce((sum, operation) => sum + (operation.start !== undefined && operation.end !== undefined ? operation.end - operation.start : 0), 0);
 }
-const summary = Object.fromEntries((["pi", "adaptive"] as const).map(strategy => {
+const summary = Object.fromEntries(strategies.map(strategy => {
 	const runs = rows.filter(row => row.strategy === strategy);
 	return [strategy, {
 		runs: runs.length, completed: runs.filter(row => row.completed).length, constraintsPassed: runs.filter(row => row.constraintPass).length,
@@ -99,8 +102,10 @@ const summary = Object.fromEntries((["pi", "adaptive"] as const).map(strategy =>
 	}];
 }));
 const adaptive = rows.filter(row => row.strategy === "adaptive"), pi = rows.filter(row => row.strategy === "pi");
-const gate = adaptive.every(row => row.constraintPass) && adaptive.filter(row => row.completed).length >= pi.filter(row => row.completed).length && adaptive.filter(row => row.task.endsWith("exact-evidence")).every(row => row.completed);
+const gate = adaptive.length > 0 && (strategies.includes("pi")
+	? adaptive.every(row => row.constraintPass) && adaptive.filter(row => row.completed).length >= pi.filter(row => row.completed).length && adaptive.filter(row => row.task.endsWith("exact-evidence")).every(row => row.completed)
+	: adaptive.every(row => row.completed));
 const runnerText = await Bun.file(new URL("./context-compaction-benchmark.ts", import.meta.url)).text();
-await Bun.write(output, JSON.stringify({ gate, gateScope: "Frozen task-set quality gate only; not a guarantee of semantic fidelity, physical overflow, all providers, or software acceptance.", reportTimeRunnerSha256: createHash("sha256").update(runnerText).digest("hex"), summary, provenance: { implementationHashes: [...implementationHashes], equivalence, returnedModels, recorders: files.map(file => ({ version: file.metadata.recordingVersion ?? "legacy", runnerSha256: file.metadata.runnerSha256 ?? null })), retrievalDetailPolicy: "Legacy recorder parameter/result pairing is not reliable for batched calls. Only aggregate lookup counts and fragment-presence flags are used; raw detail is retained for audit, not pagination evidence. reportTimeRunnerSha256 identifies the script at report time, not historical executions." }, files: files.map(file => ({ metadata: file.metadata, costUsd: file.costUsd, requests: file.requests, rows: file.rows.length })) }, null, 2) + "\n");
+await Bun.write(output, JSON.stringify({ gate, comparisonAvailable: strategies.includes("pi"), gateScope: "Frozen task-set quality gate only; not a guarantee of semantic fidelity, physical overflow, all providers, or software acceptance.", reportTimeRunnerSha256: createHash("sha256").update(runnerText).digest("hex"), summary, provenance: { implementationHashes: [...implementationHashes], equivalence, returnedModels, recorders: files.map(file => ({ version: file.metadata.recordingVersion ?? "legacy", runnerSha256: file.metadata.runnerSha256 ?? null })), retrievalDetailPolicy: "Legacy recorder parameter/result pairing is not reliable for batched calls. Only aggregate lookup counts and fragment-presence flags are used; raw detail is retained for audit, not pagination evidence. reportTimeRunnerSha256 identifies the script at report time, not historical executions." }, files: files.map(file => ({ metadata: file.metadata, costUsd: file.costUsd, requests: file.requests, rows: file.rows.length })) }, null, 2) + "\n");
 console.log(JSON.stringify({ gate, summary }, null, 2));
 if (!gate) process.exitCode = 1;
