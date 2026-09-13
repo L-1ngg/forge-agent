@@ -209,3 +209,108 @@ test("adaptive reserves provider thinking tokens before dispatch", async () => {
 		expect((await turn.result).status).toBe("error"); expect(calls).toBe(0);
 	} finally { await agent.dispose(); server.stop(true); }
 });
+
+
+test("short checkpoint survives reopen while full source quotes remain retrievable", async () => {
+	const quote = "Do not deploy. " + "evidence detail ".repeat(200);
+	const storage = new MemorySessionStorage([msg("user", quote), msg("assistant", "notes ".repeat(3000)), msg("user", "Continue")]);
+	const source = (await storage.load()).entries[0]!.id;
+	const checkpoint = { states: [{ id: "rule", kind: "constraint", text: "Do not deploy.", status: "active", sources: [{ entryId: source, quote }], supersedes: [] }], claims: [], taskChanged: false };
+	const requests: string[] = []; let tasks = 0;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		const body = await request.text();
+		if (!body.includes("task-system")) return modelResponse([], "end_turn", JSON.stringify(checkpoint));
+		requests.push(body);
+		return ++tasks === 1 ? modelResponse([{ id: "source-read", name: "read_context", arguments: { entryId: source } }]) : modelResponse();
+	} });
+	const settings = { ...options, storage, baseUrl: server.url.toString(), permission: { rules: [{ tool: "read_context", argsPattern: "*", effect: "allow" as const }] } };
+	let agent = await createAgent(settings);
+	try {
+		expect((await agent.compact()).status).toBe("complete");
+		const persisted = JSON.stringify(await storage.load()); expect(persisted).toContain(quote);
+		await agent.dispose(); agent = await createAgent(settings);
+		for await (const _event of agent.runTurn("Verify the constraint")) { }
+		expect(requests[0]).toContain("Do not deploy."); expect(requests[0]).toContain(source);
+		expect(requests[0]).not.toContain("evidence detail evidence detail");
+		expect(requests[1]).toContain("evidence detail evidence detail");
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test("search finds the latest Chinese correction and returns a Unicode read offset", async () => {
+	const storage = new MemorySessionStorage([msg("user", "端口设为8080"), msg("assistant", "端口只是猜测"), msg("user", "😀".repeat(600) + "纠正：端口改为9090。"), msg("user", "Continue")]);
+	const correction = (await storage.load()).entries[2]!.id;
+	let tasks = 0; const results: Array<Record<string, unknown>> = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() {
+		return ++tasks === 1 ? modelResponse([{ id: "search", name: "search_context", arguments: { query: "端口", role: "user", limit: 1 } }]) : tasks === 2 ? modelResponse([{ id: "read", name: "read_context", arguments: { entryId: correction, offset: Number(results[0]?.matches && (results[0].matches as Array<{ offset: number }>)[0]?.offset), limit: 256 } }]) : modelResponse();
+	} });
+	const agent = await createAgent({ ...options, context: { ...options.context, enabled: false }, storage, baseUrl: server.url.toString(), permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] } });
+	try {
+		for await (const event of agent.runTurn("Find the latest decision")) if (event.type === "message_end" && event.message.role === "toolResult") {
+			expect(event.message.isError).not.toBe(true);
+			const text = event.message.content.find(block => block.type === "text"); if (text?.type === "text") results.push(JSON.parse(text.text));
+		}
+		expect(results).toHaveLength(2);
+		expect(results[0]).toMatchObject({ hasMore: true, matches: [{ entryId: correction, role: "user", isError: false }] });
+		expect(results[1]?.text).toContain("纠正：端口改为9090。");
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test.each(["foreign", "denied", "no-match"] as const)("search preserves %s boundaries", async mode => {
+	const initialStorage = new MemorySessionStorage([msg("user", "PRIVATE-SAVED-NEEDLE")]);
+	const initial = await initialStorage.load(); if (mode === "foreign") initial.leafId = null;
+	const storage = new MemorySessionStorage(initial); let tasks = 0;
+	const results: SessionMessage[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++tasks === 1 ? modelResponse([{ id: "search", name: "search_context", arguments: { query: mode === "no-match" ? "missing-value" : "PRIVATE-SAVED-NEEDLE" } }]) : modelResponse(); } });
+	const agent = await createAgent({ ...options, storage, baseUrl: server.url.toString(), permission: { rules: [{ tool: "search_context", argsPattern: "*", effect: mode === "denied" ? "deny" : "allow" }] } });
+	try {
+		for await (const event of agent.runTurn("Find earlier evidence")) if (event.type === "message_end" && event.message.role === "toolResult") results.push(event.message);
+		expect(results).toHaveLength(1);
+		if (mode === "denied") expect(results[0]!.isError).toBe(true);
+		else expect(results[0]!.content).toEqual([{ type: "text", text: JSON.stringify({ matches: [], hasMore: false }) }]);
+		expect(JSON.stringify(results[0]!.content)).not.toContain("PRIVATE-SAVED-NEEDLE");
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test("search uses literal words, case folding, error status and bounded previews", async () => {
+	const history: SessionMessage[] = [];
+	for (let i = 0; i < 12; i++) {
+		history.push({ role: "assistant", timestamp: i, content: [{ type: "tool_call", id: `c-${i}`, name: "inspect", arguments: {} }] });
+		history.push({ role: "toolResult", timestamp: i, toolCallId: `c-${i}`, toolName: "inspect", isError: true, content: [{ type: "text", text: "İ😀".repeat(200) + "ERROR [a+b] " + "长".repeat(400) }] });
+	}
+	const storage = new MemorySessionStorage(history); let tasks = 0; const results: SessionMessage[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++tasks === 1 ? modelResponse([{ id: "search", name: "search_context", arguments: { query: "error [a+b]", role: "toolResult", limit: 10 } }]) : modelResponse(); } });
+	const agent = await createAgent({ ...options, context: { ...options.context, enabled: false }, storage, baseUrl: server.url.toString(), permission: { rules: [{ tool: "search_context", argsPattern: "*", effect: "allow" }] } });
+	try {
+		for await (const event of agent.runTurn("Find errors")) if (event.type === "message_end" && event.message.role === "toolResult") results.push(event.message);
+		const block = results[0]!.content[0]!; if (block.type !== "text") throw new Error("Expected text");
+		const result = JSON.parse(block.text) as { matches: Array<{ text: string; offset: number; isError: boolean }>; hasMore: boolean };
+		expect(result.hasMore).toBe(true); expect(result.matches).toHaveLength(10);
+		for (const match of result.matches) { expect(match.isError).toBe(true); expect(match.offset).toBe(336); expect([...match.text]).toHaveLength(256); expect(match.text).toContain("ERROR [a+b]"); }
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test.each([{ query: " " }, { query: "x".repeat(201) }, { query: "one two three four five six seven eight nine" }, { query: "valid", limit: 11 }])("invalid search input is rejected: %j", async args => {
+	let tasks = 0; const results: SessionMessage[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++tasks === 1 ? modelResponse([{ id: "search", name: "search_context", arguments: args }]) : modelResponse(); } });
+	const agent = await createAgent({ ...options, baseUrl: server.url.toString(), permission: { rules: [{ tool: "search_context", argsPattern: "*", effect: "allow" }] } });
+	try {
+		for await (const event of agent.runTurn("Search history")) if (event.type === "message_end" && event.message.role === "toolResult") results.push(event.message);
+		expect(results).toHaveLength(1); expect(results[0]!.isError).toBe(true);
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
+test("search tool conflicts are atomic across creation, strategy and configuration updates", async () => {
+	const tool = { name: "search_context", label: "Host search", description: "Host-owned search", parameters: { type: "object" as const, properties: {}, required: [], additionalProperties: false as const }, async execute() { return { content: [], details: {} }; } };
+	await expect(createAgent({ ...options, tools: [tool] })).rejects.toThrow("reserved");
+	const pi = await createAgent({ ...options, context: { ...options.context, strategy: "pi" }, tools: [tool] });
+	try { expect(() => pi.configureContext({ strategy: "adaptive" })).toThrow("reserved"); }
+	finally { await pi.dispose(); }
+	const requests: string[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.text()); return modelResponse(); } });
+	const agent = await createAgent({ ...options, baseUrl: server.url.toString() });
+	try {
+		await expect(agent.updateConfiguration({ tools: [tool], systemPrompt: "must not apply" })).rejects.toThrow("reserved");
+		for await (const _event of agent.runTurn("Continue")) { }
+		expect(requests[0]).toContain("task-system"); expect(requests[0]).not.toContain("must not apply"); expect(requests[0]).not.toContain("Host-owned search");
+	} finally { await agent.dispose(); server.stop(true); }
+});

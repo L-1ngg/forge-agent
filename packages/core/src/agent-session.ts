@@ -6,6 +6,7 @@ import { fromSessionMessage, createEventProjection, toSessionMessage } from "./e
 import type { AgentPort, InputAcceptance } from "./agent-port.ts";
 import { prepareSessionTools, type ModelPortOptions } from "./pi-port.ts";
 import { contextReader } from "./context/read-context.ts";
+import { contextSearcher } from "./context/search-context.ts";
 import { MemorySessionStorage, messageEntry, projectMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { randomUUID } from "node:crypto";
 import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, generateCompaction, prepareCompaction, type CompactionReason, type CompactionResult, type ContextSettings, buildContext } from "./context/compaction.ts";
@@ -169,14 +170,14 @@ export class AgentSession implements AgentPort {
 	}
 	private prepareTools(): SessionToolset {
 		if (this.settings.strategy !== "adaptive") return this.baseToolset;
-		if (this.options.tools?.some(tool => tool.name === "read_context")) throw new Error("read_context is reserved by adaptive context");
-		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state)] });
+		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
+		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state)] });
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
 		if (this.running || this.compactController) throw new Error("Cannot configure context during execution");
 		const next = { ...this.settings, ...settings };
 		if ((next.strategy !== undefined && !["pi", "adaptive"].includes(next.strategy)) || !Number.isInteger(next.reserveTokens) || next.reserveTokens < 1 || !Number.isInteger(next.keepRecentTokens) || next.keepRecentTokens < 1 || typeof next.enabled !== "boolean" || !["inherit", "off"].includes(next.summaryReasoning)) throw new Error("Invalid context settings");
-		if (next.strategy === "adaptive" && this.options.tools?.some(tool => tool.name === "read_context")) throw new Error("read_context is reserved by adaptive context");
+		if (next.strategy === "adaptive" && this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
 		this.settings = next;
 		if (this.runtime) {
 			this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
@@ -317,7 +318,7 @@ export class AgentSession implements AgentPort {
 		const captured = { ...patch, ...(patch.tools ? { tools: patch.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
-			if (this.settings.strategy === "adaptive" && captured.tools?.some(tool => tool.name === "read_context")) throw new Error("read_context is reserved by adaptive context");
+			if (this.settings.strategy === "adaptive" && captured.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
 			const assembly = await this.prepareConfiguration(captured);
 			this.assertHealthy();
 			const revision = ++this.revision;

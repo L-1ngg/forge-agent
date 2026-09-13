@@ -29,7 +29,7 @@ export function adaptiveMessages(state: SessionState): SessionMessage[] {
 	const history = branch.slice(0, index).filter((entry): entry is MessageEntry => entry.type === "message");
 	const kept = history.filter(item => checkpoint.keptIds.includes(item.id));
 	return structuredClone([
-		{ role: "user" as const, content: [{ type: "text" as const, text: checkpointText(checkpoint, history) }], timestamp: Date.parse(entry.timestamp) },
+		{ role: "user" as const, content: [{ type: "text" as const, text: checkpointText(checkpoint, history, "notes") }], timestamp: Date.parse(entry.timestamp) },
 		...kept.map(item => checkpoint.clippedIds.includes(item.id) ? clippedMessage(item) : item.message),
 		...branch.slice(index + 1).flatMap(item => item.type === "message" ? [item.message] : []),
 	]);
@@ -59,7 +59,7 @@ function select(history: MessageEntry[], checkpoint: TaskCheckpoint, covered: Se
 	const latest = new Set([...(groups.at(-1)?.entries.map(entry => entry.id) ?? []), ...(history[latestUser] ? [history[latestUser]!.id] : [])]);
 	const protectedGroups = groups.filter(unit => unit.entries.some(entry => latest.has(entry.id) || (entry.message.role === "user" && !covered.has(entry.id))));
 	const kept = new Set(protectedGroups), clipped = new Set<string>();
-	const text = checkpointText(checkpoint, history);
+	const text = checkpointText(checkpoint, history, "notes");
 	const view = () => [{ role: "user" as const, content: [{ type: "text" as const, text }], timestamp: 0 }, ...groups.filter(unit => kept.has(unit)).flatMap(unit => unit.entries.map(entry => clipped.has(entry.id) ? clippedMessage(entry) : entry.message))];
 	if (clip) for (const unit of groups) if (!protectedGroups.includes(unit)) for (const entry of unit.entries) if (entry.message.role === "toolResult" && !entry.message.isError && evidenceText(entry.message).length > 1024) clipped.add(entry.id);
 	if (count(view(), budget) > inputBudget) throw new Error("protected_context_budget_exceeded");

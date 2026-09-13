@@ -76,6 +76,10 @@ interface SessionStorage {
 
 增强策略注册保留工具名 `read_context`。它经过现有权限和 tool hooks，只能读取当前分支已保存消息；宿主同名工具配置会被拒绝。输入 `entryId`、`offset`（默认 0）和 `limit`（默认/最大 4096）以 Unicode code point 为单位；正文最多 16 KiB，`nextOffset` 支持长单行续读。元数据也计入后续上下文。图片只报告占位，无法找回工具原先未保存的正文；不存在、越界或外分支引用明确报错。需要自动找回的宿主应通过已有 permission 配置允许该工具。
 
+adaptive 发送给任务模型的检查点采用短投影：状态/结论的类型、完整文本与去重的来源 entryId；完整 quote、状态 ID 和替代关系继续保存在本地检查点，降级 summary 也保留完整版本。执行结果 ledger 不省略。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。
+
+`search_context` 是另一个保留工具名，允许模型在不知道 entryId 时搜索当前分支历史。输入 `query`（1–200 Unicode code points，空白分词且最多 8 项，全部字面词项都需命中，大小写不敏感）、可选 `role`（user/assistant/toolResult）和 `limit`（默认 5、最大 10）。结果从新到旧，含 `entryId`、`role`、`isError`、Unicode `offset` 和最多 256 code points 的预览，另有 `hasMore`。用 `read_context` 加载完整原文；“最新”仅指分支顺序，不判断语义上的最新决定。为避免回显，搜索排除这两个检索工具的结果及包含其调用的 assistant 消息；仍可按 ID 读取这些记录。搜索不跨分支、会话或文件，不使用额外模型；同样需要 permission 允许且经过 tool hooks。新增 schema/找回会增加输入，不能保证每个场景净省 Token。
+
 增强 compaction 使用 v4 记录的可选 `adaptive` 版本化载荷；重开时验证引用与状态替代关系。无增强载荷的旧历史仍可读取。同一新版 SDK 切回 `pi` 时采用可读降级摘要与合法后缀，再启用 `adaptive` 时从原始消息重建视图；不承诺旧 SDK 能复现增强投影。自动压缩关闭不移除原文工具，也不禁用手动压缩。
 
 增强 `compaction` 事件补充 `strategy`、`action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。以下固定阈值、两段摘要和失败续发规则描述 `pi` 策略。
