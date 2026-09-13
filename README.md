@@ -12,7 +12,7 @@ Forge Agent combines a self-owned execution core, an embeddable Bun SDK, and a t
 ## Current Capabilities
 
 - **Owned execution loop:** model streaming, tool execution, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence.
-- **Long tasks:** automatic or manual context compaction, one bounded overflow recovery, and bounded Read/Bash previews with temporary command logs.
+- **Long tasks:** automatic or manual context compaction and bounded overflow recovery; optional adaptive compaction adds sourced task notes, branch history search, and original-text retrieval. Read/Bash provide bounded previews and temporary command logs.
 - **Embeddable SDK:** independent instances with host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
 - **Coding CLI:** read, write, edit, and shell tools; interactive TUI or JSON event output for scripts.
 - **Terminal interface:** streaming transcript, tool and diff views, permission cards, queued input, and a cell-based renderer.
@@ -42,7 +42,7 @@ For headless JSON events:
 bun run forge-agent -- -p "Read package.json and summarize it" --json
 ```
 
-Configuration loads from `~/.config/forge-agent/config.json` (or `$XDG_CONFIG_HOME/forge-agent/config.json`), then `.forge-agent/config.json`, then `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and `FORGE_AGENT_API_KEY`. CLI flags override provider/model/session selection. A project configuration can reference an environment variable:
+Configuration loads from `~/.config/forge-agent/config.json` (or `$XDG_CONFIG_HOME/forge-agent/config.json`), then `.forge-agent/config.json`, then `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and `FORGE_AGENT_API_KEY`. CLI flags override provider/model selection. A project configuration can reference an environment variable:
 
 ```json
 {
@@ -62,6 +62,24 @@ Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive
 - Unsent text and queued input from saved conversations are kept in memory for this process. Returning to the conversation restores them as an editable draft, without sending. They are not saved on exit. To switch while retaining editor text, put `/new` or `/resume` on a separate first line; an empty conversation with a draft asks before discarding it (`y` confirms, `n` or Esc cancels).
 
 Restoring a conversation rebuilds its history and model context; it does not replay interrupted tools. Tools must cooperate with cancellation; switching can wait for their cleanup. A damaged conversation is reported and requires a verified copy using the SDK conversion workflow before it can be resumed.
+
+## Context Management
+
+The default `pi` strategy uses history summaries and recent original messages. To retain long-task constraints and retrieve saved evidence on demand, add the following field to your existing `.forge-agent/config.json` and restart the CLI:
+
+```json
+{
+  "context": {
+    "strategy": "adaptive"
+  }
+}
+```
+
+For SDK use, pass the same `context` option to `createAgent`, or call `agent.configureContext({ strategy: "adaptive" })` while idle. No model change is required.
+
+Adaptive compaction sends concise task states and evidence IDs to the model while retaining full evidence in session history and checkpoints. The model can use `search_context` to locate records in the current branch, then `read_context` to retrieve original text. Both tools follow existing permissions and never replay historical tools. Compaction enforces input/output budgets and bounded rebuild attempts. Switch back to `pi` to stop adaptive compaction while preserving raw history.
+
+Adaptive does not guarantee lower token use or cost for every task. The initial [real-model comparison](docs/phases/adaptive-context-compaction-acceptance.md) and the later [software checks and material-size estimates](docs/phases/context-notes-search.md) for short notes/search are separate evidence; the new projection has not yet received a fresh real-model quality and total-cost evaluation. See the [SDK context guide](docs/sdk.en.md#context-management) for settings, permissions, and compatibility.
 
 ## Embed an Agent
 
@@ -112,14 +130,13 @@ The dependency gate keeps UI dependencies out of the core and restricts pi-ai im
 
 The execution runtime is maintained in this repository, derived from the fixed Pi Agent source recorded in [runtime provenance](packages/core/src/runtime/README.md). Forge owns the session policies, SDK, CLI and TUI. The SDK supports `continue()`, invocation results, awaited idle/disposal, native text/image tool results, transient task retries, and controlled configuration updates; see the [SDK guide](docs/sdk.en.md).
 
-
 ## Roadmap
 
 | Horizon | Direction |
 |---|---|
 | **Now** | Validate the core and SDK in real tasks and resolve remaining acceptance gaps |
 | **Next** | Tool and Skills extensions; source-traceable research and reports |
-| **Later** | Context management, recovery, and long-task reliability; then service APIs and distribution |
+| **Later** | Further validation of long-task reliability, recovery, and context quality/cost; then service APIs and distribution |
 
 The [development plan](docs/plan.md) (Chinese) is the source of truth for actionable work. These are directions, not release-date commitments.
 
@@ -130,7 +147,7 @@ This is a personal project under active development. APIs and configuration may 
 - Bun SDK only; no npm distribution, stable API guarantee, or process-level sandbox.
 - Custom tools must cooperate with cancellation. Tool side effects are not rolled back.
 - JSONL storage does not guarantee atomicity under power loss or partial writes. Once a commit starts, cancellation waits for it to settle.
-- The TUI uses alt-screen. Mouse-wheel support and OSC 52 clipboard integration are not implemented.
+- The TUI uses alt-screen and supports mouse-wheel interaction. Clipboard delivery prefers available native channels; OSC 52 is a terminal-dependent fallback with no delivery guarantee.
 - Source prereleases are development snapshots, not installable binaries or production releases.
 
 ## Development and Documentation

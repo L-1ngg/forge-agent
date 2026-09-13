@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-09)。
+> 状态:生效(2026-09-13)。
 > 文档组织的历史决策见 [decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 原则:文档领路,代码跟随;证据说话,不是信心说话。
 
@@ -22,10 +22,13 @@
 |---|---|
 | [plan.md](plan.md) | 项目路线、优先级与当前行动项（**热层**）；已建 issue 的任务使用链接 |
 | [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与未测边界 |
-| [上下文管理](phases/context-management.md)、[上下文验收](phases/context-management-acceptance.md) | 上下文策略与专项证据；迁移后的接合验证见迁移验收 |
+| [Pi 上下文策略](phases/context-management.md)、[原验收](phases/context-management-acceptance.md) | 默认 pi 策略的历史设计与证据 |
+| [Adaptive 施工图](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md) | 独立状态、证据、预算及首次真实模型对照 |
+| [短检查点与历史搜索](phases/context-notes-search.md) | 当前 adaptive 投影与 search_context、软件验证、输入估算和未测质量边界 |
 | [TUI 主界面工作流](phases/tui-main-workflow.md) | 主界面交互设计与跨流程验收 |
 | [会话管理](phases/session-management.md) | 新会话、清屏与项目内恢复的施工及验收 |
 | [会话恢复体验](phases/session-resume-experience.md) | 清晰标题、按需原文预览与重复浏览缓存；规格见 GitHub #29 |
+| [软件测试体系](phases/testing-system.md) | 测试体系重设计讨论、现有约束与待决问题 |
 | [Markdown 渲染](phases/markdown-rendering.md) | 正文与详情渲染、流式显示及源码复制的施工与验收 |
 | [decisions/](decisions/) | ADR：已定决策及其替代关系，防重新争论 |
 

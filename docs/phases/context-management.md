@@ -5,7 +5,9 @@ created: 2026-09-07
 
 # 上下文管理方案
 
-> 状态:已实现并完成本地自动化及受控真实任务验收，未推送或发布(2026-09-07) | Owner:operator / Codex | [实现证据](context-management-acceptance.md)
+> 状态:默认 pi 策略的历史施工与验收快照(2026-09-07) | Owner:operator / Codex | [实现证据](context-management-acceptance.md)
+
+本文的“未推送”和验收数量记录当时状态。当前 opt-in adaptive 见 [ADR-017](../decisions/017-evidence-backed-context-compaction.md)，短检查点与分支搜索见[后续施工与验证](context-notes-search.md)。下方无累计调用帽、不提供内核原文工具等条款只适用于原 pi 策略。
 
 ## 目标与范围
 

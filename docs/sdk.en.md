@@ -77,37 +77,56 @@ The CLI uses v4 `SessionStore` instances as its storage. Older formats require a
 
 ## Context Management
 
-Adaptive task requests use short checkpoint notes: state/claim kind, full text, and deduplicated source entryIds. Full quotes, state IDs, and replacement relationships remain in persisted checkpoints and the fallback summary; the execution ledger is retained. Summary generation still extracts full evidence, so this does not imply lower summary-generation cost.
-
-The reserved `search_context` tool finds saved messages within the current branch when an entryId is unknown. Supply `query` (1–200 Unicode code points, at most 8 whitespace-separated literal words, all must match, case-insensitive), optional `role` (`user`, `assistant`, `toolResult`), and `limit` (default 5, maximum 10). Results are newest first by branch order, with `entryId`, `role`, `isError`, Unicode `offset`, a preview of at most 256 code points, and a `hasMore` flag. Use `read_context` for full text. This is literal search, not semantic interpretation of the latest decision. To avoid recursive echoes, search excludes results from either retrieval tool and assistant messages containing their calls; those records remain readable by ID. Search uses the same permissions, hooks and cancellation boundary, adds no model dependency, and never accesses other branches, sessions or files. Its schema and retrieved text add input overhead, so net token savings are workload-dependent.
-
 `context.strategy` defaults to `"pi"`, preserving the existing behavior below. Set `"adaptive"` to opt into sourced task checkpoints, relevant history selection, bounded historical lookup, and request budgeting. This does not imply better quality on every model or workload.
 
+| Strategy | Default | Behavior |
+|---|---|---|
+| `pi` | Yes | History summaries and recent original messages; existing recovery contract |
+| `adaptive` | No | Sourced short notes, relevance selection, history search/read, budgets and bounded rebuilds |
+
+The CLI accepts the same settings in its configuration file's `context` field. SDK hosts supply them at creation or switch while idle with `configureContext`. Search and retrieval still require host permission; selecting a strategy does not grant access.
+
+### Adaptive: States and Budgets
+
 Adaptive compaction protects unarchived user input and the latest complete interaction, first attempting bounded tool-body clipping and local selection. When needed, the task model extracts separate states and summary claims with exact saved-message references. Replacements require later user evidence; assistant statements are conservatively classified as inference. Recorded tool outcomes remain the execution evidence. Checkpoints never authorize tools, and structural validation does not prove semantic completeness.
+
+Adaptive task requests use short checkpoint notes: state/claim kind, full text, and deduplicated source entryIds. Full quotes, state IDs, and replacement relationships remain in persisted checkpoints and the fallback summary; the execution ledger is retained. Summary generation still extracts full evidence, so this does not imply lower summary-generation cost.
 
 Each adaptive operation allows at most two logical generations and four actual model requests, including transient retries. The fourth incremental update, a task change, an invalid checkpoint or lack of progress can trigger rebuilding from original records. Oversized summary input, protected context that cannot fit, invalid references, and final lack of progress fail without publishing an invalid checkpoint. Automatic failure prevents that over-budget task request; cancellation and storage failures retain their existing lifecycle contracts.
 
 Without an explicit task `maxTokens`, adaptive sends `min(4096, model.maxTokens)`, unlike pi's provider default. Its budget includes system text, tool definitions, states, summaries and messages, reserving `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`. Effective output includes additional provider thinking budgets where applicable. Heuristic counts do not guarantee the physical provider window will fit. Summary input is checked separately and its output is capped at 4096 tokens, further limited by model capacity and the declared window.
 
+### Search and Read History
+
 Adaptive registers the reserved `read_context` tool through existing permission checks and tool hooks. It reads only saved messages in the selected session branch; a conflicting host tool name is rejected. Arguments are `entryId`, `offset` (default 0) and `limit` (default/maximum 4096), measured in Unicode code points. Text is capped at 16 KiB; `nextOffset` supports continuing long single lines. Metadata also counts toward subsequent context. Images return placeholders, and content never saved by the original tool cannot be recovered. Missing, out-of-range, and off-branch references fail explicitly. Hosts wanting automatic retrieval must allow this tool using their existing permission configuration.
+
+The reserved `search_context` tool finds saved messages within the current branch when an entryId is unknown. Supply `query` (1–200 Unicode code points, at most 8 whitespace-separated literal words, all must match, case-insensitive), optional `role` (`user`, `assistant`, `toolResult`), and `limit` (default 5, maximum 10). Results are newest first by branch order, with `entryId`, `role`, `isError`, Unicode `offset`, a preview of at most 256 code points, and a `hasMore` flag. Use `read_context` for full text. This is literal search, not semantic interpretation of the latest decision. To avoid recursive echoes, search excludes results from either retrieval tool and assistant messages containing their calls; those records remain readable by ID. Search uses the same permissions, hooks and cancellation boundary, adds no model dependency, and never accesses other branches, sessions or files. Its schema and retrieved text add input overhead, so net token savings are workload-dependent.
+
+### Compatibility and Events
 
 Versioned optional `adaptive` payloads extend v4 compaction records. Reopening validates references and state replacement transitions; old histories without these payloads remain readable. With the same new SDK, switching to pi uses a readable fallback summary and legal recent suffix; switching back to adaptive reconstructs the view from original messages. Older SDK versions are not guaranteed to reproduce adaptive projections. Disabling automatic compaction does not remove the lookup tool or disable manual compaction.
 
-Adaptive `compaction` events add `strategy`, `action`, `inputBudget`, `contextEstimated`, `modelCalls`, `generations`, `elapsedMs`, `stopReason`, and aggregate `usage`. These are cumulative snapshots: use the latest event per `operationId`, rather than adding snapshots. The fixed threshold, two-summary structure, and failure continuation rules below apply to pi.
+Adaptive `compaction` events add `strategy`, `action`, `inputBudget`, `contextEstimated`, `modelCalls`, `generations`, `elapsedMs`, `stopReason`, and aggregate `usage`. These are cumulative snapshots: use the latest event per `operationId`, rather than adding snapshots.
+
+See the [follow-up validation record](phases/context-notes-search.md) for the current short projection and cost-estimation limits. The initial adaptive holdout does not establish quality for the new projection.
+
+### Pi: Existing Compaction Behavior
 
 The creation option `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }` defaults to `true`, `16384`, `20000`, and `"inherit"`. Update it while idle with `agent.configureContext(partial)`. Every task request checks whether estimated context strictly exceeds `contextWindow - reserveTokens`; recent tokens guide legal cut selection rather than imposing a final context cap.
-
-`contextWindow` optionally overrides the local capacity declaration, defaulting to model metadata. Lowering it tests triggering, not physical provider overflow. `maxTokens` controls ordinary task output independently of compaction reserve; provider defaults apply when omitted. `getUsage().contextEstimated` distinguishes measured usage from estimation. Model, system, tool, branch and projection changes invalidate prior anchors; summary usage never anchors task context.
-
-Historical user/toolResult content may include `{ type: "image", data: base64, mimeType }`. Requests retain the image, estimation counts 1024 tokens per image, and summaries serialize a placeholder. Task and summary pi-ai calls share `sessionId`: generated per instance by default, optionally supplied by the host, and derived from the session header in the CLI. Provider compatibility and cache settings control HTTP affinity fields; `cacheRetention: "none"` may suppress them.
-
-`await agent.compact(instructions?, onEvent?)` aborts active work, waits for tool and persistence cleanup, then compacts once without resuming the task. It returns `{ status, operationId, beforeTokens, afterTokens?, error? }`, with status `complete`, `skipped` or `error`. Storage faults still throw and disable the instance. Abort interrupts summaries and retry waits but waits for started writes. Instructions only focus the history summary.
 
 Summaries use the task model, authentication and routing, with no tools and `cacheRetention: "none"`. At most two logical requests generate history and an optional turn-prefix summary, concatenated directly. Reasoning inherits the task by default; `summaryReasoning: "off"` disables it only when supported, otherwise inheritance and the fallback reason are reported. The top-level `retry` policy defaults to enabled, three retries and a 2000 ms base delay: 2/4/8 seconds. Only classified transient responses retry the failed logical summary; provider retries are disabled and there is no cumulative summary-call cap.
 
 Failed proactive compaction preserves the view and permits the task request. Overflow and eligible length responses share one compaction recovery per continuous failure chain, including failures after partial text. Failed attempts remain in history, completed tools are never replayed, and successful answers are never regenerated just because reported usage exceeds the window. `enabled: false` disables automatic compaction and recovery; manual compaction remains available.
 
 Ordinary output-limit `length` text remains in subsequent requests; truncated tool calls are neither executed nor projected. A `length` attempt classified for context recovery stores `contextExcluded`, retaining its raw record while excluding it after reopening. Headless returns success after successful recovery, 1 for unrecovered error/length, and 130 for cancellation.
+
+### Shared APIs and Accounting
+
+`contextWindow` optionally overrides the local capacity declaration, defaulting to model metadata. Lowering it tests triggering, not physical provider overflow. `maxTokens` controls ordinary task output independently of compaction reserve; when omitted, pi uses provider defaults and adaptive uses the explicit output reservation above. `getUsage().contextEstimated` distinguishes measured usage from estimation. Model, system, tool, branch and projection changes invalidate prior anchors; summary usage never anchors task context.
+
+Historical user/toolResult content may include `{ type: "image", data: base64, mimeType }`. Requests retain the image, estimation counts 1024 tokens per image, and summaries serialize a placeholder. Task and summary pi-ai calls share `sessionId`: generated per instance by default, optionally supplied by the host, and derived from the session header in the CLI. Provider compatibility and cache settings control HTTP affinity fields; `cacheRetention: "none"` may suppress them.
+
+`await agent.compact(instructions?, onEvent?)` aborts active work, waits for tool and persistence cleanup, then compacts once without resuming the task. It returns `{ status, operationId, beforeTokens, afterTokens?, error? }`, with status `complete`, `skipped` or `error`. Storage faults still throw and disable the instance. Abort interrupts summaries and retry waits but waits for started writes. Instructions only focus the history summary.
 
 Task streams and manual onEvent callbacks expose `compaction` phases (start, attempt, retry, end, error, skipped) and `recovery` events with operation identity, reason, estimates, attempts and usage. Attempt events report effective reasoning and any fallback. The TUI command is `/compact [instructions]`.
 

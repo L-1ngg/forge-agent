@@ -1,12 +1,13 @@
 # 通用 Agent — 规划
 
-> 状态:待下一批设计(2026-09-09)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
+> 状态:待下一批设计(2026-09-13)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
 > 设计论证与历史研究见 [design-rationale.md](design-rationale.md) 和 [research/](research/)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
 ## 1. 当前行动项
 
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
+- [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次 adaptive 的已用保留集宣称新投影有效。
 - [ ] 制定第三批能力扩展施工图，明确选型、范围与验收，再开始实现。
 
 ## 2. 后续路线
@@ -22,8 +23,8 @@
 
 ### 第四批 — 长任务可靠性
 
-- 围绕真实任务补齐上下文管理、恢复、执行约束和评估。
-- 上下文工程规格与任务进度见 [GitHub #2](https://github.com/L-1ngg/forge-agent/issues/2)；采用 [Pi 对齐决策](decisions/014-pi-aligned-context-management.md) 与[施工方案](phases/context-management.md)，不改变本路线的先后顺序。
+- 围绕真实任务继续验证上下文管理、恢复、执行约束及质量/成本。
+- 默认 pi 的设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；显式 adaptive 的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
 - 知识库按场景接入,不默认开启持久记忆或新增检索基础设施。

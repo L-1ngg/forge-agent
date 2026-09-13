@@ -12,7 +12,7 @@ Forge Agent 提供自研执行内核、可嵌入的 Bun SDK 与终端应用。�
 ## 当前能力
 
 - **自研执行循环:**模型流、工具执行、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
-- **长任务:**自动或手动上下文压缩、一次有限超限恢复，以及 Read/Bash 有限预览与命令临时日志。
+- **长任务:**自动或手动上下文压缩、有限超限恢复；可选 adaptive 策略提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
 - **可嵌入 SDK:**实例独立,工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
 - **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
 - **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。
@@ -42,7 +42,7 @@ Headless JSON 事件输出:
 bun run forge-agent -- -p "Read package.json and summarize it" --json
 ```
 
-配置依次加载 `~/.config/forge-agent/config.json`(设置 XDG 时为 `$XDG_CONFIG_HOME/forge-agent/config.json`)、`.forge-agent/config.json`、`FORGE_AGENT_PROVIDER` / `FORGE_AGENT_MODEL` / `FORGE_AGENT_API_KEY`。CLI 参数覆盖 provider/model/session 选择。项目配置可以引用环境变量:
+配置依次加载 `~/.config/forge-agent/config.json`(设置 XDG 时为 `$XDG_CONFIG_HOME/forge-agent/config.json`)、`.forge-agent/config.json`、`FORGE_AGENT_PROVIDER` / `FORGE_AGENT_MODEL` / `FORGE_AGENT_API_KEY`。CLI 参数覆盖 provider/model 选择。项目配置可以引用环境变量:
 
 ```json
 {
@@ -62,6 +62,24 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 - 已保存会话的未发送文本和排队输入在当前进程内暂存，返回原会话时恢复为可编辑草稿，不自动发送；退出后不保存。要携带编辑中的草稿发起切换，可在独立首行放置 `/new` 或 `/resume`；空会话有草稿时会提示丢弃确认（`y` 确认，`n` 或 Esc 取消）。
 
 恢复会话重建历史和模型上下文，不重放中断工具。工具需要配合取消，切换会等待其收尾。损坏会话会报告诊断，需按 SDK 的副本转换流程检查后恢复。
+
+## 上下文管理
+
+默认 `pi` 策略使用历史摘要与近期原文。需要保留长任务约束并按需查回证据时，可在已有 `.forge-agent/config.json` 中加入以下字段，重启 CLI 后启用 `adaptive`：
+
+```json
+{
+  "context": {
+    "strategy": "adaptive"
+  }
+}
+```
+
+SDK 在 `createAgent` 中传入相同的 `context` 选项，或在空闲时调用 `agent.configureContext({ strategy: "adaptive" })`。无需更换模型。
+
+`adaptive` 向模型提供简短的任务状态和证据 ID，完整证据仍保存在会话历史与检查点中。模型可用 `search_context` 找到当前分支的相关记录，再用 `read_context` 查看原文；两者均受现有权限策略控制，不重新执行历史工具。压缩有输入/输出预算和有限重建次数；切回 `pi` 可停止增强压缩，原始历史保留。
+
+它不保证所有任务都省 Token 或更便宜。首次 adaptive 的[真实模型对照](docs/phases/adaptive-context-compaction-acceptance.md)与后续短检查点/搜索的[软件验证及材料大小估算](docs/phases/context-notes-search.md)是不同证据；新投影尚未重新完成真实模型质量和总费用评估。完整参数、权限和兼容边界见 [SDK 上下文指南](docs/sdk.md#上下文管理)。
 
 ## 嵌入 Agent
 
@@ -112,14 +130,13 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 
 执行 runtime 来自固定 Pi Agent 源码，由本仓库维护，来源与接入差异见 [runtime 说明](packages/core/src/runtime/README.md)。会话策略、SDK、CLI/TUI 继续由 Forge 拥有。SDK 提供 `continue()`、执行结果、可等待空闲与释放、原生文本/图片工具结果、普通任务重试和受控配置更新，使用方式见 [SDK 指南](docs/sdk.md)。
 
-
 ## Roadmap
 
 | 阶段 | 方向 |
 |---|---|
 | **Now** | 内核与 SDK 真实任务验收,补齐剩余验收项 |
 | **Next** | 工具和 Skills 扩展,来源可追溯的资料调研与报告 |
-| **Later** | 上下文管理、恢复与长任务可靠性,之后是服务 API 与分发 |
+| **Later** | 长任务可靠性、恢复边界与上下文质量/成本的持续验证,之后是服务 API 与分发 |
 
 [开发规划](docs/plan.md) 是行动项真相源。以上是方向,不承诺发布日期。
 
@@ -130,7 +147,7 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 - 当前只提供 Bun SDK,不承诺 npm 分发、稳定 API 或进程级沙箱。
 - 自定义工具需配合取消;工具副作用不会回滚。
 - JSONL 不保证断电或部分写入时的事务性;提交开始后取消需等待结算。
-- TUI 使用 alt-screen,滚轮与 OSC 52 剪贴板尚未实现。
+- TUI 使用 alt-screen，支持滚轮交互；剪贴板优先使用可用的原生渠道，OSC 52 为终端相关的回退方式，不保证终端接受。
 - 源码预发布是开发快照,不是可安装二进制或生产发行版。
 
 ## 开发与文档
