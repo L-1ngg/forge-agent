@@ -83,6 +83,27 @@ test("resume discovery shares a worktree, isolates projects, and never overwrite
 	} finally { for (const host of hosts) await host.dispose(); await rm(base, { recursive: true, force: true }); }
 });
 
+test("explicit memory import reads only a bounded selected project session without changing history", async () => {
+	const { SessionStore, messageEntry } = await import("@forge-agent/core");
+	const cwd = await mkdtemp(join(tmpdir(), "forge-import-"));
+	const host = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local", systemPrompt: "test" });
+	try {
+		const path = join(cwd, ".forge-agent", "sessions", "selected.jsonl");
+		const store = await SessionStore.open(path, cwd);
+		for (let i = 0; i < 25; i++) await store.append(messageEntry({ role: "user", content: [{ type: "text", text: `fact-${i}` }], timestamp: i }, store.getLeafId()));
+		const before = await readFile(path, "utf8");
+		const excerpt = await host.memoryImport(path);
+		expect(excerpt).toContain("Imported 20/25 messages");
+		expect(excerpt).toContain("fact-24");
+		expect(excerpt).not.toContain('"fact-0"');
+		expect(Buffer.byteLength(excerpt)).toBeLessThan(33 * 1024);
+		expect(await readFile(path, "utf8")).toBe(before);
+		const outside = join(cwd, "outside.jsonl");
+		await (await SessionStore.open(outside, cwd)).append(messageEntry({ role: "user", content: [{ type: "text", text: "outside" }], timestamp: 0 }, null));
+		await expect(host.memoryImport(outside)).rejects.toThrow("current-project");
+	} finally { await host.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});
+
 test("default adaptive resume reconstructs old pi sessions from original history", async () => {
 	const { SessionStore, messageEntry } = await import("@forge-agent/core");
 	const { modelResponse } = await import("../../core/test/helpers/model-response.ts");

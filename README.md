@@ -63,6 +63,33 @@ Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive
 
 Restoring a conversation rebuilds its history and model context; it does not replay interrupted tools. Tools must cooperate with cancellation; switching can wait for their cleanup. A damaged conversation is reported and requires a verified copy using the SDK conversion workflow before it can be resumed.
 
+## Persistent Memory
+
+Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. The model can save useful preferences and lessons during a task, and reads details on demand. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Release evidence and the default-enable gate are tracked in the [implementation record](docs/phases/persistent-memory.md).
+
+The CLI enables memory injection and automatic updates by default. You can disable them independently; `permissionMode: "deny-all"` blocks model writes and deletions while explicit management remains available.
+
+Use `/memory` for help and directory locations. Examples:
+
+```text
+/memory list
+/memory save project workflow.md Use Bun for this project.
+/memory read project workflow.md
+/memory edit project workflow.md Use Bun for local development; production is undecided.
+/memory pin project workflow.md
+/memory sources project workflow.md
+/memory read project workflow.md
+/memory delete project workflow.md
+```
+
+`edit` and `delete` use your last read version and reject intervening edits. Plain Markdown can also be edited in your editor. `search <scope> <words>` searches unindexed notes; `read <scope> <path> <offset>` continues a page using its `nextOffset`. `unpin` removes a pin. `import <session-path>` explicitly imports a bounded excerpt from one current-project conversation for model-assisted organization; startup never scans history for memory.
+
+Files live under `$XDG_DATA_HOME/forge-agent/memory` (default `~/.local/share/forge-agent/memory`), outside the Git checkout. User preferences are separate from project notes. A new worktree copies the main worktree's project Markdown once, then evolves independently. Later edits, deletions and Git merges do not synchronize copies. Deleting a note does not delete session history.
+
+`memory.autoUpdate` and `memory.injection` in configuration independently control model writes and automatic injection. `/memory auto off` and `/memory inject off` change those settings for the current process. Explicit `/memory` management remains available with both off. `--memory 'read project workflow.md'` works without a model; separate invocations can pass the returned version with `edit ... --version VERSION CONTENT` or `delete ... --version VERSION`. An oversized index can be saved successfully while only a bounded fragment is injected; pinned content that does not fit is reported. Topic and index commits are independent.
+
+The SDK only uses memory when its host supplies `memory: { store: new LongTermMemory({ project: absoluteDirectory }) }`; see the [SDK guide](docs/sdk.en.md#persistent-memory).
+
 ## Context Management
 
 CLI and SDK use `adaptive` by default, including short task notes, history search/read, and request budgets. No opt-in is required. The following optional configuration makes the defaults explicit:

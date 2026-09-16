@@ -1,0 +1,215 @@
+{
+  "split": "development",
+  "fixtureHash": "bb4dd02d07d28d82d6f8a38cc8b092c6965dab5f5b864173ebcc7b70bf7d03bc",
+  "implementationHash": "4019cf27bf82b482f0dd5e79ffbad8bac29d9a26d48e8404a19da251b65c5204",
+  "provider": "xai",
+  "model": "grok-4.6",
+  "thinking": "off",
+  "outputLimit": 2048,
+  "totalRequests": 9,
+  "conservativeReservedCostUsd": 0.22188599999999997,
+  "note": "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Usage costs use catalog prices and are not an invoice.",
+  "rows": [
+    {
+      "id": "dev-explicit",
+      "split": "development",
+      "mode": "explicit",
+      "scope": "project",
+      "learn": "请记住：这个项目名为 Cedar，离线演示使用端口 7419，仅限本项目。请立即保存。",
+      "recall": {
+        "answer": "Cedar 的离线演示端口是 **7419**，适用范围是 **仅限本项目**。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 166,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92"
+              }
+            ],
+            "warnings": [
+              "project/MEMORY.md: Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources"
+            ],
+            "timestamp": 1789579365804
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-af42fb0e-7948-454e-8782-f54078371374-0|fc_5d1b426d-69b3-90f5-9766-60e95833ccde_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# 项目记忆索引\\\\n\\\\n- [Cedar 项目](cedar-project.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:22:29.488Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:22:43.947Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\",\\\"operationId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# 项目记忆索引\\n\\n- [Cedar 项目](cedar-project.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\",\\\"operationId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1\\\"} -->\\n\",\"version\":\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\",\"modifiedAt\":\"2026-09-16T17:22:43.947Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:22:29.488Z\",\"sessionId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\",\"entryId\":\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\",\"operationId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1\"}],\"warnings\":[\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1789579372338
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-af42fb0e-7948-454e-8782-f54078371374-1|fc_5d1b426d-69b3-90f5-9766-60e95833ccde_1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"cedar-project.md\\\",\\\"text\\\":\\\"# Cedar 项目\\\\n\\\\n- 项目名：Cedar\\\\n- 离线演示端口：7419\\\\n- 适用范围：仅限本项目\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:22:29.488Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:22:43.942Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\",\\\"operationId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"cedar-project.md\",\"text\":\"# Cedar 项目\\n\\n- 项目名：Cedar\\n- 离线演示端口：7419\\n- 适用范围：仅限本项目\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\\\",\\\"operationId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0\\\"} -->\\n\",\"version\":\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\",\"modifiedAt\":\"2026-09-16T17:22:43.942Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:22:29.488Z\",\"sessionId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\",\"entryId\":\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\",\"operationId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0\"}],\"warnings\":[\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1789579372338
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-af42fb0e-7948-454e-8782-f54078371374-2|fc_5d1b426d-69b3-90f5-9766-60e95833ccde_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# 项目记忆索引\\\\n\\\\n- [Cedar 项目](cedar-project.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:22:29.488Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\\\\\",\\\",\\\"offset\\\":0,\\\"version\\\":\\\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\\\"},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"cedar-project.md\\\",\\\"text\\\":\\\"# Cedar 项目\\\\n\\\\n- 项目名：Cedar\\\\n- 离线演示端口：7419\\\\n- 适用范围：仅限本项目\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:22:29.488Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"sc\\\",\\\"offset\\\":0,\\\"version\\\":\\\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\\\"}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# 项目记忆索引\\n\\n- [Cedar 项目](cedar-project.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\",\"offset\":0,\"version\":\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\"},{\"scope\":\"project\",\"path\":\"cedar-project.md\",\"text\":\"# Cedar 项目\\n\\n- 项目名：Cedar\\n- 离线演示端口：7419\\n- 适用范围：仅限本项目\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:22:29.488Z\\\",\\\"sessionId\\\":\\\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\\\",\\\"entryId\\\":\\\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\\\",\\\"scope\\\":\\\"project\\\",\\\"sc\",\"offset\":0,\"version\":\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\"}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579372339
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 5337,
+        "outputTokens": 504,
+        "costUsd": 0.011009999999999999,
+        "elapsedMs": 10583
+      },
+      "rubric": "7419; offline demo only; project scope, not global",
+      "baselineLearn": {
+        "answer": "已记下，仅限本项目：\n\n- **项目名**：Cedar  \n- **离线演示端口**：7419  \n\n之后本对话里会按这个约定来。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 603,
+        "outputTokens": 374,
+        "costUsd": 0.00345,
+        "elapsedMs": 9844
+      },
+      "baselineRecall": {
+        "answer": "不知道。当前会话里没有 Cedar 离线演示端口或适用范围的记录。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6e9beb39-3dab-47a2-8406-55ceb348e839-0|fc_db4e60bd-1553-9f2a-b6fc-b7fe9c008847_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"78dd3d3c-f259-45da-aab1-9d44692da615\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"78dd3d3c-f259-45da-aab1-9d44692da615\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579335836
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0e0e7111-d980-4c36-945c-4d688beb09b6-1|fc_8c80fcf5-1e33-9300-984c-5ce7f108c240_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"78dd3d3c-f259-45da-aab1-9d44692da615\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"78dd3d3c-f259-45da-aab1-9d44692da615\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579341173
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0e0e7111-d980-4c36-945c-4d688beb09b6-2|fc_8c80fcf5-1e33-9300-984c-5ce7f108c240_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"78dd3d3c-f259-45da-aab1-9d44692da615\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"78dd3d3c-f259-45da-aab1-9d44692da615\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579341173
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0e0e7111-d980-4c36-945c-4d688beb09b6-3|fc_8c80fcf5-1e33-9300-984c-5ce7f108c240_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"78dd3d3c-f259-45da-aab1-9d44692da615\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"78dd3d3c-f259-45da-aab1-9d44692da615\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579341173
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 2677,
+        "outputTokens": 635,
+        "costUsd": 0.007052,
+        "elapsedMs": 22585
+      },
+      "learning": {
+        "answer": "已保存到本项目记忆：\n\n- **项目名**：Cedar\n- **离线演示端口**：7419\n- **范围**：仅限本项目",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0c2bea54-0750-48a3-b261-e5568e674a97-1|fc_aa31cb1c-b85f-91ee-879d-8a5e1a26f56f_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579353214
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0c2bea54-0750-48a3-b261-e5568e674a97-2|fc_aa31cb1c-b85f-91ee-879d-8a5e1a26f56f_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579353214
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-0c2bea54-0750-48a3-b261-e5568e674a97-0|fc_aa31cb1c-b85f-91ee-879d-8a5e1a26f56f_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-UTxUWT/dev-explicit/project/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789579353215
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"cedar-project.md\\\",\\\"version\\\":\\\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\\\",\\\"indexStatus\\\":\\\"not-updated; model must maintain MEMORY.md separately\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"cedar-project.md\",\"version\":\"9b56fdf8d1f7603ea7d242f1c6bdf2665a1f58bd40309957cde681e8f1db8e10\",\"indexStatus\":\"not-updated; model must maintain MEMORY.md separately\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579363945
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"version\\\":\\\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\\\",\\\"indexStatus\\\":\\\"saved\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"MEMORY.md\",\"version\":\"c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92\",\"indexStatus\":\"saved\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579363949
+          },
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 166,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "c3cb9bd418ebfa45c92e585f6b2ea45da21b0afd4b79b00fd9735958b55cae92"
+              }
+            ],
+            "warnings": [
+              "project/MEMORY.md: Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources"
+            ],
+            "timestamp": 1789579363955
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 5412,
+        "outputTokens": 539,
+        "costUsd": 0.010026,
+        "elapsedMs": 16313
+      },
+      "notes": {
+        "project/MEMORY.md": "# 项目记忆索引\n\n- [Cedar 项目](cedar-project.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:22:29.488Z\",\"sessionId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\",\"entryId\":\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\",\"operationId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-4|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_1\"} -->\n",
+        "project/cedar-project.md": "# Cedar 项目\n\n- 项目名：Cedar\n- 离线演示端口：7419\n- 适用范围：仅限本项目\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:22:29.488Z\",\"sessionId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2\",\"entryId\":\"4f8a1c28-c135-476c-8b38-9f68b4e1c47b\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-UTxUWT/dev-explicit/project\",\"operationId\":\"e11e6a6a-3e2c-48b1-85b4-4a1e740e0ce2:call-3f787f9d-8731-42a5-b696-262a589542ed-3|fc_f9ca5847-aa82-9e51-97e3-85ef64591bd5_0\"} -->\n"
+      }
+    }
+  ]
+}

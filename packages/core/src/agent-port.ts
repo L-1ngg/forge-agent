@@ -19,6 +19,8 @@ export interface AgentPort {
 	followUp(input: string): InputAcceptance;
 	abort(): void;
 	getUsage(): UsageTruthPoint | undefined;
+	/** Optional for adapters without persistent memory. */
+	getMemoryBudget?(): number | undefined;
 	setStorage(storage: SessionStorage): Promise<void>;
 	compact(instructions?: string, emit?: (event: SessionEvent) => void, signal?: AbortSignal): Promise<CompactionResult>;
 	configureContext(settings: Partial<ContextSettings>): void;

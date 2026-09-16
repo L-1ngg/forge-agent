@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-13)。
+> 状态:生效(2026-09-17)。
 > 文档组织的历史决策见 [decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 原则:文档领路,代码跟随;证据说话,不是信心说话。
 
@@ -28,6 +28,7 @@
 | [短检查点与历史搜索](phases/context-notes-search.md) | 当前 adaptive 投影与 search_context、软件验证、输入估算和未测质量边界 |
 | [TUI 主界面工作流](phases/tui-main-workflow.md) | 主界面交互设计与跨流程验收 |
 | [会话管理](phases/session-management.md) | 新会话、清屏与项目内恢复的施工及验收 |
+| [持久记忆](phases/persistent-memory.md) | Markdown、会话内更新、worktree 副本与独立质量/成本验收；规格见 GitHub #32 |
 | [会话恢复体验](phases/session-resume-experience.md) | 清晰标题、按需原文预览与重复浏览缓存；规格见 GitHub #29 |
 | [软件测试体系](phases/testing-system.md) | 测试体系重设计讨论、现有约束与待决问题 |
 | [Markdown 渲染](phases/markdown-rendering.md) | 正文与详情渲染、流式显示及源码复制的施工与验收 |

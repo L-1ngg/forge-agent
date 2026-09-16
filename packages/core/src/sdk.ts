@@ -10,6 +10,10 @@ export type { ContextSettings, CompactionResult, RetryPolicy } from "./context/c
 export type { AdaptiveCheckpoint, TaskCheckpoint, TaskStateItem, SummaryClaim, Evidence } from "./context/checkpoint.ts";
 
 export { createAgent } from "./agent.ts";
+export { LongTermMemory, type MemoryScope, type MemorySource, type MemoryWrite, type MemoryRead } from "./memory/store.ts";
+export type { MemoryOptions } from "./memory/tools.ts";
+export { initializeMemoryCopy } from "./memory/copy.ts";
+export type { MemoryFileSystem } from "./memory/files.ts";
 export type { HarnessTool, ToolResult, ToolContext } from "@forge-agent/tools";
 export type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
 export type { ToolHooks } from "./pi-port.ts";

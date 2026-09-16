@@ -1,0 +1,244 @@
+{
+  "split": "holdout",
+  "fixtureHash": "2e93bdf70996b3f8d0d8724651e83c977731f2d8eb1671f2b618db5bad83070d",
+  "implementationHash": "a1dc2af46c307d4644033a75932d71648b3c73021eaa6552c5d6c515fdaee677",
+  "harnessHash": "9253816cdff6d2ddeee6bf057500d8866463991dbfd3cc3cc6cf3b9702e6b402",
+  "provider": "xai",
+  "model": "grok-4.6",
+  "thinking": "off",
+  "outputLimit": 2048,
+  "retryMaxRetries": 1,
+  "adaptiveEnabled": false,
+  "totalRequests": 8,
+  "conservativeReservedCostUsd": 0.197388,
+  "note": "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Adaptive is disabled to isolate memory quality; software tests cover integration. Usage costs use catalog prices and are not an invoice.",
+  "rows": [
+    {
+      "id": "v2-noise",
+      "split": "holdout",
+      "mode": "none",
+      "scope": "project",
+      "learn": "请计算 37-12。本次没有任何新增项目事实或长期偏好。",
+      "recall": {
+        "answer": "没有。项目记忆和用户记忆里都查不到已保存的新项目约定，也没有 `MEMORY.md` 索引。当前会话也只有这一条相关提问。\n\n之后如果要沿用约定，需要先明确写下来再保存。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-0|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582288016
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-2|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582288017
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-1|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582288017
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-3|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582288017
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-4|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_4",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-DK8aPc/v2-noise/project/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789582288017
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7df98757-0344-4d01-bd20-bced79e72489-5|fc_d0deffec-c0a6-9df7-9a80-e3d95c7af34e_5",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-DK8aPc/v2-noise/user/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789582288017
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-12|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_6",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"8ff3b722-4a6b-40f8-89dd-f9b26d3e115f\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"我先查项目与用户记忆里是否已有需要沿用的新项目约定。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"user\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"convention\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call sea\\\"},{\\\"entryId\\\":\\\"9ca8c6e0-50f9-4d28-afff-9fb0287cd444\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"8ff3b722-4a6b-40f8-89dd-f9b26d3e115f\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"我先查项目与用户记忆里是否已有需要沿用的新项目约定。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"user\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"convention\\\",\\\"limit\\\":10}\\n[tool call sea\"},{\"entryId\":\"9ca8c6e0-50f9-4d28-afff-9fb0287cd444\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-13|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_7",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"8ff3b722-4a6b-40f8-89dd-f9b26d3e115f\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"我先查项目与用户记忆里是否已有需要沿用的新项目约定。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"user\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"convention\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call sea\\\"},{\\\"entryId\\\":\\\"9ca8c6e0-50f9-4d28-afff-9fb0287cd444\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"8ff3b722-4a6b-40f8-89dd-f9b26d3e115f\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"我先查项目与用户记忆里是否已有需要沿用的新项目约定。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"user\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"convention\\\",\\\"limit\\\":10}\\n[tool call sea\"},{\"entryId\":\"9ca8c6e0-50f9-4d28-afff-9fb0287cd444\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-6|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-9|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-7|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-11|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_5",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294053
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-10|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_4",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294054
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5e6a27a5-08ce-4510-a6a9-d38c89d61857-8|fc_98fad17b-e6e6-9997-be9d-0b81342d1009_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789582294054
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 5933,
+        "outputTokens": 638,
+        "costUsd": 0.011854,
+        "elapsedMs": 14673
+      },
+      "rubric": "learning answer 25; no note or meaningless growth",
+      "baselineLearn": {
+        "answer": "25",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 593,
+        "outputTokens": 516,
+        "costUsd": 0.003514,
+        "elapsedMs": 9590
+      },
+      "baselineRecall": {
+        "answer": "没有。当前会话里搜不到已保存的「新项目约定」或类似记录，因此没有需要沿用的内容。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d119afca-e71f-4261-b736-2de3ebceb711-0|fc_938592af-ee25-97a5-9019-f5c6af9e1a67_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582262933
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d119afca-e71f-4261-b736-2de3ebceb711-1|fc_938592af-ee25-97a5-9019-f5c6af9e1a67_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582262933
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d119afca-e71f-4261-b736-2de3ebceb711-2|fc_938592af-ee25-97a5-9019-f5c6af9e1a67_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582262933
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6094df6c-5c4a-41a0-82c8-2333e59fe5c9-3|fc_9ad9fa19-56df-9aff-9723-b486eac0b403_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582272252
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6094df6c-5c4a-41a0-82c8-2333e59fe5c9-4|fc_9ad9fa19-56df-9aff-9723-b486eac0b403_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582272252
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6094df6c-5c4a-41a0-82c8-2333e59fe5c9-5|fc_9ad9fa19-56df-9aff-9723-b486eac0b403_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7c11a75b-ebb0-4a09-b8f7-a0e5a4567ccc\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789582272252
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 2857,
+        "outputTokens": 515,
+        "costUsd": 0.007267999999999998,
+        "elapsedMs": 17689
+      },
+      "learning": {
+        "answer": "25",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 1460,
+        "outputTokens": 236,
+        "costUsd": 0.003568,
+        "elapsedMs": 6519
+      },
+      "notes": {}
+    }
+  ]
+}

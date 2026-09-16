@@ -9,8 +9,10 @@ import { MemorySessionStorage, sessionMessages, type SessionStorage } from "./se
 import type { UsageTruthPoint } from "./usage.ts";
 import { resolveRetryPolicy, validateRequestLimits, type CompactionResult, type ContextSettings, type RetryPolicy } from "./context/compaction.ts";
 import { randomUUID } from "node:crypto";
+import type { MemoryOptions } from "./memory/tools.ts";
 
 export interface CreateAgentOptions extends InputQueueOptions {
+	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	/** Shared task/summary routing identity; supply it to retain affinity across reopening. */
 	sessionId?: string;
@@ -61,7 +63,7 @@ function assertPortCapabilities(port: unknown): asserts port is AgentPort {
 		runTurn: true, continue: true, steer: true, followUp: true, abort: true,
 		dispose: true, getUsage: true, setStorage: true, compact: true,
 		configureContext: true, updateConfiguration: true,
-	} satisfies Record<keyof AgentPort, true>;
+	} satisfies Record<Exclude<keyof AgentPort, "getMemoryBudget">, true>;
 	const object = port !== null && (typeof port === "object" || typeof port === "function");
 	const missing = Object.keys(methods).filter(name => !object || typeof Reflect.get(port, name) !== "function");
 	if (missing.length) throw new TypeError(`Agent factory must provide callable methods: ${missing.join(", ")}`);
@@ -85,6 +87,7 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			...(options.steeringMode ? { steeringMode: options.steeringMode } : {}),
 			...(options.followUpMode ? { followUpMode: options.followUpMode } : {}),
 			...(options.context ? { context: options.context } : {}),
+			...(options.memory ? { memory: options.memory } : {}),
 			...(options.retry ? { retry: options.retry } : {}),
 			...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
 			...(options.contextWindow !== undefined ? { contextWindow: options.contextWindow } : {}),
@@ -204,6 +207,7 @@ class HostedAgent implements Agent {
 		if (this.active.begun) this.runner?.abort();
 	}
 	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }
+	getMemoryBudget(): number | undefined { return this.runner?.getMemoryBudget?.(); }
 	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); this.runner!.configureContext(settings); }
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult> {
 		this.assertAvailable();

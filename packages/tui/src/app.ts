@@ -86,6 +86,7 @@ export interface AppSessionHost {
 }
 
 export interface AppOptions {
+	memoryCommand?: (input: string) => Promise<{ text: string; prompt?: string }>;
 	sessions?: AppSessionHost;
 	port: AppPort;
 	/** main is an alias for alt until an inline host is implemented. */
@@ -128,6 +129,7 @@ export class App {
 	private generation = 0;
 	private running = false;
 	private compactTask: Promise<void> | undefined;
+	private memoryTask: Promise<void> | undefined;
 	private browsing = false;
 	private viewer: DetailView | undefined;
 	private submitted = false;
@@ -191,6 +193,7 @@ export class App {
 			this.host.stop();
 			await this.runTask;
 			await this.compactTask;
+			await this.memoryTask;
 			await this.options.sessions?.dispose();
 			await this.switchTask;
 		} finally {
@@ -545,6 +548,19 @@ export class App {
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
+		if (command === "/memory" || command.startsWith("/memory ")) {
+			if (!this.options.memoryCommand) { this.projector.addNotice("Memory management unavailable"); return true; }
+			if (this.memoryTask) { this.projector.addNotice("Memory operation is still running"); return true; }
+			this.memoryTask = this.options.memoryCommand(command.slice(7).trim()).then(result => {
+				this.projector.addNotice(result.text);
+				if (result.prompt) {
+					if (this.running || this.compactTask || this.switching) this.queued.push(result.prompt);
+					else if (this.started) this.runTask = this.runTurn(result.prompt);
+					else this.restoreInputs([result.prompt]);
+				}
+			}, error => { this.projector.addNotice(error instanceof Error ? error.message : String(error)); }).finally(() => { this.memoryTask = undefined; this.repaint(); });
+			return true;
+		}
 		if (command === "/new") { this.requestSwitch(); return true; }
 		if (command === "/resume") { void this.openSessions(); return true; }
 		if (command === "/compact" || command.startsWith("/compact ")) {
@@ -568,7 +584,7 @@ export class App {
 			return true;
 		}
 		if (command === "/help") {
-			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /quit · @file to mention");
+			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /memory · /quit · @file to mention");
 			return true;
 		}
 		return false;
@@ -693,6 +709,10 @@ export class App {
 	}
 
 	private handleEvent(event: SessionEvent): void {
+		if (event.type === "memory") {
+			if (event.truncated) this.projector.addNotice("记忆索引已截断，仍可按需读取／搜索");
+			for (const warning of event.warnings) this.projector.addNotice(warning);
+		}
 		if (event.type === "compaction") this.projector.addNotice(`Context ${event.phase}${event.error ? ": " + event.error : ""}`);
 		if (event.type === "retry") this.projector.addNotice(`Model retry ${event.phase} #${event.attempt}${event.delayMs !== undefined ? ` in ${event.delayMs}ms` : ""}${event.outcome ? `: ${event.outcome}` : ""}`);
 		if (event.type === "recovery") this.projector.addNotice(`Context recovery: ${event.reason}`);

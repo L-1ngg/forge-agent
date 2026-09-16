@@ -1,0 +1,773 @@
+{
+  "split": "development",
+  "fixtureHash": "bb4dd02d07d28d82d6f8a38cc8b092c6965dab5f5b864173ebcc7b70bf7d03bc",
+  "implementationHash": "27437841d756090390c2885cf0b140335133b651911a1fb32dea5a2c56f935bd",
+  "provider": "xai",
+  "model": "grok-4.6",
+  "thinking": "off",
+  "outputLimit": 2048,
+  "totalRequests": 35,
+  "conservativeReservedCostUsd": 0.8687899999999998,
+  "note": "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Usage costs use catalog prices and are not an invoice.",
+  "rows": [
+    {
+      "id": "dev-explicit",
+      "split": "development",
+      "mode": "explicit",
+      "scope": "project",
+      "learn": "请记住：这个项目名为 Cedar，离线演示使用端口 7419，仅限本项目。请立即保存。",
+      "recall": {
+        "answer": "",
+        "result": {
+          "status": "error"
+        },
+        "errors": [
+          "Connection error."
+        ],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 149,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "6e53bb4544a594f0bbcd2bc9c3435f587f62b703a2e8eb668373691540e1c1ee"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789578988574
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-594e2a65-aaa8-4938-8495-dc7a601c0817-0|fc_881b337a-095c-9184-a3c8-af09183002fe_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"cedar-offline-demo.md\\\",\\\"text\\\":\\\"# Cedar 项目约定\\\\n\\\\n- 项目名称：Cedar\\\\n- 离线演示端口：7419\\\\n- 适用范围：仅限本项目（Cedar），不推广到其他项目\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:15:50.186Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"b7809558-da80-4630-a9b8-1a75d3ee1228\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"13077b9e4d461df2251e5f9f06107489c834d7b99c5e0303702eb481fcbd9837\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:16:18.747Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:15:50.186Z\\\",\\\"sessionId\\\":\\\"b7809558-da80-4630-a9b8-1a75d3ee1228\\\",\\\"entryId\\\":\\\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\\\",\\\"operationId\\\":\\\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0\\\"}],\\\"warnings\\\":[]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"cedar-offline-demo.md\",\"text\":\"# Cedar 项目约定\\n\\n- 项目名称：Cedar\\n- 离线演示端口：7419\\n- 适用范围：仅限本项目（Cedar），不推广到其他项目\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:15:50.186Z\\\",\\\"sessionId\\\":\\\"b7809558-da80-4630-a9b8-1a75d3ee1228\\\",\\\"entryId\\\":\\\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\\\",\\\"operationId\\\":\\\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0\\\"} -->\\n\",\"version\":\"13077b9e4d461df2251e5f9f06107489c834d7b99c5e0303702eb481fcbd9837\",\"modifiedAt\":\"2026-09-16T17:16:18.747Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:15:50.186Z\",\"sessionId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228\",\"entryId\":\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\",\"operationId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0\"}],\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789578998624
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1666,
+        "outputTokens": 311,
+        "costUsd": 0.005006,
+        "elapsedMs": 10294
+      },
+      "rubric": "7419; offline demo only; project scope, not global",
+      "baselineLearn": {
+        "answer": "已记下，仅用于本项目 **Cedar**：\n\n- **项目名**：Cedar  \n- **离线演示端口**：`7419`\n\n后续本项目对话会按此使用。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 603,
+        "outputTokens": 467,
+        "costUsd": 0.003816,
+        "elapsedMs": 9598
+      },
+      "baselineRecall": {
+        "answer": "不知道。当前会话里没有 Cedar 离线演示端口或适用范围的记录。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-03437e2d-49d1-4ce8-b2ff-5371498b0496-0|fc_8d2d4a86-78e9-94ab-a947-373870acb369_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"c5aedd90-99cb-49e5-84c4-69689e4beb66\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"c5aedd90-99cb-49e5-84c4-69689e4beb66\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789578944338
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-03437e2d-49d1-4ce8-b2ff-5371498b0496-1|fc_8d2d4a86-78e9-94ab-a947-373870acb369_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789578944338
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-03437e2d-49d1-4ce8-b2ff-5371498b0496-2|fc_8d2d4a86-78e9-94ab-a947-373870acb369_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"c5aedd90-99cb-49e5-84c4-69689e4beb66\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"c5aedd90-99cb-49e5-84c4-69689e4beb66\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"Cedar 的离线演示端口是什么，适用范围是什么？不知道就说不知道。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789578944338
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1564,
+        "outputTokens": 425,
+        "costUsd": 0.0049099999999999994,
+        "elapsedMs": 14830
+      },
+      "learning": {
+        "answer": "已保存到本项目记忆。\n\n**主题笔记** `cedar-offline-demo.md`：已写入  \n- 项目名：Cedar  \n- 离线演示端口：7419  \n- 仅限本项目  \n\n**索引** `MEMORY.md`：已建立并链接该笔记。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3c75f71a-4357-4c67-b8fd-7069742f334c-1|fc_a7c769f7-f39b-9333-ab57-1bc535b33405_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789578955162
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3c75f71a-4357-4c67-b8fd-7069742f334c-0|fc_a7c769f7-f39b-9333-ab57-1bc535b33405_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-FuLQKR/dev-explicit/project/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789578955162
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3c75f71a-4357-4c67-b8fd-7069742f334c-2|fc_a7c769f7-f39b-9333-ab57-1bc535b33405_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789578955162
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"cedar-offline-demo.md\\\",\\\"version\\\":\\\"13077b9e4d461df2251e5f9f06107489c834d7b99c5e0303702eb481fcbd9837\\\",\\\"indexStatus\\\":\\\"not-updated; model must maintain MEMORY.md separately\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"cedar-offline-demo.md\",\"version\":\"13077b9e4d461df2251e5f9f06107489c834d7b99c5e0303702eb481fcbd9837\",\"indexStatus\":\"not-updated; model must maintain MEMORY.md separately\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789578978750
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-faa7e529-55a1-4ff1-a391-a86f30103915-4|fc_ceaef168-77b0-9b86-a406-d3da9fe94978_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"version\\\":\\\"6e53bb4544a594f0bbcd2bc9c3435f587f62b703a2e8eb668373691540e1c1ee\\\",\\\"indexStatus\\\":\\\"saved\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"MEMORY.md\",\"version\":\"6e53bb4544a594f0bbcd2bc9c3435f587f62b703a2e8eb668373691540e1c1ee\",\"indexStatus\":\"saved\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789578980843
+          },
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 149,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "6e53bb4544a594f0bbcd2bc9c3435f587f62b703a2e8eb668373691540e1c1ee"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789578980847
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 7626,
+        "outputTokens": 677,
+        "costUsd": 0.016818,
+        "elapsedMs": 38380
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Cedar 离线演示约定](cedar-offline-demo.md) — 项目名 Cedar；离线演示端口 7419；仅限本项目\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:15:50.186Z\",\"sessionId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228\",\"entryId\":\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\",\"operationId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-faa7e529-55a1-4ff1-a391-a86f30103915-4|fc_ceaef168-77b0-9b86-a406-d3da9fe94978_0\"} -->\n",
+        "project/cedar-offline-demo.md": "# Cedar 项目约定\n\n- 项目名称：Cedar\n- 离线演示端口：7419\n- 适用范围：仅限本项目（Cedar），不推广到其他项目\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:15:50.186Z\",\"sessionId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228\",\"entryId\":\"31f1f886-b948-43f1-a2bb-1272e6a12c4f\",\"operationId\":\"b7809558-da80-4630-a9b8-1a75d3ee1228:call-45921aef-2691-48f1-819f-d049d0ee86e1-3|fc_8e503ebd-673b-9e9d-b067-483a9009a9df_0\"} -->\n"
+      }
+    },
+    {
+      "id": "dev-auto",
+      "split": "development",
+      "mode": "automatic",
+      "scope": "user",
+      "learn": "我的稳定偏好是解释数据库问题时先举一个小表格例子，再讲术语。以后也适用。请用一句话确认理解。",
+      "recall": {
+        "answer": "了解。你学数据库时，我默认会：\n\n1. **先给一张小表例子**（几行具体数据）\n2. **再讲术语和概念**\n\n除非你这次另有要求。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 166,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "user",
+                "path": "MEMORY.md",
+                "version": "c34437f613c691e6620f82a6af5f875f0f79c0ff3926d002ebc38e9d15d32ef4"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789579038267
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b2a77fb3-2bd8-4bed-b600-e4a2937eb2e5-0|fc_e4e1c7ed-b8d3-96f0-938b-2650942fb1bf_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"preferences-database-explanations.md\\\",\\\"text\\\":\\\"# Database explanation style\\\\n\\\\nWhen explaining database problems, first give a small table example, then introduce terminology.\\\\n\\\\nApplies to future conversations unless the user asks otherwise.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:17:01.577Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e7581bce-4098-4ce5-ab34-4a126be3288f\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"1c5f72d9ed0144013fb3d666fcc829034e56512933ed2deaedf9dfc93c488115\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:17:12.717Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:17:01.577Z\\\",\\\"sessionId\\\":\\\"e7581bce-4098-4ce5-ab34-4a126be3288f\\\",\\\"entryId\\\":\\\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\\\",\\\"operationId\\\":\\\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0\\\"}],\\\"warnings\\\":[]}\"}],\"details\":{\"scope\":\"user\",\"path\":\"preferences-database-explanations.md\",\"text\":\"# Database explanation style\\n\\nWhen explaining database problems, first give a small table example, then introduce terminology.\\n\\nApplies to future conversations unless the user asks otherwise.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:17:01.577Z\\\",\\\"sessionId\\\":\\\"e7581bce-4098-4ce5-ab34-4a126be3288f\\\",\\\"entryId\\\":\\\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\\\",\\\"operationId\\\":\\\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0\\\"} -->\\n\",\"version\":\"1c5f72d9ed0144013fb3d666fcc829034e56512933ed2deaedf9dfc93c488115\",\"modifiedAt\":\"2026-09-16T17:17:12.717Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:17:01.577Z\",\"sessionId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f\",\"entryId\":\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\",\"operationId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0\"}],\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579041441
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 3901,
+        "outputTokens": 176,
+        "costUsd": 0.006745999999999999,
+        "elapsedMs": 5926
+      },
+      "rubric": "small table example before terminology; user scope",
+      "baselineLearn": {
+        "answer": "明白了：以后解释数据库问题时，我会先给出一个小表格例子，再讲解相关术语。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 607,
+        "outputTokens": 316,
+        "costUsd": 0.002918,
+        "elapsedMs": 7395
+      },
+      "baselineRecall": {
+        "answer": "目前这个对话里没有你之前关于「学习数据库讲解偏好」的记录，所以我还不了解。\n\n请直接告诉我你的偏好，例如：\n- 先概念后例子，还是边讲边练 SQL\n- 要不要图示 / 对比表格\n- 深度（只讲常用 vs 原理细节）\n- 语言风格（简洁要点 / 多类比）\n- 是否结合具体场景（如电商、日志）\n\n说完后我会按你的方式讲解，并尽量记住。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-99157336-4787-4a49-a159-db7d869ef58b-0|fc_eccb7820-2c91-93a3-a61a-cf53bc5cfc84_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"6e651140-9f82-44b7-a1f9-8868708cc19d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"你了解我学习数据库的讲解偏好吗？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"6e651140-9f82-44b7-a1f9-8868708cc19d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"你了解我学习数据库的讲解偏好吗？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579011620
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-99157336-4787-4a49-a159-db7d869ef58b-1|fc_eccb7820-2c91-93a3-a61a-cf53bc5cfc84_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579011620
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-99157336-4787-4a49-a159-db7d869ef58b-2|fc_eccb7820-2c91-93a3-a61a-cf53bc5cfc84_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"6e651140-9f82-44b7-a1f9-8868708cc19d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"你了解我学习数据库的讲解偏好吗？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"6e651140-9f82-44b7-a1f9-8868708cc19d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"你了解我学习数据库的讲解偏好吗？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579011620
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1559,
+        "outputTokens": 646,
+        "costUsd": 0.0066099999999999996,
+        "elapsedMs": 15319
+      },
+      "learning": {
+        "answer": "已记下：以后讲解数据库问题时，我会先给一个小表格例子，再引入术语。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6a21935a-0b43-4d20-a57e-1a4eb8464567-0|fc_ff8008b6-152c-9a7a-a1ed-271a83a0e1c7_0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579026563
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6a21935a-0b43-4d20-a57e-1a4eb8464567-1|fc_ff8008b6-152c-9a7a-a1ed-271a83a0e1c7_1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-FuLQKR/dev-auto/user/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789579026564
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"preferences-database-explanations.md\\\",\\\"version\\\":\\\"1c5f72d9ed0144013fb3d666fcc829034e56512933ed2deaedf9dfc93c488115\\\",\\\"indexStatus\\\":\\\"not-updated; model must maintain MEMORY.md separately\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"user\",\"path\":\"preferences-database-explanations.md\",\"version\":\"1c5f72d9ed0144013fb3d666fcc829034e56512933ed2deaedf9dfc93c488115\",\"indexStatus\":\"not-updated; model must maintain MEMORY.md separately\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579032723
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d329d2c1-9280-4142-af17-330e6a0b1eb3-3|fc_9f88295d-9ee4-9568-9f4a-91da744c27ea_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"version\\\":\\\"c34437f613c691e6620f82a6af5f875f0f79c0ff3926d002ebc38e9d15d32ef4\\\",\\\"indexStatus\\\":\\\"saved\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"user\",\"path\":\"MEMORY.md\",\"version\":\"c34437f613c691e6620f82a6af5f875f0f79c0ff3926d002ebc38e9d15d32ef4\",\"indexStatus\":\"saved\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579036066
+          },
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 166,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "user",
+                "path": "MEMORY.md",
+                "version": "c34437f613c691e6620f82a6af5f875f0f79c0ff3926d002ebc38e9d15d32ef4"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789579036071
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 7387,
+        "outputTokens": 556,
+        "costUsd": 0.015614,
+        "elapsedMs": 16686
+      },
+      "notes": {
+        "user/MEMORY.md": "# Memory index\n\n- [Database explanation style](preferences-database-explanations.md): For database problems, start with a small table example, then terminology.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:17:01.577Z\",\"sessionId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f\",\"entryId\":\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\",\"operationId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-d329d2c1-9280-4142-af17-330e6a0b1eb3-3|fc_9f88295d-9ee4-9568-9f4a-91da744c27ea_0\"} -->\n",
+        "user/preferences-database-explanations.md": "# Database explanation style\n\nWhen explaining database problems, first give a small table example, then introduce terminology.\n\nApplies to future conversations unless the user asks otherwise.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:17:01.577Z\",\"sessionId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f\",\"entryId\":\"a4b5acd3-123f-4eef-9ce0-de468879fd8a\",\"operationId\":\"e7581bce-4098-4ce5-ab34-4a126be3288f:call-b9e13d14-7679-45b3-ba43-65e4987f9f7a-2|fc_de3c87b0-e012-9a91-99ff-d4a92a07e677_0\"} -->\n"
+      }
+    },
+    {
+      "id": "dev-temporary",
+      "split": "development",
+      "mode": "none",
+      "scope": "project",
+      "learn": "仅本次调查不要改文件，这不是长期偏好。今天先回答 3+4 是多少。",
+      "recall": {
+        "answer": "没有。当前用户记忆和项目记忆都是空的，没有已保存的长期约定。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-90fe20f9-fd0d-40b2-ae0c-4be5d59c2c37-0|fc_1c73f2bb-73c5-9266-85c8-19b29de997be_0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579073936
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-90fe20f9-fd0d-40b2-ae0c-4be5d59c2c37-1|fc_1c73f2bb-73c5-9266-85c8-19b29de997be_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579073936
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-90fe20f9-fd0d-40b2-ae0c-4be5d59c2c37-2|fc_1c73f2bb-73c5-9266-85c8-19b29de997be_2",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-FuLQKR/dev-temporary/user/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789579073940
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-90fe20f9-fd0d-40b2-ae0c-4be5d59c2c37-3|fc_1c73f2bb-73c5-9266-85c8-19b29de997be_3",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-FuLQKR/dev-temporary/project/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789579073940
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 3024,
+        "outputTokens": 240,
+        "costUsd": 0.005375999999999999,
+        "elapsedMs": 6053
+      },
+      "rubric": "no note; do not make one-turn no-edit instruction permanent",
+      "baselineLearn": {
+        "answer": "3+4 是 **7**。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 600,
+        "outputTokens": 318,
+        "costUsd": 0.0031079999999999997,
+        "elapsedMs": 5527
+      },
+      "baselineRecall": {
+        "answer": "没有。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eaa8e404-121c-4136-b83f-00561ca19d8e-0|fc_b8f376d3-eff8-9f61-8df0-b0d0a628a9e0_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"2c2375b8-8d63-4cbe-88bd-07f0735350a6\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"你保存了什么长期约定？没有就说没有。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"2c2375b8-8d63-4cbe-88bd-07f0735350a6\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"你保存了什么长期约定？没有就说没有。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579058958
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eaa8e404-121c-4136-b83f-00561ca19d8e-1|fc_b8f376d3-eff8-9f61-8df0-b0d0a628a9e0_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"2c2375b8-8d63-4cbe-88bd-07f0735350a6\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"你保存了什么长期约定？没有就说没有。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"2c2375b8-8d63-4cbe-88bd-07f0735350a6\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"你保存了什么长期约定？没有就说没有。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579058958
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eaa8e404-121c-4136-b83f-00561ca19d8e-2|fc_b8f376d3-eff8-9f61-8df0-b0d0a628a9e0_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579058959
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1784,
+        "outputTokens": 536,
+        "costUsd": 0.005824,
+        "elapsedMs": 12485
+      },
+      "learning": {
+        "answer": "3+4 等于 **7**。\n\n这次只作答，不改任何文件。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 1389,
+        "outputTokens": 387,
+        "costUsd": 0.0051,
+        "elapsedMs": 8080
+      },
+      "notes": {}
+    },
+    {
+      "id": "dev-correction",
+      "split": "development",
+      "mode": "automatic",
+      "scope": "project",
+      "seed": "Old note: the test endpoint is /v1/check. Recorded last month, not revalidated.",
+      "learn": "刚检查了项目当前 API 合同：测试 endpoint 已改成 /v2/inspect，旧 /v1/check 不再使用。请总结这个已经确认的变化，未知生产部署情况。",
+      "recall": {
+        "answer": "当前测试 endpoint 是 **`/v2/inspect`**。旧的 **`/v1/check` 已不再使用**。\n\n生产是否已部署：**未知**。现有记录里没有确认过上线状态。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 155,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789579124157
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fc53a267-008f-48f1-a717-6f62f48ab122-0|fc_0336fb6b-d402-99a1-b3de-ae654491a6b6_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"[Project background](background.md) — test API is `/v2/inspect`; `/v1/check` unused. Production deploy unknown.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:18:23.251Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:18:40.770Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:18:23.251Z\\\",\\\"sessionId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\",\\\"entryId\\\":\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\",\\\"operationId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1\\\"}],\\\"warnings\\\":[]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"[Project background](background.md) — test API is `/v2/inspect`; `/v1/check` unused. Production deploy unknown.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:18:23.251Z\\\",\\\"sessionId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\",\\\"entryId\\\":\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\",\\\"operationId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1\\\"} -->\\n\",\"version\":\"efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba\",\"modifiedAt\":\"2026-09-16T17:18:40.770Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:18:23.251Z\",\"sessionId\":\"649d829e-adb4-4c97-9094-7912dcab157d\",\"entryId\":\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\",\"operationId\":\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1\"}],\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579128083
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fc53a267-008f-48f1-a717-6f62f48ab122-1|fc_0336fb6b-d402-99a1-b3de-ae654491a6b6_1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"# API contract\\\\n\\\\nConfirmed from current project API contract (just checked):\\\\n- Test endpoint is `/v2/inspect`\\\\n- Old `/v1/check` is no longer used\\\\n\\\\nUnknown: production deployment status.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:18:23.251Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:18:40.764Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:18:23.251Z\\\",\\\"sessionId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\",\\\"entryId\\\":\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\",\\\"operationId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0\\\"}],\\\"warnings\\\":[]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"# API contract\\n\\nConfirmed from current project API contract (just checked):\\n- Test endpoint is `/v2/inspect`\\n- Old `/v1/check` is no longer used\\n\\nUnknown: production deployment status.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:18:23.251Z\\\",\\\"sessionId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d\\\",\\\"entryId\\\":\\\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\\\",\\\"operationId\\\":\\\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0\\\"} -->\\n\",\"version\":\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\",\"modifiedAt\":\"2026-09-16T17:18:40.764Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:18:23.251Z\",\"sessionId\":\"649d829e-adb4-4c97-9094-7912dcab157d\",\"entryId\":\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\",\"operationId\":\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0\"}],\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579128084
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fc53a267-008f-48f1-a717-6f62f48ab122-2|fc_0336fb6b-d402-99a1-b3de-ae654491a6b6_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"API contract\\\\n\\\\nConfirmed from current project API contract (just checked):\\\\n- Test endpoint is `/v2/inspect`\\\\n- Old `/v1/check` is no longer used\\\\n\\\\nUnknown: production deployment status.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:1\\\",\\\"offset\\\":2,\\\"version\\\":\\\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\\\"}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"API contract\\n\\nConfirmed from current project API contract (just checked):\\n- Test endpoint is `/v2/inspect`\\n- Old `/v1/check` is no longer used\\n\\nUnknown: production deployment status.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:1\",\"offset\":2,\"version\":\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\"}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579128085
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 4514,
+        "outputTokens": 267,
+        "costUsd": 0.010438,
+        "elapsedMs": 7587
+      },
+      "rubric": "/v2/inspect replaces /v1/check; deployment unknown",
+      "baselineLearn": {
+        "answer": "**已确认的 API 合同变化**\n\n- 测试 endpoint：**`/v2/inspect`**\n- 旧 endpoint **`/v1/check` 已废弃，不再使用**\n\n**未确认**\n\n- 生产环境是否已切到 `/v2/inspect`：未知\n\n后续对接测试应以 `/v2/inspect` 为准，不要再调用 `/v1/check`。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-10a96274-4404-41dc-afb6-8d6e57aa672b-0|fc_1f5c8884-bea4-9cf0-bf93-ab583cca15cd_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"357fe2b5-c2c3-4372-a03f-6c691280d684\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"刚检查了项目当前 API 合同：测试 endpoint 已改成 /v2/inspect，旧 /v1/check 不再使用。请总结这个已经确认的变化，未知生产部署情况。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"357fe2b5-c2c3-4372-a03f-6c691280d684\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"刚检查了项目当前 API 合同：测试 endpoint 已改成 /v2/inspect，旧 /v1/check 不再使用。请总结这个已经确认的变化，未知生产部署情况。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579083541
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-10a96274-4404-41dc-afb6-8d6e57aa672b-1|fc_1f5c8884-bea4-9cf0-bf93-ab583cca15cd_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"357fe2b5-c2c3-4372-a03f-6c691280d684\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"刚检查了项目当前 API 合同：测试 endpoint 已改成 /v2/inspect，旧 /v1/check 不再使用。请总结这个已经确认的变化，未知生产部署情况。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"357fe2b5-c2c3-4372-a03f-6c691280d684\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"刚检查了项目当前 API 合同：测试 endpoint 已改成 /v2/inspect，旧 /v1/check 不再使用。请总结这个已经确认的变化，未知生产部署情况。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579083541
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1799,
+        "outputTokens": 504,
+        "costUsd": 0.00643,
+        "elapsedMs": 11061
+      },
+      "baselineRecall": {
+        "answer": "当前这次对话里没有找到之前关于 endpoint / 部署的记录，所以我没法可靠地告诉你「现在测试 endpoint 是什么、是否已上生产」。\n\n请补一下项目或服务名（或上次讨论的接口路径），我就可以按那个上下文帮你核对。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-2044eaf7-811c-4518-abee-46d7f052cfe1-0|fc_8d4adb5a-6300-9233-bc31-157b1e8a1d6d_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7204d991-28fb-4948-9e14-abd255631012\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"现在测试 endpoint 是什么？是否已经在生产部署？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7204d991-28fb-4948-9e14-abd255631012\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"现在测试 endpoint 是什么？是否已经在生产部署？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579091329
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-2044eaf7-811c-4518-abee-46d7f052cfe1-1|fc_8d4adb5a-6300-9233-bc31-157b1e8a1d6d_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579091329
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-2044eaf7-811c-4518-abee-46d7f052cfe1-2|fc_8d4adb5a-6300-9233-bc31-157b1e8a1d6d_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7204d991-28fb-4948-9e14-abd255631012\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"现在测试 endpoint 是什么？是否已经在生产部署？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7204d991-28fb-4948-9e14-abd255631012\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"现在测试 endpoint 是什么？是否已经在生产部署？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579091329
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-8ac692b5-4b4f-4abc-b4a1-4dcde710b87d-3|fc_f2b02aa8-c7b6-9c53-94c7-da30ac4adb37_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579094523
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-8ac692b5-4b4f-4abc-b4a1-4dcde710b87d-4|fc_f2b02aa8-c7b6-9c53-94c7-da30ac4adb37_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579094523
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-8ac692b5-4b4f-4abc-b4a1-4dcde710b87d-5|fc_f2b02aa8-c7b6-9c53-94c7-da30ac4adb37_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579094523
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-8ac692b5-4b4f-4abc-b4a1-4dcde710b87d-6|fc_f2b02aa8-c7b6-9c53-94c7-da30ac4adb37_3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579094523
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-8ac692b5-4b4f-4abc-b4a1-4dcde710b87d-7|fc_f2b02aa8-c7b6-9c53-94c7-da30ac4adb37_4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579094523
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-80344098-6576-4eac-af8b-b246320817d0-8|fc_e55edede-5d35-98e2-91bf-d7c168c3e8b6_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579099245
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-80344098-6576-4eac-af8b-b246320817d0-9|fc_e55edede-5d35-98e2-91bf-d7c168c3e8b6_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7204d991-28fb-4948-9e14-abd255631012\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"现在测试 endpoint 是什么？是否已经在生产部署？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7204d991-28fb-4948-9e14-abd255631012\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"现在测试 endpoint 是什么？是否已经在生产部署？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579099245
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-80344098-6576-4eac-af8b-b246320817d0-10|fc_e55edede-5d35-98e2-91bf-d7c168c3e8b6_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"7204d991-28fb-4948-9e14-abd255631012\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"现在测试 endpoint 是什么？是否已经在生产部署？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"7204d991-28fb-4948-9e14-abd255631012\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"现在测试 endpoint 是什么？是否已经在生产部署？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579099245
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-80344098-6576-4eac-af8b-b246320817d0-11|fc_e55edede-5d35-98e2-91bf-d7c168c3e8b6_3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789579099245
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 4057,
+        "outputTokens": 604,
+        "costUsd": 0.009049999999999999,
+        "elapsedMs": 15852
+      },
+      "learning": {
+        "answer": "**已确认的 API 合同变化**\n\n- 测试 endpoint：`/v2/inspect`\n- 旧 `/v1/check`：不再使用\n- 生产部署：未知\n\n**记忆**\n\n- 主题 `background.md`：已用上述内容覆盖旧 `/v1/check` 笔记\n- 索引 `MEMORY.md`：已指向该主题并标明生产部署未知",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 54,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "93aeea9e0329963625b425adba8bde9f6ec34be5cb7727c263a7f21651397f01"
+              }
+            ],
+            "warnings": [
+              "project/MEMORY.md: Source unavailable; content has not been historically verified"
+            ],
+            "timestamp": 1789579103258
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-972f625a-d488-41dc-90a8-0e1a1d6b7508-1|fc_b7ae0cab-e2c2-9626-acf5-e9066c0354f0_1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Old note: the test endpoint is /v1/check. Recorded last month, not revalidated.\\\",\\\"version\\\":\\\"6a96d6936f2973d97f197338a10035288eed3f3285002637efc670aa1de6aa62\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:17:56.330Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Old note: the test endpoint is /v1/check. Recorded last month, not revalidated.\",\"version\":\"6a96d6936f2973d97f197338a10035288eed3f3285002637efc670aa1de6aa62\",\"modifiedAt\":\"2026-09-16T17:17:56.330Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1789579109106
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-972f625a-d488-41dc-90a8-0e1a1d6b7508-0|fc_b7ae0cab-e2c2-9626-acf5-e9066c0354f0_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"[Project background](background.md)\\\\n\\\",\\\"version\\\":\\\"93aeea9e0329963625b425adba8bde9f6ec34be5cb7727c263a7f21651397f01\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:17:56.330Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"[Project background](background.md)\\n\",\"version\":\"93aeea9e0329963625b425adba8bde9f6ec34be5cb7727c263a7f21651397f01\",\"modifiedAt\":\"2026-09-16T17:17:56.330Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1789579109106
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-972f625a-d488-41dc-90a8-0e1a1d6b7508-2|fc_b7ae0cab-e2c2-9626-acf5-e9066c0354f0_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579109107
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"version\\\":\\\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\\\",\\\"indexStatus\\\":\\\"not-updated; model must maintain MEMORY.md separately\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"background.md\",\"version\":\"96979b75b950fac66290f4bfb81b0291306ae1158cd3de375793170eb8f03f20\",\"indexStatus\":\"not-updated; model must maintain MEMORY.md separately\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579120767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"version\\\":\\\"efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba\\\",\\\"indexStatus\\\":\\\"saved\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"MEMORY.md\",\"version\":\"efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba\",\"indexStatus\":\"saved\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789579120773
+          },
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 155,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "efc9a8998b3169065ed05f59b52f1b50617bad16afbdf51ea825285215e1cfba"
+              }
+            ],
+            "warnings": [],
+            "timestamp": 1789579120777
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 6652,
+        "outputTokens": 1180,
+        "costUsd": 0.017887999999999998,
+        "elapsedMs": 20900
+      },
+      "notes": {
+        "project/MEMORY.md": "[Project background](background.md) — test API is `/v2/inspect`; `/v1/check` unused. Production deploy unknown.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:18:23.251Z\",\"sessionId\":\"649d829e-adb4-4c97-9094-7912dcab157d\",\"entryId\":\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\",\"operationId\":\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-4|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_1\"} -->\n",
+        "project/background.md": "# API contract\n\nConfirmed from current project API contract (just checked):\n- Test endpoint is `/v2/inspect`\n- Old `/v1/check` is no longer used\n\nUnknown: production deployment status.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:18:23.251Z\",\"sessionId\":\"649d829e-adb4-4c97-9094-7912dcab157d\",\"entryId\":\"a9d49712-04c9-47b4-a1bb-c8a5f113357b\",\"operationId\":\"649d829e-adb4-4c97-9094-7912dcab157d:call-b429c963-29c9-465f-aadc-a895cc265df8-3|fc_0f484de8-78f8-96fa-8b1b-bb8b563196d4_0\"} -->\n"
+      }
+    }
+  ]
+}

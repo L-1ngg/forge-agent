@@ -26,7 +26,7 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		let output = "";
 		const decoder = new TextDecoder();
 		const terminal = new Bun.Terminal({ cols: 110, rows: 32, data(_terminal, bytes) { output += decoder.decode(bytes, { stream: true }); } });
-		const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../packages/cli/src/main.ts")], { cwd, terminal, env: { ...process.env, XDG_CONFIG_HOME: join(cwd, "config-home"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "" } });
+		const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../packages/cli/src/main.ts")], { cwd, terminal, env: { ...process.env, XDG_CONFIG_HOME: join(cwd, "config-home"), XDG_DATA_HOME: join(cwd, "data-home"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "" } });
 		children.push({ child, terminal });
 		const wait = async (condition: () => boolean | Promise<boolean>) => {
 			for (let i = 0; i < 500; i++) { if (await condition()) return; if (child.exitCode !== null) throw new Error(`CLI exited: ${output.slice(-1000)}`); await Bun.sleep(10); }

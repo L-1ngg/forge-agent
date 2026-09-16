@@ -4,6 +4,41 @@
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
+## Persistent Memory
+
+The optional `memory` capability is supplied explicitly by the host. Omitting it reads no CLI memory directories and creates no memory files.
+
+```ts
+import { LongTermMemory, createAgent } from "@forge-agent/core/sdk";
+
+const memory = {
+  store: new LongTermMemory({ user: "/data/alice/memory", project: "/data/alice/project-a" }),
+  autoUpdate: true,
+  injection: true,
+  maxOperations: 12,
+  maxWrites: 4,
+};
+// Include memory in your existing createAgent({ provider, model, cwd, systemPrompt, ... }) options.
+```
+
+Roots must be explicitly authorized, normalized absolute paths. Model arguments only select provided user/project aliases and relative `.md` paths; frontmatter never determines scope. The SDK does not discover Git repositories. Hosts may call `initializeMemoryCopy(target, source?)` to copy only Markdown once; completion is recorded last, and retries preserve existing files. `MemoryFileSystem` supports injected file operations for failure testing and normally need not be supplied.
+
+`store.read(scope, path, offset?, limit?)` returns a text page, version, modification time, sources and warnings. Offsets are zero-based Unicode characters; pages contain at most 4096 characters. `search(scope, query, limit?)` performs case-insensitive literal all-word matching, including unindexed notes, and returns at most 10 snippets of 256 characters. Files are limited to 256 KiB and scans to 1000 directory entries/8 MiB. Plain Markdown needs no metadata; malformed optional metadata produces warnings without modifying the original. Source pointers are unverified and their history may be unavailable.
+
+`store.write({ scope, path, content, expectedVersion, operationId }, source, signal?)` requires the read version; `expectedVersion: null` creates only an absent file. The host supplies actual source information `{ kind: "management" | "session", timestamp, sessionId?, entryId?, location? }`; the implementation appends the actual scope/root and operation identity. `delete(scope, path, expectedVersion, operationId, signal?)` removes the note. `pin(scope, path, enabled)` and `pinned(scope)` manage pinned paths. Retrying the same operation and content returns its original receipt without committing again. `replayed: true` confirms the prior commit, not that nobody subsequently edited the file.
+
+Managed writes use a local scope lock and atomic single-file replacement. There is no multi-file transaction, power-loss durability or arbitrary external-editor conflict merge guarantee. Topics and indexes report separate outcomes. Cancellation waits for started file operations; cancellation observed before publication preserves the old file. A memory error is a tool error; JSONL commit failure still faults the agent. Deleting a note neither deletes JSONL nor erases original text already present in the current conversation.
+
+Complete lock records from dead processes can be recovered automatically. Interrupted recovery or incomplete lock records fail explicitly and require host inspection. `getMemoryBudget?.()` exposes the current shared injection budget; explicit management writes can pass it to the store as `indexBudgetTokens` (0–2000). An unknown budget produces a warning: saving an index does not imply that its entire content will be injected.
+
+The `read_memory/search_memory/write_memory/delete_memory` tools use the existing permission, hook, cancellation and event paths. SDK hosts supply their own permission rules. `autoUpdate: false` rejects model writes while explicit host store operations remain available. `injection: false` stops injection while on-demand reading remains available. Hosts may change these booleans; the next request boundary refreshes injection/tool descriptions, and writes check the current setting.
+
+The CLI normally includes memory tools in its built-in allow policy, still subject to preceding hooks/rules. With `permissionMode: "deny-all"`, it omits memory write/delete allowances and retains the existing read-only policy. Explicit `/memory` management does not depend on model permission.
+
+`ContextAssembler` adds reference messages identified by scope/path/version without persisting them as user messages or adding note content to system instructions. Indexes and pins share `min(2000 tokens, 5% of the input budget, currently available input)` using the existing character estimate and adaptive reserve. Tool results, system instructions, schemas and current messages remain in the unified usage calculation. New inputs/steering and managed writes refresh the projection. Pins that do not fit are reported rather than silently truncated. The `memory` projection event exposes selected notes, tokens, truncation and warnings; tool results and existing model usage expose commits, calls and costs. There are no additional organizer models, background timers or exit scans.
+
+Every request boundary checks the pin list and disk revisions of indexes, pinned files and link targets, reloading the projection when they change. External edits and deletions within the same turn therefore refresh the next request. Requests already sent and original conversation history are not retroactively changed.
+
 ## Custom Execution Implementations
 
 Normally, use the default `createAgent(options)`. A factory supplied as the second argument must return a complete `AgentPort` (import its type from `@forge-agent/core`), or a Promise of one. Required methods are `runTurn`, `continue`, `steer`, `followUp`, `abort`, `dispose`, `getUsage`, `setStorage`, `compact`, `configureContext`, and `updateConfiguration`.

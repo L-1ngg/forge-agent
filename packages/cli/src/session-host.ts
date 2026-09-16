@@ -58,6 +58,22 @@ export class SessionHost {
 		return host;
 	}
 	get current(): SessionView { return this.view; }
+	async memoryImport(path: string): Promise<string> {
+		const file = await realpath(path);
+		const managed = join(this.root, ".forge-agent", "sessions");
+		if (dirname(file) !== managed && file !== join(this.root, ".forge-agent", "session.jsonl")) throw new Error("Memory import is limited to a selected current-project session");
+		if ((await stat(file)).size > 8 * 1024 * 1024) throw new Error("Session import exceeds the 8 MiB file resource limit");
+		const store = await SessionStore.open(file, this.options.cwd, { create: false });
+		if (!store.appendable) throw new Error("Selected session is damaged; import was not performed");
+		const entries = store.messages().slice(-20);
+		let text = `Source session: ${file}\n`, included = 0;
+		for (const message of entries) {
+			const part = JSON.stringify(message) + "\n";
+			if (Buffer.byteLength(text + part) > 32 * 1024) break;
+			text += part; included++;
+		}
+		return text + `\nImported ${included}/${store.messages().length} messages; bounded excerpt, omitted history was not reviewed.`;
+	}
 	private async prepare(path?: string): Promise<SessionView> {
 		const store = path ? await SessionStore.open(path, this.options.cwd, { create: false }) : undefined;
 		if (store && !store.messages().some(message => message.role === "user")) throw new Error("Session has no conversation history");

@@ -1,0 +1,291 @@
+{
+  "split": "holdout",
+  "fixtureHash": "bb4dd02d07d28d82d6f8a38cc8b092c6965dab5f5b864173ebcc7b70bf7d03bc",
+  "implementationHash": "a1dc2af46c307d4644033a75932d71648b3c73021eaa6552c5d6c515fdaee677",
+  "harnessHash": "9253816cdff6d2ddeee6bf057500d8866463991dbfd3cc3cc6cf3b9702e6b402",
+  "provider": "xai",
+  "model": "grok-4.6",
+  "thinking": "off",
+  "outputLimit": 2048,
+  "retryMaxRetries": 1,
+  "adaptiveEnabled": false,
+  "totalRequests": 11,
+  "conservativeReservedCostUsd": 0.31339,
+  "note": "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Adaptive is disabled to isolate memory quality; software tests cover integration. Usage costs use catalog prices and are not an invoice.",
+  "rows": [
+    {
+      "id": "holdout-auto-project",
+      "split": "holdout",
+      "mode": "automatic",
+      "scope": "project",
+      "learn": "项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。",
+      "recall": {
+        "answer": "隔离网络环境用 **`quartz-offline.tar`**，且仅用于该场景。\n\n权威规格在仓库 **`docs/network.md`**。项目记忆里的 [Quartz 离线安装包](quartz-offline-package.md) 只记了包名和范围，没有复制该文档。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 175,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103"
+              }
+            ],
+            "warnings": [
+              "project/MEMORY.md: Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources"
+            ],
+            "timestamp": 1789581368490
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-19cf35ef-5f6d-4ac9-a470-d9d1b0a97b5c-0|fc_c56bb490-608e-9791-b909-990efdf50f67_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"quartz-offline-package.md\\\",\\\"text\\\":\\\"# Quartz 离线安装包\\\\n\\\\n权威规格见仓库 [`docs/network.md`](docs/network.md)，本笔记不复制该文档。\\\\n\\\\n结论（维护者确认）：离线安装包文件名为 `quartz-offline.tar`，仅提供给隔离网络环境使用。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:55:36.129Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"38faee50-a37c-4931-99e2-7fe054c04f29\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\\\\\\\",\\\\\\\"operationId\\\\\\\":\\\\\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0\\\\\\\"} -->\\\\n\\\",\\\"version\\\":\\\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\\\",\\\"modifiedAt\\\":\\\"2026-09-16T17:56:04.221Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:55:36.129Z\\\",\\\"sessionId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\\\",\\\"entryId\\\":\\\"38faee50-a37c-4931-99e2-7fe054c04f29\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\\\",\\\"operationId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"quartz-offline-package.md\",\"text\":\"# Quartz 离线安装包\\n\\n权威规格见仓库 [`docs/network.md`](docs/network.md)，本笔记不复制该文档。\\n\\n结论（维护者确认）：离线安装包文件名为 `quartz-offline.tar`，仅提供给隔离网络环境使用。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:55:36.129Z\\\",\\\"sessionId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\\\",\\\"entryId\\\":\\\"38faee50-a37c-4931-99e2-7fe054c04f29\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\\\",\\\"operationId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0\\\"} -->\\n\",\"version\":\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\",\"modifiedAt\":\"2026-09-16T17:56:04.221Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:55:36.129Z\",\"sessionId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\",\"entryId\":\"38faee50-a37c-4931-99e2-7fe054c04f29\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\",\"operationId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0\"}],\"warnings\":[\"Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1789581375850
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-19cf35ef-5f6d-4ac9-a470-d9d1b0a97b5c-1|fc_c56bb490-608e-9791-b909-990efdf50f67_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# Project memory\\\\n\\\\n- [Quartz 离线安装包](quartz-offline-package.md) — 隔离网络离线包名与范围；规格入口 `docs/network.md`\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:55:36.129Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"38faee50-a3\\\",\\\"offset\\\":0,\\\"version\\\":\\\"42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103\\\"},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"quartz-offline-package.md\\\",\\\"text\\\":\\\"# Quartz 离线安装包\\\\n\\\\n权威规格见仓库 [`docs/network.md`](docs/network.md)，本笔记不复制该文档。\\\\n\\\\n结论（维护者确认）：离线安装包文件名为 `quartz-offline.tar`，仅提供给隔离网络环境使用。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-16T17:55:36.129Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"08aea5c4-05ad-4c02-aad9-a4aaa28\\\",\\\"offset\\\":0,\\\"version\\\":\\\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\\\"}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# Project memory\\n\\n- [Quartz 离线安装包](quartz-offline-package.md) — 隔离网络离线包名与范围；规格入口 `docs/network.md`\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:55:36.129Z\\\",\\\"sessionId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\\\",\\\"entryId\\\":\\\"38faee50-a3\",\"offset\":0,\"version\":\"42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103\"},{\"scope\":\"project\",\"path\":\"quartz-offline-package.md\",\"text\":\"# Quartz 离线安装包\\n\\n权威规格见仓库 [`docs/network.md`](docs/network.md)，本笔记不复制该文档。\\n\\n结论（维护者确认）：离线安装包文件名为 `quartz-offline.tar`，仅提供给隔离网络环境使用。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-16T17:55:36.129Z\\\",\\\"sessionId\\\":\\\"08aea5c4-05ad-4c02-aad9-a4aaa28\",\"offset\":0,\"version\":\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\"}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581375852
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 4834,
+        "outputTokens": 506,
+        "costUsd": 0.012319999999999998,
+        "elapsedMs": 11538
+      },
+      "rubric": "quartz-offline.tar; isolated networks only; docs/network.md",
+      "baselineLearn": {
+        "answer": "结论：以 `docs/network.md` 为准，`quartz-offline.tar` 仅为隔离网络环境提供的离线安装包。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d5b4576b-6c8f-443d-9f26-d3d597a680d5-0|fc_47c7525a-71cf-99bb-aba6-164a65bc6911_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581282178
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d5b4576b-6c8f-443d-9f26-d3d597a680d5-1|fc_47c7525a-71cf-99bb-aba6-164a65bc6911_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581282178
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d5b4576b-6c8f-443d-9f26-d3d597a680d5-2|fc_47c7525a-71cf-99bb-aba6-164a65bc6911_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"818459b2-7eaa-43f7-ab7c-0b5e3f588b55\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581282178
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1849,
+        "outputTokens": 636,
+        "costUsd": 0.006554,
+        "elapsedMs": 24741
+      },
+      "baselineRecall": {
+        "answer": "隔离网络（内网/离线/断网）**不要用在线安装器**（Web / Online / Network Installer），要用 **完整离线包**：\n\n| 类型 | 能不能用 | 常见名字 |\n|---|---|---|\n| 在线安装器 | 否 | `web installer`、`network installer`、小体积 `.exe` |\n| 完整离线包 | 是 | `offline`、`full`、`standalone`、`local installer`、`airgap`、`bundle` |\n| 还要另备 | 是 | 依赖库、运行时、容器镜像 tar、yum/apt/pip/npm 本地源、证书 |\n\n权威资料只认 **官方文档/官方下载页**，不要用第三方网盘或转载站。\n\n请告诉我具体软件（例如 Docker、K8s、Python、CUDA、Cursor、GitLab、Harbor、VS），我可以给你对应的离线包名称和官方文档链接。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d53ce4f3-841c-4888-8295-c0a12c9a6a4c-0|fc_cdd8a959-08bb-9dba-8695-25a23942d984_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"隔离网络环境用哪个安装包，权威资料在哪里？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"隔离网络环境用哪个安装包，权威资料在哪里？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581295037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d53ce4f3-841c-4888-8295-c0a12c9a6a4c-1|fc_cdd8a959-08bb-9dba-8695-25a23942d984_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"隔离网络环境用哪个安装包，权威资料在哪里？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"隔离网络环境用哪个安装包，权威资料在哪里？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581295037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d53ce4f3-841c-4888-8295-c0a12c9a6a4c-2|fc_cdd8a959-08bb-9dba-8695-25a23942d984_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581295037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5727fd2e-cf17-4e27-a167-bb96782a5313-3|fc_2ea7e493-bc44-9361-a90b-0ed4b48f6241_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"隔离网络环境用哪个安装包，权威资料在哪里？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"隔离网络环境用哪个安装包，权威资料在哪里？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581302269
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5727fd2e-cf17-4e27-a167-bb96782a5313-4|fc_2ea7e493-bc44-9361-a90b-0ed4b48f6241_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581302269
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5727fd2e-cf17-4e27-a167-bb96782a5313-5|fc_2ea7e493-bc44-9361-a90b-0ed4b48f6241_2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581302269
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5727fd2e-cf17-4e27-a167-bb96782a5313-6|fc_2ea7e493-bc44-9361-a90b-0ed4b48f6241_3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"隔离网络环境用哪个安装包，权威资料在哪里？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"0c3cbb5b-ff62-4b6c-80c0-ff2a6addc39d\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"隔离网络环境用哪个安装包，权威资料在哪里？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581302269
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 2794,
+        "outputTokens": 1836,
+        "costUsd": 0.015067999999999998,
+        "elapsedMs": 45764
+      },
+      "learning": {
+        "answer": "结论：离线安装包名为 `quartz-offline.tar`，仅用于隔离网络环境；细节以 `docs/network.md` 为准。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c8c16bdc-530b-4b79-a23c-723979e7c5f7-1|fc_7613ed5e-b325-9c56-bc64-ec66f6c99e6f_1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581341586
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c8c16bdc-530b-4b79-a23c-723979e7c5f7-2|fc_7613ed5e-b325-9c56-bc64-ec66f6c99e6f_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581341586
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c8c16bdc-530b-4b79-a23c-723979e7c5f7-0|fc_7613ed5e-b325-9c56-bc64-ec66f6c99e6f_0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project/MEMORY.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789581341586
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-27b6feb0-dded-4d97-b1ce-dc0d38c745a5-3|fc_7d7ab9c8-8d24-972e-84ad-7187f17bc146_0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"ff24a96c-fddd-4f2e-8ba8-51aa9caf21ed\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":82,\\\"text\\\":\\\"MORY.md\\\\\\\"}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"quartz-offline network offline\\\\\\\"}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"user\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"quartz-offline network.md\\\\\\\"}\\\"},{\\\"entryId\\\":\\\"38faee50-a37c-4931-99e2-7fe054c04f29\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"ff24a96c-fddd-4f2e-8ba8-51aa9caf21ed\",\"role\":\"assistant\",\"isError\":false,\"offset\":82,\"text\":\"MORY.md\\\"}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"quartz-offline network offline\\\"}\\n[tool call search_memory] {\\\"scope\\\":\\\"user\\\",\\\"query\\\":\\\"quartz-offline network.md\\\"}\"},{\"entryId\":\"38faee50-a37c-4931-99e2-7fe054c04f29\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581348957
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-27b6feb0-dded-4d97-b1ce-dc0d38c745a5-4|fc_7d7ab9c8-8d24-972e-84ad-7187f17bc146_1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"38faee50-a37c-4931-99e2-7fe054c04f29\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"38faee50-a37c-4931-99e2-7fe054c04f29\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"项目权威入口是 docs/network.md。维护者刚确认：离线安装包叫 quartz-offline.tar，只给隔离网络环境。请把这次讨论整理成一句结论；不要复制整份规格。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1789581348957
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-27b6feb0-dded-4d97-b1ce-dc0d38c745a5-5|fc_7d7ab9c8-8d24-972e-84ad-7187f17bc146_2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581348957
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-27b6feb0-dded-4d97-b1ce-dc0d38c745a5-6|fc_7d7ab9c8-8d24-972e-84ad-7187f17bc146_3",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project/docs/network.md'\"}],\"details\":{}}",
+            "isError": true,
+            "timestamp": 1789581348958
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"quartz-offline-package.md\\\",\\\"version\\\":\\\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\\\",\\\"indexStatus\\\":\\\"not-updated; model must maintain MEMORY.md separately\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"quartz-offline-package.md\",\"version\":\"6e3bab95e09620fa42deacf48ff739c6884d1bf5142df8804e24e69b9d44fd4a\",\"indexStatus\":\"not-updated; model must maintain MEMORY.md separately\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581364224
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-92135c20-0228-46a2-8bf0-e052959f51c2-8|fc_ef1f927e-6411-976b-9118-9ce3c0857229_1",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"version\\\":\\\"42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103\\\",\\\"indexStatus\\\":\\\"saved\\\",\\\"warnings\\\":[]}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"MEMORY.md\",\"version\":\"42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103\",\"indexStatus\":\"saved\",\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1789581364229
+          },
+          {
+            "type": "memory",
+            "phase": "projection",
+            "tokens": 175,
+            "truncated": false,
+            "selected": [
+              {
+                "scope": "project",
+                "path": "MEMORY.md",
+                "version": "42da76c309d6cf4a123106efce500e788a44e301812e158082bfd0e7744c4103"
+              }
+            ],
+            "warnings": [
+              "project/MEMORY.md: Source pointers are not verified here; referenced history may be unavailable or not persisted. External edits do not reverify sources"
+            ],
+            "timestamp": 1789581364236
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 10026,
+        "outputTokens": 1801,
+        "costUsd": 0.026057999999999998,
+        "elapsedMs": 32354
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Quartz 离线安装包](quartz-offline-package.md) — 隔离网络离线包名与范围；规格入口 `docs/network.md`\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:55:36.129Z\",\"sessionId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\",\"entryId\":\"38faee50-a37c-4931-99e2-7fe054c04f29\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\",\"operationId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-8|fc_ef1f927e-6411-976b-9118-9ce3c0857229_1\"} -->\n",
+        "project/quartz-offline-package.md": "# Quartz 离线安装包\n\n权威规格见仓库 [`docs/network.md`](docs/network.md)，本笔记不复制该文档。\n\n结论（维护者确认）：离线安装包文件名为 `quartz-offline.tar`，仅提供给隔离网络环境使用。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-16T17:55:36.129Z\",\"sessionId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713\",\"entryId\":\"38faee50-a37c-4931-99e2-7fe054c04f29\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-hdDWY1/holdout-auto-project/project\",\"operationId\":\"08aea5c4-05ad-4c02-aad9-a4aaa28e7713:call-92135c20-0228-46a2-8bf0-e052959f51c2-7|fc_ef1f927e-6411-976b-9118-9ce3c0857229_0\"} -->\n"
+      }
+    }
+  ]
+}

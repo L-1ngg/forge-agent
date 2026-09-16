@@ -11,6 +11,7 @@ export interface HarnessUiConfig {
 }
 
 export interface HarnessConfig {
+	memory?: { autoUpdate?: boolean; injection?: boolean };
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;
 	maxTokens?: number;
@@ -49,13 +50,17 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);
 	}
 	if ("apiKey" in config && (typeof config.apiKey !== "string" || !config.apiKey.trim())) {
 		throw new Error(`Invalid config ${path}: apiKey must be a non-empty string`);
+	}
+	if ("memory" in config) {
+		const memory = config.memory;
+		if (!memory || typeof memory !== "object" || Array.isArray(memory) || Object.entries(memory).some(([key, value]) => !["autoUpdate", "injection"].includes(key) || typeof value !== "boolean")) throw new Error(`Invalid config ${path}: memory accepts only boolean autoUpdate and injection`);
 	}
 	return config as Partial<HarnessConfig>;
 }
@@ -78,6 +83,7 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 		...globalConfig,
 		...projectConfig,
 		ui: mergedUi,
+		memory: { ...globalConfig.memory, ...projectConfig.memory },
 		...(env.FORGE_AGENT_PROVIDER ? { provider: env.FORGE_AGENT_PROVIDER } : {}),
 		...(env.FORGE_AGENT_MODEL ? { model: env.FORGE_AGENT_MODEL } : {}),
 		...(env.FORGE_AGENT_API_KEY ? { apiKey: env.FORGE_AGENT_API_KEY } : {}),

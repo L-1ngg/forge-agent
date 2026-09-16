@@ -32,10 +32,12 @@ import type { AgentPort, InputQueueOptions } from "./agent-port.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { SUMMARY_SYSTEM, resolveRetryPolicy, validateRequestLimits, type ContextSettings, type RetryPolicy, type SummaryDriver } from "./context/compaction.ts";
 import { randomUUID } from "node:crypto";
+import type { MemoryOptions } from "./memory/tools.ts";
 
 export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" | "toolExecution">;
 
 export interface PiPortOptions extends InputQueueOptions {
+	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	sessionId?: string;
 	context?: Partial<ContextSettings>;
@@ -70,6 +72,8 @@ export interface PiTestResponse {
 }
 
 export interface PiTestPortOptions extends InputQueueOptions {
+	memory?: MemoryOptions;
+	toolHooks?: ToolHooks;
 	responses: PiTestResponse[];
 	tools?: Array<HarnessTool<object, unknown>>;
 	/** Rewrite tool input before execution; permission checks observe the rewritten object. */
@@ -121,6 +125,7 @@ async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookO
 }
 
 export interface ModelPortOptions extends InputQueueOptions {
+	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;

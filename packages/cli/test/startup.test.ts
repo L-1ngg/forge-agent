@@ -10,7 +10,7 @@ async function runCli(config: Record<string, unknown>, env: Record<string, strin
 		await writeFile(join(directory, ".forge-agent", "config.json"), JSON.stringify(config));
 		const child = Bun.spawn([process.execPath, join(import.meta.dir, "../src/main.ts"), "--json", "-p", "hello"], {
 			cwd: directory,
-			env: { ...process.env, XDG_CONFIG_HOME: join(directory, "global"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "", XAI_API_KEY: "", ...env },
+			env: { ...process.env, XDG_CONFIG_HOME: join(directory, "global"), XDG_DATA_HOME: join(directory, "data"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "", XAI_API_KEY: "", ...env },
 			stdin: "ignore", stdout: "pipe", stderr: "pipe",
 		});
 		const timer = setTimeout(() => child.kill(), 5000);
@@ -36,6 +36,21 @@ test("CLI reports misspelled credential fields as a JSON startup error", async (
 	expect(result.stdout).toContain("api_Key");
 	expect(result.stdout).toContain("apiKey");
 	expect(result.stdout).not.toContain("private-test-key");
+});
+
+test("CLI explicit memory management needs no model or session", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "forge-memory-cli-"));
+	try {
+		for (const command of ["save project standalone.md standalone note", "read project standalone.md"]) {
+			const child = Bun.spawn([process.execPath, join(import.meta.dir, "../src/main.ts"), "--memory", command], {
+				cwd: directory, env: { ...process.env, XDG_CONFIG_HOME: join(directory, "config"), XDG_DATA_HOME: join(directory, "data"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "", XAI_API_KEY: "" }, stdin: "ignore", stdout: "pipe", stderr: "pipe",
+			});
+			const [output, error, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+			expect(code).toBe(0); expect(error).toBe("");
+			expect(output).toContain(command.startsWith("save") ? '"saved": true' : "standalone note");
+		}
+		expect(await readdir(join(directory, ".forge-agent")).catch(() => [])).toEqual([]);
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("CLI rejects missing xAI credentials before starting a turn", async () => {

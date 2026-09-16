@@ -12,6 +12,9 @@ import { randomUUID } from "node:crypto";
 import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionReason, type CompactionResult, type ContextSettings, buildContext } from "./context/compaction.ts";
 import { compactAdaptive, adaptiveInputBudget, type AdaptiveMetrics } from "./context/adaptive.ts";
 import { UsageTracker, estimateContextTokens } from "./usage.ts";
+import { MemoryTools, MEMORY_TOOL_NAMES } from "./memory/tools.ts";
+import { selectedBranch } from "./session-storage.ts";
+import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts";
 
 /** Owns durable history and run settlement; the runtime alone owns request messages. */
 export class AgentSession implements AgentPort {
@@ -40,10 +43,18 @@ export class AgentSession implements AgentPort {
 	private readonly usage: UsageTracker;
 	private running: Promise<void> | undefined;
 	private emit: (event: SessionEvent) => void = () => { };
+	private readonly memoryTools: MemoryTools | undefined;
+	private readonly assembler: ContextAssembler;
+	private memoryWriteMode: boolean | undefined;
 
 	constructor(assembly: SessionAssembly, private readonly prepareConfiguration: (patch: ConfigurationPatch) => Promise<SessionAssembly>) {
 		this.options = assembly.options; this.toolset = assembly.toolset; this.driver = assembly.driver;
 		const options = this.options;
+		this.assembler = new ContextAssembler(options.memory);
+		if (options.memory) this.memoryTools = new MemoryTools(options.memory, () => {
+			const entry = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
+			return { kind: "session", timestamp: entry?.timestamp ?? new Date().toISOString(), ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(entry ? { entryId: entry.id } : {}) };
+		}, () => this.getMemoryBudget());
 
 		this.settings = { ...DEFAULT_CONTEXT, ...options.context };
 		this.configureContext(options.context ?? {});
@@ -60,16 +71,25 @@ export class AgentSession implements AgentPort {
 			...(toolset.toolExecution ? { toolExecution: toolset.toolExecution } : {}),
 			...(options.sessionId ? { sessionId: options.sessionId } : {}),
 			shouldStopAfterResponse: ({ message }) => message.stopReason === "length" || message.stopReason === "deferred",
-			prepareNextTurnWithContext: () => { this.applyConfigurations(); return { context: { systemPrompt: this.runtime.state.systemPrompt, tools: this.runtime.state.tools, messages: this.runtime.state.messages.slice() }, model: this.options.model, thinkingLevel: this.options.thinkingLevel }; },
+			prepareNextTurnWithContext: () => {
+				this.applyConfigurations();
+				if (this.memoryTools && this.memoryWriteMode !== (this.memoryTools.options.autoUpdate !== false)) {
+					this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
+					this.usage.invalidate();
+				}
+				return { context: { systemPrompt: this.runtime.state.systemPrompt, tools: this.runtime.state.tools, messages: this.runtime.state.messages.slice() }, model: this.options.model, thinkingLevel: this.options.thinkingLevel };
+			},
 			transformContext: async (messages, signal) => {
-				signal?.throwIfAborted(); this.syncUsage();
+				signal?.throwIfAborted();
+				await this.assembleMemory(signal); this.syncUsage();
 				const limit = adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens);
 				if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > limit) {
 					const result = await this.compactContext("threshold", signal ?? this.runController!.signal, this.emit);
 					if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
+					await this.assembleMemory(signal); this.syncUsage();
 				}
 				signal?.throwIfAborted();
-				return this.runtime.state.messages.slice();
+				return [...this.assembler.projection.messages.map(message => fromSessionMessage(message, this.options.model)), ...this.runtime.state.messages];
 			},
 			convertToLlm: messages => projectMessages(messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model)),
 			streamFn: (model, context, settings) => {
@@ -127,6 +147,7 @@ export class AgentSession implements AgentPort {
 		this.emit = event => { events.push(structuredClone(event)); wake?.(); };
 		this.usage.beginTurn(); this.accepting = true;
 		this.runController = new AbortController();
+		this.memoryTools?.reset();
 		const running = this.runSession(input, this.runController.signal)
 			.catch(error => { failure = error; })
 			.finally(() => { done = true; wake?.(); });
@@ -164,12 +185,28 @@ export class AgentSession implements AgentPort {
 	}
 	abort(): void { this.runController?.abort(); this.compactController?.abort(); this.closeInput(); this.runtime.abort(); this.options.requestBus?.abort(); }
 	getUsage() { return this.usage.snapshot(); }
+	getMemoryBudget(): number {
+		if (this.options.memory?.injection === false) return 0;
+		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.adaptiveBudget().fixedText, adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens));
+	}
 	private syncUsage(): void {
-		this.usage.setContext({ messages: projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), contextWindow: this.options.contextWindow ?? this.options.model.contextWindow, identity: JSON.stringify([this.options.model, this.options.systemPrompt, this.options.thinkingLevel, this.options.tools]), fixedText: this.options.systemPrompt + (this.runtime.state.tools.length ? JSON.stringify(this.runtime.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }))) : "") });
+		this.usage.setContext({ messages: [...this.assembler.projection.messages, ...projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))], contextWindow: this.options.contextWindow ?? this.options.model.contextWindow, identity: JSON.stringify([this.options.model, this.options.systemPrompt, this.options.thinkingLevel, this.options.tools, this.assembler.projection.messages]), fixedText: this.adaptiveBudget().fixedText });
+	}
+	private async assembleMemory(signal?: AbortSignal): Promise<void> {
+		const messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
+		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
+		const before = JSON.stringify(this.assembler.projection);
+		const projection = await this.assembler.assemble(messages, this.adaptiveBudget().fixedText, adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
+		if (JSON.stringify(projection) !== before) {
+			this.usage.invalidate();
+			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
+		}
 	}
 	private prepareTools(): SessionToolset {
+		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
+		if (this.memoryTools && this.options.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
 		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
-		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state)] });
+		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
 		if (this.running || this.compactController) throw new Error("Cannot configure context during execution");
@@ -303,6 +340,7 @@ export class AgentSession implements AgentPort {
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
 			if (captured.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
+			if (this.memoryTools && captured.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
 			const assembly = await this.prepareConfiguration(captured);
 			this.assertHealthy();
 			const revision = ++this.revision;

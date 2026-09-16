@@ -4,6 +4,41 @@
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
+## 持久记忆
+
+`createAgent` 的 `memory` 是显式宿主能力；省略时不读 CLI 目录、不创建记忆文件。核心导出 `LongTermMemory` 与 `MemoryOptions`，示例：
+
+```ts
+import { LongTermMemory, createAgent } from "@forge-agent/core/sdk";
+
+const memory = {
+  store: new LongTermMemory({ user: "/data/alice/memory", project: "/data/alice/project-a" }),
+  autoUpdate: true,
+  injection: true,
+  maxOperations: 12,
+  maxWrites: 4,
+};
+// 将 memory 放进现有 createAgent({ provider, model, cwd, systemPrompt, ... }) 选项。
+```
+
+目录必须为宿主明确授权的规范化绝对路径；模型只可选择已提供的 user/project 别名和相对 `.md` 路径，文件 frontmatter 不决定身份。SDK 不解析 Git；宿主需要副本时可调用 `initializeMemoryCopy(target, source?)`，仅复制 Markdown，最后记录初始化成功，失败重试保留已有文件。`MemoryFileSystem` 是可注入文件操作边界，正常使用无需提供。
+
+`store.read(scope, path, offset?, limit?)` 返回正文页、版本、修改时间、来源和警告；offset 按零基 Unicode 字符，单页最多 4096 字符。`search(scope, query, limit?)` 使用不区分大小写的普通词项匹配（全部命中），最多 10 个 256 字符片段，覆盖未入索引文件。文件资源上限 256 KiB，扫描最多 1000 个目录项/8 MiB。缺少 frontmatter 不影响使用，损坏元数据不覆盖原文；来源只是未核验入口，可能无法读取其历史。
+
+`store.write({ scope, path, content, expectedVersion, operationId }, source, signal?)` 使用读取的版本；`expectedVersion: null` 仅新建。`source` 为宿主实际掌握的 `{ kind: "management" | "session", timestamp, sessionId?, entryId?, location? }`，程序追加真实 scope/root 和操作身份。`delete(scope, path, expectedVersion, operationId, signal?)` 删除当前笔记；`pin(scope, path, enabled)` 与 `pinned(scope)` 管理固定入口。相同操作身份与同一正文的重试返回原提交结果，不重复提交；修改或删除后旧版本失效。收到 `replayed: true` 只确认原操作已提交，不保证文件随后未被人工修改。
+
+单文件原子替换与本机 scope 锁保护受管理写入；没有跨文件事务、断电级持久性或任意外部编辑器竞态合并保证。正文与索引分别返回实际结果；正文成功不等于索引已维护。取消等待已开始的文件操作，发布前发现取消不替换正文。记忆工具失败作为工具错误反馈；JSONL 存储失败仍停用实例。笔记删除不删除 JSONL，也不能抹去仍在当前上下文中的原话。
+
+死亡进程的完整锁记录可自动回收；若回收过程本身中断或锁记录不完整，会明确失败，需宿主检查后处理。`getMemoryBudget?.()` 提供当前共享注入预算；显式管理写入可将其作为 `indexBudgetTokens`（0–2000）传给 store。未知预算会提示无法确认自动装载范围，保存成功不代表整篇索引都会注入。
+
+模型的 `read_memory/search_memory/write_memory/delete_memory` 沿用权限、hooks、取消及工具事件。SDK 没有隐式授权；由宿主照常提供 permission rules。`autoUpdate: false` 拒绝模型写工具，宿主显式 store 管理独立可用；`injection: false` 停止注入，但保留按需读取。两个布尔值可由宿主修改，下一个请求边界使用新注入/工具描述，实际写入同时检查开关。
+
+CLI 默认将记忆工具作为内建允许项，仍受前置 hooks/rules 约束；`permissionMode: "deny-all"` 不添加记忆写入/删除允许项，保留既有只读策略。显式 `/memory` 管理不依赖模型授权。
+
+`ContextAssembler` 将 scope/path/version 标记的记忆作为参考消息装配，未持久化为用户消息，不成为 system 指令。索引及固定笔记总注入不超过 `min(2000 tokens, 输入预算 5%, 当前剩余预算)`，沿用当前字符估算与 adaptive 窗口余量；详情工具结果、system、schema、当前消息仍计入统一 usage。新输入/steering 和受管理写入后刷新投影。固定正文放不下会明确报告，不静默截断。`memory` projection 事件返回 selected、tokens、truncated、warnings；工具结果与现有模型 usage 提供写入、调用和费用证据。首版没有额外整理模型、后台计时器或退出扫描。
+
+每次请求边界检查固定清单、索引、固定文件及链接目标的磁盘 revision，变化后重读投影；同一轮中的外部编辑和删除也会刷新下一次请求。已发送的请求和当前历史原文不会被追溯修改。
+
 ## 自定义执行实现
 
 通常直接使用默认 `createAgent(options)`。若传入第二个参数 factory，它必须返回完整的 `AgentPort`（类型从 `@forge-agent/core` 导入），或返回该实例的 Promise。必需方法为 `runTurn`、`continue`、`steer`、`followUp`、`abort`、`dispose`、`getUsage`、`setStorage`、`compact`、`configureContext`、`updateConfiguration`。

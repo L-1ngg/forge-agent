@@ -63,6 +63,33 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 
 恢复会话重建历史和模型上下文，不重放中断工具。工具需要配合取消，切换会等待其收尾。损坏会话会报告诊断，需按 SDK 的副本转换流程检查后恢复。
 
+## 持久记忆
+
+持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。模型可在任务过程中保存有用偏好和经验，详情按需读取。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。发布证据与默认启用门槛见[施工记录](docs/phases/persistent-memory.md)。
+
+CLI 默认启用记忆注入与会话内自动更新，可分别关闭；`permissionMode: "deny-all"` 会拒绝模型写入和删除，显式管理仍可使用。
+
+`/memory` 显示帮助和目录位置，例如：
+
+```text
+/memory list
+/memory save project workflow.md 本项目使用 Bun。
+/memory read project workflow.md
+/memory edit project workflow.md 本地开发使用 Bun；production 尚未决定。
+/memory pin project workflow.md
+/memory sources project workflow.md
+/memory read project workflow.md
+/memory delete project workflow.md
+```
+
+`edit` 和 `delete` 使用你上次读取的版本，期间有修改则拒绝旧操作；也可直接用编辑器管理普通 Markdown。`search <scope> <words>` 覆盖未入索引的笔记；`read <scope> <path> <offset>` 用返回的 `nextOffset` 继续分页。`unpin` 取消固定。`import <session-path>` 显式、限量读取当前项目的单个会话，由模型整理；启动不会为记忆扫描全部历史。
+
+目录为 `$XDG_DATA_HOME/forge-agent/memory`，缺省 `~/.local/share/forge-agent/memory`，位于 Git 工作区外。用户通用偏好与项目笔记分开。新 worktree 首次使用时复制主 worktree 的项目 Markdown，随后独立维护；后续修改、删除与 Git 合并不自动同步副本。删除记忆不删除会话历史。
+
+配置中的 `memory.autoUpdate` 和 `memory.injection` 分别控制模型更新和自动注入；`/memory auto off`、`/memory inject off` 只改变当前进程。两者关闭时仍可显式管理记忆。`--memory 'read project workflow.md'` 无需模型；分次调用可通过 `edit ... --version VERSION CONTENT` 或 `delete ... --version VERSION` 使用读取返回的版本。索引可能已保存，但下次只能注入预算内片段；固定内容放不下会明确报告。主题与索引分开提交。
+
+SDK 只有在宿主提供 `memory: { store: new LongTermMemory({ project: absoluteDirectory }) }` 时才启用，见 [SDK 指南](docs/sdk.md#持久记忆)。
+
 ## 上下文管理
 
 CLI 与 SDK 默认使用 `adaptive`，包括短检查点、历史搜索/读取与请求预算，无需额外开启。以下可选配置只是显式写出默认值：

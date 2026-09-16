@@ -6,8 +6,12 @@ import { builtinTools } from "@forge-agent/tools";
 import { App, scanFiles } from "@forge-agent/tui";
 import { SessionHost } from "./session-host.ts";
 import { jsonError, runHeadless } from "./headless.ts";
+import { createMemoryHost } from "./memory-host.ts";
+import { MemoryManager } from "./memory-command.ts";
+import type { MemoryOptions } from "@forge-agent/core/sdk";
 
 interface Args {
+	memoryCommand?: string;
 	prompt?: string;
 	json: boolean;
 	provider?: string;
@@ -28,6 +32,7 @@ function parseArgs(argv: string[]): Args {
 		else if (value === "--json") args.json = true;
 		else if (value === "--provider") args.provider = requiredValue(++index, value);
 		else if (value === "--model") args.model = requiredValue(++index, value);
+		else if (value === "--memory") args.memoryCommand = requiredValue(++index, value);
 		else if (value === "-h" || value === "--help") args.help = true;
 		else throw new Error(`Unknown argument: ${value}`);
 	}
@@ -35,7 +40,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function usage(): string {
-	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL]";
+	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--memory 'COMMAND']";
 }
 
 type PortFactory = (options: PiPortOptions) => Promise<AgentPort>;
@@ -57,6 +62,12 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 	try {
 		const workingDirectory = cwd();
 		const config = await loadConfig({ cwd: workingDirectory });
+		const memoryHost = await createMemoryHost(workingDirectory);
+		const memory: MemoryOptions = { store: memoryHost.memory, autoUpdate: config.memory?.autoUpdate ?? true, injection: config.memory?.injection ?? true };
+		if (args.memoryCommand) {
+			const result = await new MemoryManager(memory).execute(args.memoryCommand);
+			console.log(result.text); return 0;
+		}
 		const prompt = args.prompt;
 		if (args.json && !prompt) {
 			console.log(jsonError("-p/--prompt is required with --json", "INVALID_ARGUMENT"));
@@ -83,11 +94,13 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			...(config.maxTokens !== undefined ? { maxTokens: config.maxTokens } : {}),
 			...(config.contextWindow !== undefined ? { contextWindow: config.contextWindow } : {}),
 			cwd: workingDirectory,
+			memory,
 			tools: builtinTools,
 			requestTimeoutMs: args.json ? 30_000 : null,
-			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }] },
+			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }, ...["read_memory", "search_memory", ...(config.permissionMode === "deny-all" ? [] : ["write_memory", "delete_memory"])].map(tool => ({ tool, argsPattern: "*", effect: "allow" as const }))] },
 		}, portFactory);
 		try {
+			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), () => sessions.current.port.getMemoryBudget?.());
 			if (args.json) {
 				return await runHeadless(sessions.current.port, prompt as string, console.log, { requestBus: sessions.current.requestBus });
 			}
@@ -98,12 +111,14 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 					{ name: "new", description: "Start a new conversation" },
 					{ name: "resume", description: "Resume a project conversation" },
 					{ name: "compact", description: "Compact context" },
+					{ name: "memory", description: "Manage persistent memory" },
 					{ name: "quit", description: "Exit" },
 				],
 				listFiles: (prefix) => scanFiles(workingDirectory, prefix),
 			});
 			const app = new App({
 				port: sessions.current.port,
+				memoryCommand: input => memoryManager.execute(input),
 				sessions,
 				host: config.ui.host,
 				requestBus: sessions.current.requestBus,

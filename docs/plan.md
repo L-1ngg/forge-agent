@@ -1,6 +1,6 @@
 # 通用 Agent — 规划
 
-> 状态:待下一批设计(2026-09-13)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
+> 状态:后续路线(2026-09-17)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
 > 设计论证与历史研究见 [design-rationale.md](design-rationale.md) 和 [research/](research/)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
@@ -27,7 +27,7 @@
 - 当前默认 adaptive 见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；adaptive 的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
-- 知识库按场景接入,不默认开启持久记忆或新增检索基础设施。
+- 持久记忆规格见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，当前实现、默认行为与发布证据见[施工图](phases/persistent-memory.md)；知识库和额外检索基础设施仍按场景另行接入。
 
 ### 第五批 — 服务 API 与分发
 

@@ -70,6 +70,7 @@ export interface CompactionMetrics {
 }
 
 export type SessionEvent =
+	| (EventBase & { type: "memory"; phase: "projection"; tokens: number; truncated: boolean; selected: Array<{ scope: string; path: string; version: string }>; warnings: string[] })
 	| (EventBase & { type: "configuration"; phase: "accepted" | "applied"; revision: number })
 	| (EventBase & { type: "retry"; phase: "scheduled" | "attempt" | "end"; attempt: number; delayMs?: number; error?: string; outcome?: "success" | "error" | "aborted" })
 	| (EventBase & CompactionMetrics & { type: "compaction"; phase: "start" | "end" | "error" | "skipped" | "retry" | "attempt"; operationId: string; reason: string; beforeTokens: number; afterTokens?: number; error?: string; attempt?: number; delayMs?: number; thinking?: string; usage?: TokenUsage })
