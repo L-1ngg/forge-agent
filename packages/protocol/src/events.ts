@@ -59,7 +59,6 @@ interface EventBase {
 }
 
 export interface CompactionMetrics {
-	strategy?: "adaptive";
 	contextEstimated?: boolean;
 	inputBudget?: number;
 	modelCalls?: number;

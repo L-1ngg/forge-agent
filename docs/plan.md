@@ -7,7 +7,7 @@
 ## 1. 当前行动项
 
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
-- [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次 adaptive 的已用保留集宣称新投影有效。
+- [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次上下文压缩的已用保留集宣称新投影有效。
 - [ ] 制定第三批能力扩展施工图，明确选型、范围与验收，再开始实现。
 
 ## 2. 后续路线
@@ -24,7 +24,7 @@
 ### 第四批 — 长任务可靠性
 
 - 围绕真实任务继续验证上下文管理、恢复、执行约束及质量/成本。
-- 当前默认 adaptive 见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；adaptive 的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
+- 当前默认上下文压缩见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；上下文压缩的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
 - 持久记忆规格见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，当前实现、默认行为与发布证据见[施工图](phases/persistent-memory.md)；知识库和额外检索基础设施仍按场景另行接入。

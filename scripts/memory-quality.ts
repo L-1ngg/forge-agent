@@ -41,7 +41,7 @@ globalThis.fetch = Object.assign(async (...parameters: Parameters<typeof fetch>)
 }, { preconnect: originalFetch.preconnect });
 const rows: unknown[] = [];
 const record = async () => {
-	const report = { split, fixtureHash, implementationHash: hash.copy().digest("hex"), harnessHash, provider: config.provider, model: config.model, thinking: "off", outputLimit: 2048, retryMaxRetries: 1, adaptiveEnabled: false, totalRequests, conservativeReservedCostUsd: reservedCost, note: "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Adaptive is disabled to isolate memory quality; software tests cover integration. Usage costs use catalog prices and are not an invoice.", rows };
+	const report = { split, fixtureHash, implementationHash: hash.copy().digest("hex"), harnessHash, provider: config.provider, model: config.model, thinking: "off", outputLimit: 2048, retryMaxRetries: 1, compactionEnabled: false, totalRequests, conservativeReservedCostUsd: reservedCost, note: "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Automatic context compaction is disabled to isolate memory quality; software tests cover integration. Usage costs use catalog prices and are not an invoice.", rows };
 	const serialized = JSON.stringify(report, null, 2);
 	await Bun.write(out, apiKey ? serialized.replaceAll(apiKey, "[redacted]") : serialized);
 };

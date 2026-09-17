@@ -12,7 +12,7 @@ export interface TaskStateItem {
 }
 export interface SummaryClaim { kind: "fact" | "inference" | "plan"; text: string; sources: Evidence[]; }
 export interface TaskCheckpoint { states: TaskStateItem[]; claims: SummaryClaim[]; taskChanged: boolean; }
-export interface AdaptiveCheckpoint extends TaskCheckpoint {
+export interface CompactionCheckpoint extends TaskCheckpoint {
 	version: 1;
 	keptIds: string[];
 	clippedIds: string[];
@@ -83,21 +83,21 @@ export function parseCheckpoint(value: unknown, history: readonly MessageEntry[]
 	return { states, claims, taskChanged: input.taskChanged };
 }
 
-export function validateAdaptive(value: unknown, preceding: readonly SessionEntry[]): AdaptiveCheckpoint {
+export function validateCompactionCheckpoint(value: unknown, preceding: readonly SessionEntry[]): CompactionCheckpoint {
 	const input = object(value);
-	if (input.version !== 1 || !Number.isSafeInteger(input.updates) || Number(input.updates) < 0 || typeof input.rebuildReason !== "string") throw new Error("Invalid adaptive checkpoint version/metadata");
+	if (input.version !== 1 || !Number.isSafeInteger(input.updates) || Number(input.updates) < 0 || typeof input.rebuildReason !== "string") throw new Error("Invalid compaction checkpoint version/metadata");
 	const history = preceding.filter((entry): entry is MessageEntry => entry.type === "message");
 	const previous = [...preceding].reverse().find(entry => entry.type === "compaction");
-	const checkpoint = parseCheckpoint(value, history, previous?.type === "compaction" ? previous.adaptive : undefined);
+	const checkpoint = parseCheckpoint(value, history, previous?.type === "compaction" ? previous.checkpoint : undefined);
 	if (checkpoint.claims.some((claim, index) => claim.kind !== object((input.claims as unknown[])[index]).kind)) throw new Error("Persisted assistant claim is not verified evidence");
 	const keptIds = strings(input.keptIds), clippedIds = strings(input.clippedIds), coveredIds = strings(input.coveredIds);
 	const byId = new Map(history.map(entry => [entry.id, entry]));
-	if (!keptIds.length || keptIds.some(id => !byId.has(id)) || coveredIds.some(id => !byId.has(id)) || clippedIds.some(id => !keptIds.includes(id) || byId.get(id)?.message.role !== "toolResult")) throw new Error("Invalid adaptive projection reference");
-	if (history.filter(entry => keptIds.includes(entry.id)).map(entry => entry.id).join() !== keptIds.join()) throw new Error("Adaptive projection is not chronological");
+	if (!keptIds.length || keptIds.some(id => !byId.has(id)) || coveredIds.some(id => !byId.has(id)) || clippedIds.some(id => !keptIds.includes(id) || byId.get(id)?.message.role !== "toolResult")) throw new Error("Invalid compaction projection reference");
+	if (history.filter(entry => keptIds.includes(entry.id)).map(entry => entry.id).join() !== keptIds.join()) throw new Error("Compaction projection is not chronological");
 	const kept = new Set(keptIds);
 	for (const [index, entry] of history.entries()) for (const block of entry.message.content) if (block.type === "tool_call") {
 		const results = followingResults(history, index).filter(candidate => candidate.message.toolCallId === block.id);
-		if (results.some(result => kept.has(result.id) !== kept.has(entry.id))) throw new Error("Adaptive projection splits a tool interaction");
+		if (results.some(result => kept.has(result.id) !== kept.has(entry.id))) throw new Error("Compaction projection splits a tool interaction");
 	}
 	return { ...checkpoint, version: 1, keptIds, clippedIds, coveredIds, updates: Number(input.updates), rebuildReason: input.rebuildReason };
 }

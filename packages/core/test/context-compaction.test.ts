@@ -1,12 +1,15 @@
 import type { SessionMessage, SessionEvent } from "@forge-agent/protocol";
 import { expect, test } from "bun:test";
-import { createAgent, MemorySessionStorage, type CreateAgentOptions } from "@forge-agent/core/sdk";
+import { createAgent, MemorySessionStorage, SessionStore, type CompactionCheckpoint, type CreateAgentOptions } from "@forge-agent/core/sdk";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { gate, modelResponse } from "./helpers/model-response.ts";
 
 const options = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "task-system", cwd: process.cwd(), maxTokens: 512, contextWindow: 32000, context: { reserveTokens: 1024, keepRecentTokens: 100 } } satisfies CreateAgentOptions;
 const msg = (role: "user" | "assistant", text: string): SessionMessage => ({ role, content: [{ type: "text", text }], timestamp: 1, ...(role === "assistant" ? { stopReason: "stop" } : {}) });
 
-test("SDK restores sourced constraints after adaptive compaction without replacing raw history", async () => {
+test.each([false, true])("SDK restores sourced constraints without replacing raw history; legacy=%s", async legacy => {
 	const storage = new MemorySessionStorage([msg("user", "Do not deploy. Use port 8080."), msg("assistant", "Investigation ".repeat(1500)), msg("user", "Correction: use port 9090. Do not deploy. " + "unrelated background ".repeat(1000)), msg("assistant", "More investigation ".repeat(1500)), msg("user", "Continue debugging")]);
 	const original = await storage.load();
 	const first = original.entries[0]!.id, corrected = original.entries[2]!.id;
@@ -23,9 +26,17 @@ test("SDK restores sourced constraints after adaptive compaction without replaci
 	const settings = { ...options, baseUrl: server.url.toString(), storage };
 	let agent = await createAgent(settings);
 	try {
-		expect((await agent.compact()).status).toBe("complete");
+		const events: SessionEvent[] = [];
+		expect((await agent.compact(undefined, event => events.push(event))).status).toBe("complete");
+		expect(events.some(event => event.type === "compaction" && event.phase === "end" && event.action)).toBe(true);
+		expect(events.some(event => "strategy" in event)).toBe(false);
+		const saved = await storage.load(), latest = saved.entries.at(-1)!;
+		expect(latest.type === "compaction" && latest.checkpoint).toBeTruthy();
+		expect("adaptive" in latest).toBe(false);
 		expect((await storage.load()).entries.slice(0, original.entries.length)).toEqual(original.entries);
-		await agent.dispose(); agent = await createAgent(settings);
+		await agent.dispose();
+		const reopenedStorage = legacy ? new MemorySessionStorage(JSON.parse(JSON.stringify(saved).replaceAll('"checkpoint":', '"adaptive":'))) : storage;
+		agent = await createAgent({ ...settings, storage: reopenedStorage });
 		for await (const _event of agent.runTurn("Proceed")) { }
 		const task = requests.at(-1)!;
 		expect(task).toContain("Do not deploy."); expect(task).toContain("9090");
@@ -33,7 +44,36 @@ test("SDK restores sourced constraints after adaptive compaction without replaci
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("adaptive rejects oversized summary input before sending any request", async () => {
+test.each(["valid", "version", "evidence", "ambiguous"])("file storage reads the former checkpoint field without rewriting history: %s", async mode => {
+	const directory = await mkdtemp(join(tmpdir(), "forge-compaction-rename-"));
+	const path = join(directory, "session.jsonl");
+	const history = await new MemorySessionStorage([msg("user", "Do not deploy.")]).load();
+	const source = history.entries[0]!;
+	const checkpoint = { version: 1, states: [{ id: "rule", kind: "constraint", text: "Do not deploy.", status: "active", sources: [{ entryId: source.id, quote: mode === "evidence" ? "Deploy now" : "Do not deploy." }], supersedes: [] }], claims: [], taskChanged: false, keptIds: [source.id], clippedIds: [], coveredIds: [source.id], updates: 0, rebuildReason: "initial" } satisfies CompactionCheckpoint;
+	const record = { type: "compaction", id: "old-checkpoint", parentId: source.id, timestamp: source.timestamp, summary: "Saved constraints", firstKeptEntryId: source.id, tokensBefore: 100, adaptive: mode === "version" ? { ...checkpoint, version: 999 } : checkpoint, ...(mode === "ambiguous" ? { checkpoint } : {}) };
+	const original = [{ type: "session", version: 4, id: "rename-test", timestamp: source.timestamp, cwd: directory }, ...history.entries, record].map(entry => JSON.stringify(entry)).join("\n") + "\n";
+	try {
+		await writeFile(path, original);
+		if (mode === "valid") {
+			const store = await SessionStore.open(path, directory, { create: false });
+			const entry = store.getEntry(record.id)!;
+			expect(entry.type === "compaction" && entry.checkpoint).toEqual(checkpoint);
+			expect("adaptive" in entry).toBe(false);
+			expect(await readFile(path, "utf8")).toBe(original);
+			await store.append({ ...entry, id: "new-checkpoint", parentId: entry.id });
+			const text = await readFile(path, "utf8");
+			expect(text.startsWith(original)).toBe(true);
+			expect(text.slice(original.length)).toContain('"checkpoint":');
+			expect(text.slice(original.length)).not.toContain('"adaptive":');
+			expect((await SessionStore.open(path, directory, { create: false })).getLeafId()).toBe("new-checkpoint");
+		} else {
+			await expect(SessionStore.open(path, directory, { create: false })).rejects.toThrow(mode === "ambiguous" ? "Ambiguous" : mode === "version" ? "version" : "evidence");
+			expect(await readFile(path, "utf8")).toBe(original);
+		}
+	} finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("compaction rejects oversized summary input before sending any request", async () => {
 	const storage = new MemorySessionStorage([msg("user", "keep constraint"), msg("assistant", "huge ".repeat(20000)), msg("user", "Continue")]);
 	let requests = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
@@ -42,7 +82,7 @@ test("adaptive rejects oversized summary input before sending any request", asyn
 	finally { await agent.dispose(); server.stop(true); }
 });
 
-test("adaptive clips recoverable old tool output with zero summary calls", async () => {
+test("compaction clips recoverable old tool output with zero summary calls", async () => {
 	const history: SessionMessage[] = [msg("user", "Inspect build"), { role: "assistant", timestamp: 2, stopReason: "tool_use", content: [{ type: "tool_call", id: "build", name: "read", arguments: { path: "build.log" } }] }, { role: "toolResult", toolCallId: "build", toolName: "read", timestamp: 3, content: [{ type: "text", text: "Build detail ".repeat(4000) }] }, msg("user", "What next?")];
 	const storage = new MemorySessionStorage(history); let requests = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
@@ -130,7 +170,7 @@ test("oversized protected context stops automatic task dispatch instead of loopi
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("canceling an adaptive summary leaves the previous persisted view intact", async () => {
+test("canceling a compaction summary leaves the previous persisted view intact", async () => {
 	const storage = new MemorySessionStorage([msg("user", "Do not deploy"), msg("assistant", "notes ".repeat(3000)), msg("user", "continue")]);
 	const before = await storage.load(), started = gate(), release = gate(); let calls = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch() { calls++; started.resolve(); await release.promise; return modelResponse(); } });
@@ -139,7 +179,7 @@ test("canceling an adaptive summary leaves the previous persisted view intact", 
 	finally { release.resolve(); await agent.dispose(); server.stop(true); }
 });
 
-test("adaptive enforces a shared four-request cap including retries", async () => {
+test("compaction enforces a shared four-request cap including retries", async () => {
 	const storage = new MemorySessionStorage([msg("user", "constraint"), msg("assistant", "notes ".repeat(3000)), msg("user", "continue")]);
 	let calls = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return new Response(JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "overloaded" } }), { status: 529 }); } });
@@ -172,11 +212,11 @@ test.each(["removed", "rewritten", "version"] as const)("reopening rejects %s pe
 	try {
 		expect((await agent.compact()).status).toBe("complete"); await agent.dispose();
 		const saved = await storage.load(); const latest = saved.entries.at(-1)!;
-		if (latest.type !== "compaction" || !latest.adaptive) throw new Error("Expected adaptive checkpoint");
+		if (latest.type !== "compaction" || !latest.checkpoint) throw new Error("Expected compaction checkpoint");
 		const broken = structuredClone(latest); broken.id = "broken"; broken.parentId = latest.id;
-		if (mode === "removed") broken.adaptive!.states = [];
-		else if (mode === "rewritten") broken.adaptive!.states[0]!.text = "Deploy now";
-		else Object.assign(broken.adaptive!, { version: 999 });
+		if (mode === "removed") broken.checkpoint!.states = [];
+		else if (mode === "rewritten") broken.checkpoint!.states[0]!.text = "Deploy now";
+		else Object.assign(broken.checkpoint!, { version: 999 });
 		await storage.append(broken);
 		await expect(createAgent(settings)).rejects.toThrow(mode === "version" ? "version" : "silently");
 	} finally { await agent.dispose(); server.stop(true); }
@@ -192,7 +232,7 @@ test("identical assistant text with different timestamps is deduplicated without
 	finally { await agent.dispose(); server.stop(true); }
 });
 
-test("adaptive reserves provider thinking tokens before dispatch", async () => {
+test("compaction reserves provider thinking tokens before dispatch", async () => {
 	let calls = 0;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return modelResponse(); } });
 	const agent = await createAgent({ ...options, contextWindow: 11000, thinkingLevel: "medium", baseUrl: server.url.toString() });
@@ -304,7 +344,7 @@ test("search tool conflicts are atomic across creation and configuration updates
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test.each([undefined, {}])("SDK defaults to adaptive tools and output budget with context=%j", async context => {
+test.each([undefined, {}])("SDK defaults to context lookup tools and output budget with context=%j", async context => {
 	const requests: Array<{ max_tokens?: number; tools?: Array<{ name: string }> }> = [];
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.json() as typeof requests[number]); return modelResponse(); } });
 	const agent = await createAgent({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", cwd: process.cwd(), systemPrompt: "default policy", ...(context ? { context } : {}), thinkingLevel: "off", baseUrl: server.url.toString() });

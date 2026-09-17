@@ -35,7 +35,7 @@ const memory = {
 
 CLI 默认将记忆工具作为内建允许项，仍受前置 hooks/rules 约束；`permissionMode: "deny-all"` 不添加记忆写入/删除允许项，保留既有只读策略。显式 `/memory` 管理不依赖模型授权。
 
-`ContextAssembler` 将 scope/path/version 标记的记忆作为参考消息装配，未持久化为用户消息，不成为 system 指令。索引及固定笔记总注入不超过 `min(2000 tokens, 输入预算 5%, 当前剩余预算)`，沿用当前字符估算与 adaptive 窗口余量；详情工具结果、system、schema、当前消息仍计入统一 usage。新输入/steering 和受管理写入后刷新投影。固定正文放不下会明确报告，不静默截断。`memory` projection 事件返回 selected、tokens、truncated、warnings；工具结果与现有模型 usage 提供写入、调用和费用证据。首版没有额外整理模型、后台计时器或退出扫描。
+`ContextAssembler` 将 scope/path/version 标记的记忆作为参考消息装配，未持久化为用户消息，不成为 system 指令。索引及固定笔记总注入不超过 `min(2000 tokens, 输入预算 5%, 当前剩余预算)`，沿用当前字符估算与上下文压缩窗口余量；详情工具结果、system、schema、当前消息仍计入统一 usage。新输入/steering 和受管理写入后刷新投影。固定正文放不下会明确报告，不静默截断。`memory` projection 事件返回 selected、tokens、truncated、warnings；工具结果与现有模型 usage 提供写入、调用和费用证据。首版没有额外整理模型、后台计时器或退出扫描。
 
 每次请求边界检查固定清单、索引、固定文件及链接目标的磁盘 revision，变化后重读投影；同一轮中的外部编辑和删除也会刷新下一次请求。已发送的请求和当前历史原文不会被追溯修改。
 
@@ -101,33 +101,33 @@ interface SessionStorage {
 
 ## 上下文管理
 
-上下文管理统一使用 adaptive：[ADR-018](decisions/018-adaptive-default.md) 的带证据短检查点、相关性选择、历史搜索/读取与请求预算。旧 pi 策略及 `context.strategy` 已删除，传入该字段会报错；省略 `context` 或传 `{}` 即使用增强策略。
+上下文压缩提供带证据短检查点、相关性选择、历史搜索/读取与请求预算，见 [ADR-018](decisions/018-adaptive-default.md)。旧 pi 策略及 `context.strategy` 已删除，传入该字段会报错；省略 `context` 或传 `{}` 即启用上下文压缩。
 
 CLI 配置与 SDK 创建选项均支持 `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }`，默认分别为 `true`、`16384`、`20000`、`"inherit"`。SDK 可在空闲时通过 `configureContext` 更新。搜索和读取仍需宿主权限允许，启用压缩不授予权限。
 
-### Adaptive：状态与预算
+### 上下文压缩：状态与预算
 
-增强策略保留未归档用户输入及最新完整交互单元，先尝试裁剪可找回的旧工具正文和选择相关材料；需要时由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
+上下文压缩保留未归档用户输入及最新完整交互单元，先尝试裁剪可找回的旧工具正文和选择相关材料；需要时由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
 
-adaptive 发送给任务模型的检查点采用短投影：状态/结论的类型、完整文本与去重的来源 entryId；完整 quote、状态 ID 和替代关系继续保存在本地检查点，降级 summary 也保留完整版本。执行结果 ledger 不省略。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。
+上下文压缩发送给任务模型的检查点采用短投影：状态/结论的类型、完整文本与去重的来源 entryId；完整 quote、状态 ID 和替代关系继续保存在本地检查点，降级 summary 也保留完整版本。执行结果 ledger 不省略。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。
 
-增强压缩在第 4 次增量更新、任务切换或无效检查点/无进展时尝试从原文重建；每次操作最多 2 次逻辑生成、4 次实际模型请求（包括临时重试）。超大摘要输入、保护状态放不下、引用无效或最终无进展均返回错误，不发布损坏检查点；自动路径阻止该次过预算任务请求，取消和存储失败继续遵循既有生命周期。
+上下文压缩在第 4 次增量更新、任务切换或无效检查点/无进展时尝试从原文重建；每次操作最多 2 次逻辑生成、4 次实际模型请求（包括临时重试）。超大摘要输入、保护状态放不下、引用无效或最终无进展均返回错误，不发布损坏检查点；自动路径阻止该次过预算任务请求，取消和存储失败继续遵循既有生命周期。
 
-`adaptive` 的 task `maxTokens` 未指定时显式取 `min(4096, model.maxTokens)`。预算包括 system、工具定义、状态、摘要与消息，预留 `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`；有效输出计入适用 provider 的额外 thinking 预算。启发式计数不保证供应商物理窗口一定足够。摘要输入也单独预检，输出最多 4096 tokens（还受模型和窗口限制）。
+上下文压缩中，task `maxTokens` 未指定时显式取 `min(4096, model.maxTokens)`。预算包括 system、工具定义、状态、摘要与消息，预留 `max(reserveTokens, effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))`；有效输出计入适用 provider 的额外 thinking 预算。启发式计数不保证供应商物理窗口一定足够。摘要输入也单独预检，输出最多 4096 tokens（还受模型和窗口限制）。
 
 ### 查找与读取历史
 
-增强策略注册保留工具名 `read_context`。它经过现有权限和 tool hooks，只能读取当前分支已保存消息；宿主同名工具配置会被拒绝。输入 `entryId`、`offset`（默认 0）和 `limit`（默认/最大 4096）以 Unicode code point 为单位；正文最多 16 KiB，`nextOffset` 支持长单行续读。元数据也计入后续上下文。图片只报告占位，无法找回工具原先未保存的正文；不存在、越界或外分支引用明确报错。需要自动找回的宿主应通过已有 permission 配置允许该工具。
+上下文压缩注册保留工具名 `read_context`。它经过现有权限和 tool hooks，只能读取当前分支已保存消息；宿主同名工具配置会被拒绝。输入 `entryId`、`offset`（默认 0）和 `limit`（默认/最大 4096）以 Unicode code point 为单位；正文最多 16 KiB，`nextOffset` 支持长单行续读。元数据也计入后续上下文。图片只报告占位，无法找回工具原先未保存的正文；不存在、越界或外分支引用明确报错。需要自动找回的宿主应通过已有 permission 配置允许该工具。
 
 `search_context` 是另一个保留工具名，允许模型在不知道 entryId 时搜索当前分支历史。输入 `query`（1–200 Unicode code points，空白分词且最多 8 项，全部字面词项都需命中，大小写不敏感）、可选 `role`（user/assistant/toolResult）和 `limit`（默认 5、最大 10）。结果从新到旧，含 `entryId`、`role`、`isError`、Unicode `offset` 和最多 256 code points 的预览，另有 `hasMore`。用 `read_context` 加载完整原文；“最新”仅指分支顺序，不判断语义上的最新决定。为避免回显，搜索排除这两个检索工具的结果及包含其调用的 assistant 消息；仍可按 ID 读取这些记录。搜索不跨分支、会话或文件，不使用额外模型；同样需要 permission 允许且经过 tool hooks。新增 schema/找回会增加输入，不能保证每个场景净省 Token。
 
 ### 兼容与事件
 
-增强 compaction 使用 v4 记录的可选 `adaptive` 版本化载荷；重开时验证引用与状态替代关系。无增强载荷的旧历史默认从原始分支消息恢复 adaptive 视图，不沿用旧 pi 摘要，也不因预算或提取失败自动回退 pi。不再提供策略切换。自动压缩关闭不移除原文工具，也不禁用手动压缩。
+v4 `compaction` 记录使用可选、版本化的 `checkpoint` 载荷，SDK 导出 `CompactionCheckpoint` 类型。重开时验证引用与状态替代关系。旧 v4 记录的 `adaptive` 字段在读取时转换为 `checkpoint`，不重写原始文件；新记录只写 `checkpoint`。同时出现两种字段会报错，不保留旧 SDK 类型别名。无检查点载荷的旧历史从原始分支消息恢复模型上下文，不沿用旧 pi 摘要，也不因预算或提取失败自动回退 pi。自动压缩关闭不移除原文工具，也不禁用手动压缩。
 
-增强 `compaction` 事件补充 `strategy`、`action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。
+`compaction` 事件提供 `action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`，不再提供 `strategy`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。
 
-当前短投影的软件验证和费用估算边界见[后续验证记录](phases/context-notes-search.md)；不要将首次 adaptive 的旧保留集结果视为新投影的质量验收。
+当前短投影的软件验证和费用估算边界见[后续验证记录](phases/context-notes-search.md)；不要将首次上下文压缩的旧保留集结果视为新投影的质量验收。
 
 ### 自动压缩与恢复
 

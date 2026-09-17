@@ -1,5 +1,5 @@
 import type { SessionMessage } from "@forge-agent/protocol";
-import { selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
+import { normalizeSessionEntry, selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -39,7 +39,7 @@ function parseSession(text: string, allowOld = false): { header: SessionHeader; 
 		if (entry.type === "compaction" && (typeof entry.summary !== "string" || typeof entry.firstKeptEntryId !== "string" || !Number.isFinite(entry.tokensBefore))) throw new Error("Invalid compaction record");
 		ids.add(entry.id);
 	}
-	return { header, entries, diagnostics, appendable: diagnostics.length === 0 && text.endsWith("\n") };
+	return { header, entries: entries.map(normalizeSessionEntry), diagnostics, appendable: diagnostics.length === 0 && text.endsWith("\n") };
 }
 
 export class SessionStore implements SessionStorage {

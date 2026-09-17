@@ -1,5 +1,5 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
-import { validateAdaptive, type AdaptiveCheckpoint } from "./context/checkpoint.ts";
+import { validateCompactionCheckpoint, type CompactionCheckpoint } from "./context/checkpoint.ts";
 import { randomUUID } from "node:crypto";
 
 interface EntryIdentity {
@@ -12,7 +12,7 @@ export interface MessageEntry extends EntryIdentity {
 	message: SessionMessage;
 }
 export interface CompactionEntry extends EntryIdentity {
-	adaptive?: AdaptiveCheckpoint;
+	checkpoint?: CompactionCheckpoint;
 	type: "compaction";
 	summary: string;
 	firstKeptEntryId: string;
@@ -30,6 +30,14 @@ export interface SessionStorage {
 	append(entry: SessionEntry): Promise<void>;
 }
 
+/** Read the former v4 field name without retaining it in current records. */
+export function normalizeSessionEntry(entry: SessionEntry): SessionEntry {
+	if (entry.type !== "compaction" || !("adaptive" in entry)) return entry;
+	if (entry.checkpoint !== undefined) throw new Error("Ambiguous compaction checkpoint fields");
+	const { adaptive, ...record } = entry;
+	return { ...record, checkpoint: adaptive as CompactionCheckpoint };
+}
+
 export function messageEntry(message: SessionMessage, parentId: string | null): MessageEntry {
 	return { type: "message", id: randomUUID(), parentId, timestamp: new Date(message.timestamp).toISOString(), message: structuredClone(message) };
 }
@@ -45,7 +53,7 @@ export function selectedBranch(state: SessionState): SessionEntry[] {
 		visited.add(id);
 		const entry = byId.get(id);
 		if (!entry) throw new Error(`Session entry ${id} not found`);
-		branch.push(entry);
+		branch.push(normalizeSessionEntry(entry));
 		id = entry.parentId;
 	}
 	branch.reverse();
@@ -55,7 +63,7 @@ export function selectedBranch(state: SessionState): SessionEntry[] {
 		const boundary = branch.findIndex((candidate) => candidate.id === entry.firstKeptEntryId);
 		const kept = branch[boundary];
 		if (boundary < previousBoundary || boundary < 0 || boundary >= index || kept?.type !== "message" || kept.message.role === "toolResult") throw new Error("Invalid compaction retained boundary in selected branch");
-		if (entry.adaptive !== undefined) validateAdaptive(entry.adaptive, branch.slice(0, index));
+		if (entry.checkpoint !== undefined) validateCompactionCheckpoint(entry.checkpoint, branch.slice(0, index));
 		previousBoundary = boundary;
 	}
 	return branch;

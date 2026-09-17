@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Synthetic records exercise reporting contracts only, never model quality.
-for (const comparison of [false, true]) test(`context report requires every run in its declared strategy set; comparison=${comparison}`, async () => {
+for (const format of ["current", "legacy-single", "legacy-comparison"]) test(`context report requires every run in its declared strategy set; format=${format}`, async () => {
+	const comparison = format === "legacy-comparison";
 	const directory = await mkdtemp(join(tmpdir(), "forge-context-report-"));
 	const input = join(directory, "input");
 	const output = join(directory, "report.json");
 	const fixtureText = await Bun.file(new URL("./fixtures/context-tasks-v2.json", import.meta.url)).text();
 	const fixture = JSON.parse(fixtureText) as { cases: Array<{ id: string; split: string; port: number; marker: string; target: string }> };
-	const strategies = comparison ? ["pi", "adaptive"] : ["adaptive"];
+	const strategies = comparison ? ["pi", "adaptive"] : [format === "current" ? "compaction" : "adaptive"];
 	const rows = fixture.cases.filter(task => task.split === "holdout").flatMap(task => strategies.flatMap(strategy => Array.from({ length: 3 }, (_, repeat) => ({
 		task: task.id, repeat, strategy, completed: true, constraintPass: true,
 		checks: { noNewEffects: true, deploymentState: true, latestPort: true, exactMarker: true, latestTarget: true, recordedState: true },

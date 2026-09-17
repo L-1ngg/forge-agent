@@ -5,6 +5,7 @@ created: 2026-09-07
 
 # ADR-014: 对齐 Pi 的上下文管理
 
+> 命名更新(2026-09-17)：后续实现统一称为上下文压缩；本文保留当时策略名称，当前入口见 [ADR-018](018-adaptive-default.md)。
 > 状态:已实现并完成本地自动化及受控真实任务验收，未推送或发布(2026-09-07)；见[实现证据](../phases/context-management-acceptance.md)。
 > 参与者:operator、Codex。
 

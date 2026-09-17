@@ -104,7 +104,7 @@ test("explicit memory import reads only a bounded selected project session witho
 	} finally { await host.dispose(); await rm(cwd, { recursive: true, force: true }); }
 });
 
-test("default adaptive resume reconstructs old pi sessions from original history", async () => {
+test("session resume reconstructs old pi sessions from original history", async () => {
 	const { SessionStore, messageEntry } = await import("@forge-agent/core");
 	const { modelResponse } = await import("../../core/test/helpers/model-response.ts");
 	const cwd = await mkdtemp(join(tmpdir(), "forge-resume-summary-"));

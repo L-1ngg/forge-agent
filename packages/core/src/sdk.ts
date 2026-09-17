@@ -7,7 +7,7 @@ export type { SessionState, SessionEntry, MessageEntry, CompactionEntry } from "
 export type { PermissionContext } from "./permission/index.ts";
 export type { UsageTruthPoint } from "./usage.ts";
 export type { ContextSettings, CompactionResult, RetryPolicy } from "./context/compaction.ts";
-export type { AdaptiveCheckpoint, TaskCheckpoint, TaskStateItem, SummaryClaim, Evidence } from "./context/checkpoint.ts";
+export type { CompactionCheckpoint, TaskCheckpoint, TaskStateItem, SummaryClaim, Evidence } from "./context/checkpoint.ts";
 
 export { createAgent } from "./agent.ts";
 export { LongTermMemory, type MemoryScope, type MemorySource, type MemoryWrite, type MemoryRead } from "./memory/store.ts";

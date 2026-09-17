@@ -10,7 +10,7 @@ import { contextSearcher } from "./context/search-context.ts";
 import { MemorySessionStorage, messageEntry, projectMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { randomUUID } from "node:crypto";
 import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionReason, type CompactionResult, type ContextSettings, buildContext } from "./context/compaction.ts";
-import { compactAdaptive, adaptiveInputBudget, type AdaptiveMetrics } from "./context/adaptive.ts";
+import { compactContext, compactionInputBudget, type CompactionMetrics } from "./context/compact.ts";
 import { UsageTracker, estimateContextTokens } from "./usage.ts";
 import { MemoryTools, MEMORY_TOOL_NAMES } from "./memory/tools.ts";
 import { selectedBranch } from "./session-storage.ts";
@@ -82,7 +82,7 @@ export class AgentSession implements AgentPort {
 			transformContext: async (messages, signal) => {
 				signal?.throwIfAborted();
 				await this.assembleMemory(signal); this.syncUsage();
-				const limit = adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens);
+				const limit = compactionInputBudget(this.contextBudget(), this.settings.reserveTokens);
 				if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > limit) {
 					const result = await this.compactContext("threshold", signal ?? this.runController!.signal, this.emit);
 					if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
@@ -95,7 +95,7 @@ export class AgentSession implements AgentPort {
 			streamFn: (model, context, settings) => {
 				settings?.signal?.throwIfAborted();
 				this.responseDriver = this.driver;
-				return this.options.stream(model, context, { ...settings, maxRetries: 0, maxTokens: this.adaptiveMaxTokens() });
+				return this.options.stream(model, context, { ...settings, maxRetries: 0, maxTokens: this.taskMaxTokens() });
 			},
 		});
 		this.runtime.subscribe(async event => {
@@ -187,16 +187,16 @@ export class AgentSession implements AgentPort {
 	getUsage() { return this.usage.snapshot(); }
 	getMemoryBudget(): number {
 		if (this.options.memory?.injection === false) return 0;
-		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.adaptiveBudget().fixedText, adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens));
+		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.contextBudget().fixedText, compactionInputBudget(this.contextBudget(), this.settings.reserveTokens));
 	}
 	private syncUsage(): void {
-		this.usage.setContext({ messages: [...this.assembler.projection.messages, ...projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))], contextWindow: this.options.contextWindow ?? this.options.model.contextWindow, identity: JSON.stringify([this.options.model, this.options.systemPrompt, this.options.thinkingLevel, this.options.tools, this.assembler.projection.messages]), fixedText: this.adaptiveBudget().fixedText });
+		this.usage.setContext({ messages: [...this.assembler.projection.messages, ...projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))], contextWindow: this.options.contextWindow ?? this.options.model.contextWindow, identity: JSON.stringify([this.options.model, this.options.systemPrompt, this.options.thinkingLevel, this.options.tools, this.assembler.projection.messages]), fixedText: this.contextBudget().fixedText });
 	}
 	private async assembleMemory(signal?: AbortSignal): Promise<void> {
 		const messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
 		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
 		const before = JSON.stringify(this.assembler.projection);
-		const projection = await this.assembler.assemble(messages, this.adaptiveBudget().fixedText, adaptiveInputBudget(this.adaptiveBudget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
+		const projection = await this.assembler.assemble(messages, this.contextBudget().fixedText, compactionInputBudget(this.contextBudget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
 		if (JSON.stringify(projection) !== before) {
 			this.usage.invalidate();
 			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
@@ -205,14 +205,14 @@ export class AgentSession implements AgentPort {
 	private prepareTools(): SessionToolset {
 		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
 		if (this.memoryTools && this.options.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
-		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
+		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
 		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
 		if (this.running || this.compactController) throw new Error("Cannot configure context during execution");
 		const next = { ...this.settings, ...settings };
 		if ("strategy" in next || !Number.isInteger(next.reserveTokens) || next.reserveTokens < 1 || !Number.isInteger(next.keepRecentTokens) || next.keepRecentTokens < 1 || typeof next.enabled !== "boolean" || !["inherit", "off"].includes(next.summaryReasoning)) throw new Error("Invalid context settings");
-		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
+		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
 		this.settings = next;
 		if (this.runtime) {
 			this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
@@ -233,22 +233,22 @@ export class AgentSession implements AgentPort {
 		try { return await this.compactContext("manual", controller.signal, emit, instructions); }
 		finally { signal?.removeEventListener("abort", abort); this.compactController = undefined; this.applyConfigurations(); }
 	}
-	private adaptiveMaxTokens(): number { return this.options.maxTokens ?? Math.min(4096, this.options.model.maxTokens || 4096); }
-	private adaptiveBudget() {
-		return { window: this.options.contextWindow ?? this.options.model.contextWindow, output: this.driver.outputTokens?.(this.adaptiveMaxTokens(), "inherit") ?? this.adaptiveMaxTokens(), fixedText: this.options.systemPrompt + JSON.stringify(this.runtime.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }))) };
+	private taskMaxTokens(): number { return this.options.maxTokens ?? Math.min(4096, this.options.model.maxTokens || 4096); }
+	private contextBudget() {
+		return { window: this.options.contextWindow ?? this.options.model.contextWindow, output: this.driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: this.options.systemPrompt + JSON.stringify(this.runtime.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }))) };
 	}
 	private async compactContext(reason: CompactionReason, signal: AbortSignal, emit: (event: SessionEvent) => void, instructions?: string): Promise<CompactionResult> {
 		const operationId = randomUUID();
 		this.syncUsage();
-		const beforeTokens = estimateContextTokens(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))) + Math.ceil(this.adaptiveBudget().fixedText.length / 4);
-		let adaptiveMetrics: AdaptiveMetrics | undefined;
-		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...adaptiveMetrics, ...extra });
+		const beforeTokens = estimateContextTokens(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))) + Math.ceil(this.contextBudget().fixedText.length / 4);
+		let compactionMetrics: CompactionMetrics | undefined;
+		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...compactionMetrics, ...extra });
 		try {
 			signal.throwIfAborted();
 			event("start");
-			const result = await compactAdaptive(this.state, this.settings, this.driver, this.adaptiveBudget(), beforeTokens, signal, details => {
-				const changed = details.modelCalls !== (adaptiveMetrics?.modelCalls ?? 0);
-				adaptiveMetrics = details;
+			const result = await compactContext(this.state, this.settings, this.driver, this.contextBudget(), beforeTokens, signal, details => {
+				const changed = details.modelCalls !== (compactionMetrics?.modelCalls ?? 0);
+				compactionMetrics = details;
 				if (changed) emit({ type: "compaction", phase: "attempt", operationId, reason, beforeTokens, timestamp: Date.now(), ...details });
 			}, instructions);
 			signal.throwIfAborted();
@@ -256,7 +256,7 @@ export class AgentSession implements AgentPort {
 			this.runtime.state.messages = buildContext(this.state).map(message => fromSessionMessage(message, this.options.model));
 			this.usage.invalidate(); this.syncUsage();
 			const afterTokens = this.getUsage().contextTokens ?? result.afterTokens;
-			emit({ type: "compaction", phase: "end", operationId, reason, beforeTokens, afterTokens, timestamp: Date.now(), ...adaptiveMetrics });
+			emit({ type: "compaction", phase: "end", operationId, reason, beforeTokens, afterTokens, timestamp: Date.now(), ...compactionMetrics });
 			return { status: "complete", operationId, beforeTokens, afterTokens };
 		} catch (error) {
 			if (this.failure !== undefined) throw error;
@@ -339,7 +339,7 @@ export class AgentSession implements AgentPort {
 		const captured = { ...patch, ...(patch.tools ? { tools: patch.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
-			if (captured.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by adaptive context");
+			if (captured.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
 			if (this.memoryTools && captured.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
 			const assembly = await this.prepareConfiguration(captured);
 			this.assertHealthy();

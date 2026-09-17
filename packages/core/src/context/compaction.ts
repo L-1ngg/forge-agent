@@ -1,6 +1,6 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { selectedBranch, type SessionState } from "../session-storage.ts";
-import { adaptiveMessages } from "./adaptive.ts";
+import { compactedMessages } from "./compact.ts";
 
 export interface ContextSettings { enabled: boolean; reserveTokens: number; keepRecentTokens: number; summaryReasoning: "inherit" | "off"; }
 export const DEFAULT_CONTEXT: ContextSettings = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, summaryReasoning: "inherit" };
@@ -30,7 +30,7 @@ export interface SummaryDriver {
 }
 export function buildContext(state: SessionState): SessionMessage[] {
 	const branch = selectedBranch(state);
-	if ([...branch].reverse().find(entry => entry.type === "compaction")?.adaptive) return adaptiveMessages(state);
+	if ([...branch].reverse().find(entry => entry.type === "compaction")?.checkpoint) return compactedMessages(state);
 	return structuredClone(branch.flatMap(entry => entry.type === "message" ? [entry.message] : []));
 }
 

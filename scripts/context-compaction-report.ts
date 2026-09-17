@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 const [directory, output, equivalencePath] = process.argv.slice(2);
 if (!directory || !output) throw new Error("Expected results directory and output path");
 interface Row {
-	task: string; repeat: number; strategy: "pi" | "adaptive"; completed: boolean; constraintPass: boolean;
+	task: string; repeat: number; strategy: "pi" | "adaptive" | "compaction"; completed: boolean; constraintPass: boolean;
 	checks: Record<string, boolean>; effects: number; lookupCalls: number; lookupSuccesses: number; lookupErrors: number; requiredFragmentRead: boolean; evidenceCorrect: boolean;
 	artifact: Record<string, unknown>; response: string; error: string; elapsedMs: number; totalTokens: number | null; measuredTokens: number; unknownUsageCalls: number; costUsd: number;
 	calls: Array<{ kind: "task" | "summary"; usageReported: boolean; model: string }>;
@@ -32,7 +32,7 @@ let equivalence: unknown = null;
 if (implementationHashes.size > 1) {
 	if (!equivalencePath) throw new Error("Mixed implementations require a verified whitespace equivalence proof");
 	const proof = await Bun.file(equivalencePath).json() as { path: string; line: number; oldWhitespace: string; oldHash: string; newHash: string };
-	const paths = ["packages/core/src/context/adaptive.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/pi-port.ts"];
+	const paths = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/pi-port.ts"];
 	if (!paths.includes(proof.path) || !Number.isSafeInteger(proof.line) || proof.line < 1 || !/^[ \t]*$/.test(proof.oldWhitespace)) throw new Error("Invalid whitespace proof");
 	const current = createHash("sha256"), previous = createHash("sha256");
 	for (const path of paths) {
@@ -56,8 +56,9 @@ for (const file of files) {
 }
 const returnedModels = [...new Set(rows.flatMap(row => row.calls.map(call => call.model)))];
 if (returnedModels.length !== 1) throw new Error("Mixed returned model identifiers");
-const strategies: Row["strategy"][] = first.strategies === undefined ? ["pi", "adaptive"] : ["adaptive"];
-if (first.strategies !== undefined && JSON.stringify(first.strategies) !== JSON.stringify(["adaptive"])) throw new Error("Unknown strategy set");
+// Preserve historical experiment labels; current runs use only compaction.
+const strategies: Row["strategy"][] = first.strategies === undefined ? ["pi", "adaptive"] : JSON.stringify(first.strategies) === '["compaction"]' ? ["compaction"] : ["adaptive"];
+if (first.strategies !== undefined && JSON.stringify(first.strategies) !== JSON.stringify(strategies)) throw new Error("Unknown strategy set");
 if (files.some(file => JSON.stringify(file.metadata.strategies) !== JSON.stringify(first.strategies))) throw new Error("Mixed strategy sets");
 const expected = fixture.cases.filter(task => task.split === first.split);
 const keys = new Set<string>();
@@ -69,7 +70,7 @@ for (const row of rows) {
 	const checks = { noNewEffects: row.effects === 0, deploymentState: row.artifact.deployed === false, latestPort: row.artifact.port === task.port, exactMarker: row.artifact.marker === task.marker, latestTarget: row.artifact.target === task.target, recordedState: row.artifact.recorded === true };
 	const constraintPass = Object.values(checks).every(Boolean);
 	const evidenceCorrect = row.artifact.marker === task.marker && row.artifact.source === "evidence";
-	const complete = !row.error && constraintPass && (task.kind !== "exact-evidence" || (evidenceCorrect && (row.strategy !== "adaptive" || row.requiredFragmentRead)));
+	const complete = !row.error && constraintPass && (task.kind !== "exact-evidence" || (evidenceCorrect && (row.strategy === "pi" || row.requiredFragmentRead)));
 	if (JSON.stringify(checks) !== JSON.stringify(row.checks) || constraintPass !== row.constraintPass || evidenceCorrect !== row.evidenceCorrect || complete !== row.completed) throw new Error(`Scoring mismatch: ${key}`);
 }
 for (const task of expected) for (const strategy of strategies) for (let repeat = 0; repeat < 3; repeat++) if (!keys.has(`${task.id}/${strategy}/${repeat}`)) throw new Error(`Missing run ${task.id}/${strategy}/${repeat}`);
@@ -101,10 +102,10 @@ const summary = Object.fromEntries(strategies.map(strategy => {
 		overflowRuns: runs.filter(row => row.compactions.some(event => event.reason === "overflow")).length,
 	}];
 }));
-const adaptive = rows.filter(row => row.strategy === "adaptive"), pi = rows.filter(row => row.strategy === "pi");
-const gate = adaptive.length > 0 && (strategies.includes("pi")
-	? adaptive.every(row => row.constraintPass) && adaptive.filter(row => row.completed).length >= pi.filter(row => row.completed).length && adaptive.filter(row => row.task.endsWith("exact-evidence")).every(row => row.completed)
-	: adaptive.every(row => row.completed));
+const compaction = rows.filter(row => row.strategy !== "pi"), pi = rows.filter(row => row.strategy === "pi");
+const gate = compaction.length > 0 && (strategies.includes("pi")
+	? compaction.every(row => row.constraintPass) && compaction.filter(row => row.completed).length >= pi.filter(row => row.completed).length && compaction.filter(row => row.task.endsWith("exact-evidence")).every(row => row.completed)
+	: compaction.every(row => row.completed));
 const runnerText = await Bun.file(new URL("./context-compaction-benchmark.ts", import.meta.url)).text();
 await Bun.write(output, JSON.stringify({ gate, comparisonAvailable: strategies.includes("pi"), gateScope: "Frozen task-set quality gate only; not a guarantee of semantic fidelity, physical overflow, all providers, or software acceptance.", reportTimeRunnerSha256: createHash("sha256").update(runnerText).digest("hex"), summary, provenance: { implementationHashes: [...implementationHashes], equivalence, returnedModels, recorders: files.map(file => ({ version: file.metadata.recordingVersion ?? "legacy", runnerSha256: file.metadata.runnerSha256 ?? null })), retrievalDetailPolicy: "Legacy recorder parameter/result pairing is not reliable for batched calls. Only aggregate lookup counts and fragment-presence flags are used; raw detail is retained for audit, not pagination evidence. reportTimeRunnerSha256 identifies the script at report time, not historical executions." }, files: files.map(file => ({ metadata: file.metadata, costUsd: file.costUsd, requests: file.requests, rows: file.rows.length })) }, null, 2) + "\n");
 console.log(JSON.stringify({ gate, summary }, null, 2));
