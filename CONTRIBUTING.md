@@ -15,6 +15,10 @@ bun run typecheck:examples
 
 The test suite uses local provider replays and real PTYs. It does not require an API key. Keep regression tests with behavior changes, and include what you ran, what you did not run, why, and remaining risks in your PR.
 
+`check` and `test:headless` use local fixtures, fake credentials, a restricted environment, and isolated configuration directories on both platforms. Linux additionally enforces OS network isolation inherited by CLI and tool subprocesses: it requires `unshare`, `ip`, and Python 3 for the independent native socket probe (unprivileged namespaces locally; CI can create the namespace with sudo then drop privileges). Missing Linux isolation support fails the check. macOS runs the full compatibility suite without OS network isolation, Seatbelt, or PF. `test:network` is Linux-only. Reports distinguish the platforms' evidence; this is not a filesystem or arbitrary-code sandbox.
+
+Use `bun run test:contract`, `bun run test:integration`, and `bun run test:cli` for focused groups. `.test-results/` contains JUnit, raw failure traces, network evidence, and timings; CI uploads these even on failure. `bun test <file>` is useful for quick local work but does not supply OS isolation evidence. The [testing guide](docs/phases/testing-system-implementation.md) describes fixture maintenance, property replay, and the separately budgeted `test:live` probe. Do not use live credentials in ordinary tests or update fixtures automatically on a mismatch.
+
 Do not include API keys, local configuration, or session history in issues, commits, logs, or screenshots. `.forge-agent/` is local runtime data.
 
 ## Changes and Documentation

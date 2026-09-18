@@ -40,5 +40,5 @@ try {
 	await agent.dispose();
 }
 process.off("message", capture);
-if (process.connected) process.disconnect();
+if (process.connected) process.disconnect?.();
 await Bun.write(`${directory}/result.json`, JSON.stringify({ raw: process.stdin.isRaw, frames: [...snapshots.values()], pending: bus.pendingCount }));

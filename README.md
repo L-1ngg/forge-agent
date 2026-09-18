@@ -185,6 +185,8 @@ bun run test:headless
 bun run typecheck:examples
 ```
 
+`check` uses local fixtures, fake credentials, and isolated configuration on both platforms. Linux additionally enforces OS network isolation with `unshare` and `ip`, and needs Python 3 for native network probes. macOS runs the full compatibility suite without OS network isolation or firewall setup. `test:network` is Linux-only. Use `test:contract`, `test:integration`, or `test:cli` for individual groups. Reports and timings, including the isolation mode, are written to `.test-results/`. The opt-in `test:live` probe requires an explicit target and request/time budgets; see the [testing guide](docs/phases/testing-system-implementation.md) (Chinese).
+
 [SDK guide](docs/sdk.en.md) · [中文 SDK 指南](docs/sdk.md) · [Contributing](CONTRIBUTING.md) · [Internal documentation](docs/README.md) (Chinese)
 
 Maintainers can create [source prerelease drafts](docs/release.md) after dual-platform verification. Publishing a draft is a separate manual step.

@@ -185,6 +185,8 @@ bun run test:headless
 bun run typecheck:examples
 ```
 
+`check` 在两平台均使用本地 fixtures、假凭据和独立配置。Linux 额外通过 `unshare` 和 `ip` 强制网络隔离，并需要 Python 3 运行原生网络探针；macOS 运行完整兼容性测试，不启用系统网络隔离或配置防火墙。`test:network` 仅支持 Linux。可用 `test:contract`、`test:integration`、`test:cli` 单独运行各组，报告、耗时及隔离模式保存在 `.test-results/`。`test:live` 是独立显式入口，需要指定目标及请求/时间额度；详见[测试指南](docs/phases/testing-system-implementation.md)。
+
 [中文 SDK](docs/sdk.md) · [English SDK](docs/sdk.en.md) · [贡献说明](CONTRIBUTING.md) · [内部文档](docs/README.md)
 
 维护者可在双平台验证后创建 [源码预发布草稿](docs/release.md),公开发布仍是单独的手动操作。

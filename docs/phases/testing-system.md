@@ -5,7 +5,7 @@ created: 2026-09-10
 
 # 软件测试体系：设计讨论
 
-> 状态:草稿（2026-09-10）。当前仅调查与讨论，不修改测试实现；问题优先级、目标范围与迁移方案尚未确认。
+> 状态:实现与 Linux 强制断网、三台 macOS 完整 fixture 兼容性验证均已完成；PF 接入已撤回，operator 已授权提交并推送，Issue 保持 OPEN（2026-09-18）。需求规格见 [Issue #33](https://github.com/L-1ngg/forge-agent/issues/33)；实际设计、执行入口与验收证据见 [施工记录](testing-system-implementation.md)。以下保留早期讨论背景。
 
 ## 已确认的目标与边界
 

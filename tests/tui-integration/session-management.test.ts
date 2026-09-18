@@ -11,7 +11,7 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 	let release: (() => void) | undefined;
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 		requests.push(await request.text());
-		if (hold) await new Promise<void>(resolve => { release = resolve; request.signal.addEventListener("abort", resolve, { once: true }); });
+		if (hold) await new Promise<void>(resolve => { release = resolve; request.signal.addEventListener("abort", () => resolve(), { once: true }); });
 		return modelResponse();
 	} });
 	await mkdir(join(cwd, ".forge-agent"));

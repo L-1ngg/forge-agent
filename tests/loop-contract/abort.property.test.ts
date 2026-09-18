@@ -12,7 +12,7 @@ const eventArbitrary: fc.Arbitrary<AbortInput> = fc.oneof(
 	fc.constant({ type: "turn_end" } as const),
 );
 
-test("abort state machine preserves tool pairing, atomic abort, and terminal states", () => {
+test("reference model self-check (not production coverage): tool pairing and terminal states", () => {
 	fc.assert(
 		fc.property(fc.array(eventArbitrary, { maxLength: 100 }), (inputs) => {
 			let state = initialAbortState();
@@ -32,7 +32,7 @@ test("abort state machine preserves tool pairing, atomic abort, and terminal sta
 	);
 });
 
-test("terminal abort ignores every later input", () => {
+test("reference model self-check (not production coverage): terminal abort ignores later input", () => {
 	const before = runAbortMachine([{ type: "turn_start" }, { type: "abort" }]);
 	const after = runAbortMachine([{ type: "turn_start" }, { type: "abort" }, { type: "tool_call", id: "late" }, { type: "tool_result", id: "late" }, { type: "turn_end" }]);
 	expect(after).toEqual(before);
