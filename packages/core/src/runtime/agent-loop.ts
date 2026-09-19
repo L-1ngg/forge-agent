@@ -102,6 +102,7 @@ export async function runAgentLoop(
 	signal: AbortSignal | undefined,
 	streamFn: StreamFn,
 ): Promise<AgentMessage[]> {
+	for (const prompt of prompts) await config.prepareInputMessage?.(prompt, signal);
 	const newMessages: AgentMessage[] = [...prompts];
 	const currentContext: AgentContext = {
 		...context,
@@ -201,6 +202,7 @@ async function runLoop(
 			// Process pending messages (inject before next assistant response)
 			if (pendingMessages.length > 0) {
 				for (const message of pendingMessages) {
+					await config.prepareInputMessage?.(message, signal);
 					await emit({ type: "message_start", message });
 					await emit({ type: "message_end", message });
 					currentContext.messages.push(message);

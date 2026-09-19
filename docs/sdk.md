@@ -4,6 +4,40 @@
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
+## Skills
+
+SDK 省略 `skills` 时不扫描任何来源；配置对象默认启用，`enabled: false` 时不扫描。Core 不调用 home 目录探测；相对路径按 `cwd` 解析，不展开 `~`。
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Help with the task.",
+  skills: { roots: {
+    workspace: { path: "./skills" },
+    user: { path: "/data/alice/skills", optional: true },
+  } },
+  permission: { rules: [{ tool: "load_skill", argsPattern: "*", effect: "allow" }] },
+});
+const snapshot = agent.getSkills();
+const turn = agent.runTurn({ kind: "skill", name: "code-review", task: "Review this patch.\nKeep the API stable." });
+for await (const event of turn) {
+  if (event.type === "skill_input") console.error(event.inputId, event.code, event.message);
+}
+await turn.result;
+const receipt = await agent.refreshSkills();
+await receipt.applied;
+```
+
+`SkillsOptions.roots` 只包含 workspace/user/builtin 三层。缺层为空；缺失根仅在 `optional: true` 时为空。目录名按真实入口核对；根命中 `SKILL.md` 后停止递归；分组目录使用来源范围内的 ignore 规则并阻断 symlink 环路。`getSkills()` 返回 applied 状态的可修改副本，包含 enabled、revision、entries、diagnostics；每项包括来源/入口、状态、胜出入口、内容修订、自动调用标志，不含正文。
+
+`load_skill` 只接受 `{ name }`，遵循 ToolHooks、参数重写、权限、取消及持久化；同名宿主工具在启用时被拒绝。返回完整 Markdown body、标准/扩展 metadata、name、layer、entry、baseDirectory、`sha256:` 修订。正文精确保留 UTF-8 文字与换行，最多 50 × 1024 字节；header 上限 64 KiB。变更、替换、删除或改换 symlink 目标要求刷新，不使用旧目录悄悄加载新正文。references 由已有宿主工具读取；SDK 不隐式增加 read/bash 或 allow。
+
+`runTurn`、`steer`、`followUp` 均接受 `AgentInput = string | SkillInvocation`，原有 string 不变。显式调用允许 explicit-only，但仍经 PermissionContext/RequestBus；不运行需要 assistantMessage 的 ToolHooks 或模型参数重写。选择和原始 task 在消费点展开成一条 user message，不伪造模型工具调用。`AgentTurn.inputId` 和 accepted 回执的 `inputId` 关联拒绝事件；`skill_input` 包含 phase=`rejected`、name、code、message。失败先发事件、再以 processed=false 返还未处理输入；初始 turn 结果为 error，实例可复用。宿主保留原始输入用于恢复，不从错误文字反解析。取消/释放仍以既有 result/processed 结算为准。
+
+错误 code 包含 `skills-disabled`、`unknown-skill`、`explicit-only`、`permission-denied`、`missing`、`changed`、`too-large`、`invalid-skill`、`read-failed`、`canceled`。权限规则及预算同样约束显式输入；关闭压缩也不允许超预算直发。
+
+`refreshSkills()` 与 `updateConfiguration({ skills })` 共用串行提交：当前响应和整批工具保持旧快照，下一请求原子应用 prompt/catalog/tools，accepted 不等于 applied。`updateConfiguration({ skills: false })` 关闭功能；失败保留旧状态，dispose 取消未应用 receipt 并等待准备结束。仅模型或基础 prompt 更新复用目录，无隐式重扫。恢复时重新发现当前来源，历史中已经保存的正文/修订保持原样；上下文压缩只改变请求投影，仍可按需重读。目录与权限状态按实例隔离。
+
 ## 持久记忆
 
 `createAgent` 的 `memory` 是显式宿主能力；省略时不读 CLI 目录、不创建记忆文件。核心导出 `LongTermMemory` 与 `MemoryOptions`，示例：

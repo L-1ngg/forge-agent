@@ -29,7 +29,7 @@ interface PermissionCheckDenied {
 
 type PermissionCheck = PermissionCheckAllowed | PermissionCheckDenied;
 
-async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookOptions, signal?: AbortSignal): Promise<PermissionCheck> {
+export async function checkPermission(toolCall: ToolCallBlock, options: PermissionHookOptions, signal?: AbortSignal): Promise<PermissionCheck> {
 	const decision = decide(toolCall, options.context);
 	if (decision.kind === "allow") return { allowed: true };
 	if (decision.kind === "deny") return { allowed: false, reason: decision.reason };
@@ -84,7 +84,7 @@ export function prepareSessionTools(options: ModelPortOptions) {
 		const finalArgs = structuredClone(validateToolArguments(schema, { ...context.toolCall, arguments: args }));
 		const finalCall = makeToolCall(context.toolCall.id, context.toolCall.name, finalArgs);
 		const check = await checkPermission(finalCall, { context: options.permission ?? {}, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
-		if (!check.allowed) return { block: true, reason: check.reason, terminate: true };
+		if (!check.allowed) return { block: true, reason: finalCall.name === "load_skill" ? JSON.stringify({ code: "permission-denied", message: check.reason }) : check.reason, terminate: true };
 		signal?.throwIfAborted();
 		prepared.set(context.toolCall.id, finalArgs);
 		// Native after hook sees the same values that were authorized and executed.

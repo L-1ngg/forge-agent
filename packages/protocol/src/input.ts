@@ -31,3 +31,6 @@ export interface InputCompletionSuggestions {
 	items: InputCompletionItem[];
 	prefix: string;
 }
+
+export interface SkillInvocation { kind: "skill"; name: string; task: string; }
+export type AgentInput = string | SkillInvocation;

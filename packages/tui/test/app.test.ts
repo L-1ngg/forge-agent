@@ -138,6 +138,7 @@ test.each(["success", "deferred", "length", "error", "aborted"] as const)("queue
 	const result = new Promise<{ status: typeof status }>(resolve => { settle = resolve; });
 	const { app, input } = createApp({ port: {
 		runTurn(value) {
+			if (typeof value !== "string") throw new Error("This fixture accepts text inputs");
 			calls.push(value);
 			return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 				yield { type: "message_start", message: { role: "user", content: [{ type: "text", text: value }], timestamp: 0 }, timestamp: 0 };
@@ -1334,6 +1335,7 @@ test.each([false, true])("failed settlement restores only unprocessed input: pro
 	const gate = new Promise<void>(resolve => { finish = resolve; });
 	const { app, input } = createApp({ port: {
 		runTurn(value) {
+			if (typeof value !== "string") throw new Error("This fixture accepts text inputs");
 			calls.push(value);
 			return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 				if (processed) yield { type: "message_start", message: { role: "user", content: [{ type: "text", text: value }], timestamp: 1 }, timestamp: 1 };

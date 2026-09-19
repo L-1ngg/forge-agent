@@ -1,5 +1,5 @@
 import { InputFlow } from "./input-flow.ts";
-import type { SessionTurn, TurnResult } from "@forge-agent/protocol";
+import type { SessionTurn, TurnResult, AgentInput } from "@forge-agent/protocol";
 import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
@@ -61,7 +61,7 @@ export interface AppRequestBus {
 /** Structural view of the core agent port; the Forge SDK agent satisfies this. */
 export interface AppPort {
 	compact?(instructions?: string, emit?: (event: SessionEvent) => void): Promise<unknown>;
-	runTurn(input: string): SessionTurn;
+	runTurn(input: AgentInput): SessionTurn;
 	abort?(): void;
 	getUsage?(): ContextUsageSnapshot | undefined;
 }
@@ -88,6 +88,8 @@ export interface AppSessionHost {
 }
 
 export interface AppOptions {
+	prepareInput?: (input: string) => AgentInput;
+	skillsCommand?: (input: string, report: (text: string) => void) => Promise<void>;
 	memoryCommand?: (input: string) => Promise<{ text: string; prompt?: string }>;
 	sessions?: AppSessionHost;
 	port: AppPort;
@@ -131,6 +133,7 @@ export class App {
 	private generation = 0;
 	private running = false;
 	private compactTask: Promise<void> | undefined;
+	private skillsTask: Promise<void> | undefined;
 	private memoryTask: Promise<void> | undefined;
 	private browsing = false;
 	private viewer: DetailView | undefined;
@@ -194,6 +197,7 @@ export class App {
 			await this.runTask;
 			await this.compactTask;
 			await this.memoryTask;
+			await this.skillsTask;
 			await this.options.sessions?.dispose();
 			await this.switchTask;
 		} finally {
@@ -543,6 +547,14 @@ export class App {
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
+		if (command === "/skills" || command.startsWith("/skills ")) {
+			if (!this.options.skillsCommand) { this.projector.addNotice("Skills management unavailable"); return true; }
+			if (this.skillsTask) { this.projector.addNotice("Skills operation is still running"); return true; }
+			const generation = this.generation, session = this.session?.id;
+			const report = (text: string) => { if (this.started && this.generation === generation && this.session?.id === session) { this.projector.addNotice(text); this.repaint(); } };
+			this.skillsTask = this.options.skillsCommand(command, report).catch(error => report(String(error))).finally(() => { this.skillsTask = undefined; this.repaint(); });
+			return true;
+		}
 		if (command === "/memory" || command.startsWith("/memory ")) {
 			if (!this.options.memoryCommand) { this.projector.addNotice("Memory management unavailable"); return true; }
 			if (this.memoryTask) { this.projector.addNotice("Memory operation is still running"); return true; }
@@ -579,7 +591,7 @@ export class App {
 			return true;
 		}
 		if (command === "/help") {
-			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /memory · /quit · @file to mention");
+			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /memory · /skills · /skill <name> [task] · /quit · @file to mention");
 			return true;
 		}
 		return false;
@@ -672,7 +684,14 @@ export class App {
 				let status: TurnResult["status"] | undefined;
 				let failed = false;
 				try {
-					const turn = this.port.runTurn(current);
+					let prepared: AgentInput;
+					try { prepared = this.options.prepareInput?.(current) ?? current; }
+					catch (error) {
+						this.projector.addNotice(String(error));
+						this.restoreInputs(this.inputs.settle("error", false, this.switching).restore);
+						break;
+					}
+					const turn = this.port.runTurn(prepared);
 					for await (const event of turn) {
 						this.inputs.observe(event);
 						this.handleEvent(event);
@@ -695,6 +714,7 @@ export class App {
 	}
 
 	private handleEvent(event: SessionEvent): void {
+		if (event.type === "skill_input") this.projector.addNotice(`Skill ${event.name}: ${event.code}: ${event.message}`);
 		if (event.type === "memory") {
 			if (event.truncated) this.projector.addNotice("记忆索引已截断，仍可按需读取／搜索");
 			for (const warning of event.warnings) this.projector.addNotice(warning);
@@ -919,7 +939,7 @@ export class App {
 				height: plan.interactive.height,
 				draft: this.draft,
 				theme: this.theme,
-				placeholder: "Type a message",
+				placeholder: this.switching ? "正在切换会话…" : "Type a message",
 				caption: this.options.getStatus ? `${this.options.getStatus().provider}/${this.options.getStatus().model}` : undefined,
 				focused: !this.browsing,
 				compact: plan.compact,

@@ -270,3 +270,48 @@ test("preview cache is bounded to twenty excerpts and is released when the picke
 		expect(cachedInputs.at(-1)).toBe(false);
 	} finally { await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
 });
+
+import { skillInput } from "../src/skills-command.ts";
+import { mkdir, writeFile } from "node:fs/promises";
+
+test("TUI rejected Skill input restores its original draft and keeps it with its session", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-skill-switch-"));
+	await mkdir(join(cwd, "skills/manual"), { recursive: true });
+	await writeFile(join(cwd, "skills/manual/SKILL.md"), "---\nname: manual\ndescription: Manual workflow\n---\nPRIVATE_SKILL_BODY");
+	const requests: string[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.text()); return modelResponse(); } });
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: server.url.toString(), systemPrompt: "test", skills: { roots: { workspace: { path: "skills" } } } });
+	const input = new Input();
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, prepareInput: skillInput, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 150, rows: 40, write() {} } });
+	const screen = () => frameToText(app.composeFrameForTest());
+	try {
+		await app.start(); input.send("ORIGINAL_SESSION\r"); await until(() => requests.length === 1 && !screen().includes("working"));
+		const original = sessions.current.id;
+		input.send("/skill manual ORIGINAL_TASK\r"); await until(() => screen().includes("load_skill"));
+		input.send("3"); await until(() => screen().includes("permission-denied") && !screen().includes("working"));
+		expect(screen()).toContain("/skill manual ORIGINAL_TASK");
+		input.send("\x1b[H\x1b[200~/new\n\x1b[201~\r"); await until(() => sessions.current.id !== original);
+		expect(requests).toHaveLength(1); expect(screen()).not.toContain("ORIGINAL_TASK");
+		input.send("/resume\r"); await until(() => screen().includes("选择会话")); input.send("\r");
+		await until(() => sessions.current.id === original);
+		expect(screen()).toContain("/skill manual ORIGINAL_TASK"); expect(requests).toHaveLength(1);
+	} finally { await app.stop(); await sessions.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("malformed Skill command returns the draft without faulting session switching", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-skill-syntax-"));
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	const input = new Input();
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, prepareInput: skillInput, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 120, rows: 32, write() {} } });
+	const screen = () => frameToText(app.composeFrameForTest());
+	try {
+		await app.start(); const original = sessions.current.id;
+		input.send("/skill\r"); await until(() => screen().includes("Usage: /skill"));
+		expect(screen()).toContain("/skill");
+		input.send("\x7f".repeat(6) + "/new\r");
+		expect(screen()).toContain("正在切换会话");
+		expect(screen()).not.toContain("Type a message");
+		await until(() => sessions.current.id !== original && screen().includes("Type a message"));
+		expect(sessions.current.hasHistory()).toBe(false);
+	} finally { await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});

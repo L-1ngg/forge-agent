@@ -31,7 +31,7 @@ function excerpt(text: string, limit: number): { text: string; truncated: boolea
 	return { text: result, truncated: false };
 }
 
-async function projectRoot(cwd: string): Promise<string> {
+export async function projectRoot(cwd: string): Promise<string> {
 	const path = await realpath(cwd);
 	const child = Bun.spawn(["git", "-C", path, "rev-parse", "--show-toplevel"], { stdout: "pipe", stderr: "ignore" });
 	const output = (await new Response(child.stdout).text()).trim();

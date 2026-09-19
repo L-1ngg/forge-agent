@@ -30,6 +30,7 @@
 | [会话管理](phases/session-management.md) | 新会话、清屏与项目内恢复的施工及验收 |
 | [持久记忆](phases/persistent-memory.md) | Markdown、会话内更新、worktree 副本与独立质量/成本验收；规格见 GitHub #32 |
 | [会话恢复体验](phases/session-resume-experience.md) | 清晰标题、按需原文预览与重复浏览缓存；规格见 GitHub #29 |
+| [Skills 接入证据](phases/skills-acceptance.md) | 本地分层 Skills、按需加载、显式输入、配置与软件验证；规格见 GitHub #35 |
 | [软件测试体系](phases/testing-system.md) | 测试体系规格入口、现有约束与施工验收证据 |
 | [Markdown 渲染](phases/markdown-rendering.md) | 正文与详情渲染、流式显示及源码复制的施工与验收 |
 | [decisions/](decisions/) | ADR：已定决策及其替代关系，防重新争论 |

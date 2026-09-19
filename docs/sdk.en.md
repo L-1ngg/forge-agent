@@ -4,6 +4,40 @@
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
+## Skills
+
+Omitting `skills` disables discovery. A configuration object enables it by default; `enabled: false` performs no scan. Core never discovers the host's home directory. Relative paths resolve against `cwd`; `~` is not expanded.
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Help with the task.",
+  skills: { roots: {
+    workspace: { path: "./skills" },
+    user: { path: "/data/alice/skills", optional: true },
+  } },
+  permission: { rules: [{ tool: "load_skill", argsPattern: "*", effect: "allow" }] },
+});
+const snapshot = agent.getSkills();
+const turn = agent.runTurn({ kind: "skill", name: "code-review", task: "Review this patch.\nKeep the API stable." });
+for await (const event of turn) {
+  if (event.type === "skill_input") console.error(event.inputId, event.code, event.message);
+}
+await turn.result;
+const receipt = await agent.refreshSkills();
+await receipt.applied;
+```
+
+`SkillsOptions.roots` supports workspace/user/builtin in that priority order. Omitted layers are empty; missing roots are only empty with `optional: true`. Names must match the real entry directory. A `SKILL.md` stops recursion; grouping directories honor ignore rules within the configured source and symlink loops terminate. `getSkills()` returns a mutable copy of applied state: enabled, revision, entries and diagnostics. Entries include source/path, status, winner, content revision and automatic-invocation flag, without bodies.
+
+`load_skill` accepts only `{ name }` and follows ToolHooks, rewrites, permissions, cancellation and persistence. An enabled catalog reserves that tool name. Results contain the complete Markdown body, metadata, name, layer, entry, baseDirectory and `sha256:` revision. UTF-8 text and line endings are preserved; the body limit is 50 × 1024 bytes and the header limit is 64 KiB. Changes, replacement, removal or symlink retargeting require refresh. References require existing host tools; SDK does not add read/bash or an implicit allow rule.
+
+`runTurn`, `steer` and `followUp` accept `AgentInput = string | SkillInvocation`; existing string calls are unchanged. Explicit selection permits explicit-only entries but still uses PermissionContext/RequestBus. It does not run assistant-specific ToolHooks or model input rewrites. Selection and literal task are prepared at consumption into one user message, without fabricated assistant tool calls. `AgentTurn.inputId` and accepted receipts' `inputId` correlate rejections. `skill_input` carries phase=`rejected`, name, code and message, before a rejected queued input settles processed=false. An initial rejection settles the turn as error without faulting the instance. Keep the original input to restore drafts; do not parse natural-language errors. Cancellation/disposal still settle through existing result/processed contracts.
+
+Error codes include `skills-disabled`, `unknown-skill`, `explicit-only`, `permission-denied`, `missing`, `changed`, `too-large`, `invalid-skill`, `read-failed`, and `canceled`. Explicit inputs obey permissions and request budgets, even with automatic compaction disabled.
+
+`refreshSkills()` and `updateConfiguration({ skills })` share the configuration queue. The current response and entire tool batch retain their snapshot; prompt/catalog/tools switch together before the next request. Accepted does not mean applied. `updateConfiguration({ skills: false })` disables the feature. Failures preserve old state; disposal cancels unapplied receipts and waits for preparation cleanup. Model/base-prompt-only patches reuse the catalog. Reopening discovers current sources without changing stored bodies or revisions. Compaction changes request projections, leaving history intact and allowing later loading. Catalogs and permissions remain instance-local.
+
 ## Persistent Memory
 
 The optional `memory` capability is supplied explicitly by the host. Omitting it reads no CLI memory directories and creates no memory files.

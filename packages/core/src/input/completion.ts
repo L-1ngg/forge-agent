@@ -9,6 +9,7 @@ export interface InputCommand {
 
 export interface InputCompletionSourceOptions {
 	commands?: readonly InputCommand[];
+	listSkills?: () => readonly InputCommand[];
 	listFiles?: (prefix: string) => readonly string[] | Promise<readonly string[]>;
 }
 
@@ -33,6 +34,11 @@ export function createInputCompletionSource(options: InputCompletionSourceOption
 		async getSuggestions(input, cursor) {
 			const boundedCursor = clampCursor(input, cursor);
 			const beforeCursor = input.slice(0, boundedCursor);
+			const skill = /^\s*\/skill\s+([^\s]*)$/.exec(beforeCursor);
+			if (skill && options.listSkills) {
+				const items = options.listSkills().filter(item => item.name.startsWith(skill[1]!)).map(item => ({ value: item.name, label: item.name, ...(item.description ? { description: item.description } : {}) }));
+				return items.length ? { items, prefix: `skill:${skill[1]}` } : null;
+			}
 			const slash = slashCommandPrefix(beforeCursor);
 			if (slash) {
 				const items = commands
@@ -50,6 +56,10 @@ export function createInputCompletionSource(options: InputCompletionSourceOption
 		},
 		applyCompletion(input, cursor, item, prefix) {
 			const boundedCursor = clampCursor(input, cursor);
+			if (prefix.startsWith("skill:")) {
+				const start = boundedCursor - prefix.slice(6).length;
+				return { input: `${input.slice(0, start)}${item.value} ${input.slice(boundedCursor)}`, cursor: start + item.value.length + 1 };
+			}
 			if (prefix.startsWith("/")) return applySlashCompletion(input, boundedCursor, item);
 			if (prefix.startsWith("@")) return applyMentionCompletion(input, boundedCursor, item);
 			const start = Math.max(0, boundedCursor - prefix.length);

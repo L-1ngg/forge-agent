@@ -96,6 +96,7 @@ function createMutableAgentState(
 
 /** Options for constructing an {@link Agent}. */
 export interface AgentOptions {
+	prepareInputMessage?: AgentLoopConfig["prepareInputMessage"];
 	shouldStopAfterResponse?: AgentLoopConfig["shouldStopAfterResponse"];
 	initialState?: (Partial<Omit<AgentState, "pendingToolCalls" | "isStreaming" | "streamingMessage" | "errorMessage">>) | undefined;
 	convertToLlm?: ((messages: AgentMessage[]) => Message[] | Promise<Message[]>) | undefined;
@@ -203,6 +204,7 @@ export class Agent {
 		context: PrepareNextTurnContext,
 		signal?: AbortSignal,
 	) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined) | undefined;
+	public prepareInputMessage?: AgentLoopConfig["prepareInputMessage"];
 	private activeRun?: (ActiveRun) | undefined;
 	/** Session identifier forwarded to providers for cache-aware backends. */
 	public sessionId?: (string) | undefined;
@@ -229,6 +231,7 @@ export class Agent {
 		this.beforeToolCall = runtimeOptions.beforeToolCall;
 		this.afterToolCall = runtimeOptions.afterToolCall;
 		this.shouldStopAfterTurn = runtimeOptions.shouldStopAfterTurn;
+		this.prepareInputMessage = runtimeOptions.prepareInputMessage;
 		this.prepareNextTurn = runtimeOptions.prepareNextTurn;
 		this.prepareNextTurnWithContext = runtimeOptions.prepareNextTurnWithContext;
 		this.steeringQueue = new PendingMessageQueue(runtimeOptions.steeringMode ?? "one-at-a-time");
@@ -450,6 +453,7 @@ export class Agent {
 		const shouldStopAfterTurn = this.shouldStopAfterTurn;
 		return {
 			model: this._state.model,
+			prepareInputMessage: this.prepareInputMessage,
 			shouldStopAfterResponse: this.shouldStopAfterResponse,
 			reasoning: this._state.thinkingLevel === "off" ? undefined : this._state.thinkingLevel,
 			sessionId: this.sessionId,

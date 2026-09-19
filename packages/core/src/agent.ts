@@ -1,3 +1,4 @@
+import { emptySkills, type SkillsOptions, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
 import type { TurnResult, SessionTurn } from "@forge-agent/protocol";
 export type { TurnResult } from "@forge-agent/protocol";
@@ -15,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import type { MemoryOptions } from "./memory/tools.ts";
 
 export interface CreateAgentOptions extends InputQueueOptions {
+	skills?: SkillsOptions;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	/** Shared task/summary routing identity; supply it to retain affinity across reopening. */
@@ -39,18 +41,21 @@ export interface CreateAgentOptions extends InputQueueOptions {
 
 export interface AgentTurn extends SessionTurn {
 	readonly id: symbol;
+	readonly inputId?: string;
 	readonly result: Promise<TurnResult>;
 }
 
 export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp" | "setStorage"> {
+	getSkills(): SkillsSnapshot;
+	refreshSkills(): Promise<ConfigurationReceipt>;
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
 	configureContext(settings: Partial<ContextSettings>): void;
-	runTurn(input: string): AgentTurn;
+	runTurn(input: AgentInput): AgentTurn;
 	continue(): AgentTurn;
 	waitForIdle(): Promise<void>;
 	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;
-	steer(input: string, expectedTurnId: symbol): InputAcceptance;
-	followUp(input: string, expectedTurnId: symbol): InputAcceptance;
+	steer(input: AgentInput, expectedTurnId: symbol): InputAcceptance;
+	followUp(input: AgentInput, expectedTurnId: symbol): InputAcceptance;
 	readonly requests: AsyncIterable<RequestEnvelopeUnion>;
 	getUsage(): UsageTruthPoint | undefined;
 	respond(response: ResponseEnvelope): boolean;
@@ -64,7 +69,7 @@ function assertPortCapabilities(port: unknown): asserts port is AgentPort {
 		runTurn: true, continue: true, steer: true, followUp: true, abort: true,
 		dispose: true, getUsage: true, setStorage: true, compact: true,
 		configureContext: true, updateConfiguration: true,
-	} satisfies Record<Exclude<keyof AgentPort, "getMemoryBudget">, true>;
+	} satisfies Record<Exclude<keyof AgentPort, "getMemoryBudget" | "getSkills" | "refreshSkills">, true>;
 	const object = port !== null && (typeof port === "object" || typeof port === "function");
 	const missing = Object.keys(methods).filter(name => !object || typeof Reflect.get(port, name) !== "function");
 	if (missing.length) throw new TypeError(`Agent factory must provide callable methods: ${missing.join(", ")}`);
@@ -90,6 +95,7 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			...(options.followUpMode ? { followUpMode: options.followUpMode } : {}),
 			...(options.context ? { context: options.context } : {}),
 			...(options.memory ? { memory: options.memory } : {}),
+			...(options.skills ? { skills: options.skills } : {}),
 			...(options.retry ? { retry: options.retry } : {}),
 			...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
 			...(options.contextWindow !== undefined ? { contextWindow: options.contextWindow } : {}),
@@ -131,26 +137,28 @@ class HostedAgent implements Agent {
 		this.requests = bus.requests();
 	}
 
-	runTurn(input: string): AgentTurn { return this.startTurn(input); }
+	runTurn(input: AgentInput): AgentTurn { return this.startTurn(input); }
 	continue(): AgentTurn { return this.startTurn(); }
 	waitForIdle(): Promise<void> { return this.active?.settled ?? this.compacting?.then(() => { }) ?? Promise.resolve(); }
-	private startTurn(input?: string): AgentTurn {
+	private startTurn(input?: AgentInput): AgentTurn {
 		this.assertAvailable();
 		if (this.compacting) throw new Error("Agent is compacting");
 		let started = false;
 		const id = Symbol("invocation");
+		const inputId = input !== undefined && typeof input !== "string" ? randomUUID() : undefined;
+		if (input !== undefined && typeof input !== "string") input = structuredClone(input);
 		let resolveResult!: (result: TurnResult) => void;
 		const result = new Promise<TurnResult>(resolve => { resolveResult = resolve; });
 		let status: TurnResult["status"] = "aborted";
 		return {
-			id, result,
+			id, result, ...(inputId ? { inputId } : {}),
 			[Symbol.asyncIterator]: () => {
 				this.assertAvailable();
 				if (this.compacting) throw new Error("Agent is compacting");
 				if (started) throw new Error("A turn can only be consumed once");
 				if (this.active) throw new Error("Agent is already processing a turn");
 				started = true;
-				const events = input === undefined ? this.runner!.continue() : this.runner!.runTurn(input);
+				const events = input === undefined ? this.runner!.continue() : this.runner!.runTurn(input, inputId);
 				const iterator = events[Symbol.asyncIterator]();
 				let resolveIdle!: () => void;
 				const settled = new Promise<void>(resolve => { resolveIdle = resolve; });
@@ -186,15 +194,15 @@ class HostedAgent implements Agent {
 		};
 	}
 
-	steer(input: string, expectedTurnId: symbol): InputAcceptance {
+	steer(input: AgentInput, expectedTurnId: symbol): InputAcceptance {
 		this.assertAvailable();
 		if (!this.accepts(expectedTurnId)) return { accepted: false };
-		return this.runner!.steer(input);
+		return this.runner!.steer(input, typeof input === "string" ? undefined : randomUUID());
 	}
-	followUp(input: string, expectedTurnId: symbol): InputAcceptance {
+	followUp(input: AgentInput, expectedTurnId: symbol): InputAcceptance {
 		this.assertAvailable();
 		if (!this.accepts(expectedTurnId)) return { accepted: false };
-		return this.runner!.followUp(input);
+		return this.runner!.followUp(input, typeof input === "string" ? undefined : randomUUID());
 	}
 	private accepts(id: symbol): boolean {
 		const active = this.active;
@@ -208,6 +216,8 @@ class HostedAgent implements Agent {
 		this.active.canceled = true;
 		if (this.active.begun) this.runner?.abort();
 	}
+	getSkills(): SkillsSnapshot { return this.runner?.getSkills?.() ?? emptySkills(); }
+	refreshSkills(): Promise<ConfigurationReceipt> { this.assertAvailable(); if (!this.runner!.refreshSkills) return Promise.reject(new Error("Adapter does not support Skills")); return this.runner!.refreshSkills(); }
 	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }
 	getMemoryBudget(): number | undefined { return this.runner?.getMemoryBudget?.(); }
 	configureContext(settings: Partial<ContextSettings>): void { this.assertAvailable(); this.runner!.configureContext(settings); }

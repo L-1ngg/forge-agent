@@ -1,3 +1,5 @@
+import { formatSkillsForPrompt } from "./skills/upstream/skills.ts";
+import { emptySkills, type SkillsSnapshot } from "./skills/types.ts";
 import { InMemoryCredentialStore, getSupportedThinkingLevels, isRetryableAssistantError, isContextOverflow, type AssistantMessage } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { thinkingBudgetForLevel } from "@earendil-works/pi-ai/api/simple-options";
@@ -10,12 +12,14 @@ import type { PiPortOptions, ModelPortOptions } from "./pi-port.ts";
 import { validateSessionTools } from "./session-tools.ts";
 
 /** Prepared configuration owns no execution resources. The session binds tools at application. */
-export async function prepareSessionConfiguration(options: PiPortOptions): Promise<SessionAssembly> {
+export async function prepareSessionConfiguration(options: PiPortOptions, skills: SkillsSnapshot = emptySkills()): Promise<SessionAssembly> {
 	const configuration = snapshotConfiguration(options);
 	if (typeof configuration.systemPrompt !== "string" || !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(configuration.thinkingLevel)) throw new Error("Invalid model configuration");
 	validateSessionTools(configuration);
+	if (skills.enabled && configuration.tools?.some(tool => tool.name === "load_skill")) throw new Error("load_skill is reserved when Skills are enabled");
+	configuration.systemPrompt += formatSkillsForPrompt(skills.entries.filter(entry => entry.status === "available"));
 	const resolved = await resolveModelOptions(configuration);
-	return { options: resolved, driver: createSummaryDriver(resolved) };
+	return { options: resolved, driver: createSummaryDriver(resolved), skills };
 }
 
 async function resolveModelOptions(options: PiPortOptions): Promise<ModelPortOptions> {
@@ -62,5 +66,5 @@ export function createSummaryDriver(options: ModelPortOptions): SummaryDriver & 
 }
 
 export function snapshotConfiguration<T extends Partial<PiPortOptions>>(options: T): T {
-	return { ...options, ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
+	return { ...options, ...(options.skills ? { skills: structuredClone(options.skills) } : {}), ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 }

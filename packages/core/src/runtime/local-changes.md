@@ -13,3 +13,7 @@ Forge 使用此栅栏处理 `length` 与 `deferred`。前者保留已有“不�
 取消保留上游已准备调用的错误记录以及必要 aborted assistant；不会启动新模型请求或未启动工具。完整历史保留记录，请求投影排除错误/取消响应，不重放不确定效果。会话关闭时返回未消费的 steering/follow-up 回执。
 
 配置通过会话队列在完整批次结束时应用；对上一响应的 overflow/length/retry 判定固定使用生成该响应的 driver。摘要与任务重试计数相互独立，不改 Core 的普通调度分支。
+
+## #35：异步输入准备（2026-09-19）
+
+新增可选 `prepareInputMessage(message, signal)`，在初始输入与 steering/follow-up 消费点、上下文变更和 user 事件之前等待宿主准备。默认未设置时保持原有循环；不新增队列或 Agent loop。Forge 使用它检查显式 Skill 输入的权限、取消、版本和预算，再形成一条 user message；失败沿 runtime 原有错误结算，未准备输入不进入 user 历史。Skill 的 processed 回执在 user 保存成功后结算，普通文本保持原有确认语义。输入 id 和拒绝事件归 session/SDK，不写入上游 AgentMessage 协议。

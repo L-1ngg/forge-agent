@@ -63,6 +63,35 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 
 恢复会话重建历史和模型上下文，不重放中断工具。工具需要配合取消，切换会等待其收尾。损坏会话会报告诊断，需按 SDK 的副本转换流程检查后恢复。
 
+## 本地 Skills
+
+CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skills`、`~/.forge/skills`、产品随附 `packages/cli/builtin_skills`（本轮为空）中的 `SKILL.md` 目录。`<project>` 是当前 Git worktree 根，无 Git 时为启动目录；既有 `.forge-agent` 配置、会话与记忆路径不迁移。
+
+```text
+/skills
+/skills reload
+/skill code-review 请审查当前补丁。
+```
+
+`/skills` 查看有效、遮蔽、重复与无效项；`/skill` 提供名称补全，按 Enter 接受候选后输入任务。正文准备成功后只提交一次用户输入，任务文本保留原文，失败输入返还编辑草稿。headless 支持 `--json -p '/skills'`、`--json -p '/skills reload'` 和 `--json -p '/skill code-review 请审查当前补丁。'`。管理命令不请求模型、不创建对话历史；启动仍需配置 provider/model 凭据。
+
+模型初始只看到名称和用途，通过 `load_skill` 按需读取正文。`disable-model-invocation: true` 禁止自动选用，但允许显式选择。加载不执行脚本、不安装依赖、不读取 references，`allowed-tools` 不产生授权。相对引用按返回的 `baseDirectory` 定位，需要宿主已有读取工具。CLI 的 `load_skill` 沿用现有只读权限策略，含 `deny-all` 下的 built-in allow；前置权限 hooks 和 deny rules 仍优先。
+
+每项必须显式声明与真实目录一致的有效 `name` 及 `description`，坏项显示诊断。文件自发现后发生变化须刷新；超过 50 KiB UTF-8 的正文明确失败，不截断。运行中刷新先 accepted，当前响应和整批工具结束后才 applied。目录或输入超预算会提示缩小来源或拆分资料。
+
+`--no-skills` 可关闭；也可在 `.forge-agent/config.json` 覆盖来源（相对路径以启动 cwd 解析）：
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "roots": { "workspace": "./team-skills", "user": "/home/alice/shared-skills" }
+  }
+}
+```
+
+默认根缺失为空；显式覆盖缺失报错。设 `enabled: false` 后不扫描、不注入目录、不注册加载工具。SDK 默认关闭并要求宿主提供 roots，见 [Skills 接入](docs/sdk.md#skills)。源码归属见 [Skills 本地差异](packages/core/src/skills/LOCAL_CHANGES.md)。
+
 ## 持久记忆
 
 持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。模型可在任务过程中保存有用偏好和经验，详情按需读取。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。发布证据与默认启用门槛见[施工记录](docs/phases/persistent-memory.md)。
@@ -162,7 +191,7 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 | 阶段 | 方向 |
 |---|---|
 | **Now** | 内核与 SDK 真实任务验收,补齐剩余验收项 |
-| **Next** | 工具和 Skills 扩展,来源可追溯的资料调研与报告 |
+| **Next** | 后续工具扩展,来源可追溯的资料调研与报告 |
 | **Later** | 长任务可靠性、恢复边界与上下文质量/成本的持续验证,之后是服务 API 与分发 |
 
 [开发规划](docs/plan.md) 是行动项真相源。以上是方向,不承诺发布日期。

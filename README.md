@@ -63,6 +63,35 @@ Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive
 
 Restoring a conversation rebuilds its history and model context; it does not replay interrupted tools. Tools must cooperate with cancellation; switching can wait for their cleanup. A damaged conversation is reported and requires a verified copy using the SDK conversion workflow before it can be resumed.
 
+## Local Skills
+
+The CLI discovers `SKILL.md` directories under `<project>/.forge/skills`, `~/.forge/skills`, and the bundled `packages/cli/builtin_skills` collection (currently empty), in that priority order. `<project>` is the current Git worktree root, or the startup directory outside Git. Existing `.forge-agent` configuration and sessions stay in their current locations.
+
+```text
+/skills
+/skills reload
+/skill code-review Review this patch.
+```
+
+Use `/skills` to inspect active, shadowed, duplicate and invalid entries. `/skill` supports name completion; press Enter to accept a suggestion, then type the task. It preserves the task text and loads instructions before submitting a single user input. Rejected inputs return to the editable draft. `--json -p '/skills'`, `--json -p '/skills reload'`, and `--json -p '/skill code-review Review this patch.'` use the same behavior in headless mode. Management commands do not call a model or create conversation history; startup still requires configured provider/model credentials.
+
+The model initially sees only names and descriptions, then uses `load_skill` to read a selected body. `disable-model-invocation: true` hides a skill from automatic selection while allowing explicit invocation. Loading does not execute scripts, install dependencies, read references, or grant permissions through `allowed-tools`. Relative references use the returned `baseDirectory` and require existing host tools. The CLI uses its existing read-only permission policy for `load_skill`, including built-in allow under `deny-all`; earlier permission hooks and deny rules still win.
+
+Each skill must explicitly declare a valid `name` matching its real directory and a `description`. Malformed entries have diagnostics. Files changed since discovery require `/skills reload`; bodies above 50 KiB of UTF-8 fail without truncation. A refresh accepted during execution applies after the current response and tool batch. Oversized catalogs or inputs fail with guidance to reduce sources or split instructions.
+
+Disable with `--no-skills` or configure overrides in `.forge-agent/config.json` (relative paths resolve from startup cwd):
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "roots": { "workspace": "./team-skills", "user": "/home/alice/shared-skills" }
+  }
+}
+```
+
+Missing defaults are empty; a missing explicit override is an error. Set `enabled` to `false` to stop discovery and remove the catalog and loading tool. The SDK is disabled by default and accepts explicit roots; see [Skills](docs/sdk.en.md#skills). Source provenance is in [the Skills module](packages/core/src/skills/LOCAL_CHANGES.md).
+
 ## Persistent Memory
 
 Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. The model can save useful preferences and lessons during a task, and reads details on demand. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Release evidence and the default-enable gate are tracked in the [implementation record](docs/phases/persistent-memory.md).
@@ -162,7 +191,7 @@ The execution runtime is maintained in this repository, derived from the fixed P
 | Horizon | Direction |
 |---|---|
 | **Now** | Validate the core and SDK in real tasks and resolve remaining acceptance gaps |
-| **Next** | Tool and Skills extensions; source-traceable research and reports |
+| **Next** | Further tool extensions; source-traceable research and reports |
 | **Later** | Further validation of long-task reliability, recovery, and context quality/cost; then service APIs and distribution |
 
 The [development plan](docs/plan.md) (Chinese) is the source of truth for actionable work. These are directions, not release-date commitments.

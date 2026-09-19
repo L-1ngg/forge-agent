@@ -24,7 +24,7 @@ const agent = await createAgent({
 }, (options) => createPiTestPort({ ...options, responses: [{ text: "FIRST_COMPLETE" }, { text: "NEXT_COMPLETE" }, { text: "LAST_COMPLETE" }] }));
 const app = new App({
 	port: {
-		runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() {
+		runTurn(input) { if (typeof input !== "string") throw new Error("Text fixture"); const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() {
 			calls.push(input);
 			try { yield* turn; }
 			finally { process.send?.({ type: "settled", calls: [...calls] }); }

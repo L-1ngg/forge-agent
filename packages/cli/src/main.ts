@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { cliSkills, skillInput, isSkillsCommand, skillsCommand, skillsText } from "./skills-command.ts";
 import { homedir } from "node:os";
 import { cwd } from "node:process";
 import { createInputCompletionSource, createPiPort, loadConfig, resolveSecret, type AgentPort, type PiPortOptions } from "@forge-agent/core";
@@ -11,6 +12,7 @@ import { MemoryManager } from "./memory-command.ts";
 import type { MemoryOptions } from "@forge-agent/core/sdk";
 
 interface Args {
+	noSkills?: boolean;
 	memoryCommand?: string;
 	prompt?: string;
 	json: boolean;
@@ -29,6 +31,7 @@ function parseArgs(argv: string[]): Args {
 	for (let index = 0; index < argv.length; index++) {
 		const value = argv[index];
 		if (value === "-p" || value === "--prompt") args.prompt = requiredValue(++index, value);
+		else if (value === "--no-skills") args.noSkills = true;
 		else if (value === "--json") args.json = true;
 		else if (value === "--provider") args.provider = requiredValue(++index, value);
 		else if (value === "--model") args.model = requiredValue(++index, value);
@@ -40,7 +43,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function usage(): string {
-	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--memory 'COMMAND']";
+	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--memory 'COMMAND'] [--no-skills]";
 }
 
 type PortFactory = (options: PiPortOptions) => Promise<AgentPort>;
@@ -94,17 +97,22 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			...(config.maxTokens !== undefined ? { maxTokens: config.maxTokens } : {}),
 			...(config.contextWindow !== undefined ? { contextWindow: config.contextWindow } : {}),
 			cwd: workingDirectory,
+			skills: await cliSkills(workingDirectory, config.skills, args.noSkills ?? false),
 			memory,
 			tools: builtinTools,
 			requestTimeoutMs: args.json ? 30_000 : null,
-			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }, ...["read_memory", "search_memory", ...(config.permissionMode === "deny-all" ? [] : ["write_memory", "delete_memory"])].map(tool => ({ tool, argsPattern: "*", effect: "allow" as const }))] },
+			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }, ...["load_skill", "read_memory", "search_memory", ...(config.permissionMode === "deny-all" ? [] : ["write_memory", "delete_memory"])].map(tool => ({ tool, argsPattern: "*", effect: "allow" as const }))] },
 		}, portFactory);
 		try {
 			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), () => sessions.current.port.getMemoryBudget?.());
+			if (prompt && isSkillsCommand(prompt)) {
+				await skillsCommand(sessions.current.port, prompt, value => console.log(args.json ? JSON.stringify(value) : skillsText(value))); return 0;
+			}
 			if (args.json) {
-				return await runHeadless(sessions.current.port, prompt as string, console.log, { requestBus: sessions.current.requestBus });
+				return await runHeadless(sessions.current.port, skillInput(prompt as string), console.log, { requestBus: sessions.current.requestBus });
 			}
 			const completionSource = createInputCompletionSource({
+				listSkills: () => sessions.current.port.getSkills().entries.filter(entry => entry.status === "available").map(entry => ({ name: entry.name!, description: entry.description! })),
 				commands: [
 					{ name: "help", description: "Show commands" },
 					{ name: "clear", description: "Clear display; keep context" },
@@ -112,11 +120,15 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 					{ name: "resume", description: "Resume a project conversation" },
 					{ name: "compact", description: "Compact context" },
 					{ name: "memory", description: "Manage persistent memory" },
+					{ name: "skills", description: "List skills; reload to refresh" },
+					{ name: "skill", description: "Select a skill explicitly" },
 					{ name: "quit", description: "Exit" },
 				],
 				listFiles: (prefix) => scanFiles(workingDirectory, prefix),
 			});
 			const app = new App({
+				prepareInput: skillInput,
+				skillsCommand: (input, report) => skillsCommand(sessions.current.port, input, value => report(skillsText(value))),
 				port: sessions.current.port,
 				memoryCommand: input => memoryManager.execute(input),
 				sessions,

@@ -1,3 +1,4 @@
+import type { SkillsSnapshot, AgentInput } from "./skills/types.ts";
 import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
 import type { SessionEvent } from "@forge-agent/protocol";
 import type { SessionStorage } from "./session-storage.ts";
@@ -7,16 +8,18 @@ import type { UsageTruthPoint } from "./usage.ts";
 export type InputQueueMode = "all" | "one-at-a-time";
 export interface InputQueueOptions { steeringMode?: InputQueueMode; followUpMode?: InputQueueMode; }
 
-export type InputAcceptance = { accepted: false } | { accepted: true; processed: Promise<boolean> };
+export type InputAcceptance = { accepted: false } | { accepted: true; processed: Promise<boolean>; inputId?: string };
 
 /** Complete session execution contract accepted by createAgent. */
 export interface AgentPort {
+	getSkills?(): SkillsSnapshot;
+	refreshSkills?(): Promise<ConfigurationReceipt>;
 	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;
 	dispose(): Promise<void> | void;
-	runTurn(input: string): AsyncIterable<SessionEvent>;
+	runTurn(input: AgentInput, inputId?: string): AsyncIterable<SessionEvent>;
 	continue(): AsyncIterable<SessionEvent>;
-	steer(input: string): InputAcceptance;
-	followUp(input: string): InputAcceptance;
+	steer(input: AgentInput, inputId?: string): InputAcceptance;
+	followUp(input: AgentInput, inputId?: string): InputAcceptance;
 	abort(): void;
 	getUsage(): UsageTruthPoint | undefined;
 	/** Optional for adapters without persistent memory. */

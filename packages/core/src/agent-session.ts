@@ -1,3 +1,7 @@
+import { loadSkill } from "./skills/load.ts";
+import { calculateContextUsage } from "./usage.ts";
+import { skillLoader, validateSkillArguments } from "./skills/tools.ts";
+import { emptySkills, SkillError, type SkillsSnapshot, type AgentInput, type SkillInvocation } from "./skills/types.ts";
 import { CompactionCoordinator } from "./context/coordinator.ts";
 import type { ConfigurationPatch, ConfigurationReceipt, SessionAssembly, SessionToolset } from "./configuration.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
@@ -6,7 +10,7 @@ import { Agent as RuntimeAgent } from "./runtime/agent.ts";
 import { fromSessionMessage, createEventProjection, toSessionMessage } from "./event-projection.ts";
 import type { AgentPort, InputAcceptance } from "./agent-port.ts";
 import type { ModelPortOptions } from "./pi-port.ts";
-import { prepareSessionTools, validateSessionTools } from "./session-tools.ts";
+import { prepareSessionTools, validateSessionTools, checkPermission } from "./session-tools.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
 import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
@@ -21,6 +25,7 @@ import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts"
 
 /** Owns durable history and run settlement; the runtime alone owns request messages. */
 export class AgentSession implements AgentPort {
+	private skills: SkillsSnapshot;
 	private readonly runtime: RuntimeAgent;
 	private readonly compaction: CompactionCoordinator;
 	private readonly projectEvent = createEventProjection();
@@ -31,6 +36,7 @@ export class AgentSession implements AgentPort {
 	private disposed = false;
 	private executing = false;
 	private revision = 0;
+	private readonly configurationController = new AbortController();
 	private configurationQueue: Promise<void> = Promise.resolve();
 	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void }> = [];
 	private storage: SessionStorage;
@@ -42,6 +48,8 @@ export class AgentSession implements AgentPort {
 	private recoveryUsed = false;
 	private taskFailures = 0;
 	private accepting = false;
+	private readonly preparedSkills = new WeakSet<AgentMessage>();
+	private skillInputs = new Map<AgentMessage, { invocation: SkillInvocation; inputId: string }>();
 	private receipts = new Map<AgentMessage, (processed: boolean) => void>();
 	private failure: unknown;
 	private readonly usage: UsageTracker;
@@ -51,7 +59,8 @@ export class AgentSession implements AgentPort {
 	private readonly assembler: ContextAssembler;
 	private memoryWriteMode: boolean | undefined;
 
-	constructor(assembly: SessionAssembly, private readonly prepareConfiguration: (patch: ConfigurationPatch) => Promise<SessionAssembly>) {
+	constructor(assembly: SessionAssembly, private readonly prepareConfiguration: (patch: ConfigurationPatch, refresh?: boolean, signal?: AbortSignal) => Promise<SessionAssembly>) {
+		this.skills = assembly.skills ?? emptySkills();
 		this.options = assembly.options; this.driver = assembly.driver;
 		const options = this.options;
 		this.assembler = new ContextAssembler(options.memory);
@@ -67,6 +76,7 @@ export class AgentSession implements AgentPort {
 		this.storage = new MemorySessionStorage(options.history);
 		this.usage = new UsageTracker({ contextWindow: options.contextWindow ?? options.model.contextWindow });
 		this.runtime = new RuntimeAgent({
+			prepareInputMessage: (message, signal) => this.prepareInputMessage(message, signal),
 			...(options.steeringMode ? { steeringMode: options.steeringMode } : {}),
 			...(options.followUpMode ? { followUpMode: options.followUpMode } : {}),
 			initialState: { model: options.model, systemPrompt: options.systemPrompt, thinkingLevel: options.thinkingLevel, tools: toolset?.tools ?? [] },
@@ -93,6 +103,7 @@ export class AgentSession implements AgentPort {
 					await this.assembleMemory(signal); this.compaction.syncUsage();
 				}
 				signal?.throwIfAborted();
+				if (this.skills.enabled && (this.getUsage().contextTokens ?? 0) > limit) throw new Error("Skills context exceeds request budget; reduce sources or split instructions into references.");
 				return [...this.assembler.projection.messages.map(message => fromSessionMessage(message, this.options.model)), ...this.runtime.state.messages];
 			},
 			convertToLlm: messages => projectMessages(messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model)),
@@ -113,7 +124,7 @@ export class AgentSession implements AgentPort {
 			if (this.failure !== undefined) throw this.failure;
 			if (event.type === "message_start" && event.message.role === "user") {
 				this.runController?.signal.throwIfAborted();
-				this.receipts.get(event.message)?.(true); this.receipts.delete(event.message);
+				if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
 			}
 			if (event.type === "message_end") {
 				if (event.message.role === "user") this.recoveryUsed = false;
@@ -122,8 +133,9 @@ export class AgentSession implements AgentPort {
 				if (message && this.settings.enabled && this.recoverableLength(message)) { message.contextExcluded = true; Object.assign(event.message, { contextExcluded: true }); }
 				if (message) {
 					const entry = messageEntry(message, this.state.leafId);
-					this.receipts.get(event.message)?.(true); this.receipts.delete(event.message);
+					if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
 					await this.persistEntry(entry);
+					if (this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); this.preparedSkills.delete(event.message); }
 					this.compaction.syncUsage();
 					if (message.usage) this.usage.recordUsage(message.usage);
 				}
@@ -142,9 +154,9 @@ export class AgentSession implements AgentPort {
 		this.state = structuredClone(state); this.storage = storage; this.initialized = true;
 		this.compaction.rebuild();
 	}
-	runTurn(input: string): AsyncIterable<SessionEvent> { return this.run(input); }
+	runTurn(input: AgentInput, inputId?: string): AsyncIterable<SessionEvent> { return this.run(input, inputId); }
 	continue(): AsyncIterable<SessionEvent> { return this.run(); }
-	private async *run(input?: string): AsyncIterable<SessionEvent> {
+	private async *run(input?: AgentInput, inputId?: string): AsyncIterable<SessionEvent> {
 		this.assertHealthy();
 		if (this.running) throw new Error("Agent is already processing a turn");
 		if (!this.initialized) await this.setStorage(this.storage);
@@ -156,7 +168,7 @@ export class AgentSession implements AgentPort {
 		this.usage.beginTurn(); this.accepting = true;
 		this.runController = new AbortController();
 		this.memoryTools?.reset();
-		const running = this.runSession(input, this.runController.signal)
+		const running = this.runSession(input, this.runController.signal, inputId)
 			.catch(error => { failure = error; })
 			.finally(() => { done = true; wake?.(); });
 		this.running = running;
@@ -176,20 +188,55 @@ export class AgentSession implements AgentPort {
 			if (failure !== undefined) throw failure;
 		}
 	}
-	steer(input: string): InputAcceptance { return this.enqueue(input, "steer"); }
-	followUp(input: string): InputAcceptance { return this.enqueue(input, "followUp"); }
-	private enqueue(input: string, mode: "steer" | "followUp"): InputAcceptance {
+	steer(input: AgentInput, inputId?: string): InputAcceptance { return this.enqueue(input, "steer", inputId); }
+	followUp(input: AgentInput, inputId?: string): InputAcceptance { return this.enqueue(input, "followUp", inputId); }
+	private enqueue(input: AgentInput, mode: "steer" | "followUp", inputId?: string): InputAcceptance {
 		this.assertHealthy();
 		if (!this.accepting) return { accepted: false };
-		const message: AgentMessage = { role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() };
+		const message = this.inputMessage(input, inputId);
 		const processed = new Promise<boolean>(resolve => { this.receipts.set(message, resolve); });
 		this.runtime[mode](message);
-		return { accepted: true, processed };
+		return { accepted: true, processed, ...(inputId ? { inputId } : {}) };
+	}
+	private inputMessage(input: AgentInput, inputId?: string): AgentMessage {
+		const message: AgentMessage = { role: "user", content: [{ type: "text", text: typeof input === "string" ? input : "" }], timestamp: Date.now() };
+		if (typeof input !== "string") this.skillInputs.set(message, { invocation: structuredClone(input), inputId: inputId ?? randomUUID() });
+		return message;
+	}
+	private async prepareInputMessage(message: AgentMessage, signal?: AbortSignal): Promise<void> {
+		const selected = this.skillInputs.get(message);
+		try {
+			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
+			if (selected) {
+				const { invocation, inputId } = selected;
+				if (invocation.kind !== "skill" || typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
+				const args = { name: invocation.name }; validateSkillArguments(args);
+				const check = await checkPermission({ type: "tool_call", id: inputId, name: "load_skill", arguments: args }, { context: this.options.permission ?? {}, ...(this.options.requestBus ? { requestBus: this.options.requestBus } : {}) }, signal);
+				if (!check.allowed) throw new SkillError("permission-denied", check.reason);
+				const loaded = await loadSkill(this.skills, invocation.name, true, signal);
+				const { body, ...source } = loaded;
+				message.content = [{ type: "text", text: `Skill instructions (${JSON.stringify(source)}):\n${body}\n\nUser task:\n${invocation.task}` }];
+			}
+			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
+			if (this.skills.enabled) {
+				const budget = this.compaction.budget();
+				const size = calculateContextUsage({ fixedText: budget.fixedText, messages: [toSessionMessage(message)!] }).contextTokens ?? 0;
+				if (size > compactionInputBudget(budget, this.settings.reserveTokens)) throw new SkillError("too-large", "Skills and input exceed context budget; reduce Skill sources or split instructions into references.");
+			}
+			if (selected) this.preparedSkills.add(message);
+		} catch (error) {
+			if (selected) {
+				const code = signal?.aborted || this.runController?.signal.aborted ? "canceled" : error instanceof SkillError ? error.code : "read-failed";
+				this.emit({ type: "skill_input", phase: "rejected", inputId: selected.inputId, name: selected.invocation.name, code, message: String(error), timestamp: Date.now() });
+				this.receipts.get(message)?.(false); this.receipts.delete(message);
+			}
+			throw error;
+		} finally { this.skillInputs.delete(message); }
 	}
 	private closeInput(): void {
 		this.accepting = false; this.runtime.clearAllQueues();
 		for (const resolve of this.receipts.values()) resolve(false);
-		this.receipts.clear();
+		this.receipts.clear(); this.skillInputs.clear();
 	}
 	abort(): void { this.runController?.abort(); this.compactController?.abort(); this.closeInput(); this.runtime.abort(); this.options.requestBus?.abort(); }
 	getUsage() { return this.usage.snapshot(); }
@@ -211,7 +258,7 @@ export class AgentSession implements AgentPort {
 	private prepareTools(): SessionToolset {
 		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
 		validateSessionTools(this.options);
-		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
+		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), ...(this.skills.enabled ? [skillLoader(this.skills)] : []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
 		if (this.running || this.compactController) throw new Error("Cannot configure context during execution");
@@ -248,7 +295,7 @@ export class AgentSession implements AgentPort {
 		const driver = this.responseDriver ?? this.driver;
 		return message.stopReason === "length" && (driver.maxTokens ?? 0) > 0 && message.usage !== undefined && message.usage.output < driver.maxTokens!;
 	}
-	private async runSession(input: string | undefined, signal: AbortSignal): Promise<void> {
+	private async runSession(input: AgentInput | undefined, signal: AbortSignal, inputId?: string): Promise<void> {
 		this.executing = true;
 		this.emit({ type: "agent_start", timestamp: Date.now() });
 		const retry = resolveRetryPolicy(this.options.retry);
@@ -259,7 +306,7 @@ export class AgentSession implements AgentPort {
 			let first = true;
 			while (!signal.aborted) {
 				this.applyConfigurations();
-				if (first && input !== undefined) await this.runtime.prompt(input);
+				if (first && input !== undefined) await this.runtime.prompt(this.inputMessage(input, inputId));
 				else await this.runtime.continue();
 				first = false;
 				if (this.failure !== undefined) throw this.failure;
@@ -305,13 +352,15 @@ export class AgentSession implements AgentPort {
 		}
 	}
 
-	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt> {
+	getSkills(): SkillsSnapshot { return structuredClone(this.skills); }
+	refreshSkills(): Promise<ConfigurationReceipt> { return this.updateConfiguration({}, true); }
+	updateConfiguration(patch: ConfigurationPatch, refresh = false): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
 		const captured = snapshotConfiguration(patch);
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
-			const assembly = await this.prepareConfiguration(captured);
+			const assembly = await this.prepareConfiguration(captured, refresh, this.configurationController.signal);
 			this.assertHealthy();
 			const revision = ++this.revision;
 			const applied = new Promise<Awaited<ConfigurationReceipt["applied"]>>(resolve => { this.pendingConfigurations.push({ assembly, revision, resolve }); });
@@ -326,6 +375,7 @@ export class AgentSession implements AgentPort {
 		for (const pending of this.pendingConfigurations.splice(0)) {
 			if (this.disposed || this.failure !== undefined) { pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
 			this.toolset.clear();
+			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
 			this.options = pending.assembly.options; this.toolset = this.prepareTools(); this.driver = pending.assembly.driver;
 			this.runtime.state.model = this.options.model; this.runtime.state.systemPrompt = this.options.systemPrompt;
 			this.runtime.state.thinkingLevel = this.options.thinkingLevel; this.runtime.state.tools = this.toolset.tools;
@@ -334,6 +384,6 @@ export class AgentSession implements AgentPort {
 			this.emit({ type: "configuration", phase: "applied", revision: pending.revision, timestamp: Date.now() });
 		}
 	}
-	async dispose(): Promise<void> { this.disposed = true; this.abort(); this.applyConfigurations(); await this.running; await this.configurationQueue; }
+	async dispose(): Promise<void> { this.disposed = true; this.configurationController.abort(); this.abort(); this.applyConfigurations(); await this.running; await this.configurationQueue; }
 	private assertHealthy(): void { if (this.disposed) throw new Error("Agent has been disposed"); if (this.failure !== undefined) throw new Error("Agent is faulted; recreate it from storage", { cause: this.failure }); }
 }

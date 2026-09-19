@@ -1,3 +1,5 @@
+import { discoverSkills } from "./skills/catalog.ts";
+import type { SkillsOptions } from "./skills/types.ts";
 import { snapshotConfiguration, prepareSessionConfiguration, createSummaryDriver } from "./session-configuration.ts";
 import type { ConfigurationPatch } from "./configuration.ts";
 import type { AgentOptions as RuntimeOptions } from "./runtime/agent.ts";
@@ -27,6 +29,7 @@ import type { MemoryOptions } from "./memory/tools.ts";
 export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" | "toolExecution">;
 
 export interface PiPortOptions extends InputQueueOptions {
+	skills?: SkillsOptions | false;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	sessionId?: string;
@@ -97,10 +100,14 @@ export interface ModelPortOptions extends InputQueueOptions {
 /** Assemble the single source-owned session runtime. */
 export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
 	let desired = snapshotConfiguration(options);
-	const initial = await prepareSessionConfiguration(desired);
-	return new AgentSession(initial, async (patch: ConfigurationPatch) => {
+	let catalog = await discoverSkills(desired.skills, desired.cwd);
+	const initial = await prepareSessionConfiguration(desired, catalog);
+	return new AgentSession(initial, async (patch: ConfigurationPatch, refresh = false, signal?: AbortSignal) => {
 		const next = snapshotConfiguration({ ...desired, ...patch });
-		const assembly = await prepareSessionConfiguration(next);
+		const nextCatalog = refresh || "skills" in patch ? await discoverSkills(next.skills, next.cwd, signal) : catalog;
+		const assembly = await prepareSessionConfiguration(next, nextCatalog);
+		signal?.throwIfAborted();
+		catalog = nextCatalog;
 		desired = next;
 		return assembly;
 	});

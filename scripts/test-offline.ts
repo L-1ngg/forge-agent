@@ -61,9 +61,11 @@ export async function offline(group = "all"): Promise<number> {
 	// Explicit environment: no inherited provider credentials, proxy, NODE_OPTIONS or Bun preload.
 	const env: Record<string, string | undefined> = {};
 	for (const name of ["PATH", "TMPDIR", "LANG", "LC_ALL", "TERM", "CI", "FORGE_TEST_SEED", "FORGE_TEST_PATH"]) if (process.env[name] !== undefined) env[name] = process.env[name];
+	// Skills uses ~/.forge/skills; isolate the child home as well as XDG state.
+	env.HOME = join(directory, "home");
 	env.XDG_CONFIG_HOME = join(directory, "config"); env.XDG_DATA_HOME = join(directory, "data");
 	env.FORGE_TEST_OFFLINE = "1";
-	await Promise.all([env.XDG_CONFIG_HOME, env.XDG_DATA_HOME].map(path => mkdir(path!, { recursive: true })));
+	await Promise.all([env.HOME, env.XDG_CONFIG_HOME, env.XDG_DATA_HOME].map(path => mkdir(path!, { recursive: true })));
 	const command = [process.execPath, import.meta.path, "--inside", group];
 	try {
 		if (process.platform === "linux") {

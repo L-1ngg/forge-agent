@@ -1,3 +1,4 @@
+import type { AgentInput } from "@forge-agent/core/sdk";
 import { response, type RequestEnvelopeFor, type RequestKind, type ResponseEnvelope, type ResponseResultByKind, type SessionEvent, type SessionTurn } from "@forge-agent/protocol";
 import type { RequestBus } from "@forge-agent/core";
 
@@ -40,13 +41,13 @@ export interface RunHeadlessOptions {
 }
 
 type HeadlessOutput = (line: string) => void;
-type HeadlessPort = { runTurn(input: string): SessionTurn };
+type HeadlessPort = { runTurn(input: AgentInput): SessionTurn };
 
-export function runHeadless(port: HeadlessPort, prompt: string, output?: HeadlessOutput, options?: RunHeadlessOptions): Promise<number>;
-export function runHeadless(port: HeadlessPort, prompt: string, options?: RunHeadlessOptions): Promise<number>;
+export function runHeadless(port: HeadlessPort, prompt: AgentInput, output?: HeadlessOutput, options?: RunHeadlessOptions): Promise<number>;
+export function runHeadless(port: HeadlessPort, prompt: AgentInput, options?: RunHeadlessOptions): Promise<number>;
 export async function runHeadless(
 	port: HeadlessPort,
-	prompt: string,
+	prompt: AgentInput,
 	outputOrOptions: HeadlessOutput | RunHeadlessOptions | undefined = console.log,
 	maybeOptions: RunHeadlessOptions = {},
 ): Promise<number> {

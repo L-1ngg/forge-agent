@@ -11,6 +11,7 @@ export interface HarnessUiConfig {
 }
 
 export interface HarnessConfig {
+	skills?: { enabled?: boolean; roots?: Partial<Record<"workspace" | "user" | "builtin", string>> };
 	memory?: { autoUpdate?: boolean; injection?: boolean };
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;
@@ -50,13 +51,18 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory", "skills"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);
 	}
 	if ("apiKey" in config && (typeof config.apiKey !== "string" || !config.apiKey.trim())) {
 		throw new Error(`Invalid config ${path}: apiKey must be a non-empty string`);
+	}
+	if ("skills" in config) {
+		const skills = config.skills;
+		if (!skills || typeof skills !== "object" || Array.isArray(skills) || Object.keys(skills).some(key => !["enabled", "roots"].includes(key)) || ("enabled" in skills && typeof skills.enabled !== "boolean")) throw new Error(`Invalid config ${path}: skills accepts enabled and roots`);
+		if ("roots" in skills && (!skills.roots || typeof skills.roots !== "object" || Array.isArray(skills.roots) || Object.entries(skills.roots).some(([key, value]) => !["workspace", "user", "builtin"].includes(key) || typeof value !== "string" || !value.trim()))) throw new Error(`Invalid config ${path}: invalid skills roots`);
 	}
 	if ("memory" in config) {
 		const memory = config.memory;
@@ -84,6 +90,7 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 		...projectConfig,
 		ui: mergedUi,
 		memory: { ...globalConfig.memory, ...projectConfig.memory },
+	skills: { ...globalConfig.skills, ...projectConfig.skills, roots: { ...globalConfig.skills?.roots, ...projectConfig.skills?.roots } },
 		...(env.FORGE_AGENT_PROVIDER ? { provider: env.FORGE_AGENT_PROVIDER } : {}),
 		...(env.FORGE_AGENT_MODEL ? { model: env.FORGE_AGENT_MODEL } : {}),
 		...(env.FORGE_AGENT_API_KEY ? { apiKey: env.FORGE_AGENT_API_KEY } : {}),

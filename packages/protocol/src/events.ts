@@ -69,6 +69,7 @@ export interface CompactionMetrics {
 }
 
 export type SessionEvent =
+	| (EventBase & { type: "skill_input"; phase: "rejected"; inputId: string; name: string; code: string; message: string })
 	| (EventBase & { type: "memory"; phase: "projection"; tokens: number; truncated: boolean; selected: Array<{ scope: string; path: string; version: string }>; warnings: string[] })
 	| (EventBase & { type: "configuration"; phase: "accepted" | "applied"; revision: number })
 	| (EventBase & { type: "retry"; phase: "scheduled" | "attempt" | "end"; attempt: number; delayMs?: number; error?: string; outcome?: "success" | "error" | "aborted" })
