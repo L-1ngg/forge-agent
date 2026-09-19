@@ -5,7 +5,7 @@ created: 2026-09-19
 
 # 架构职责收敛施工记录
 
-> 状态:实现中(2026-09-19)。需求与验收唯一来源为 [Issue #34](https://github.com/L-1ngg/forge-agent/issues/34)，本文件记录内部组织、批次证据与回退。
+> 状态:五批实现与本地 Linux 自动化验收完成(2026-09-19)；未执行 macOS 或人工验收。需求与验收唯一来源为 [Issue #34](https://github.com/L-1ngg/forge-agent/issues/34)，本文件记录内部组织、批次证据与回退。
 
 ## Entry 与边界
 
@@ -61,4 +61,20 @@ created: 2026-09-19
 - 反向验证：临时吞掉 checkpoint 保存异常，故障用例 1 fail；恢复后生命周期文件 6 pass。
 - 回退：协调器、重建模块、会话接线及生命周期测试一起回退；压缩算法、预算公式、提示词与模型调用上限未改。
 
-B5 及最终门禁待记录。
+### B5
+
+- Scenario 通过 `httpFixture()` 统一登记与释放 HTTP fixtures。close 共用一次 Promise，按释放屏障→停止执行资源/等待收集→等待已接收请求解析并验证→关闭全部 fixture→删除临时目录结算；失败仍继续其他阶段。withScenario 保留业务主错误并输出次要诊断。
+- Scenario 中的 protocol/retry/cancellation/property/PTY permission 已移除手工 fixture close/assertComplete；独立 HttpFixture 自检保留。公共 Trace/屏障移至 `control.ts`，避免 Scenario/HttpFixture 互相运行时依赖。
+- 目标验证：支撑层自检 17 pass，迁移集成与正式 CLI permission 21 pass。覆盖缺失/未匹配/额外请求、收尾才发出的请求、取消/hold/断流、同时失败的主次错误、所有 fixture 释放、目录删除、重复 close 及活动 SDK invocation 收尾。
+- 反向验证：移除自动完成性检查，省略显式 assertComplete 的缺失请求用例变红；恢复后通过。测试/automation 类型检查通过。
+- 回退：Scenario/HttpFixture、共享控制原语及全部迁移测试共同回退，不改变生产代码或网络隔离策略。
+
+## 最终验收与审查
+
+- Ran：最终 `bun run check` 退出 0，依赖门禁、五包类型、automation/test 类型均通过；649 pass / 0 fail（contract 518、integration 119、CLI 12，90 个测试文件）。环境 Linux x64、Bun 1.3.12，三个测试组均为 `networkIsolation: "network-namespace"`，内核网络隔离探针通过。
+- Ran：`bun run test:headless`、`bun run typecheck:examples`、`git diff --check` 通过。headless 受控模型输出 `replay ok` 并以 success 结束。受影响入口的运行时 import 图无循环；App 不直接修改队列、替换和暂停字段。
+- 审查：每批使用固定起点 `c2f9aea`、累计任务提交及本批 WIP 做 Standards/Spec 两轴审查。B5 的工具 trace 参数误删已恢复；owned execution 在其他 cleanup 期间失败被过早移除的问题已补回归，先复现假绿、再保留任务至 close 结算。修复后受影响 38 项测试通过，并重跑完整门禁通过；两轴均无未解决发现。
+- AC 归属：B1 对应 AC-ARCH-01–03，B2 对应 04–06，B3 对应 07–09，B4 对应 10–12，B5 对应 13–15；各批反向验证、最终门禁和文档同步分别提供 16–18 的证据，验收定义仍以 Issue 为准。
+- Not run / Why：本机未执行 macOS、Windows、真实外部模型或人工 TUI 验收；本任务验证软件合同与结构，模型质量/费用不在范围内。既有 macOS fixture 兼容性策略和人工验收豁免不变。
+- Risk：本地通过不代表其他平台或真实供应商矩阵已复验；取消仍不承诺撤销已经开始的存储写入或工具副作用。有界清理会报告不合作资源的超时，不能强制完成任意用户 Promise。
+- 交付：按 B1–B5 分批提交到当前 `master`；本次不推送、不关闭 Issue。原有三份用户文档逐字核对未改，未混入任务提交。

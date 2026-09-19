@@ -5,7 +5,7 @@ created: 2026-09-12
 
 # 完整 Agent 装配契约
 
-> 状态:完整装配合同继续生效；局部宿主结算接口按 [Issue #34 施工记录](architecture-responsibilities.md) 更新中(2026-09-19)。operator 已确认创建阶段检查完整能力、失败清理已创建资源，并保留局部测试的小 interface。
+> 状态:完整装配合同继续生效；局部宿主结算与配置装配按 [Issue #34 施工记录](architecture-responsibilities.md) 完成更新及本地自动化验证(2026-09-19)。operator 已确认创建阶段检查完整能力、失败清理已创建资源，并保留局部测试的小 interface。
 
 ## Why / Entry
 

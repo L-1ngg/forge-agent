@@ -11,6 +11,8 @@ created: 2026-09-18
 
 基线 `3892705a585e50d49a1bb46bedf1ade108aae0eb`，Bun 1.3.12、pi-ai 0.85.1、fast-check 4.3.0。operator 确认：保留 Linux 强制断网，macOS 使用本地 fixtures、假凭据和独立配置目录运行完整测试；撤回 PF 接入，不再追查 Seatbelt 内部问题。验收完成后 operator 明确授权「可以，你可以提交并push了」；Issue 关闭仍未授权。此前临时诊断分支的一次 bootstrap 提交及结束后的分支清理已按有限授权执行。开始时 `docs/README.md`、`docs/plan.md`、`docs/phases/testing-system.md` 有未暂存改动，作为上下文保留，不混入本任务提交；最后一份文件仅提交本次状态行更新。
 
+2026-09-19 的资源结算更新见 [Issue #34 施工记录](architecture-responsibilities.md)：Scenario 场景使用 `scenario.httpFixture(id, exchanges)` 创建 fixture，无需手动配对关闭或完整性断言。`withScenario` 成功退出包含全部预期请求核验；它先解除屏障、等待执行资源，再验证并关闭 fixture。取消/hold/断流允许响应未完整送达，但不豁免请求匹配；断言失败保持为主错误，结算故障保留为次要诊断。独立 HttpFixture 自检仍使用 `assertComplete()` 与 `close()`。
+
 测试侧增加 `tests/support/`：场景资源与有界屏障、顺序证据、严格 HTTP fixtures；生产执行仍使用 SDK 默认装配，属性测试只在模型流边界注入脚本。受控工具必须显式声明预期调用。存储仍使用生产接口，必要时在 append 前暂停或失败。支撑层不复制 Agent 状态机。
 
 Linux 离线入口新建只有 loopback 的 network namespace，限制由测试进程及 CLI、工具子进程继承；原生 socket 与 Bun/Bash/CLI 越界探针在每次测试组运行前验证内核拒绝。隔离不可用时明确失败，不降级；Linux CI 必要时仅通过 sudo 创建命名空间后降权回 runner 用户。

@@ -1,4 +1,4 @@
-import { Trace, bounded } from "./scenario.ts";
+import { Trace, bounded } from "./control.ts";
 
 export interface Exchange {
 	id: string;
@@ -24,8 +24,14 @@ export class HttpFixture {
 	private headerRequests = 0;
 	private readonly waiters = new Map<string, () => void>();
 	private closed = false;
+	private readonly pendingRequests = new Set<Promise<Response>>();
 	constructor(readonly id: string, private readonly exchanges: readonly Exchange[], readonly trace = new Trace()) {
-		this.server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => this.fetch(request) });
+		this.server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => {
+			const pending = this.fetch(request);
+			this.pendingRequests.add(pending);
+			void pending.then(() => this.pendingRequests.delete(pending), () => this.pendingRequests.delete(pending));
+			return pending;
+		} });
 	}
 	get url(): string { return this.server.url.toString(); }
 	get count(): number { return this.requests.length; }
@@ -81,11 +87,16 @@ export class HttpFixture {
 			return Response.json({ error: { message: `Fixture mismatch: ${label}` } }, { status: 400 });
 		}
 	}
+	async verify(): Promise<void> {
+		await bounded(Promise.all([...this.pendingRequests]), `${this.id}/request settlement`);
+		this.assertComplete();
+	}
 	assertComplete(): void {
 		if (this.errors.length) throw new AggregateError(this.errors, this.errors.map(error => error.message).join("\n"));
 		if (this.cursor !== this.exchanges.length) throw new Error(`${this.id}: missing exchanges: ${this.exchanges.slice(this.cursor).map(step => step.id).join(", ")}`);
 	}
 	close(): void {
+		if (this.closed) return;
 		this.closed = true;
 		for (const controller of this.controllers) { try { controller.close(); } catch { /* Already canceled by the client. */ } }
 		this.controllers.clear();

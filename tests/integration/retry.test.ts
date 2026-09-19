@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { HttpFixture, type Exchange } from "../support/http-fixture.ts";
+import type { Exchange } from "../support/http-fixture.ts";
 import { withScenario } from "../support/scenario.ts";
 import { frames, path, protocols, settings } from "../fixtures/protocol.ts";
 
@@ -17,7 +17,7 @@ for (const protocol of protocols) for (const failure of [429, 503, "disconnect",
 		{ id: "retry-tool", method: "POST", path: path(protocol), match, response: { chunks: frames(protocol, true) } },
 		{ id: "continuation", method: "POST", path: path(protocol), match(body) { match(body); expect(JSON.stringify(body)).toContain("one-effect"); }, response: { chunks: frames(protocol) } },
 	);
-	const fixture = new HttpFixture(scenario.id, script, scenario.trace); scenario.defer(() => fixture.close());
+	const fixture = scenario.httpFixture(scenario.id, script);
 	let effects = 0;
 	const agent = await scenario.agent({ ...settings(protocol), baseUrl: fixture.url,
 		retry: { enabled: true, maxRetries: 1, baseDelayMs: failure === "backoff-cancel" ? 10000 : 0 },
@@ -32,5 +32,4 @@ for (const protocol of protocols) for (const failure of [429, 503, "disconnect",
 	expect(await turn.result).toEqual({ status: failure === "backoff-cancel" ? "aborted" : "success" });
 	expect(retries).toBe(1); expect(fixture.count).toBe(failure === "backoff-cancel" ? 1 : 3);
 	expect(effects).toBe(failure === "backoff-cancel" ? 0 : 1);
-	fixture.assertComplete();
 }));

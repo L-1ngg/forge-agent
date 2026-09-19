@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import type { AgentTurn } from "../../packages/core/src/sdk.ts";
-import { HttpFixture, type Exchange } from "../support/http-fixture.ts";
+import type { Exchange } from "../support/http-fixture.ts";
 import { withScenario, bounded } from "../support/scenario.ts";
 import { frames, settings, path } from "../fixtures/protocol.ts";
 
@@ -15,7 +15,7 @@ test("generated operations drive the real SDK: ownership, cancellation, reuse an
 		await withScenario("sdk-sequence", async scenario => {
 			scenario.trace.record("reproduction", { seed, path: replayPath ?? "", commands });
 			const script: Exchange[] = [];
-			const fixture = new HttpFixture(scenario.id, script, scenario.trace); scenario.defer(() => fixture.close());
+			const fixture = scenario.httpFixture(scenario.id, script);
 			const agent = await scenario.agent({ ...settings("anthropic"), baseUrl: fixture.url, tools: [] });
 			let disposed = false;
 			let old: AgentTurn | undefined;
@@ -71,7 +71,6 @@ test("generated operations drive the real SDK: ownership, cancellation, reuse an
 			// Ensure an old invocation exists; the random suffix is what fast-check shrinks.
 			await execute("run", -1);
 			for (const [index, operation] of commands.entries()) await execute(operation, index);
-			fixture.assertComplete();
 			await agent.dispose();
 			expect(() => agent.runTurn("closed")).toThrow("disposed");
 		});
