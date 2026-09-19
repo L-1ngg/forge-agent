@@ -54,4 +54,11 @@ created: 2026-09-19
 - 反向验证：临时取消 processed 保护后，已处理输入错误恢复用例 1 fail；恢复后两用例通过。未处理的取消/错误输入恢复为草稿，不自动重放。
 - 回退：InputFlow、App 接入及行为测试共同回退；依赖 B1 的 result 合同。
 
-B4–B5 及最终门禁待记录。
+### B4
+
+- `CompactionCoordinator` 统一预算、usage 同步、计算→保存→重建→事件结算；会话保留 manual/threshold/overflow/length/usage 的触发、取消及重试策略。`context/rebuild.ts` 独立重建检查点投影，公共定义不再依赖计算模块，运行时循环已解除。
+- 目标验证：compaction-lifecycle、context-compaction、memory-session、runtime-configuration、runtime-retry 与 PTY context 共 62 pass；类型、依赖门禁通过。新增持久化屏障两路径，保证未保存不成功、不开始任务，失败停用实例，保存后原历史保留并使用压缩投影。
+- 反向验证：临时吞掉 checkpoint 保存异常，故障用例 1 fail；恢复后生命周期文件 6 pass。
+- 回退：协调器、重建模块、会话接线及生命周期测试一起回退；压缩算法、预算公式、提示词与模型调用上限未改。
+
+B5 及最终门禁待记录。

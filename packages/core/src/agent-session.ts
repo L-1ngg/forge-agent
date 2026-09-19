@@ -1,3 +1,4 @@
+import { CompactionCoordinator } from "./context/coordinator.ts";
 import type { ConfigurationPatch, ConfigurationReceipt, SessionAssembly, SessionToolset } from "./configuration.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import type { AgentMessage } from "./runtime/types.ts";
@@ -11,9 +12,9 @@ import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
 import { MemorySessionStorage, messageEntry, projectMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { randomUUID } from "node:crypto";
-import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionReason, type CompactionResult, type ContextSettings, buildContext } from "./context/compaction.ts";
-import { compactContext, compactionInputBudget, type CompactionMetrics } from "./context/compact.ts";
-import { UsageTracker, estimateContextTokens } from "./usage.ts";
+import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionResult, type ContextSettings } from "./context/compaction.ts";
+import { compactionInputBudget } from "./context/compact.ts";
+import { UsageTracker } from "./usage.ts";
 import { MemoryTools } from "./memory/tools.ts";
 import { selectedBranch } from "./session-storage.ts";
 import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts";
@@ -21,6 +22,7 @@ import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts"
 /** Owns durable history and run settlement; the runtime alone owns request messages. */
 export class AgentSession implements AgentPort {
 	private readonly runtime: RuntimeAgent;
+	private readonly compaction: CompactionCoordinator;
 	private readonly projectEvent = createEventProjection();
 	private options: ModelPortOptions;
 	private toolset: SessionToolset;
@@ -83,12 +85,12 @@ export class AgentSession implements AgentPort {
 			},
 			transformContext: async (messages, signal) => {
 				signal?.throwIfAborted();
-				await this.assembleMemory(signal); this.syncUsage();
-				const limit = compactionInputBudget(this.contextBudget(), this.settings.reserveTokens);
+				await this.assembleMemory(signal); this.compaction.syncUsage();
+				const limit = compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens);
 				if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > limit) {
-					const result = await this.compactContext("threshold", signal ?? this.runController!.signal, this.emit);
+					const result = await this.compaction.run("threshold", signal ?? this.runController!.signal, this.emit);
 					if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
-					await this.assembleMemory(signal); this.syncUsage();
+					await this.assembleMemory(signal); this.compaction.syncUsage();
 				}
 				signal?.throwIfAborted();
 				return [...this.assembler.projection.messages.map(message => fromSessionMessage(message, this.options.model)), ...this.runtime.state.messages];
@@ -97,8 +99,13 @@ export class AgentSession implements AgentPort {
 			streamFn: (model, context, settings) => {
 				settings?.signal?.throwIfAborted();
 				this.responseDriver = this.driver;
-				return this.options.stream(model, context, { ...settings, maxRetries: 0, maxTokens: this.taskMaxTokens() });
+				return this.options.stream(model, context, { ...settings, maxRetries: 0, maxTokens: this.compaction.taskMaxTokens() });
 			},
+		});
+		this.compaction = new CompactionCoordinator({
+			runtime: this.runtime, usage: this.usage, assembler: this.assembler,
+			configuration: () => ({ options: this.options, driver: this.driver, settings: this.settings }),
+			history: () => this.state, persist: entry => this.persistEntry(entry), isFaulted: () => this.failure !== undefined,
 		});
 		this.runtime.subscribe(async event => {
 			// Agent reduces state before awaited listeners, and reports listener failures as
@@ -117,7 +124,7 @@ export class AgentSession implements AgentPort {
 					const entry = messageEntry(message, this.state.leafId);
 					this.receipts.get(event.message)?.(true); this.receipts.delete(event.message);
 					await this.persistEntry(entry);
-					this.syncUsage();
+					this.compaction.syncUsage();
 					if (message.usage) this.usage.recordUsage(message.usage);
 				}
 			}
@@ -133,8 +140,7 @@ export class AgentSession implements AgentPort {
 		if (this.initialized && storage === this.storage) return;
 		const state = await storage.load();
 		this.state = structuredClone(state); this.storage = storage; this.initialized = true;
-		this.runtime.state.messages = buildContext(state).map(message => fromSessionMessage(message, this.options.model));
-		this.usage.invalidate(); this.syncUsage();
+		this.compaction.rebuild();
 	}
 	runTurn(input: string): AsyncIterable<SessionEvent> { return this.run(input); }
 	continue(): AsyncIterable<SessionEvent> { return this.run(); }
@@ -166,7 +172,7 @@ export class AgentSession implements AgentPort {
 			this.closeInput(); this.toolset?.clear();
 			this.emit = () => { };
 			this.running = undefined; this.runController = undefined;
-			this.syncUsage(); this.usage.endTurn();
+			this.compaction.syncUsage(); this.usage.endTurn();
 			if (failure !== undefined) throw failure;
 		}
 	}
@@ -189,16 +195,14 @@ export class AgentSession implements AgentPort {
 	getUsage() { return this.usage.snapshot(); }
 	getMemoryBudget(): number {
 		if (this.options.memory?.injection === false) return 0;
-		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.contextBudget().fixedText, compactionInputBudget(this.contextBudget(), this.settings.reserveTokens));
+		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
 	}
-	private syncUsage(): void {
-		this.usage.setContext({ messages: [...this.assembler.projection.messages, ...projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))], contextWindow: this.options.contextWindow ?? this.options.model.contextWindow, identity: JSON.stringify([this.options.model, this.options.systemPrompt, this.options.thinkingLevel, this.options.tools, this.assembler.projection.messages]), fixedText: this.contextBudget().fixedText });
-	}
+
 	private async assembleMemory(signal?: AbortSignal): Promise<void> {
 		const messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
 		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
 		const before = JSON.stringify(this.assembler.projection);
-		const projection = await this.assembler.assemble(messages, this.contextBudget().fixedText, compactionInputBudget(this.contextBudget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
+		const projection = await this.assembler.assemble(messages, this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
 		if (JSON.stringify(projection) !== before) {
 			this.usage.invalidate();
 			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
@@ -217,8 +221,7 @@ export class AgentSession implements AgentPort {
 		this.settings = next;
 		if (this.runtime) {
 			this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
-			this.runtime.state.messages = buildContext(this.state).map(message => fromSessionMessage(message, this.options.model));
-			this.usage.invalidate(); this.syncUsage();
+			this.compaction.rebuild();
 		}
 	}
 
@@ -231,40 +234,8 @@ export class AgentSession implements AgentPort {
 		signal?.addEventListener("abort", abort, { once: true });
 		if (signal?.aborted) abort();
 		this.compactController = controller;
-		try { return await this.compactContext("manual", controller.signal, emit, instructions); }
+		try { return await this.compaction.run("manual", controller.signal, emit, instructions); }
 		finally { signal?.removeEventListener("abort", abort); this.compactController = undefined; this.applyConfigurations(); }
-	}
-	private taskMaxTokens(): number { return this.options.maxTokens ?? Math.min(4096, this.options.model.maxTokens || 4096); }
-	private contextBudget() {
-		return { window: this.options.contextWindow ?? this.options.model.contextWindow, output: this.driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: this.options.systemPrompt + JSON.stringify(this.runtime.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }))) };
-	}
-	private async compactContext(reason: CompactionReason, signal: AbortSignal, emit: (event: SessionEvent) => void, instructions?: string): Promise<CompactionResult> {
-		const operationId = randomUUID();
-		this.syncUsage();
-		const beforeTokens = estimateContextTokens(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!))) + Math.ceil(this.contextBudget().fixedText.length / 4);
-		let compactionMetrics: CompactionMetrics | undefined;
-		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...compactionMetrics, ...extra });
-		try {
-			signal.throwIfAborted();
-			event("start");
-			const result = await compactContext(this.state, this.settings, this.driver, this.contextBudget(), beforeTokens, signal, details => {
-				const changed = details.modelCalls !== (compactionMetrics?.modelCalls ?? 0);
-				compactionMetrics = details;
-				if (changed) emit({ type: "compaction", phase: "attempt", operationId, reason, beforeTokens, timestamp: Date.now(), ...details });
-			}, instructions);
-			signal.throwIfAborted();
-			await this.persistEntry(result.entry);
-			this.runtime.state.messages = buildContext(this.state).map(message => fromSessionMessage(message, this.options.model));
-			this.usage.invalidate(); this.syncUsage();
-			const afterTokens = this.getUsage().contextTokens ?? result.afterTokens;
-			emit({ type: "compaction", phase: "end", operationId, reason, beforeTokens, afterTokens, timestamp: Date.now(), ...compactionMetrics });
-			return { status: "complete", operationId, beforeTokens, afterTokens };
-		} catch (error) {
-			if (this.failure !== undefined) throw error;
-			const message = error instanceof Error ? error.message : String(error);
-			event("error", { error: message });
-			return { status: "error", operationId, beforeTokens, error: message };
-		}
 	}
 
 	private async persistEntry(entry: SessionEntry): Promise<void> {
@@ -304,7 +275,7 @@ export class AgentSession implements AgentPort {
 					this.recoveryUsed = true;
 					const reason = length ? "length" : "overflow";
 					this.emit({ type: "recovery", reason, operationId: randomUUID(), attempt: 1, timestamp: Date.now() });
-					const result = await this.compactContext(reason, signal, this.emit);
+					const result = await this.compaction.run(reason, signal, this.emit);
 					if (result.status !== "complete" || signal.aborted) return;
 					this.runtime.state.messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model));
 					continue;
@@ -316,12 +287,12 @@ export class AgentSession implements AgentPort {
 					try { await (this.driver.wait ?? waitForRetry)(delayMs, signal); } catch (error) { if (signal.aborted) return; throw error; }
 					signal.throwIfAborted();
 					this.runtime.state.messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model));
-					this.usage.invalidate(); this.syncUsage();
+					this.usage.invalidate(); this.compaction.syncUsage();
 					this.emit({ type: "retry", phase: "attempt", attempt, timestamp: Date.now() });
 					continue;
 				}
 				if (message.stopReason !== "error" && message.stopReason !== "length" && message.stopReason !== "aborted") this.recoveryUsed = false;
-				if (this.settings.enabled && message.stopReason === "stop" && overflow) await this.compactContext("usage", signal, this.emit);
+				if (this.settings.enabled && message.stopReason === "stop" && overflow) await this.compaction.run("usage", signal, this.emit);
 				return;
 			}
 		} finally {
@@ -358,7 +329,7 @@ export class AgentSession implements AgentPort {
 			this.options = pending.assembly.options; this.toolset = this.prepareTools(); this.driver = pending.assembly.driver;
 			this.runtime.state.model = this.options.model; this.runtime.state.systemPrompt = this.options.systemPrompt;
 			this.runtime.state.thinkingLevel = this.options.thinkingLevel; this.runtime.state.tools = this.toolset.tools;
-			this.usage.invalidate(); this.syncUsage();
+			this.usage.invalidate(); this.compaction.syncUsage();
 			pending.resolve({ status: "applied", revision: pending.revision });
 			this.emit({ type: "configuration", phase: "applied", revision: pending.revision, timestamp: Date.now() });
 		}

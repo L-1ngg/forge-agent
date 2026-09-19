@@ -1,6 +1,6 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { selectedBranch, type SessionState } from "../session-storage.ts";
-import { compactedMessages } from "./compact.ts";
+import { compactedMessages } from "./rebuild.ts";
 
 export interface ContextSettings { enabled: boolean; reserveTokens: number; keepRecentTokens: number; summaryReasoning: "inherit" | "off"; }
 export const DEFAULT_CONTEXT: ContextSettings = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, summaryReasoning: "inherit" };

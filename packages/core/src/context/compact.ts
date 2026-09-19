@@ -19,20 +19,7 @@ export interface CompactionBudget { window: number; output: number; fixedText: s
 export function compactionInputBudget(budget: CompactionBudget, reserve: number): number {
 	return budget.window - Math.max(reserve, budget.output + Math.max(1024, Math.ceil(budget.window * 0.02)));
 }
-export function compactedMessages(state: SessionState): SessionMessage[] {
-	const branch = selectedBranch(state);
-	const index = branch.reduce((last, entry, index) => entry.type === "compaction" ? index : last, -1);
-	const entry = branch[index];
-	if (entry?.type !== "compaction" || !entry.checkpoint) throw new Error("No compaction checkpoint");
-	const checkpoint = entry.checkpoint;
-	const history = branch.slice(0, index).filter((entry): entry is MessageEntry => entry.type === "message");
-	const kept = history.filter(item => checkpoint.keptIds.includes(item.id));
-	return structuredClone([
-		{ role: "user" as const, content: [{ type: "text" as const, text: checkpointText(checkpoint, history, "notes") }], timestamp: Date.parse(entry.timestamp) },
-		...kept.map(item => checkpoint.clippedIds.includes(item.id) ? clippedMessage(item) : item.message),
-		...branch.slice(index + 1).flatMap(item => item.type === "message" ? [item.message] : []),
-	]);
-}
+
 
 interface Unit { entries: MessageEntry[]; }
 function unitSignature(unit: Unit): string {

@@ -46,3 +46,42 @@ test("abort immediately after requesting manual compaction never starts a summar
 	try { const compacting = agent.compact(); agent.abort(); await compacting; expect(calls).toBe(0); }
 	finally { await agent.dispose(); }
 });
+
+for (const fail of [false, true]) test(`compaction waits for durable checkpoint before success or reuse: fail=${fail}`, async () => {
+	const { gate } = await import("./helpers/model-response.ts");
+	const saving = gate(); const release = gate();
+	const storage = new MemorySessionStorage([message("user", "old goal"), message("assistant", "old work ".repeat(1000)), message("user", "recent goal")]);
+	const initial = await storage.load();
+	const events: import("@forge-agent/protocol").SessionEvent[] = [];
+	const requests: string[] = [];
+	const diskError = new Error("checkpoint disk failure");
+	const core = createScriptedSession({ contextWindow: 100000, abortInteractions() {}, async stream(messages) { requests.push(JSON.stringify(messages)); return message("assistant", "done"); }, async summarize() { return message("assistant", JSON.stringify({ states: [], claims: [], taskChanged: false })); }, async execute() { throw new Error("no tool"); } }, [], { enabled: false, keepRecentTokens: 1 });
+	const agent = await createAgent({ ...options, storage: {
+		load: () => storage.load(),
+		async append(entry) {
+			if (entry.type === "compaction") { saving.resolve(); await release.promise; if (fail) throw diskError; }
+			await storage.append(entry);
+		},
+	} }, () => core);
+	const compacting = agent.compact(undefined, event => events.push(event));
+	try {
+		await saving.promise;
+		expect(events.some(event => event.type === "compaction" && event.phase === "end")).toBe(false);
+		expect(await storage.load()).toEqual(initial);
+		expect(() => agent.runTurn("too early")).toThrow("compacting");
+		expect(requests).toHaveLength(0);
+		release.resolve();
+		if (fail) {
+			await expect(compacting).rejects.toBe(diskError);
+			expect(() => agent.runTurn("reuse")).toThrow("faulted");
+			expect(events.some(event => event.type === "compaction" && event.phase === "end")).toBe(false);
+		} else {
+			expect(await compacting).toMatchObject({ status: "complete" });
+			expect((await storage.load()).entries.slice(0, initial.entries.length)).toEqual(initial.entries);
+			for await (const _ of agent.continue()) { }
+			expect(requests).toHaveLength(1);
+			expect(requests[0]).toContain("recent goal");
+			expect(requests[0]).not.toContain("old work ".repeat(1000));
+		}
+	} finally { release.resolve(); await compacting.catch(() => {}); await agent.dispose(); }
+});
