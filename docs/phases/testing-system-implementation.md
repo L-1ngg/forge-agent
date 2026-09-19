@@ -5,11 +5,11 @@ created: 2026-09-18
 
 # 确定性测试体系施工与证据
 
-> 状态:实现与 Linux、三台 macOS 验收已完成；Linux 强制断网，macOS 仅提供完整 fixture 兼容性证据，PF 接入已撤回。operator 已授权提交并推送，Issue 保持 OPEN（2026-09-18）。需求与验收唯一来源为 [Issue #33](https://github.com/L-1ngg/forge-agent/issues/33)，讨论入口见 [testing-system.md](testing-system.md)。
+> 状态:已完成（2026-09-19 核对）。实现与 Linux、三台 macOS 验收证据见下文；Linux 强制断网，macOS 仅提供完整 fixture 兼容性证据，PF 接入已撤回。[Issue #33](https://github.com/L-1ngg/forge-agent/issues/33) 已于 2026-09-18 关闭，需求与验收以该 Issue 为准；规格入口见 [testing-system.md](testing-system.md)。
 
 ## Entry 与设计
 
-基线 `3892705a585e50d49a1bb46bedf1ade108aae0eb`，Bun 1.3.12、pi-ai 0.85.1、fast-check 4.3.0。operator 确认：保留 Linux 强制断网，macOS 使用本地 fixtures、假凭据和独立配置目录运行完整测试；撤回 PF 接入，不再追查 Seatbelt 内部问题。验收完成后 operator 明确授权「可以，你可以提交并push了」；Issue 关闭仍未授权。此前临时诊断分支的一次 bootstrap 提交及结束后的分支清理已按有限授权执行。开始时 `docs/README.md`、`docs/plan.md`、`docs/phases/testing-system.md` 有未暂存改动，作为上下文保留，不混入本任务提交；最后一份文件仅提交本次状态行更新。
+以下保留 Issue 关闭前的施工背景。基线 `3892705a585e50d49a1bb46bedf1ade108aae0eb`，Bun 1.3.12、pi-ai 0.85.1、fast-check 4.3.0。operator 确认：保留 Linux 强制断网，macOS 使用本地 fixtures、假凭据和独立配置目录运行完整测试；撤回 PF 接入，不再追查 Seatbelt 内部问题。验收完成后 operator 明确授权「可以，你可以提交并push了」，当时尚未授权关闭 Issue。此前临时诊断分支的一次 bootstrap 提交及结束后的分支清理已按有限授权执行。开始时 `docs/README.md`、`docs/plan.md`、`docs/phases/testing-system.md` 有未暂存改动，作为上下文保留，不混入该批实现提交；最后一份文件当时仅提交了状态行更新。
 
 2026-09-19 的资源结算更新见 [Issue #34 施工记录](architecture-responsibilities.md)：Scenario 场景使用 `scenario.httpFixture(id, exchanges)` 创建 fixture，无需手动配对关闭或完整性断言。`withScenario` 成功退出包含全部预期请求核验；它先解除屏障、等待执行资源，再验证并关闭 fixture。取消/hold/断流允许响应未完整送达，但不豁免请求匹配；断言失败保持为主错误，结算故障保留为次要诊断。独立 HttpFixture 自检仍使用 `assertComplete()` 与 `close()`。
 
