@@ -1,4 +1,5 @@
-import type { SessionTurn } from "@forge-agent/protocol";
+import { InputFlow } from "./input-flow.ts";
+import type { SessionTurn, TurnResult } from "@forge-agent/protocol";
 import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
@@ -140,9 +141,7 @@ export class App {
 	private feedbackTimer: ReturnType<typeof setTimeout> | undefined;
 	private copyVersion = 0;
 	private interactiveRegion: { x: number; y: number; width: number; height: number } | undefined;
-	private readonly queued: string[] = [];
-	private autoSendPaused = false;
-	private replacement: string | undefined;
+	private readonly inputs = new InputFlow();
 	private runTask: Promise<void> | undefined;
 	private picker: PickerState | undefined;
 	private suggestionVersion = 0;
@@ -383,7 +382,7 @@ export class App {
 				if (key.direction === "left") moveLeft(this.draft);
 				else if (key.direction === "right") moveRight(this.draft);
 				else if (key.direction === "up") {
-					const recalled = isEditorEmpty(this.draft) ? this.queued.pop() : undefined;
+					const recalled = isEditorEmpty(this.draft) ? this.inputs.recall() : undefined;
 					if (recalled !== undefined) replaceEditor(this.draft, recalled, recalled.length);
 					else moveUp(this.draft);
 				}
@@ -503,7 +502,7 @@ export class App {
 			return;
 		}
 		if (this.running || this.compactTask) {
-			this.queued.push(input);
+			this.inputs.enqueue(input);
 			this.repaint();
 			return;
 		}
@@ -518,9 +517,7 @@ export class App {
 		this.picker = undefined;
 		if (input && this.dispatchCommand(input)) { this.repaint(); return; }
 		if (this.running) {
-			this.autoSendPaused = true;
-			if (this.replacement !== undefined) this.queued.push(this.replacement);
-			this.replacement = input;
+			this.inputs.stopAndSend(input);
 			this.port.abort?.();
 			this.repaint();
 			return;
@@ -541,10 +538,7 @@ export class App {
 	}
 
 	private pauseSending(): void {
-		this.autoSendPaused = true;
-		if (this.replacement !== undefined) this.queued.push(this.replacement);
-		this.replacement = undefined;
-		this.restoreInputs(this.queued.splice(0));
+		this.restoreInputs(this.inputs.pause());
 	}
 
 	private dispatchCommand(input: string): boolean {
@@ -555,7 +549,7 @@ export class App {
 			this.memoryTask = this.options.memoryCommand(command.slice(7).trim()).then(result => {
 				this.projector.addNotice(result.text);
 				if (result.prompt) {
-					if (this.running || this.compactTask || this.switching) this.queued.push(result.prompt);
+					if (this.running || this.compactTask || this.switching) this.inputs.enqueue(result.prompt);
 					else if (this.started) this.runTask = this.runTurn(result.prompt);
 					else this.restoreInputs([result.prompt]);
 				}
@@ -617,7 +611,7 @@ export class App {
 	private requestSwitch(id?: string): void {
 		if (!this.options.sessions || !this.session) { this.projector.addNotice("Session switching unavailable"); return; }
 		if (id === this.session.id || this.switching) return;
-		if (!this.session.hasHistory() && (!isEditorEmpty(this.draft) || this.queued.length || this.replacement)) {
+		if (!this.session.hasHistory() && (!isEditorEmpty(this.draft) || this.inputs.hasPending)) {
 			this.pendingTarget = id;
 			this.sessionMenu = new SessionMenu("discard");
 			return;
@@ -654,7 +648,7 @@ export class App {
 				this.browser.reset(); this.viewer = undefined; this.browsing = false;
 				this.selection = undefined; this.selectionFlash = undefined;
 				this.feedback = undefined; this.copyVersion++; clearTimeout(this.feedbackTimer);
-				this.queued.length = 0; this.replacement = undefined; this.autoSendPaused = true;
+				this.inputs.reset();
 				const draft = this.savedDrafts.get(next.id) ?? "";
 				this.savedDrafts.delete(next.id);
 				replaceEditor(this.draft, draft, draft.length);
@@ -669,37 +663,30 @@ export class App {
 		this.executionError = undefined;
 		this.submitted = true;
 		this.running = true;
-		this.autoSendPaused = false;
+		this.inputs.start();
 		try {
 			let current: string | undefined = input;
 			while (current !== undefined && this.started) {
 				this.repaint();
-				let inputProcessed = false;
+				this.inputs.begin(current);
+				let status: TurnResult["status"] | undefined;
+				let failed = false;
 				try {
 					const turn = this.port.runTurn(current);
 					for await (const event of turn) {
-						if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "user") inputProcessed = true;
+						this.inputs.observe(event);
 						this.handleEvent(event);
 					}
-					const { status } = await turn.result;
-					if (status === "error" || (status === "aborted" && !this.autoSendPaused)) this.pauseSending();
+					status = (await turn.result).status;
 				} catch (error) {
+					failed = true;
 					this.executionError = error;
 					this.projector.addNotice(error instanceof Error ? error.message : String(error));
-					if (!inputProcessed) { this.queued.unshift(current); inputProcessed = true; }
-					this.pauseSending();
 				}
-				if (this.switching) {
-					if (!inputProcessed) this.queued.unshift(current);
-					this.pauseSending(); break;
-				}
-				if (this.autoSendPaused) {
-					this.restoreInputs(this.queued.splice(0));
-					current = this.replacement;
-					this.replacement = undefined;
-					this.autoSendPaused = false;
-				} else current = this.queued.shift();
-				if (current !== undefined && this.dispatchCommand(current)) current = this.queued.shift();
+				const decision = this.inputs.settle(status, failed, this.switching);
+				this.restoreInputs(decision.restore);
+				current = decision.next;
+				if (current !== undefined && this.dispatchCommand(current)) current = this.inputs.takeNext();
 			}
 		} finally {
 			this.running = false;
@@ -855,12 +842,11 @@ export class App {
 	}
 
 	private queueLines(columns: number): string[] {
-		const pending = this.queued.map((input, index) => `Queued ${index + 1}: ${input}`);
-		if (this.replacement !== undefined) pending.push(`Next: ${this.replacement}`);
+		const pending = this.inputs.labels();
 		return pending.flatMap((input) => wrapText(input, Math.max(1, columns - 2)));
 	}
 	private activityLines(columns: number): string[] {
-		return [...(this.switching ? ["正在切换会话…"] : this.menuLoading ? ["正在读取会话…"] : []), ...this.queueLines(columns), ...(this.compactTask ? ["compacting"] : this.running ? [this.autoSendPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
+		return [...(this.switching ? ["正在切换会话…"] : this.menuLoading ? ["正在读取会话…"] : []), ...this.queueLines(columns), ...(this.compactTask ? ["compacting"] : this.running ? [this.inputs.isPaused ? "stopping" : "working"] : []), ...(this.feedback ? [this.feedback] : [])];
 	}
 
 	/** Compose the current frame. Pure w.r.t. the terminal; exposed for tests. */
@@ -905,7 +891,7 @@ export class App {
 		}
 		const activityLines = this.activityLines(columns);
 		for (let row = 0; row < plan.activity.height; row++) {
-			const text = row === plan.activity.height - 1 && activityLines.length > plan.activity.height ? `... (${this.queued.length} queued)${this.running ? " working" : ""}` : activityLines[row]!;
+			const text = row === plan.activity.height - 1 && activityLines.length > plan.activity.height ? `... (${this.inputs.queuedCount} queued)${this.running ? " working" : ""}` : activityLines[row]!;
 			writeText(frame, 1, offsets.activity + row, text, { ...defaultStyle(), foreground: this.theme.color("activity") });
 		}
 		if (this.picker && plan.interactive.owner === "composer") {

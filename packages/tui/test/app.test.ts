@@ -140,6 +140,7 @@ test.each(["success", "deferred", "length", "error", "aborted"] as const)("queue
 		runTurn(value) {
 			calls.push(value);
 			return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
+				yield { type: "message_start", message: { role: "user", content: [{ type: "text", text: value }], timestamp: 0 }, timestamp: 0 };
 				yield { type: "agent_end", outcome: "error", timestamp: 1 };
 				streamEnded = true;
 			})(), calls.length === 1 ? result : { status: "success" });
@@ -1324,4 +1325,34 @@ test("assistant detail keyboard selection freezes the selected streaming source"
 		input.emit(Buffer.from("y")); await Bun.sleep(0);
 		expect(output.text).toContain(`\x1b]52;c;${Buffer.from("hello").toString("base64")}\x07`);
 	} finally { advance?.(); await app.stop(); }
+});
+
+test.each([false, true])("failed settlement restores only unprocessed input: processed=%s", async processed => {
+	const calls: string[] = [];
+	let finish!: () => void;
+	let ready = false;
+	const gate = new Promise<void>(resolve => { finish = resolve; });
+	const { app, input } = createApp({ port: {
+		runTurn(value) {
+			calls.push(value);
+			return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
+				if (processed) yield { type: "message_start", message: { role: "user", content: [{ type: "text", text: value }], timestamp: 1 }, timestamp: 1 };
+				ready = true;
+				await gate;
+				throw new Error("save failed after input processing");
+			})());
+		},
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("original\r"));
+		await waitFor(() => ready);
+		input.emit(Buffer.from("queued\rselected\x1b[13;5u"));
+		finish();
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("save failed"));
+		expect(calls).toEqual(["original"]);
+		const frame = frameToText(app.composeFrameForTest());
+		expect(frame).toContain(processed ? "❯ queued" : "❯ original");
+		expect(frame).toContain("selected");
+	} finally { finish(); await app.stop(); }
 });
