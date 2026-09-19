@@ -113,7 +113,7 @@ M0 与接入改动保留独立提交边界。迁移期可以并存测试对照�
 
 - `runtime/Agent`：唯一生产循环、临时请求消息、工具调度、原生事件和状态归约；基线与定制见 `packages/core/src/runtime/README.md`。
 - `agent-session.ts`：完整持久历史、awaited 保存、输入消费回执、usage、压缩/恢复、任务 retry、配置应用边界。
-- `pi-port.ts`：模型与认证装配、工具串行准备/授权、结构化结果持久化校验；`event-projection.ts` 投影协议及现有展示块。
+- 模型接入：`pi-port.ts` 创建会话，`session-configuration.ts` 准备模型/认证与摘要 driver，`session-tools.ts` 桥接工具串行准备/授权及结果校验；`event-projection.ts` 投影协议及现有展示块。职责收敛与证据见 [Issue #34 施工记录](architecture-responsibilities.md)。依赖门禁只允许这些明确的 adapter 与 runtime 接触 pi-ai，TUI 仍只依赖 protocol。
 - `agent.ts` / `sdk.ts`：宿主 invocation 身份、惰性迭代消费、取消/释放和公开出口。旧 `ExecutionCore`、`AgentRunner`、临时双工具协议及权限转发桥已移除。
 - `packages/tools`：一个 `HarnessTool`，返回 `ToolResult`；内置文件/进程操作的 `ToolOutcome` 只在实现内部转换，不是第二套 SDK 工具协议。
 

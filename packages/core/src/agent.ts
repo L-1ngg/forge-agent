@@ -1,3 +1,4 @@
+import { snapshotConfiguration } from "./session-configuration.ts";
 import type { TurnResult, SessionTurn } from "@forge-agent/protocol";
 export type { TurnResult } from "@forge-agent/protocol";
 import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
@@ -70,6 +71,7 @@ function assertPortCapabilities(port: unknown): asserts port is AgentPort {
 }
 
 export async function createAgent(options: CreateAgentOptions, portFactory: (options: PiPortOptions) => AgentPort | Promise<AgentPort> = createPiPort): Promise<Agent> {
+	options = snapshotConfiguration(options);
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
 	const storage = options.storage ?? new MemorySessionStorage();

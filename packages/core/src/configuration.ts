@@ -12,6 +12,5 @@ export interface ConfigurationReceipt {
 export interface SessionToolset extends ToolHooks { tools: AgentTool[]; clear(): void; }
 export interface SessionAssembly {
 	options: ModelPortOptions;
-	toolset: SessionToolset;
 	driver: SummaryDriver & { isOverflow(message: SessionMessage): boolean };
 }

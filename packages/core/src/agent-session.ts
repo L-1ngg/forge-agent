@@ -4,7 +4,9 @@ import type { AgentMessage } from "./runtime/types.ts";
 import { Agent as RuntimeAgent } from "./runtime/agent.ts";
 import { fromSessionMessage, createEventProjection, toSessionMessage } from "./event-projection.ts";
 import type { AgentPort, InputAcceptance } from "./agent-port.ts";
-import { prepareSessionTools, type ModelPortOptions } from "./pi-port.ts";
+import type { ModelPortOptions } from "./pi-port.ts";
+import { prepareSessionTools, validateSessionTools } from "./session-tools.ts";
+import { snapshotConfiguration } from "./session-configuration.ts";
 import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
 import { MemorySessionStorage, messageEntry, projectMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
@@ -12,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionReason, type CompactionResult, type ContextSettings, buildContext } from "./context/compaction.ts";
 import { compactContext, compactionInputBudget, type CompactionMetrics } from "./context/compact.ts";
 import { UsageTracker, estimateContextTokens } from "./usage.ts";
-import { MemoryTools, MEMORY_TOOL_NAMES } from "./memory/tools.ts";
+import { MemoryTools } from "./memory/tools.ts";
 import { selectedBranch } from "./session-storage.ts";
 import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts";
 
@@ -48,7 +50,7 @@ export class AgentSession implements AgentPort {
 	private memoryWriteMode: boolean | undefined;
 
 	constructor(assembly: SessionAssembly, private readonly prepareConfiguration: (patch: ConfigurationPatch) => Promise<SessionAssembly>) {
-		this.options = assembly.options; this.toolset = assembly.toolset; this.driver = assembly.driver;
+		this.options = assembly.options; this.driver = assembly.driver;
 		const options = this.options;
 		this.assembler = new ContextAssembler(options.memory);
 		if (options.memory) this.memoryTools = new MemoryTools(options.memory, () => {
@@ -204,8 +206,7 @@ export class AgentSession implements AgentPort {
 	}
 	private prepareTools(): SessionToolset {
 		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
-		if (this.memoryTools && this.options.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
-		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
+		validateSessionTools(this.options);
 		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
@@ -336,11 +337,9 @@ export class AgentSession implements AgentPort {
 	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
-		const captured = { ...patch, ...(patch.tools ? { tools: patch.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
+		const captured = snapshotConfiguration(patch);
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
-			if (captured.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
-			if (this.memoryTools && captured.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
 			const assembly = await this.prepareConfiguration(captured);
 			this.assertHealthy();
 			const revision = ++this.revision;

@@ -40,4 +40,11 @@ created: 2026-09-19
 - 结构审查：宿主不再归约终态；6 个 PTY adapter 透传同一 result。Standards 与 Spec 并行审查均无待修发现。SDK 指南原有 result 合同无需改写。
 - 回退：本批 protocol 结构类型、两个宿主、局部替身、PTY adapter 和装配说明共同回退。
 
-B2–B5 及最终门禁待记录。
+### B2
+
+- `session-configuration.ts` 统一初始/更新准备与快照，`session-tools.ts` 负责工具桥接；SessionAssembly 只含模型材料与 driver，最终工具集合在 AgentSession 装配。准备阶段无 server、工具授权缓存或其他需 dispose 的执行资源；应用前取消只结算回执，已应用工具缓存由会话释放。
+- 目标验证：runtime-configuration、agent-assembly、memory-session 共 43 pass；覆盖旧工具整批执行、下一请求配置、手动摘要期间更新、存储接入与失败清理、记忆与历史工具。新增初始 storage 等待期间的快照隔离、两次 revision 与失败更新不污染有效配置。
+- 反向验证：移除 createAgent 入口快照，新快照用例 1 fail（请求泄漏宿主修改后的 prompt）；恢复后目标文件 5 pass。类型与依赖门禁通过。
+- 回退：本批准备/工具模块、会话装配、SDK 入口快照及对应测试共同回退，不改会话数据。
+
+B3–B5 及最终门禁待记录。

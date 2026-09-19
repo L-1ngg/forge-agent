@@ -49,7 +49,6 @@ export function createScriptedSession(driver: ScriptedDriver, history: readonly 
 				return stream;
 			}
 		},
-		toolset: { clear() {}, tools: [] },
 		driver: { ...driver, isOverflow: message => driver.isOverflow?.(message) ?? false },
 	};
 	const session = new AgentSession(assembly, async () => { throw new Error("Scripted session has no model catalog"); });

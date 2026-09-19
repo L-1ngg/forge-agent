@@ -103,3 +103,40 @@ test("SDK configuration waits for manual summary and applies to the following ta
 		expect(requests[1]?.model).toBe("claude-haiku-4-5"); expect(JSON.stringify(requests[1]?.system)).toContain("after summary");
 	} finally { release.resolve(); await compact; await agent.dispose(); server.stop(true); }
 });
+
+test("SDK snapshots initial and queued configurations before asynchronous preparation", async () => {
+	const { MemorySessionStorage } = await import("@forge-agent/core/sdk");
+	const loaded = gate(); const release = gate();
+	const requests: Array<{ system: unknown; tools: unknown }> = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		requests.push(await request.json() as typeof requests[number]); return modelResponse();
+	} });
+	const storage = new MemorySessionStorage();
+	const tools = [{ name: "original", label: "Original", description: "original schema", parameters: { type: "object" as const, properties: { value: { type: "string" } }, required: [], additionalProperties: false as const }, async execute() { return { content: [], details: {} }; } }];
+	const options = { ...settings, tools, baseUrl: server.url.toString(), storage: { async load() { loaded.resolve(); await release.promise; return storage.load(); }, append: storage.append.bind(storage) } };
+	const creating = createAgent(options);
+	await loaded.promise;
+	options.systemPrompt = "mutated host prompt"; tools[0]!.parameters.properties.value.type = "number";
+	release.resolve();
+	const agent = await creating;
+	try {
+		for await (const _ of agent.runTurn("initial")) { }
+		expect(JSON.stringify(requests[0]?.system)).toContain("old prompt");
+		expect(JSON.stringify(requests[0]?.tools)).toContain('"type":"string"');
+		const patch = { systemPrompt: "revision one", tools };
+		const first = agent.updateConfiguration(patch);
+		patch.systemPrompt = "must not leak"; tools[0]!.description = "must not leak";
+		const second = agent.updateConfiguration({ systemPrompt: "revision two" });
+		const [a, b] = await Promise.all([first, second]);
+		expect([a.revision, b.revision]).toEqual([1, 2]);
+		expect(await a.applied).toEqual({ status: "applied", revision: 1 });
+		expect(await b.applied).toEqual({ status: "applied", revision: 2 });
+		await expect(agent.updateConfiguration({ systemPrompt: "invalid", tools: [{ ...tools[0]!, name: "read_context" }] })).rejects.toThrow("reserved");
+		for await (const _ of agent.runTurn("updated")) { }
+		expect(JSON.stringify(requests[1]?.system)).toContain("revision two");
+		expect(JSON.stringify(requests[1])).not.toContain("must not leak");
+		expect(JSON.stringify(requests[1]?.tools)).toContain("read_context");
+		expect(JSON.stringify(requests[1]?.tools)).toContain("search_context");
+		expect(JSON.stringify(requests[1]?.tools)).toContain("original schema");
+	} finally { release.resolve(); await agent.dispose(); server.stop(true); }
+});
