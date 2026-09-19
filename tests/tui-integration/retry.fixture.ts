@@ -12,7 +12,7 @@ const bus = new RequestBus({ timeoutMs: null });
 const agent = await createAgent({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", baseUrl: server.url.toString(), systemPrompt: "", cwd: process.cwd(), requestBus: bus, retry: { baseDelayMs: 100 } });
 const app = new App({
 	host: "alt", requestBus: bus, cwd: process.cwd(), homeDir: process.cwd(), port: {
-		async *runTurn(input) { const turn = agent.runTurn(input); yield* turn; process.send?.({ status: (await turn.result).status, calls }); },
+		runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { yield* turn; process.send?.({ status: (await turn.result).status, calls }); } }; },
 		abort() { agent.abort(); }, getUsage() { return agent.getUsage(); },
 	}
 });

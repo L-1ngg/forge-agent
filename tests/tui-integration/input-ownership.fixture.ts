@@ -1,6 +1,5 @@
 import { App, frameToText } from "../../packages/tui/src/index.ts";
 import { createAgent, createPiTestPort, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
-import type { SessionEvent } from "../../packages/protocol/src/index.ts";
 import { sessionMessages } from "../../packages/core/src/session-storage.ts";
 
 const bus = new RequestBus({ timeoutMs: null });
@@ -25,11 +24,11 @@ const agent = await createAgent({
 }, (options) => createPiTestPort({ ...options, responses: [{ text: "FIRST_COMPLETE" }, { text: "NEXT_COMPLETE" }, { text: "LAST_COMPLETE" }] }));
 const app = new App({
 	port: {
-		async *runTurn(input): AsyncIterable<SessionEvent> {
+		runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() {
 			calls.push(input);
-			try { yield* agent.runTurn(input); }
+			try { yield* turn; }
 			finally { process.send?.({ type: "settled", calls: [...calls] }); }
-		},
+		} }; },
 		abort: () => agent.abort(),
 		getUsage: () => agent.getUsage(),
 	},

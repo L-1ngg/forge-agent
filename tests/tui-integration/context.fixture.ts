@@ -13,7 +13,7 @@ const agent = await createAgent({ provider: "faux", model: "faux-1", systemPromp
 const app = new App({
 	host: "alt", requestBus: bus, cwd: process.cwd(), homeDir: process.cwd(),
 	port: {
-		async *runTurn(input) { yield* agent.runTurn(input); process.send?.("task-done"); },
+		runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { yield* turn; process.send?.("task-done"); } }; },
 		async compact(instructions, emit) { const result = await agent.compact(instructions, emit); process.send?.({ compact: result.status }); return result; },
 		abort() { agent.abort(); }, getUsage() { return agent.getUsage(); },
 	},

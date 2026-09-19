@@ -5,13 +5,13 @@ created: 2026-09-12
 
 # 完整 Agent 装配契约
 
-> 状态:实现与自动化验证完成(2026-09-12)。operator 已确认创建阶段检查完整能力、失败清理已创建资源，并保留局部测试的小 interface。
+> 状态:完整装配合同继续生效；局部宿主结算接口按 [Issue #34 施工记录](architecture-responsibilities.md) 更新中(2026-09-19)。operator 已确认创建阶段检查完整能力、失败清理已创建资源，并保留局部测试的小 interface。
 
 ## Why / Entry
 
 `createAgent()` 接受的 `AgentPort` 把存储接入及若干已由 `Agent` 承诺的能力设为可选，导致存储可被静默跳过，其他缺失能力延迟到运行时才报错；`setStorage` 失败时已创建的执行实例未被释放。已有 ADR-010/014/015 的输入归属、增量保存及本地 runtime 职责保持不变。
 
-核对生产 `AgentSession`、`createPiPort`、`createPiTestPort` 和 scripted session：均已有完整方法。两处 SDK 测试使用旧的最小替身，需要改为生产会话加可控模型。`AppPort`、headless 的 `Pick<AgentPort, "runTurn">` 等局部 interface 保留，不强迫局部测试经过 SDK 装配。
+核对生产 `AgentSession`、`createPiPort`、`createPiTestPort` 和 scripted session：均已有完整方法。完整 SDK 测试使用生产会话加可控模型。`AppPort` 与 headless 保留小 interface，`runTurn` 返回事件迭代与最终 `result`；生产接入使用 `AgentTurn`，局部替身可提供受控结算，不强迫局部测试经过 SDK 装配。宿主必须消费完迭代后读取 result，不以中间事件提前调度。
 
 ## Design / Batches
 

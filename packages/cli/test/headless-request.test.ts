@@ -1,3 +1,5 @@
+import { scriptedTurn } from "../../../tests/support/turn.ts";
+import type { SessionEvent } from "@forge-agent/protocol";
 import { expect, test } from "bun:test";
 import {
 	HEADLESS_REQUEST_EXIT_CODES,
@@ -65,11 +67,11 @@ test("runHeadless drains a blocking request and returns its deterministic exit c
 		const bus = new RequestBus({ idPrefix: `headless-${kind}`, timeoutMs: 1_000 });
 		let outcome: unknown;
 		const port = {
-			async *runTurn(): AsyncIterable<{ type: "agent_start" | "agent_end"; timestamp: number }> {
+			runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 				outcome = await bus.ask(kind, requests[kind].payload as never);
 				yield { type: "agent_start", timestamp: 1 };
 				yield { type: "agent_end", timestamp: 2 };
-			},
+			})()); },
 		};
 		const lines: string[] = [];
 		const exitCode = await runHeadless(port, "headless request", (line) => lines.push(line), { requestBus: bus });
@@ -83,9 +85,9 @@ test("headless preserves the same structured block envelope consumed by TUI", as
 	const richBlock = block({ id: "exec-1", kind: "execute", lifecycle: "complete" }, { command: "echo ok", stdout: "ok" });
 	const lines: string[] = [];
 	await runHeadless({
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "tool_execution_end", timestamp: 1, toolCallId: "exec-1", toolName: "bash", content: "ok", isError: false, block: richBlock };
-		},
+		})()); },
 	}, "block", (line) => lines.push(line));
 	expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ block: richBlock });
 });

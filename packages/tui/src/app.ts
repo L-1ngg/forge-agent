@@ -1,3 +1,4 @@
+import type { SessionTurn } from "@forge-agent/protocol";
 import { type ContextUsageSnapshot, type InputCompletionItem, type InputCompletionSuggestions, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { Host, type HostInput, type HostOutput } from "./host.ts";
 import { createFrame, defaultStyle, writeText, type TerminalFrame } from "./frame.ts";
@@ -59,7 +60,7 @@ export interface AppRequestBus {
 /** Structural view of the core agent port; the Forge SDK agent satisfies this. */
 export interface AppPort {
 	compact?(instructions?: string, emit?: (event: SessionEvent) => void): Promise<unknown>;
-	runTurn(input: string): AsyncIterable<SessionEvent>;
+	runTurn(input: string): SessionTurn;
 	abort?(): void;
 	getUsage?(): ContextUsageSnapshot | undefined;
 }
@@ -674,16 +675,14 @@ export class App {
 			while (current !== undefined && this.started) {
 				this.repaint();
 				let inputProcessed = false;
-				let finalReason: string | undefined;
 				try {
-					for await (const event of this.port.runTurn(current)) {
+					const turn = this.port.runTurn(current);
+					for await (const event of turn) {
 						if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "user") inputProcessed = true;
-						const reason = event.type === "turn_end" ? event.stopReason : event.type === "message_end" ? event.message.stopReason : undefined;
-						if (reason) finalReason = reason;
-						if (event.type === "agent_end" && event.outcome) finalReason = event.outcome;
 						this.handleEvent(event);
 					}
-					if (finalReason === "error" || (finalReason === "aborted" && !this.autoSendPaused)) this.pauseSending();
+					const { status } = await turn.result;
+					if (status === "error" || (status === "aborted" && !this.autoSendPaused)) this.pauseSending();
 				} catch (error) {
 					this.executionError = error;
 					this.projector.addNotice(error instanceof Error ? error.message : String(error));

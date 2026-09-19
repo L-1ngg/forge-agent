@@ -1,3 +1,5 @@
+import type { TurnResult, SessionTurn } from "@forge-agent/protocol";
+export type { TurnResult } from "@forge-agent/protocol";
 import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
 import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
 import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
@@ -34,9 +36,7 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	requestBus?: RequestBus;
 }
 
-export type TurnResult = { status: "success" | "error" | "aborted" | "length" | "deferred" };
-
-export interface AgentTurn extends AsyncIterable<SessionEvent> {
+export interface AgentTurn extends SessionTurn {
 	readonly id: symbol;
 	readonly result: Promise<TurnResult>;
 }

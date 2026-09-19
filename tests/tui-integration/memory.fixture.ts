@@ -12,7 +12,7 @@ const bus = new RequestBus({ timeoutMs: null });
 let calls = 0;
 const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", requestBus: bus }, options => createPiTestPort({ ...options, responses: [{ text: "unexpected task" }] }));
 const app = new App({ host: "alt", cwd: root, homeDir: root, requestBus: bus,
-	port: { async *runTurn(input) { calls++; yield* agent.runTurn(input); } },
+	port: { runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { calls++; yield* turn; } }; } },
 	async memoryCommand(command) { const result = await manager.execute(command); process.send?.({ command, text: result.text }); return result; },
 });
 try { await app.start(); process.send?.("ready"); await app.waitUntilStopped(); }

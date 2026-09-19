@@ -1,3 +1,4 @@
+import { scriptedTurn } from "../../../tests/support/turn.ts";
 import { expect, test } from "bun:test";
 import { block, request, type RequestEnvelopeUnion, type RequestKind, type RequestOutcome, type ResponseEnvelope, type SessionEvent, type SessionMessage } from "@forge-agent/protocol";
 import { App, computeScreenLayout, frameToText, type AppCompletionSource, type AppPort, type AppRequestBus } from "../src/index.ts";
@@ -103,9 +104,9 @@ class FakeBus implements AppRequestBus {
 
 function fakePort(events: SessionEvent[]): AppPort {
 	return {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			for (const event of events) yield event;
-		},
+		})()); },
 	};
 }
 
@@ -129,6 +130,33 @@ function createApp(options: { port?: AppPort; bus?: FakeBus; completionSource?: 
 	});
 	return { app, input, output, bus };
 }
+
+test.each(["success", "deferred", "length", "error", "aborted"] as const)("queued input waits for settlement and follows final %s", async status => {
+	const calls: string[] = [];
+	let settle!: (result: { status: typeof status }) => void;
+	let streamEnded = false;
+	const result = new Promise<{ status: typeof status }>(resolve => { settle = resolve; });
+	const { app, input } = createApp({ port: {
+		runTurn(value) {
+			calls.push(value);
+			return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
+				yield { type: "agent_end", outcome: "error", timestamp: 1 };
+				streamEnded = true;
+			})(), calls.length === 1 ? result : { status: "success" });
+		},
+	} });
+	await app.start();
+	try {
+		input.emit(Buffer.from("first\r"));
+		await waitFor(() => streamEnded);
+		input.emit(Buffer.from("second\r"));
+		expect(calls).toEqual(["first"]);
+		settle({ status });
+		await waitFor(() => !frameToText(app.composeFrameForTest()).includes("working"));
+		expect(calls).toEqual(status === "error" || status === "aborted" ? ["first"] : ["first", "second"]);
+		if (status === "error" || status === "aborted") expect(frameToText(app.composeFrameForTest())).toContain("❯ second");
+	} finally { settle({ status }); await app.stop(); }
+});
 
 test("selecting an adjacent reply never paints over the user message band", async () => {
 	for (const [columns, rows] of [[120, 32], [80, 24], [40, 12]]) {
@@ -528,11 +556,11 @@ test("live tool details keep a paused reading position through updates, completi
 		{ command: "long-running-command", stdout: Array.from({ length: count }, (_, index) => `STREAM_LINE_${index}`).join("\n") },
 	);
 	const { app, input, output } = createApp({ port: {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "tool_execution_start", toolCallId: "live", toolName: "bash", args: { command: "long-running-command" }, block: outputBlock(60, "streaming"), timestamp: 1 };
 			await gate;
 			yield { type: "tool_execution_end", toolCallId: "live", toolName: "bash", content: "complete", isError: false, block: outputBlock(100, "complete"), timestamp: 2 };
-		},
+		})()); },
 	} });
 	const send = (text: string) => input.emit(Buffer.from(text));
 	const view = () => frameToText(app.composeFrameForTest());
@@ -740,10 +768,10 @@ test("AC-34: parked Esc does not abort the turn", async () => {
 	let aborted = 0;
 	let release: (() => void) | undefined;
 	const port: AppPort = {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "turn_start", timestamp: 1 };
 			await new Promise<void>((resolve) => { release = resolve; });
-		},
+		})()); },
 		abort() {
 			aborted++;
 			release?.();
@@ -809,12 +837,12 @@ test("Enter queues while a turn is running; Ctrl+Enter aborts and sends", async 
 	const calls: string[] = [];
 	let release: (() => void) | undefined;
 	const port: AppPort = {
-		async *runTurn(input: string) {
+		runTurn(input: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			calls.push(input);
 			yield { type: "turn_start", timestamp: 1 };
 			if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; });
 			yield { type: "turn_end", timestamp: 2, stopReason: calls.length === 1 ? "aborted" : "stop" };
-		},
+		})()); },
 		abort() {
 			release?.();
 		},
@@ -840,7 +868,7 @@ test("ADR010: Esc during saving restores queued input and draft without autosend
 	const calls: string[] = [];
 	let release!: () => void;
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) { calls.push(value); yield { type: "agent_end", timestamp: 1 }; await new Promise<void>((resolve) => { release = resolve; }); },
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> { calls.push(value); yield { type: "agent_end", timestamp: 1 }; await new Promise<void>((resolve) => { release = resolve; }); })()); },
 		abort() {},
 	} });
 	await app.start();
@@ -864,12 +892,12 @@ test("ADR010: saving failure retains the selected replacement and older queue as
 	const calls: string[] = [];
 	let release!: () => void;
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) {
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			calls.push(value);
 			yield { type: "agent_end", timestamp: 1 };
 			await new Promise<void>((resolve) => { release = resolve; });
 			throw new Error("disk failed");
-		},
+		})()); },
 		abort() {},
 	} });
 	await app.start();
@@ -890,7 +918,7 @@ test("ADR010: empty composer Up withdraws queued input for editing", async () =>
 	const calls: string[] = [];
 	let release!: () => void;
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) { calls.push(value); if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; }); },
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> { calls.push(value); if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; }); })()); },
 		abort() { release?.(); },
 	} });
 	await app.start();
@@ -924,7 +952,7 @@ for (const phase of ["stream", "tool"] as const) test(`ADR010: ordinary stop dur
 	const calls: string[] = [];
 	const cleanup = new Promise<void>((resolve) => { finish = resolve; });
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) {
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			calls.push(value);
 			if (phase === "stream") yield { type: "message_delta", contentIndex: 0, contentType: "text", delta: "partial", timestamp: 1 };
 			else yield { type: "tool_execution_start", toolCallId: "hold", toolName: "hold", args: {}, timestamp: 1 };
@@ -932,7 +960,7 @@ for (const phase of ["stream", "tool"] as const) test(`ADR010: ordinary stop dur
 			cleaning = true;
 			await cleanup;
 			yield { type: "turn_end", stopReason: "aborted", timestamp: 2 };
-		},
+		})()); },
 		abort() { cancel?.(); },
 	} });
 	await app.start();
@@ -954,10 +982,10 @@ test("repeated Enter submissions run in FIFO order", async () => {
 	const calls: string[] = [];
 	let release: (() => void) | undefined;
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) {
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			calls.push(value);
 			if (calls.length === 1) await new Promise<void>((resolve) => { release = resolve; });
-		},
+		})()); },
 		abort() { release?.(); },
 	} });
 	await app.start();
@@ -978,12 +1006,12 @@ test("stop aborts and waits for the active turn and never starts queued input", 
 	let aborted = false;
 	let settled = false;
 	const { app, input } = createApp({ port: {
-		async *runTurn(value) {
+		runTurn(value: string) { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			calls.push(value);
 			await new Promise<void>((resolve) => { release = resolve; });
 			await Bun.sleep(5);
 			settled = true;
-		},
+		})()); },
 		abort() { aborted = true; release?.(); },
 	} });
 	await app.start();
@@ -1092,12 +1120,12 @@ test("scrollback stays anchored during streaming and cannot paint over the heade
 	let advance: (() => void) | undefined;
 	const first = Array.from({ length: 50 }, (_, index) => `row-${index}`).join("\n");
 	const { app, input } = createApp({ port: {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
 			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: first };
 			await new Promise<void>((resolve) => { advance = resolve; });
 			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: "\nnew-row-a\nnew-row-b" };
-		},
+		})()); },
 		abort() { advance?.(); },
 	} });
 	await app.start();
@@ -1237,13 +1265,13 @@ test("streaming Markdown preserves a selection snapshot and paused assistant det
 	const first = "**COPY_THIS_TEXT" + Array.from({ length: 45 }, (_, i) => `\nLINE_${i} content`).join("");
 	const final = first + "**\n\n| Name | State |\n| --- | --- |\n| final | ready |";
 	const { app, input, output } = createApp({ port: {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
 			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: first };
 			await new Promise<void>(resolve => { advance = resolve; });
 			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: final.slice(first.length) };
 			yield { type: "message_end", timestamp: 4, message: { role: "assistant", content: [{ type: "text", text: final }], timestamp: 1 } };
-		}, abort() { advance?.(); },
+		})()); }, abort() { advance?.(); },
 	} });
 	await app.start();
 	try {
@@ -1281,12 +1309,12 @@ test("assistant detail keyboard selection copies complete fenced source", async 
 test("assistant detail keyboard selection freezes the selected streaming source", async () => {
 	let advance: (() => void) | undefined;
 	const { app, input, output } = createApp({ port: {
-		async *runTurn() {
+		runTurn() { return scriptedTurn((async function* (): AsyncIterable<SessionEvent> {
 			yield { type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } };
 			yield { type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "text", delta: "hello" };
 			await new Promise<void>(resolve => { advance = resolve; });
 			yield { type: "message_delta", timestamp: 3, contentIndex: 0, contentType: "text", delta: " appended" };
-		}, abort() { advance?.(); },
+		})()); }, abort() { advance?.(); },
 	} });
 	await app.start();
 	try {

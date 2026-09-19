@@ -1,5 +1,5 @@
-import { response, type RequestEnvelopeFor, type RequestKind, type ResponseEnvelope, type ResponseResultByKind, type SessionEvent } from "@forge-agent/protocol";
-import type { AgentPort, RequestBus } from "@forge-agent/core";
+import { response, type RequestEnvelopeFor, type RequestKind, type ResponseEnvelope, type ResponseResultByKind, type SessionEvent, type SessionTurn } from "@forge-agent/protocol";
+import type { RequestBus } from "@forge-agent/core";
 
 export const HEADLESS_REQUEST_EXIT_CODES: Record<RequestKind, number> = {
 	permission: 20,
@@ -40,7 +40,7 @@ export interface RunHeadlessOptions {
 }
 
 type HeadlessOutput = (line: string) => void;
-type HeadlessPort = Pick<AgentPort, "runTurn">;
+type HeadlessPort = { runTurn(input: string): SessionTurn };
 
 export function runHeadless(port: HeadlessPort, prompt: string, output?: HeadlessOutput, options?: RunHeadlessOptions): Promise<number>;
 export function runHeadless(port: HeadlessPort, prompt: string, options?: RunHeadlessOptions): Promise<number>;
@@ -54,7 +54,6 @@ export async function runHeadless(
 	const options = typeof outputOrOptions === "function" ? maybeOptions : (outputOrOptions ?? maybeOptions);
 	let requestExitCode = 0;
 	let runExitCode = 0;
-	let recovering = false;
 	const responder = options.requestBus
 		? (async () => {
 				for await (const request of options.requestBus!.requests()) {
@@ -65,17 +64,10 @@ export async function runHeadless(
 		  })()
 		: undefined;
 	try {
-		for await (const event of port.runTurn(prompt)) {
-			if (event.type === "recovery" || (event.type === "retry" && event.phase === "scheduled")) recovering = true;
-			if (event.type === "turn_end" || event.type === "message_end") {
-				const reason = event.type === "turn_end" ? event.stopReason : event.message.stopReason;
-				if (reason === "error" || reason === "length") runExitCode = 1;
-				else if (reason === "aborted") runExitCode = 130;
-				else if (recovering && (reason === "stop" || reason === "tool_use")) { runExitCode = 0; recovering = false; }
-			}
-			if (event.type === "agent_end" && event.outcome) runExitCode = event.outcome === "error" || event.outcome === "length" ? 1 : event.outcome === "aborted" ? 130 : 0;
-			output(JSON.stringify(event));
-		}
+		const turn = port.runTurn(prompt);
+		for await (const event of turn) output(JSON.stringify(event));
+		const { status } = await turn.result;
+		runExitCode = status === "error" || status === "length" ? 1 : status === "aborted" ? 130 : 0;
 	} finally {
 		if (options.requestBus) options.requestBus.close();
 		await responder;

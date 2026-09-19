@@ -18,7 +18,7 @@ const agent = await createAgent({
 	],
 }));
 const app = new App({
-	port: { async *runTurn(input) { yield* agent.runTurn(input); process.send?.("turn-done"); }, abort() { agent.abort(); } },
+	port: { runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { yield* turn; process.send?.("turn-done"); } }; }, abort() { agent.abort(); } },
 	host: "alt", requestBus: bus, cwd: directory, homeDir: directory,
 	getStatus: () => ({ provider: "faux", model: "faux-1" }),
 });
