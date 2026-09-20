@@ -2,7 +2,7 @@
 import { cliSkills, skillInput, isSkillsCommand, skillsCommand, skillsText } from "./skills-command.ts";
 import { homedir } from "node:os";
 import { cwd } from "node:process";
-import { createInputCompletionSource, createPiPort, loadConfig, resolveSecret, type AgentPort, type PiPortOptions } from "@forge-agent/core";
+import { createInputCompletionSource, loadConfig, resolveSecret } from "@forge-agent/core";
 import { builtinTools } from "@forge-agent/tools";
 import { App, scanFiles } from "@forge-agent/tui";
 import { SessionHost } from "./session-host.ts";
@@ -46,9 +46,7 @@ function usage(): string {
 	return "forge-agent [-p PROMPT] [--json] [--provider PROVIDER --model MODEL] [--memory 'COMMAND'] [--no-skills]";
 }
 
-type PortFactory = (options: PiPortOptions) => Promise<AgentPort>;
-
-export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = createPiPort): Promise<number> {
+export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 	let args: Args;
 	try {
 		args = parseArgs(argv);
@@ -102,7 +100,7 @@ export async function main(argv = Bun.argv.slice(2), portFactory: PortFactory = 
 			tools: builtinTools,
 			requestTimeoutMs: args.json ? 30_000 : null,
 			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }, ...["load_skill", "read_memory", "search_memory", ...(config.permissionMode === "deny-all" ? [] : ["write_memory", "delete_memory"])].map(tool => ({ tool, argsPattern: "*", effect: "allow" as const }))] },
-		}, portFactory);
+		});
 		try {
 			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), () => sessions.current.port.getMemoryBudget?.());
 			if (prompt && isSkillsCommand(prompt)) {

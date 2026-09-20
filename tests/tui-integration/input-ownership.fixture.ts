@@ -1,5 +1,6 @@
+import { fauxModel } from "../support/model.ts";
 import { App, frameToText } from "../../packages/tui/src/index.ts";
-import { createAgent, createPiTestPort, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
+import { createAgent, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
 import { sessionMessages } from "../../packages/core/src/session-storage.ts";
 
 const bus = new RequestBus({ timeoutMs: null });
@@ -8,9 +9,7 @@ let releaseCommit!: () => void;
 const commitGate = new Promise<void>((resolve) => { releaseCommit = resolve; });
 let commits = 0;
 const calls: string[] = [];
-const agent = await createAgent({
-	provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd(), requestBus: bus,
-	storage: {
+const agent = await createAgent({ systemPrompt: "", cwd: process.cwd(), requestBus: bus, storage: {
 		load: () => storage.load(),
 		async append(entry) {
 			if (entry.type === "message" && entry.message.role === "assistant" && ++commits === 1) {
@@ -20,8 +19,7 @@ const agent = await createAgent({
 			}
 			await storage.append(entry);
 		},
-	},
-}, (options) => createPiTestPort({ ...options, responses: [{ text: "FIRST_COMPLETE" }, { text: "NEXT_COMPLETE" }, { text: "LAST_COMPLETE" }] }));
+	}, ...fauxModel({ responses: [{ text: "FIRST_COMPLETE" }, { text: "NEXT_COMPLETE" }, { text: "LAST_COMPLETE" }] }) });
 const app = new App({
 	port: {
 		runTurn(input) { if (typeof input !== "string") throw new Error("Text fixture"); const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() {

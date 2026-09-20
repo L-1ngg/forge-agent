@@ -32,26 +32,24 @@ for (const cancel of [false, true]) test(`SDK transient retry preserves input an
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("SDK task retry uses three independent 2/4/8 second waits and resets for a new invocation", async () => {
-	const { createScriptedSession } = await import("./helpers/scripted-session.ts");
+test("SDK task retry schedules exponential backoff and resets for a new invocation", async () => {
+	const { scriptedModel } = await import("./helpers/scripted-model.ts");
 	const waits: number[] = []; let calls = 0;
 	const storage = new MemorySessionStorage();
-	const session = createScriptedSession({
+	const agent = await createAgent({ ...settings, ...scriptedModel({
 		contextWindow: 100000,
-		async stream() { calls++; return { role: "assistant", content: [], timestamp: calls, stopReason: "error", errorMessage: "temporarily overloaded" }; },
-		isRetryable: () => true,
-		async wait(ms, signal) { signal.throwIfAborted(); waits.push(ms); },
-		async execute() { throw new Error("No tools"); }, abortInteractions() { },
-	});
-	const agent = await createAgent({ ...settings, storage }, () => session);
+		async stream() { calls++; return { role: "assistant", content: [], timestamp: calls, stopReason: "error", errorMessage: "503 service unavailable" }; },
+	}), provider: "faux", storage, retry: { baseDelayMs: 1 } });
 	try {
 		for (const input of ["first", "second"]) {
 			const turn = agent.runTurn(input); const retries = [];
-			for await (const event of turn) if (event.type === "retry") retries.push(event);
+			for await (const event of turn) if (event.type === "retry") {
+				retries.push(event); if (event.phase === "scheduled" && event.delayMs !== undefined) waits.push(event.delayMs);
+			}
 			expect(await turn.result).toEqual({ status: "error" });
 			expect(retries.at(-1)).toMatchObject({ phase: "end", attempt: 3, outcome: "error" });
 		}
-		expect(calls).toBe(8); expect(waits).toEqual([2000, 4000, 8000, 2000, 4000, 8000]);
+		expect(calls).toBe(8); expect(waits).toEqual([1, 2, 4, 1, 2, 4]);
 		expect(sessionMessages(await storage.load()).filter(message => message.role === "user")).toHaveLength(2);
 	} finally { await agent.dispose(); }
 });

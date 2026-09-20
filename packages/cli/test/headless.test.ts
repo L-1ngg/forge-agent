@@ -1,9 +1,9 @@
+import { fauxModel } from "../../../tests/support/model.ts";
 import { scriptedTurn } from "../../../tests/support/turn.ts";
 import type { SessionEvent } from "@forge-agent/protocol";
 import { expect, test } from "bun:test";
 import { runHeadless } from "../src/headless.ts";
 import { createAgent } from "../../core/src/agent.ts";
-import { createPiTestPort } from "../../core/src/pi-port.ts";
 
 test.each([ ["success", 0], ["deferred", 0], ["error", 1], ["length", 1], ["aborted", 130] ] as const)("headless uses settled %s even when events disagree", async (status, expected) => {
 	const lines: string[] = [];
@@ -44,7 +44,7 @@ test("headless emits one valid JSON object per event", async () => {
 });
 
 test("headless reports a provider error as failure even when pi ends normally", async () => {
-	const port = await createAgent({ provider: "faux", model: "faux-1", cwd: process.cwd(), systemPrompt: "test" }, () => createPiTestPort({ responses: [{ stopReason: "error", errorMessage: "provider unavailable" }] }));
+	const port = await createAgent({ cwd: process.cwd(), systemPrompt: "test", ...fauxModel({ responses: [{ stopReason: "error", errorMessage: "provider unavailable" }] }) });
 	const lines: string[] = [];
 	try { expect(await runHeadless(port, "hello", (line) => lines.push(line))).toBe(1); }
 	finally { await port.dispose(); }

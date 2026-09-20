@@ -4,6 +4,24 @@
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
+## 自定义模型流（StreamFn）
+
+SDK 直接复用 Pi Agent 内核的 `StreamFn` 类型，导出 `StreamFn` 和 `Model`。宿主提供完整模型元数据及流函数，即可使用内置 catalog 之外的模型。可运行的离线示例：[custom-stream.ts](../examples/custom-stream.ts)，命令 `bun examples/custom-stream.ts`。
+
+```ts
+import { createAgent, type Model, type StreamFn } from "@forge-agent/core/sdk";
+
+async function openAgent(model: Model<string>, streamFn: StreamFn) {
+  return createAgent({ model, streamFn, cwd: process.cwd(), systemPrompt: "Help with the task." });
+}
+```
+
+`StreamFn(model, context, options)` 返回 `AssistantMessageEventStream` 或其 Promise，协议沿用当前锁定的 pi-ai。`context` 包含本次 systemPrompt、投影后的 messages 和 tools。完整模型对象必须配套 `streamFn`；宿主负责准确提供 provider、api、contextWindow、maxTokens 等元数据及认证。若同时传 `provider`，必须与 `model.provider` 一致；显式 `baseUrl` 覆盖模型的 baseUrl。
+
+原有 `provider: string, model: string` 仍查内置 catalog。它也可以配套 `streamFn`，此时跳过内置认证检查；省略函数则沿用内置传输及认证。自定义函数收到显式 `apiKey`（如有）、`signal`、`sessionId`、输出上限和推理设置。函数须响应取消，将请求失败/取消编码为流中的 error 事件及最终 error/aborted AssistantMessage；不要用 throw/rejected Promise 表达正常的请求失败。不得把函数只写成固定返回任务答案：压缩摘要也使用同一生效配置的流函数，但有不同的上下文、输出预算及 `cacheRetention: "none"`。`maxRetries: 0` 保留会话层统一重试控制，传输应遵守此设置。
+
+`updateConfiguration({ model, streamFn })` 支持在现有完整工具批次或摘要结束后一起切换，继续区分 accepted 与 applied。模型元数据在异步创建/准备前快照。传 `streamFn: null` 恢复内置传输，此时必须使用字符串模型；若从对象模型切回，需同时提供 catalog 的 provider/model。配置失败保留原生效配置；流函数及其闭包由宿主管理，不序列化到会话历史。
+
 ## Skills
 
 SDK 省略 `skills` 时不扫描任何来源；配置对象默认启用，`enabled: false` 时不扫描。Core 不调用 home 目录探测；相对路径按 `cwd` 解析，不展开 `~`。
@@ -73,15 +91,13 @@ CLI 默认将记忆工具作为内建允许项，仍受前置 hooks/rules 约束
 
 每次请求边界检查固定清单、索引、固定文件及链接目标的磁盘 revision，变化后重读投影；同一轮中的外部编辑和删除也会刷新下一次请求。已发送的请求和当前历史原文不会被追溯修改。
 
-## 自定义执行实现
+## 装配与定制边界
 
-通常直接使用默认 `createAgent(options)`。若传入第二个参数 factory，它必须返回完整的 `AgentPort`（类型从 `@forge-agent/core` 导入），或返回该实例的 Promise。必需方法为 `runTurn`、`continue`、`steer`、`followUp`、`abort`、`dispose`、`getUsage`、`setStorage`、`compact`、`configureContext`、`updateConfiguration`。
+`createAgent(options)` 始终装配生产会话，只接受一个 options 参数。定制模型使用 `model` + `streamFn`；定制数据库或会话持久化实现 `SessionStorage` 并通过 `storage` 传入；定制工具通过 `tools` 传入。SDK 和 CLI 均不提供替换整个执行实例的 factory。旧的第二参数在 TypeScript 中报错，在 JavaScript 中于任何装配和模型调用前抛出 `TypeError`。
 
-TypeScript 检查完整类型；创建时还会检查每个方法是否为函数，缺失或非函数立即报 `TypeError`。通过后等待 `setStorage(storage)` 完成，才返回 Agent；省略 storage 时也会接入默认内存存储。`setStorage` 仅用于装配，不在已创建 Agent 的宿主接口中。检查不会执行模型或工具，也不保证自定义方法的语义正确：`getUsage()` 可以返回 `undefined`，配置更新可以拒绝不支持的配置。
+创建会等待存储接入完成，包括默认内存存储。`setStorage` 属于内部装配过程，不在已创建 Agent 的宿主接口中。存储接入失败时，中止并等待已创建会话释放；内部创建的 RequestBus 会关闭，外部传入的总线不会由失败装配关闭。清理成功时原样抛出创建错误；清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误。
 
-factory 返回实例后，能力检查或存储接入失败会尝试 `abort()`，随后等待 `dispose()`；abort 报错也会继续释放。内部创建的 RequestBus 会先关闭，外部传入的总线不会由失败装配主动关闭（adapter 自身取消行为仍由其实现决定）。成功返回后的 dispose 总线归属规则不变。清理成功时原样抛出创建错误；清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误，后续项为清理错误。factory 在返回实例前抛错时，应自行清理尚未交付的资源。
-
-局部 UI/headless 测试可以继续使用各自的小接口；经过完整 SDK 创建路径的测试应使用生产会话配合可控模型。设计及验证见[完整 Agent 装配契约](phases/agent-assembly.md)。
+SDK 集成测试用 `streamFn` 控制模型返回，存储故障和工具行为分别在 `storage`、`tools` 注入。局部 UI/headless 测试可以使用各自的小接口，底层单元测试可直接测试内部模块。设计及验证见[完整 Agent 装配契约](phases/agent-assembly.md)。
 
 ## 创建实例
 

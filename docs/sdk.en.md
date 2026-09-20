@@ -4,6 +4,24 @@
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
+## Custom Model Streams (StreamFn)
+
+The SDK reuses Pi Agent's `StreamFn` type and exports both `StreamFn` and `Model`. Supply complete model metadata and a stream function to use a model outside the built-in catalog. Run the offline [custom-stream.ts example](../examples/custom-stream.ts) with `bun examples/custom-stream.ts`.
+
+```ts
+import { createAgent, type Model, type StreamFn } from "@forge-agent/core/sdk";
+
+async function openAgent(model: Model<string>, streamFn: StreamFn) {
+  return createAgent({ model, streamFn, cwd: process.cwd(), systemPrompt: "Help with the task." });
+}
+```
+
+`StreamFn(model, context, options)` returns an `AssistantMessageEventStream` or a Promise of one, using the currently pinned pi-ai protocol. `context` contains the request's systemPrompt, projected messages and tools. A model object requires `streamFn`; the host owns authentication and accurate metadata including provider, api, contextWindow and maxTokens. An explicitly supplied `provider` must match `model.provider`; an explicit `baseUrl` overrides the model's baseUrl.
+
+Existing `provider: string, model: string` configuration still resolves the built-in catalog. It can also supply `streamFn`, bypassing built-in authentication checks; omitting the function preserves built-in transport and authentication. Custom functions receive the explicit `apiKey`, if supplied, along with `signal`, `sessionId`, output limits and reasoning settings. Honor cancellation and encode request failures/cancellation as stream error events and a final error/aborted AssistantMessage, rather than throwing or rejecting for normal request failures. Compaction summaries use the same applied stream function with a different context, output budget and `cacheRetention: "none"`; do not assume every call is an ordinary task response. Honor `maxRetries: 0` so the session retains retry control.
+
+`updateConfiguration({ model, streamFn })` switches both after the current complete tool batch or summary, preserving accepted/applied receipts. Model metadata is snapshotted before asynchronous creation/preparation. Set `streamFn: null` to restore built-in transport with a string model; when switching from a model object, also supply the catalog provider/model. Failed updates preserve the applied configuration. The host owns the function and its closures; they are not serialized into session history.
+
 ## Skills
 
 Omitting `skills` disables discovery. A configuration object enables it by default; `enabled: false` performs no scan. Core never discovers the host's home directory. Relative paths resolve against `cwd`; `~` is not expanded.
@@ -73,15 +91,13 @@ The CLI normally includes memory tools in its built-in allow policy, still subje
 
 Every request boundary checks the pin list and disk revisions of indexes, pinned files and link targets, reloading the projection when they change. External edits and deletions within the same turn therefore refresh the next request. Requests already sent and original conversation history are not retroactively changed.
 
-## Custom Execution Implementations
+## Assembly and Customization Boundaries
 
-Normally, use the default `createAgent(options)`. A factory supplied as the second argument must return a complete `AgentPort` (import its type from `@forge-agent/core`), or a Promise of one. Required methods are `runTurn`, `continue`, `steer`, `followUp`, `abort`, `dispose`, `getUsage`, `setStorage`, `compact`, `configureContext`, and `updateConfiguration`.
+`createAgent(options)` always assembles the production session and accepts exactly one options argument. Customize models through `model` + `streamFn`, databases or session persistence through `storage` implementing `SessionStorage`, and tools through `tools`. Neither the SDK nor the CLI offers a factory for replacing the execution instance. The former second argument is rejected by TypeScript and throws a `TypeError` in JavaScript before any assembly or model invocation.
 
-TypeScript checks the complete type. Creation also checks that every method is callable, rejecting missing or non-callable methods with a `TypeError`. It then awaits `setStorage(storage)` before returning the Agent, including when using default memory storage. `setStorage` is an assembly capability, not part of the returned Agent's host interface. These checks do not run models or tools and cannot prove implementation semantics: `getUsage()` may return `undefined`, and configuration updates may reject unsupported settings.
+Creation awaits storage attachment, including default memory storage. `setStorage` is internal to assembly and is not part of the returned Agent's host interface. If attachment fails, creation aborts and awaits disposal of the created session. An internally created RequestBus is closed; an externally supplied bus is not closed by failed assembly. Successful cleanup preserves the original error. If cleanup also fails, an `AggregateError` retains the original error in `cause` and `errors[0]`.
 
-If capability validation or storage attachment fails after the factory returns, creation attempts `abort()` and then awaits `dispose()`, even if abort throws. It first closes an internally created RequestBus; it does not explicitly close an externally supplied bus on assembly failure (the adapter remains responsible for its own cancellation behavior). Bus ownership on disposal after successful creation is unchanged. Successful cleanup preserves the original creation error. If cleanup also fails, an `AggregateError` retains the original error in `cause` and `errors[0]`, followed by cleanup errors. A factory that throws before returning an instance must clean up resources it has not handed over.
-
-Local UI/headless tests may keep their smaller interfaces. Tests using the full SDK creation path should use production sessions with controlled models. See the [assembly design and verification](phases/agent-assembly.md) (Chinese).
+SDK integration tests control model responses through `streamFn`, with storage failures and tool behavior injected through `storage` and `tools`. Local UI/headless tests may keep their smaller interfaces, and unit tests may exercise internal modules directly. See the [assembly design and verification](phases/agent-assembly.md) (Chinese).
 
 ## Create an Instance
 

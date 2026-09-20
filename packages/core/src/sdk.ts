@@ -16,6 +16,6 @@ export { initializeMemoryCopy } from "./memory/copy.ts";
 export type { MemoryFileSystem } from "./memory/files.ts";
 export type { HarnessTool, ToolResult, ToolContext } from "@forge-agent/tools";
 export type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
-export type { ToolHooks } from "./pi-port.ts";
+export type { ToolHooks, StreamFn, Model } from "./pi-port.ts";
 
 export type { SkillsOptions, SkillRoot, SkillLayer, SkillsSnapshot, SkillEntry, SkillDiagnostic, SkillInvocation, AgentInput, SkillErrorCode } from "./skills/types.ts";

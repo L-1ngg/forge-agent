@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgent } from "../src/agent.ts";
-import { createScriptedSession } from "./helpers/scripted-session.ts";
+import { scriptedModel } from "./helpers/scripted-model.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
@@ -10,12 +10,16 @@ test("cancellation while launching a batch saves started results but does not st
 	const storage = new MemorySessionStorage();
 	const executed: string[] = [];
 	let cancel = () => {};
-	const core = createScriptedSession({
-		contextWindow: 100000, toolNames: ["first", "second", "write"], abortInteractions() {},
+	const model = scriptedModel({
+		contextWindow: 100000,
 		async stream() { return { role: "assistant", timestamp: 1, stopReason: "tool_use", content: ["first", "second"].map((id) => ({ type: "tool_call" as const, id, name: id, arguments: {} })) }; },
-		async execute(call) { executed.push(call.id); cancel(); return { message: { role: "toolResult", toolCallId: call.id, toolName: call.name, timestamp: 2, content: [{ type: "text", text: "formed" }] } }; },
 	});
-	const agent = await createAgent({ ...options, storage }, () => core); cancel = () => agent.abort();
+	const agent = await createAgent({ ...options, ...model, storage,
+		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
+		tools: ["first", "second", "write"].map(name => ({ name, label: name, description: name, parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+			async execute(_args, context) { executed.push(context.toolCallId!); cancel(); return { content: [{ type: "text", text: "formed" }], details: undefined }; },
+		})),
+	}); cancel = () => agent.abort();
 	try {
 		for await (const _event of agent.runTurn("work")) {}
 		expect(executed).toEqual(["first"]);
@@ -29,15 +33,16 @@ test("SDK storage failure before tool dispatch faults the instance without execu
 	const memory = new MemorySessionStorage();
 	let executions = 0;
 	let writes = 0;
-	const core = createScriptedSession({
-		contextWindow: 100000, toolNames: ["write"], abortInteractions() {},
+	const model = scriptedModel({
+		contextWindow: 100000,
 		async stream() { return { role: "assistant", timestamp: 2, stopReason: "tool_use", content: [{ type: "tool_call", id: "side-effect", name: "write", arguments: {} }] }; },
-		async execute() { executions++; throw new Error("unexpected execution"); },
 	});
-	const agent = await createAgent({ ...options, storage: {
+	const agent = await createAgent({ ...options, ...model,
+		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
+		tools: [{ name: "write", label: "Write", description: "write", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute() { executions++; throw new Error("unexpected execution"); } }], storage: {
 		load: () => memory.load(),
 		async append(entry) { writes++; await memory.append(entry); if (writes === 2) throw new Error("partial write failure"); },
-	} }, () => core);
+	} });
 	try {
 		await expect((async () => { for await (const _event of agent.runTurn("work")) {} })()).rejects.toThrow("partial write failure");
 		expect(executions).toBe(0);
@@ -55,12 +60,15 @@ test("SDK reopen filters interrupted responses and projects missing results with
 	];
 	const storage = new MemorySessionStorage(history);
 	let request: readonly SessionMessage[] = [];
-	const core = createScriptedSession({
-		contextWindow: 100000, toolNames: ["write"], abortInteractions() {},
+	const model = scriptedModel({
+		contextWindow: 100000,
 		async stream(messages) { request = messages; return { role: "assistant", timestamp: 5, content: [], stopReason: "stop" }; },
-		async execute() { throw new Error("must not replay"); },
 	});
-	const agent = await createAgent({ ...options, storage }, () => core);
+	let effects = 0;
+	const agent = await createAgent({ ...options, ...model, storage,
+		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
+		tools: [{ name: "write", label: "Write", description: "write", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute() { effects++; throw new Error("must not replay"); } }],
+	});
 	try {
 		for await (const _event of agent.runTurn("continue")) {}
 		expect(request.filter((message) => message.role === "toolResult")).toMatchObject([{ toolCallId: "unknown", isError: true }]);
@@ -68,6 +76,7 @@ test("SDK reopen filters interrupted responses and projects missing results with
 		expect(JSON.stringify(request)).not.toContain("interrupted-secret");
 		expect(JSON.stringify(request)).not.toContain("partial");
 		expect(sessionMessages(await storage.load()).slice(0, 3)).toEqual(history);
+		expect(effects).toBe(0);
 	} finally { await agent.dispose(); }
 });
 
@@ -75,17 +84,15 @@ test("SDK saves consumed input before the model and retains it after cancellatio
 	const storage = new MemorySessionStorage();
 	let started!: () => void;
 	const ready = new Promise<void>((resolve) => { started = resolve; });
-	const core = createScriptedSession({
-		contextWindow: 100000, toolNames: ["write"],
+	const model = scriptedModel({
+		contextWindow: 100000,
 		async stream(_messages, signal) {
 			started();
 			await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
 			return { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "aborted", timestamp: 2 };
 		},
-		async execute() { throw new Error("unexpected tool"); },
-		abortInteractions() {},
 	});
-	const agent = await createAgent({ provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd(), storage }, () => core);
+	const agent = await createAgent({ ...options, ...model, storage });
 	const running = (async () => { for await (const _event of agent.runTurn("keep this")) {} })();
 	try {
 		await ready;

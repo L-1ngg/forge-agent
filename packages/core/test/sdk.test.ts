@@ -1,17 +1,17 @@
+import { fauxModel } from "../../../tests/support/model.ts";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { createAgent, type CreateAgentOptions } from "../src/agent.ts";
-import { createPiTestPort } from "../src/pi-port.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
 import { response } from "@forge-agent/protocol";
-import { createScriptedSession } from "./helpers/scripted-session.ts";
+import { scriptedModel } from "./helpers/scripted-model.ts";
 
 const options: CreateAgentOptions = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };
 
 test("SDK disposal remains terminal across generated queued inputs and cancellation", async () => {
 	await fc.assert(fc.asyncProperty(fc.array(fc.constantFrom("steer", "followUp", "abort"), { maxLength: 12 }), async (actions) => {
 		const storage = new MemorySessionStorage();
-		const agent = await createAgent({ ...options, storage }, () => createPiTestPort({ responses: [{ text: "streaming output" }], tokensPerSecond: 100 }));
+		const agent = await createAgent({ ...options, storage, ...fauxModel({ responses: [{ text: "streaming output" }], tokensPerSecond: 100 }) });
 		const turn = agent.runTurn("hello");
 		const iterator = turn[Symbol.asyncIterator]();
 		await iterator.next();
@@ -30,7 +30,7 @@ test("SDK disposal remains terminal across generated queued inputs and cancellat
 
 test("SDK retains complete calls even when the consumer breaks at agent_end", async () => {
 	const storage = new MemorySessionStorage();
-	const agent = await createAgent({ ...options, storage }, () => createPiTestPort({ responses: [{ text: "first" }, { text: "second" }] }));
+	const agent = await createAgent({ ...options, storage, ...fauxModel({ responses: [{ text: "first" }, { text: "second" }] }) });
 	const initialUsage = agent.getUsage()?.contextTokens;
 	for await (const event of agent.runTurn("first")) {
 		if (event.type === "agent_end") break;
@@ -44,7 +44,7 @@ test("SDK retains complete calls even when the consumer breaks at agent_end", as
 
 test("SDK dispose aborts streaming while the event consumer is paused", async () => {
 	const storage = new MemorySessionStorage();
-	const agent = await createAgent({ ...options, storage }, () => createPiTestPort({ responses: [{ text: "very long output" }], tokensPerSecond: 1 }));
+	const agent = await createAgent({ ...options, storage, ...fauxModel({ responses: [{ text: "very long output" }], tokensPerSecond: 1 }) });
 	const iterator = agent.runTurn("hello")[Symbol.asyncIterator]();
 	await iterator.next();
 	const disposing = agent.dispose();
@@ -59,11 +59,7 @@ test("SDK dispose aborts streaming while the event consumer is paused", async ()
 
 test("SDK default permission waits for host response and dispose closes requests", async () => {
 	let executions = 0;
-	const agent = await createAgent(options, (config) => createPiTestPort({
-		...config,
-		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }],
-		responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }, { text: "done" }],
-	}));
+	const agent = await createAgent({ ...options, tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }], ...fauxModel({ responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }, { text: "done" }] }) });
 	const events = (async () => { for await (const event of agent.runTurn("hello")) void event; })();
 	const requests = agent.requests[Symbol.asyncIterator]();
 	const request = await requests.next();
@@ -77,7 +73,7 @@ test("SDK default permission waits for host response and dispose closes requests
 });
 
 test("SDK rejects reuse after storage commit failure", async () => {
-	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { throw new Error("disk failed"); } } }, () => createPiTestPort({ responses: [{ text: "done" }] }));
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { throw new Error("disk failed"); } }, ...fauxModel({ responses: [{ text: "done" }] }) });
 	const consume = async () => { for await (const event of agent.runTurn("hello")) void event; };
 	await expect(consume()).rejects.toThrow("disk failed");
 	expect(() => agent.runTurn("again")).toThrow("faulted");
@@ -86,7 +82,7 @@ test("SDK rejects reuse after storage commit failure", async () => {
 });
 
 test("SDK stale iterator return cannot cancel a newer invocation", async () => {
-	const agent = await createAgent(options, () => createPiTestPort({ responses: [{ text: "first" }, { text: "second" }] }));
+	const agent = await createAgent({ ...options, ...fauxModel({ responses: [{ text: "first" }, { text: "second" }] }) });
 	const old = agent.runTurn("first")[Symbol.asyncIterator]();
 	while (!(await old.next()).done) {}
 	const current = agent.runTurn("second")[Symbol.asyncIterator]();
@@ -105,13 +101,8 @@ test("SDK stale iterator return cannot cancel a newer invocation", async () => {
 test("SDK disposed unstarted iterators cannot launch a model", async () => {
 	let runs = 0;
 	const storage = new MemorySessionStorage();
-	const session = createScriptedSession({
-		contextWindow: 10000,
-		async stream() { runs++; return { role: "assistant", content: [], stopReason: "stop", timestamp: 1 }; },
-		async execute() { throw new Error("Unexpected tool execution"); },
-		abortInteractions() {},
-	});
-	const agent = await createAgent({ ...options, storage }, () => session);
+	const session = { ...scriptedModel({ contextWindow: 10000, async stream() { runs++; return { role: "assistant", content: [], stopReason: "stop", timestamp: 1 }; } }) };
+	const agent = await createAgent({ ...options, storage, ...session });
 	const iterator = agent.runTurn("first")[Symbol.asyncIterator]();
 	await agent.dispose();
 	expect((await iterator.next()).done).toBe(true);
@@ -121,11 +112,7 @@ test("SDK disposed unstarted iterators cannot launch a model", async () => {
 
 test("SDK dispose cancels a pending permission without executing the tool", async () => {
 	let executions = 0;
-	const agent = await createAgent(options, (config) => createPiTestPort({
-		...config,
-		tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }],
-		responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }],
-	}));
+	const agent = await createAgent({ ...options, tools: [{ name: "custom", label: "Custom", description: "Custom", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, execute: async () => { executions++; return { content: [{ type: "text", text: "ok" }], details: "ok" }; } }], ...fauxModel({ responses: [{ toolCalls: [{ id: "call", name: "custom", arguments: {} }] }] }) });
 	const iterator = agent.runTurn("hello")[Symbol.asyncIterator]();
 	await iterator.next();
 	const requests = agent.requests[Symbol.asyncIterator]();
@@ -139,17 +126,13 @@ test("SDK dispose waits for cooperative tool cleanup with paused event consumpti
 	let notifyStarted!: () => void;
 	const started = new Promise<void>((resolve) => { notifyStarted = resolve; });
 	let cleaned = false;
-	const agent = await createAgent({ ...options, permission: { rules: [{ tool: "hold", argsPattern: "*", effect: "allow" }] } }, (config) => createPiTestPort({
-		...config,
-		tools: [{ name: "hold", label: "Hold", description: "Hold", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute(_input, context) {
+	const agent = await createAgent({ ...options, permission: { rules: [{ tool: "hold", argsPattern: "*", effect: "allow" }] }, tools: [{ name: "hold", label: "Hold", description: "Hold", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute(_input, context) {
 			notifyStarted();
 			await new Promise<void>((resolve) => { context.signal?.addEventListener("abort", () => resolve(), { once: true }); });
 			await Bun.sleep(5);
 			cleaned = true;
 			return { content: [{ type: "text", text: "done" }], details: "done" };
-		} }],
-		responses: [{ toolCalls: [{ id: "call", name: "hold", arguments: {} }] }],
-	}));
+		} }], ...fauxModel({ responses: [{ toolCalls: [{ id: "call", name: "hold", arguments: {} }] }] }) });
 	const iterator = agent.runTurn("hello")[Symbol.asyncIterator]();
 	await iterator.next();
 	await started;

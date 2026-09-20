@@ -1,4 +1,4 @@
-import { createAgent, createPiPort, RequestBus, SessionStore, type Agent, type AgentPort, type CreateAgentOptions, type PiPortOptions } from "@forge-agent/core";
+import { createAgent, RequestBus, SessionStore, type Agent, type CreateAgentOptions } from "@forge-agent/core";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { randomUUID } from "node:crypto";
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -16,7 +16,6 @@ export interface SessionView {
 }
 
 type HostOptions = Omit<CreateAgentOptions, "storage" | "sessionId" | "requestBus"> & { requestTimeoutMs?: number | null };
-type PortFactory = (options: PiPortOptions) => AgentPort | Promise<AgentPort>;
 
 async function fileRevision(path: string): Promise<string> {
 	const info = await stat(path);
@@ -51,9 +50,9 @@ export class SessionHost {
 	private operation: Promise<SessionView> | undefined;
 	private available = new Set<string>();
 	private summaries = new Map<string, { revision: string; summary?: SessionSummary; diagnostics: string[] }>();
-	private constructor(private readonly root: string, private readonly options: HostOptions, private readonly factory: PortFactory) { }
-	static async create(options: HostOptions, factory: PortFactory = createPiPort): Promise<SessionHost> {
-		const host = new SessionHost(await projectRoot(options.cwd), options, factory);
+	private constructor(private readonly root: string, private readonly options: HostOptions) { }
+	static async create(options: HostOptions): Promise<SessionHost> {
+		const host = new SessionHost(await projectRoot(options.cwd), options);
 		host.view = await host.prepare();
 		return host;
 	}
@@ -83,7 +82,7 @@ export class SessionHost {
 		const storage = store ?? SessionStore.create(file, this.options.cwd, id);
 		const requestBus = new RequestBus({ timeoutMs: this.options.requestTimeoutMs ?? null });
 		try {
-			const port = await createAgent({ ...this.options, sessionId: id, storage, requestBus }, this.factory);
+			const port = await createAgent({ ...this.options, sessionId: id, storage, requestBus });
 			return { id: file, port, requestBus, history: store?.messages() ?? [], hasHistory: () => storage.saved };
 		} catch (error) { requestBus.close(); throw error; }
 	}

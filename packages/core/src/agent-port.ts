@@ -10,7 +10,7 @@ export interface InputQueueOptions { steeringMode?: InputQueueMode; followUpMode
 
 export type InputAcceptance = { accepted: false } | { accepted: true; processed: Promise<boolean>; inputId?: string };
 
-/** Complete session execution contract accepted by createAgent. */
+/** Internal contract between the hosted SDK lifecycle and its production session. */
 export interface AgentPort {
 	getSkills?(): SkillsSnapshot;
 	refreshSkills?(): Promise<ConfigurationReceipt>;

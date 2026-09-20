@@ -1,6 +1,6 @@
+import { createPiTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { createPiTestPort } from "../../packages/core/src/index.ts";
 import { initialAbortState, runAbortMachine, stepAbortMachine, type AbortInput } from "./abort-machine.ts";
 
 const eventArbitrary: fc.Arbitrary<AbortInput> = fc.oneof(

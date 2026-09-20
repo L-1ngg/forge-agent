@@ -1,5 +1,6 @@
+import { createPiTestPort } from "../../../tests/support/test-port.ts";
 import { expect, test } from "bun:test";
-import { UsageTracker, calculateContextUsage, createPiTestPort, estimateContextTokens } from "../src/index.ts";
+import { UsageTracker, calculateContextUsage, estimateContextTokens } from "../src/index.ts";
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 
 const usage: TokenUsage = {

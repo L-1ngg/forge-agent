@@ -1,5 +1,5 @@
+import { createPiTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
-import { createPiTestPort } from "../../packages/core/src/index.ts";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
 
 test("pi parallel tool settlement retains every result when one tool fails", async () => {

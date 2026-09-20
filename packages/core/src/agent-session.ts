@@ -110,7 +110,7 @@ export class AgentSession implements AgentPort {
 			streamFn: (model, context, settings) => {
 				settings?.signal?.throwIfAborted();
 				this.responseDriver = this.driver;
-				return this.options.stream(model, context, { ...settings, maxRetries: 0, maxTokens: this.compaction.taskMaxTokens() });
+				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens() });
 			},
 		});
 		this.compaction = new CompactionCoordinator({

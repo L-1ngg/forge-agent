@@ -1,5 +1,5 @@
+import { createPiTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
-import { createPiTestPort } from "../../packages/core/src/index.ts";
 
 const stopReasons = ["stop", "length", "tool_use", "error", "aborted", "deferred"] as const;
 type StopReason = (typeof stopReasons)[number];

@@ -1,7 +1,8 @@
+import { createPiTestPort } from "../../../tests/support/test-port.ts";
 import { expect, test } from "bun:test";
 import { block, type BlockEnvelope } from "@forge-agent/protocol";
 import { bashTool, editTool } from "@forge-agent/tools";
-import { createEditBlockData, createPiTestPort, digest } from "../src/index.ts";
+import { createEditBlockData, digest } from "../src/index.ts";
 
 test("core computes line hunks and aggregate edit counts", () => {
 	const data = createEditBlockData("src/demo.ts", "keep\nold\n", "keep\nnew\nadded\n");

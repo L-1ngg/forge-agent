@@ -1,25 +1,16 @@
+import { fauxModel } from "../support/model.ts";
 import { App, dumpFrame } from "../../packages/tui/src/index.ts";
-import { createAgent, createPiTestPort, RequestBus, SessionStore } from "../../packages/core/src/index.ts";
+import { createAgent, RequestBus, SessionStore } from "../../packages/core/src/index.ts";
 import { editTool } from "../../packages/tools/src/index.ts";
 
 const directory = process.env.FORGE_AGENT_PTY_DIRECTORY!;
 const bus = new RequestBus({ timeoutMs: null });
 const store = await SessionStore.open(`${directory}/session.jsonl`, directory);
-const agent = await createAgent({
-	provider: "faux", model: "faux-1", systemPrompt: "PTY fixture", thinkingLevel: "off",
-	storage: store.asStorage(), cwd: directory, tools: [editTool], permission: {}, requestBus: bus,
-}, async (options) => createPiTestPort({
-	...options,
-	cwd: directory,
-	tools: [editTool],
-	permission: {}, requestBus: bus,
-	responses: [
+const agent = await createAgent({ systemPrompt: "PTY fixture", thinkingLevel: "off", storage: store.asStorage(), cwd: directory, tools: [editTool], permission: {}, requestBus: bus, ...fauxModel({ responses: [
 		{ toolCalls: [{ id: "edit", name: "edit", arguments: { path: "file.txt", old_text: "before", new_text: "after" } }] },
 		{ text: "EDIT_COMPLETE" },
 		{ text: "SLOW_RESPONSE_".repeat(50) },
-	],
-	tokensPerSecond: 40,
-}));
+	], tokensPerSecond: 40 }) });
 const app = new App({
 	port: agent, host: "alt", requestBus: bus,
 	cwd: directory, homeDir: directory, getStatus: () => ({ provider: "faux", model: "faux-1" }),

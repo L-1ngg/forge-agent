@@ -1,9 +1,9 @@
+import { fauxModel } from "../../../tests/support/model.ts";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createAgent, LongTermMemory, MemorySessionStorage } from "../src/sdk.ts";
-import { createPiTestPort } from "../src/pi-port.ts";
 import * as fs from "node:fs/promises";
 
 const directories: string[] = [];
@@ -13,13 +13,10 @@ test("SDK saves memory inside the current turn through hooks and exposes durable
 	const root = await mkdtemp(join(tmpdir(), "forge-memory-session-")); directories.push(root);
 	const memory = new LongTermMemory({ project: root }), storage = new MemorySessionStorage();
 	let hook = false;
-	const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", storage,
-		memory: { store: memory }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] },
-		toolHooks: { async beforeToolCall() { hook = true; return undefined; } },
-	}, options => createPiTestPort({ ...options, responses: [
+	const agent = await createAgent({ cwd: root, systemPrompt: "", storage, memory: { store: memory }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] }, toolHooks: { async beforeToolCall() { hook = true; return undefined; } }, ...fauxModel({ responses: [
 		{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "preference.md", content: "Project uses Bun.", expectedVersion: null } }] },
 		{ text: "Saved." },
-	] }));
+	] }) });
 	try {
 		let observed = false;
 		for await (const event of agent.runTurn("Remember: this project uses Bun.")) {
@@ -75,7 +72,7 @@ test("oversized pinned content is reported instead of silently truncated", async
 	const root = await mkdtemp(join(tmpdir(), "forge-memory-pinned-")); directories.push(root);
 	await writeFile(join(root, "large.md"), "PINNED_SENTINEL" + "x".repeat(15000));
 	const store = new LongTermMemory({ project: root }); await store.pin("project", "large.md", true);
-	const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", memory: { store } }, options => createPiTestPort({ ...options, responses: [{ text: "ok" }] }));
+	const agent = await createAgent({ cwd: root, systemPrompt: "", memory: { store }, ...fauxModel({ responses: [{ text: "ok" }] }) });
 	try {
 		const events = []; for await (const event of agent.runTurn("hello")) events.push(event);
 		expect(events).toContainEqual(expect.objectContaining({ type: "memory", warnings: expect.arrayContaining([expect.stringContaining("Pinned memory project/large.md does not fit")]) }));
@@ -85,12 +82,9 @@ test("oversized pinned content is reported instead of silently truncated", async
 for (const mode of ["disabled", "budget", "permission", "hook"] as const) test(`memory ${mode} prevents writes without reporting a successful save`, async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-memory-gate-")); directories.push(root);
 	const store = new LongTermMemory({ project: root });
-	const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", memory: { store, autoUpdate: mode !== "disabled", ...(mode === "budget" ? { maxWrites: 0 } : {}) },
-		permission: { rules: [{ tool: "*", argsPattern: "*", effect: mode === "permission" ? "deny" : "allow" }] },
-		...(mode === "hook" ? { toolHooks: { async beforeToolCall() { return { block: true, reason: "host blocked write" }; } } } : {}),
-	}, options => createPiTestPort({ ...options, responses: [
+	const agent = await createAgent({ cwd: root, systemPrompt: "", memory: { store, autoUpdate: mode !== "disabled", ...(mode === "budget" ? { maxWrites: 0 } : {}) }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: mode === "permission" ? "deny" : "allow" }] }, ...(mode === "hook" ? { toolHooks: { async beforeToolCall() { return { block: true, reason: "host blocked write" }; } } } : {}), ...fauxModel({ responses: [
 		{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "denied.md", content: "must not persist", expectedVersion: null } }] }, { text: "Main task complete; note not saved." },
-	] }));
+	] }) });
 	try {
 		const events = []; for await (const event of agent.runTurn("Save this")) events.push(event);
 		expect(await store.list("project")).toEqual([]);
@@ -103,7 +97,7 @@ test("memory failure remains a tool failure while session storage failure faults
 	const memory = new LongTermMemory({ project: root }), storage = new MemorySessionStorage();
 	const originalAppend = storage.append.bind(storage);
 	storage.append = async entry => { if (entry.type === "message" && entry.message.role === "toolResult") throw new Error("session commit failed"); await originalAppend(entry); };
-	const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", storage, memory: { store: memory }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] } }, options => createPiTestPort({ ...options, responses: [{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "saved.md", content: "file succeeded", expectedVersion: null } }] }] }));
+	const agent = await createAgent({ cwd: root, systemPrompt: "", storage, memory: { store: memory }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] }, ...fauxModel({ responses: [{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "saved.md", content: "file succeeded", expectedVersion: null } }] }] }) });
 	try {
 		await expect((async () => { for await (const _event of agent.runTurn("remember")) {} })()).rejects.toThrow("session commit failed");
 		expect((await memory.read("project", "saved.md")).text).toContain("file succeeded");
@@ -119,7 +113,7 @@ test("dispose waits for an already-started memory write and canceled publication
 		if (String(data).startsWith("CANCEL_ME")) { entered(); await gate; }
 		return fs.writeFile(path, data, options);
 	} });
-	const agent = await createAgent({ provider: "faux", model: "faux-1", cwd: root, systemPrompt: "", memory: { store }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] } }, options => createPiTestPort({ ...options, responses: [{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "canceled.md", content: "CANCEL_ME", expectedVersion: null } }] }] }));
+	const agent = await createAgent({ cwd: root, systemPrompt: "", memory: { store }, permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" }] }, ...fauxModel({ responses: [{ toolCalls: [{ id: "save", name: "write_memory", arguments: { scope: "project", path: "canceled.md", content: "CANCEL_ME", expectedVersion: null } }] }] }) });
 	const consumed = (async () => { for await (const _event of agent.runTurn("remember")) {} })();
 	try {
 		await writing;

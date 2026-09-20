@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { createAgent } from "../src/agent.ts";
-import { createScriptedSession, type ScriptedDriver } from "./helpers/scripted-session.ts";
+import { scriptedModel, type ScriptedModel } from "./helpers/scripted-model.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 
 function gate() {
@@ -12,23 +12,22 @@ function gate() {
 }
 const answer: SessionMessage = { role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: 1, stopReason: "stop" };
 async function consume(events: AsyncIterable<SessionEvent>) { for await (const event of events) void event; }
-function fixture(stream: ScriptedDriver["stream"] = async () => answer) {
-	let executions = 0;
-	const core = createScriptedSession({ contextWindow: 100000, stream, async execute() { executions++; throw new Error("unexpected tool"); }, abortInteractions() {} });
-	return { core, executions: () => executions };
+function fixture(stream: ScriptedModel["stream"] = async () => answer) {
+	const modelOptions = { ...scriptedModel({ contextWindow: 100000, stream }) };
+	return { modelOptions };
 }
 const options = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };
 
 test("ADR010: abort an acquired but unstarted iterator without model, tools or commit; reuse", async () => {
 	let models = 0;
 	let commits = 0;
-	const { core, executions } = fixture(async () => { models++; return answer; });
-	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } } }, () => core);
+	const { modelOptions } = fixture(async () => { models++; return answer; });
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } }, ...modelOptions });
 	try {
 		const iterator = agent.runTurn("canceled")[Symbol.asyncIterator]();
 		agent.abort();
 		expect((await iterator.next()).done).toBe(true);
-		expect([models, executions(), commits]).toEqual([0, 0, 0]);
+		expect([models, commits]).toEqual([0, 0]);
 		await consume(agent.runTurn("fresh"));
 		expect([models, commits]).toEqual([1, 2]);
 	} finally { await agent.dispose(); }
@@ -38,12 +37,12 @@ test("ADR010: saving rejects intervention, abort cannot leak it into the next in
 	const saving = gate();
 	const release = gate();
 	const contexts: string[][] = [];
-	const { core } = fixture(async (messages) => {
+	const { modelOptions } = fixture(async (messages) => {
 		contexts.push(messages.filter((message) => message.role === "user").flatMap((message) => message.content.flatMap((block) => block.type === "text" ? [block.text] : [])));
 		return answer;
 	});
 	let commits = 0;
-	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), async append(entry) { commits++; if (entry.type === "message" && entry.message.role === "assistant") { saving.resolve(); await release.promise; } } } }, () => core);
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), async append(entry) { commits++; if (entry.type === "message" && entry.message.role === "assistant") { saving.resolve(); await release.promise; } } }, ...modelOptions });
 	const turn = agent.runTurn("first");
 	const running = consume(turn);
 	try {
@@ -64,44 +63,49 @@ test("ADR010: receipt confirms processed input; cancellation returns only pendin
 	const second = gate();
 	const releaseFirst = gate();
 	let models = 0;
-	const { core } = fixture(async (_messages, signal) => {
+	const { modelOptions } = fixture(async (_messages, signal) => {
 		if (++models === 1) { first.resolve(); await releaseFirst.promise; }
 		else { second.resolve(); await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true })); }
 		return answer;
 	});
-	const running = consume(core.runTurn("initial"));
+	const agent = await createAgent({ ...options, ...modelOptions });
+	const turn = agent.runTurn("initial");
+	const running = consume(turn);
 	await first.promise;
-	const processed = core.steer("processed");
-	const pending = core.followUp("pending");
+	const processed = agent.steer("processed", turn.id);
+	const pending = agent.followUp("pending", turn.id);
 	expect(processed?.accepted).toBe(true);
 	expect(pending?.accepted).toBe(true);
 	releaseFirst.resolve();
 	await second.promise;
-	core.abort();
+	agent.abort();
 	await running;
 	if (!processed?.accepted || !pending?.accepted) throw new Error("missing receipts");
 	expect(await processed.processed).toBe(true);
 	expect(await pending.processed).toBe(false);
-	expect(core.steer("idle")).toEqual({ accepted: false });
+	expect(agent.steer("idle", turn.id)).toEqual({ accepted: false });
+	await agent.dispose();
 });
 
-test("ADR010: core closes acceptance before buffered terminal events are consumed", async () => {
-	const { core } = fixture();
-	const iterator = core.runTurn("initial")[Symbol.asyncIterator]();
+test("ADR010: SDK closes acceptance before buffered terminal events are consumed", async () => {
+	const { modelOptions } = fixture();
+	const agent = await createAgent({ ...options, ...modelOptions });
+	const turn = agent.runTurn("initial");
+	const iterator = turn[Symbol.asyncIterator]();
 	await iterator.next();
 	await Bun.sleep(0);
 	try {
-		expect(core.steer("late")).toEqual({ accepted: false });
-		expect(core.followUp("late")).toEqual({ accepted: false });
-	} finally { await iterator.return?.(); }
+		expect(agent.steer("late", turn.id)).toEqual({ accepted: false });
+		expect(agent.followUp("late", turn.id)).toEqual({ accepted: false });
+	} finally { await iterator.return?.(); await agent.dispose(); }
 });
 
 test("ADR010: stale SDK invocation id cannot reach a newer execution", async () => {
 	const started = gate();
 	const release = gate();
 	let models = 0;
-	const { core } = fixture(async () => { if (++models === 2) { started.resolve(); await release.promise; } return answer; });
-	const agent = await createAgent(options, () => core);
+	const { modelOptions } = fixture(async () => { if (++models === 2) { started.resolve(); await release.promise; } return answer; });
+	const agent = await createAgent({ ...options, ...modelOptions });
 	const old = agent.runTurn("old");
 	await consume(old);
 	const current = agent.runTurn("current");
@@ -124,10 +128,10 @@ for (const fail of [false, true]) test(`ADR010: dispose waits for an already sta
 	const saving = gate();
 	const release = gate();
 	let committed = false;
-	const { core } = fixture();
+	const { modelOptions } = fixture();
 	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), async append() {
 		saving.resolve(); await release.promise; if (fail) throw new Error("disk failed"); committed = true;
-	} } }, () => core);
+	} }, ...modelOptions });
 	const outcome = consume(agent.runTurn("first")).then(() => undefined, (error: Error) => error);
 	await saving.promise;
 	let disposed = false;
@@ -146,8 +150,8 @@ for (const fail of [false, true]) test(`ADR010: dispose waits for an already sta
 
 test("incremental: abort at agent_end retains saved history", async () => {
 	let commits = 0;
-	const { core } = fixture();
-	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } } }, () => core);
+	const { modelOptions } = fixture();
+	const agent = await createAgent({ ...options, storage: { load: async () => ({ entries: [], leafId: null }), append: async () => { commits++; } }, ...modelOptions });
 	try {
 		for await (const event of agent.runTurn("initial")) if (event.type === "agent_end") agent.abort();
 		expect(commits).toBe(2);
@@ -158,19 +162,22 @@ for (const stopReason of ["deferred", "error"] as const) test(`ADR010: ${stopRea
 	const started = gate();
 	const release = gate();
 	const contexts: SessionMessage[][] = [];
-	const { core } = fixture(async (messages) => {
+	const { modelOptions } = fixture(async (messages) => {
 		contexts.push(structuredClone([...messages]));
 		started.resolve(); await release.promise;
 		return { ...answer, stopReason };
 	});
-	const running = consume(core.runTurn("first"));
+	const agent = await createAgent({ ...options, ...modelOptions });
+	const turn = agent.runTurn("first");
+	const running = consume(turn);
 	await started.promise;
-	const receipt = core.followUp("unprocessed");
+	const receipt = agent.followUp("unprocessed", turn.id);
 	release.resolve();
 	await running;
 	if (!receipt.accepted) throw new Error("missing receipt");
 	expect(await receipt.processed).toBe(false);
-	await consume(core.runTurn("next"));
+	await consume(agent.runTurn("next"));
+	await agent.dispose();
 	expect(JSON.stringify(contexts)).not.toContain("unprocessed");
 });
 
@@ -180,21 +187,22 @@ test("ADR010: generated input/end/cancel interleavings process each accepted inp
 		async (actions) => {
 			const seen: string[] = [];
 			const storage = new MemorySessionStorage();
-			const { core } = fixture(async (messages) => {
+			const { modelOptions } = fixture(async (messages) => {
 				const text = messages.filter((message) => message.role === "user").at(-1)?.content[0];
 				if (text?.type === "text") seen.push(text.text);
 				await Promise.resolve();
 				return answer;
 			});
-			await core.setStorage(storage);
-			const running = consume(core.runTurn("root"));
+			const agent = await createAgent({ ...options, ...modelOptions, storage });
+			const turn = agent.runTurn("root");
+			const running = consume(turn);
 			const receipts = [];
 			for (const [index, action] of actions.entries()) {
 				for (let tick = 0; tick < action.ticks; tick++) await Promise.resolve();
 				const text = `input-${index}`;
-				const receipt = action.followup ? core.followUp(text) : core.steer(text);
+				const receipt = action.followup ? agent.followUp(text, turn.id) : agent.steer(text, turn.id);
 				receipts.push({ text, receipt });
-				if (action.cancel) core.abort();
+				if (action.cancel) agent.abort();
 			}
 			await running;
 			const saved = sessionMessages(await storage.load()).filter((message) => message.role === "user").flatMap((message) => message.content.flatMap((block) => block.type === "text" ? [block.text] : []));
@@ -204,7 +212,8 @@ test("ADR010: generated input/end/cancel interleavings process each accepted inp
 				expect(seen.filter((input) => input === text).length).toBeLessThanOrEqual(processed ? 1 : 0);
 			}
 			const count = seen.length;
-			await consume(core.runTurn("fresh"));
+			await consume(agent.runTurn("fresh"));
+			await agent.dispose();
 			expect(seen.slice(count)).toEqual(["fresh"]);
 		},
 	), { seed: 91004, numRuns: 40 });

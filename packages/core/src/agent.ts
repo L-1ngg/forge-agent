@@ -6,7 +6,7 @@ import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.t
 import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
 import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
 import type { AgentPort, InputAcceptance, InputQueueOptions } from "./agent-port.ts";
-import { createPiPort, type PiPortOptions, type ToolHooks } from "./pi-port.ts";
+import { createPiPort, type PiPortOptions, type ToolHooks, type StreamFn } from "./pi-port.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
 import { MemorySessionStorage, sessionMessages, type SessionStorage } from "./session-storage.ts";
@@ -25,8 +25,9 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	retry?: Partial<RetryPolicy>;
 	maxTokens?: number;
 	contextWindow?: number;
-	provider: string;
-	model: string;
+	provider?: string;
+	model: PiPortOptions["model"];
+	streamFn?: StreamFn | null;
 	apiKey?: string;
 	baseUrl?: string;
 	systemPrompt: string;
@@ -64,18 +65,8 @@ export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp" 
 
 export type AgentOptions = CreateAgentOptions;
 
-function assertPortCapabilities(port: unknown): asserts port is AgentPort {
-	const methods = {
-		runTurn: true, continue: true, steer: true, followUp: true, abort: true,
-		dispose: true, getUsage: true, setStorage: true, compact: true,
-		configureContext: true, updateConfiguration: true,
-	} satisfies Record<Exclude<keyof AgentPort, "getMemoryBudget" | "getSkills" | "refreshSkills">, true>;
-	const object = port !== null && (typeof port === "object" || typeof port === "function");
-	const missing = Object.keys(methods).filter(name => !object || typeof Reflect.get(port, name) !== "function");
-	if (missing.length) throw new TypeError(`Agent factory must provide callable methods: ${missing.join(", ")}`);
-}
-
-export async function createAgent(options: CreateAgentOptions, portFactory: (options: PiPortOptions) => AgentPort | Promise<AgentPort> = createPiPort): Promise<Agent> {
+export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
+	if (arguments.length !== 1) throw new TypeError("createAgent accepts one options argument; use streamFn, storage or tools for customization");
 	options = snapshotConfiguration(options);
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
@@ -84,10 +75,11 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 	let port: AgentPort | undefined;
 	try {
 		const history = await storage.load();
-		port = await portFactory({
+		port = await createPiPort({
 			sessionId: options.sessionId ?? randomUUID(),
-			provider: options.provider,
+			...(options.provider !== undefined ? { provider: options.provider } : {}),
 			model: options.model,
+			...(options.streamFn !== undefined ? { streamFn: options.streamFn } : {}),
 			systemPrompt: options.systemPrompt,
 			cwd: options.cwd,
 			thinkingLevel: options.thinkingLevel ?? "off",
@@ -108,16 +100,14 @@ export async function createAgent(options: CreateAgentOptions, portFactory: (opt
 			requestBus,
 			history: sessionMessages(history),
 		});
-		assertPortCapabilities(port);
 		await port.setStorage(storage);
 		return new HostedAgent(port, requestBus);
 	} catch (error) {
 		if (!options.requestBus) requestBus.close();
 		const cleanupErrors: unknown[] = [];
-		// A rejected dynamic adapter may itself be missing lifecycle methods.
-		try { if (typeof port?.abort === "function") port.abort(); }
+		try { port?.abort(); }
 		catch (cleanupError) { cleanupErrors.push(cleanupError); }
-		try { if (typeof port?.dispose === "function") await port.dispose(); }
+		try { await port?.dispose(); }
 		catch (cleanupError) { cleanupErrors.push(cleanupError); }
 		if (cleanupErrors.length) throw new AggregateError([error, ...cleanupErrors], "Agent creation failed and cleanup was incomplete", { cause: error });
 		throw error;

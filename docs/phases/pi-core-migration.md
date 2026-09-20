@@ -7,6 +7,8 @@ created: 2026-09-08
 
 > 状态:已完成，operator 已在 WSL 验收(2026-09-08)。正式需求、任务范围及验收定义见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)；本文维护施工接合与回退设计，执行证据见[迁移验收](pi-core-migration-acceptance.md)。
 
+后续 SDK 模型流注入采用同源 `StreamFn`，设计与验证见 [StreamFn 接入](stream-fn.md)。
+
 ## Why
 
 以固定 Pi Agent Core 源码建立可验证、由 Forge 本地维护的执行底座。保留 Forge CLI/TUI 和已完成的上下文工程，允许为清晰接口修改 SDK、工具与协议消费者。方向见 [ADR-015](../decisions/015-pi-core-source-migration.md)，历史差异依据见[调研方案](../research/pi-core-alignment-plan.md)。

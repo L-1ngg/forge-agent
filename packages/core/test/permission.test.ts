@@ -1,5 +1,6 @@
+import { createPiTestPort } from "../../../tests/support/test-port.ts";
 import { expect, test } from "bun:test";
-import { createPiTestPort, MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
+import { MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
 import { RequestBus } from "../src/request-bus.ts";
 import { permissionScopeForToolCall, response } from "@forge-agent/protocol";
 import type { ToolCallBlock } from "@forge-agent/protocol";
