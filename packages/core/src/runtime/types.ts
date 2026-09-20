@@ -190,8 +190,9 @@ export interface AgentLoopConfig extends OptionalStreamOptions {
 	 * - Context window management (pruning old messages)
 	 * - Injecting context from external sources
 	 *
-	 * Contract: must not throw or reject. Return the original messages or another
-	 * safe fallback value instead.
+	 * Contract: throws/rejections propagate from the low-level loop. RuntimeAgent
+	 * catches them and settles error/aborted through its lifecycle. Session budget
+	 * and cancellation failures must prevent the request, not silently fall back.
 	 *
 	 * @example
 	 * ```typescript
@@ -224,7 +225,9 @@ export interface AgentLoopConfig extends OptionalStreamOptions {
 	 *
 	 * Use this to request a graceful stop after the current turn, e.g. before context gets too full.
 	 *
-	 * Contract: must not throw or reject. Throwing interrupts the low-level agent loop without producing a normal event sequence.
+	 * Contract: throws/rejections interrupt the low-level loop. RuntimeAgent settles
+	 * them through its failure lifecycle; session-owned policies must also prevent
+	 * provider retry/recovery from treating a policy failure as a request failure.
 	 */
 	shouldStopAfterTurn?: ((context: ShouldStopAfterTurnContext) => boolean | Promise<boolean>) | undefined;
 

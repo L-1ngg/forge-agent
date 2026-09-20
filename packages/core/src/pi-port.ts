@@ -1,3 +1,4 @@
+import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { discoverSkills } from "./skills/catalog.ts";
 import type { SkillsOptions } from "./skills/types.ts";
 import { snapshotConfiguration, prepareSessionConfiguration } from "./session-configuration.ts";
@@ -18,6 +19,7 @@ export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" 
 export type { Model, StreamFn };
 
 export interface PiPortOptions extends InputQueueOptions {
+	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	skills?: SkillsOptions | false;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
@@ -48,6 +50,7 @@ export interface PiPortOptions extends InputQueueOptions {
 }
 
 export interface ModelPortOptions extends InputQueueOptions {
+	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	context?: Partial<ContextSettings>;

@@ -22,6 +22,34 @@ Existing `provider: string, model: string` configuration still resolves the buil
 
 `updateConfiguration({ model, streamFn })` switches both after the current complete tool batch or summary, preserving accepted/applied receipts. Model metadata is snapshotted before asynchronous creation/preparation. Set `streamFn: null` to restore built-in transport with a string model; when switching from a model object, also supply the catalog provider/model. Failed updates preserve the applied configuration. The host owns the function and its closures; they are not serialized into session history.
 
+## Stop After a Completed Round (shouldStopAfterTurn)
+
+Set `shouldStopAfterTurn(context, signal)` at creation to stop gracefully after a complete batch and avoid further model calls. Return a boolean synchronously or asynchronously: `true` stops the invocation; `false` allows it to continue. The SDK exports `ShouldStopAfterTurn`, `ShouldStopAfterTurnContext`, and `InvocationUsage`. Run the offline [turn-policy.ts example](../examples/turn-policy.ts) with `bun examples/turn-policy.ts`.
+
+```ts
+const agent = await createAgent({
+  model, streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
+  tools, permission,
+  shouldStopAfterTurn: ({ toolResults, turnIndex, usage }) => {
+    const found = toolResults.some(result => result.toolName === "lookup" && !result.isError);
+    const budgetReached = usage.costUsd !== null && usage.costUsd >= 0.10;
+    return found || budgetReached || turnIndex >= 5;
+  },
+});
+```
+
+The callback runs after the assistant response, the complete tool batch, and required persistence, before consuming another steering/follow-up input. Normal responses without tools also invoke it. `turnIndex` starts at 1 for each `runTurn()` / `continue()` invocation. Failed retries, summaries, and error/aborted/length/deferred responses neither count as completed rounds nor invoke the callback.
+
+`message` and `toolResults` use the SessionMessage protocol, including tool content and details. Arguments are isolated, deeply readonly snapshots, without mutable AgentContext access. `model` and `configurationRevision` describe the completed task request (initial revision 0), even when turn_end has already applied a new configuration. The accepted/applied timing stays intact. The callback is configured only at creation; `updateConfiguration` rejects it. The host owns closures; callbacks are not serialized.
+
+`usage` totals this invocation's task requests, failed retries, and automatic summary requests, excluding historical usage and separate manual compaction. Fields are `requests`, `tokens` (input/output/cacheRead/cacheWrite/totalTokens), `costUsd`, `missingUsageRequests`, and `missingCostRequests`. If any request lacks valid token usage, tokens is null; if any request lacks usage or cost, costUsd is null. Pi's all-zero placeholder usage is conservatively unknown; positive token usage with an explicit zero cost remains 0. Costs use transport reports or pi-ai pricing calculations; unknown pricing is not inferred. The host decides whether unknown values should continue, stop, or fail; the example retains a round limit. Checking after a batch provides a soft limit, not a guarantee against exceeding the actual bill.
+
+A policy stop prevents further task calls, retries, recovery, and automatic summaries. Completed messages and tool side effects remain; there may be no final natural-language answer. `agent_end` reports `outcome: "success", terminationReason: "policy"`; after consumption, `AgentTurn.result` is `{ status: "success", terminationReason: "policy" }`. Success denotes normal settlement, not proof of business completion. The model's stopReason is unchanged. Unconsumed inputs settle processed=false; processed inputs are neither returned nor replayed.
+
+Throwing, rejecting, or returning a non-boolean settles the invocation as error and records the policy failure without provider retry/recovery or repeated tools. The instance remains reusable when storage is healthy. Cancellation takes precedence and settles aborted without a policy reason. The SDK can stop waiting for an uncooperative callback, but cannot undo its external side effects; callbacks should honor signal. Do not await the current turn.result, waitForIdle(), or a pending configuration.applied inside the callback: those depend on the callback finishing. Storage failures retain the existing faulted-instance behavior.
+
+See the [construction and acceptance record](phases/turn-policy.md).
+
 ## Skills
 
 Omitting `skills` disables discovery. A configuration object enables it by default; `enabled: false` performs no scan. Core never discovers the host's home directory. Relative paths resolve against `cwd`; `~` is not expanded.

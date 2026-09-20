@@ -19,3 +19,5 @@ export type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.t
 export type { ToolHooks, StreamFn, Model } from "./pi-port.ts";
 
 export type { SkillsOptions, SkillRoot, SkillLayer, SkillsSnapshot, SkillEntry, SkillDiagnostic, SkillInvocation, AgentInput, SkillErrorCode } from "./skills/types.ts";
+
+export type { ShouldStopAfterTurn, ShouldStopAfterTurnContext, InvocationUsage } from "./turn-policy.ts";

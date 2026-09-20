@@ -76,7 +76,7 @@ export type SessionEvent =
 	| (EventBase & CompactionMetrics & { type: "compaction"; phase: "start" | "end" | "error" | "skipped" | "retry" | "attempt"; operationId: string; reason: string; beforeTokens: number; afterTokens?: number; error?: string; attempt?: number; delayMs?: number; thinking?: string; usage?: TokenUsage })
 	| (EventBase & { type: "recovery"; operationId: string; reason: string; attempt: number })
 	| (EventBase & { type: "agent_start" })
-	| (EventBase & { type: "agent_end"; outcome?: "success" | "error" | "aborted" | "length" | "deferred" })
+	| (EventBase & { type: "agent_end"; outcome?: "success" | "error" | "aborted" | "length" | "deferred"; terminationReason?: "policy" })
 	| (EventBase & { type: "turn_start" })
 	| (EventBase & { type: "turn_end"; stopReason?: StopReason })
 	| (EventBase & { type: "message_start"; message: SessionMessage })

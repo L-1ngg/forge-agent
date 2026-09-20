@@ -11,3 +11,5 @@ export * from "./request-bus.ts";
 export * from "./session-search.ts";
 export * from "./session-store.ts";
 export * from "./usage.ts";
+
+export type { ShouldStopAfterTurn, ShouldStopAfterTurnContext, InvocationUsage } from "./turn-policy.ts";

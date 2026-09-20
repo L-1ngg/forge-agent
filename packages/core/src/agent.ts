@@ -1,3 +1,4 @@
+import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { emptySkills, type SkillsOptions, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
 import type { TurnResult, SessionTurn } from "@forge-agent/protocol";
@@ -16,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import type { MemoryOptions } from "./memory/tools.ts";
 
 export interface CreateAgentOptions extends InputQueueOptions {
+	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	skills?: SkillsOptions;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
@@ -67,6 +69,7 @@ export type AgentOptions = CreateAgentOptions;
 
 export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 	if (arguments.length !== 1) throw new TypeError("createAgent accepts one options argument; use streamFn, storage or tools for customization");
+	if (options.shouldStopAfterTurn !== undefined && typeof options.shouldStopAfterTurn !== "function") throw new TypeError("shouldStopAfterTurn must be a function");
 	options = snapshotConfiguration(options);
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
@@ -79,6 +82,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 			sessionId: options.sessionId ?? randomUUID(),
 			...(options.provider !== undefined ? { provider: options.provider } : {}),
 			model: options.model,
+			...(options.shouldStopAfterTurn ? { shouldStopAfterTurn: options.shouldStopAfterTurn } : {}),
 			...(options.streamFn !== undefined ? { streamFn: options.streamFn } : {}),
 			systemPrompt: options.systemPrompt,
 			cwd: options.cwd,
@@ -140,6 +144,7 @@ class HostedAgent implements Agent {
 		let resolveResult!: (result: TurnResult) => void;
 		const result = new Promise<TurnResult>(resolve => { resolveResult = resolve; });
 		let status: TurnResult["status"] = "aborted";
+		let terminationReason: TurnResult["terminationReason"];
 		return {
 			id, result, ...(inputId ? { inputId } : {}),
 			[Symbol.asyncIterator]: () => {
@@ -155,7 +160,7 @@ class HostedAgent implements Agent {
 				const active = { id, iterator, begun: false, canceled: false, settled, finish: (_status?: TurnResult["status"]) => { } };
 				this.active = active;
 				let closed = false;
-				const release = (outcome?: TurnResult["status"]): void => { if (outcome) status = outcome; closed = true; if (this.active === active) this.active = undefined; resolveResult({ status }); resolveIdle(); };
+				const release = (outcome?: TurnResult["status"]): void => { if (outcome) status = outcome; closed = true; if (this.active === active) this.active = undefined; resolveResult({ status, ...(status === "success" && terminationReason ? { terminationReason } : {}) }); resolveIdle(); };
 				active.finish = release;
 				return {
 					next: async () => {
@@ -165,7 +170,10 @@ class HostedAgent implements Agent {
 						active.begun = true;
 						try {
 							const result = await iterator.next();
-							if (!result.done && result.value.type === "agent_end" && result.value.outcome) status = result.value.outcome;
+							if (!result.done && result.value.type === "agent_end") {
+								if (result.value.outcome) status = result.value.outcome;
+								terminationReason = result.value.terminationReason;
+							}
 							if (!result.done && result.value.type === "turn_end") { const reason = result.value.stopReason; status = reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success"; }
 							if (result.done) release();
 							return result;

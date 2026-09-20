@@ -55,14 +55,14 @@ export function toSessionMessage(message: Message): SessionMessage | undefined {
 			provider: standard.provider,
 			model: standard.model,
 			api: standard.api,
-			usage: {
+			...(standard.usage ? { usage: {
 				input: standard.usage.input,
 				output: standard.usage.output,
 				cacheRead: standard.usage.cacheRead,
 				cacheWrite: standard.usage.cacheWrite,
 				totalTokens: standard.usage.totalTokens,
-				cost: { ...standard.usage.cost },
-			},
+				...(standard.usage.cost ? { cost: { ...standard.usage.cost } } : {}),
+			} } : {}),
 			...(stopReason !== undefined ? { stopReason } : {}),
 			...(standard.errorMessage ? { errorMessage: standard.errorMessage } : {}),
 			...("contextExcluded" in standard && standard.contextExcluded === true ? { contextExcluded: true } : {}),

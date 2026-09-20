@@ -22,6 +22,34 @@ async function openAgent(model: Model<string>, streamFn: StreamFn) {
 
 `updateConfiguration({ model, streamFn })` 支持在现有完整工具批次或摘要结束后一起切换，继续区分 accepted 与 applied。模型元数据在异步创建/准备前快照。传 `streamFn: null` 恢复内置传输，此时必须使用字符串模型；若从对象模型切回，需同时提供 catalog 的 provider/model。配置失败保留原生效配置；流函数及其闭包由宿主管理，不序列化到会话历史。
 
+## 每轮停止策略（shouldStopAfterTurn）
+
+在创建时设置 `shouldStopAfterTurn(context, signal)`，宿主可在完整批次结束后优雅停止，避免继续调用模型。它支持同步或异步 boolean 返回值；`true` 停止当前 invocation，`false` 允许继续。SDK 导出 `ShouldStopAfterTurn`、`ShouldStopAfterTurnContext` 与 `InvocationUsage`。可运行离线示例：[turn-policy.ts](../examples/turn-policy.ts)，命令 `bun examples/turn-policy.ts`。
+
+```ts
+const agent = await createAgent({
+  model, streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
+  tools, permission,
+  shouldStopAfterTurn: ({ toolResults, turnIndex, usage }) => {
+    const found = toolResults.some(result => result.toolName === "lookup" && !result.isError);
+    const budgetReached = usage.costUsd !== null && usage.costUsd >= 0.10;
+    return found || budgetReached || turnIndex >= 5;
+  },
+});
+```
+
+回调在当前 assistant 响应、完整工具批次和必要持久化结束后执行，早于消费下一批 steering/follow-up。无工具的正常响应也会调用。`turnIndex` 从 1 开始，每次 `runTurn()` / `continue()` 独立计数；失败重试、摘要与 error/aborted/length/deferred 响应不算完成轮，不调用回调。
+
+`message`、`toolResults` 使用 SessionMessage 协议，包含工具正文和 details；整个参数是隔离的深只读快照，不暴露可变 AgentContext。`model` 与 `configurationRevision` 属于刚完成的任务请求（初始 revision 为 0），即使 turn_end 已应用新配置也保留旧值。accepted/applied 时序不变。回调仅在创建时配置，`updateConfiguration` 不接受它；闭包仍由宿主管理，不序列化。
+
+`usage` 是本次 invocation 的累计模型请求统计，覆盖任务请求、失败重试和自动摘要请求，不包含历史或独立手动压缩。它提供 `requests`、`tokens`（input/output/cacheRead/cacheWrite/totalTokens）、`costUsd`、`missingUsageRequests`、`missingCostRequests`。任何请求缺失有效 token usage 时 tokens 为 null；任何请求缺失 usage 或费用时 costUsd 为 null。Pi 的全零占位 usage 保守视为未知；正 token usage 附带明确零费用仍为 0。费用沿用传输返回的报告值或 pi-ai 定价计算结果，不推测未知定价。宿主自行决定未知时继续、停止或报错；示例以轮数上限兜底。判断发生在批次之后，是软限制，不能保证实际账单不超阈值。
+
+策略命中后不再启动任务续跑、重试、恢复或自动摘要；完成消息和工具副作用保留，可能没有最后一条自然语言答案。`agent_end` 为 `outcome: "success", terminationReason: "policy"`；消费完成后 `AgentTurn.result` 为 `{ status: "success", terminationReason: "policy" }`。success 表示正常结算，业务目标是否完成由宿主判断；模型 stopReason 不改写。尚未消费的输入以 processed=false 结算，已处理输入不返还或重放。
+
+回调抛错、拒绝或返回非 boolean 时，当前 invocation 结算为 error，记录策略失败，不套用供应商重试/恢复，不重做工具；存储健康时实例可复用。取消优先，结算 aborted，不携带 policy 结束原因。SDK 可中止等待不合作的异步回调，但无法撤销其外部副作用；回调应响应 signal。不要在回调内等待当前 turn.result、waitForIdle() 或尚未生效的 configuration.applied，它们依赖回调结束。存储失败继续沿用实例停用规则。
+
+施工与验收见[逐轮停止策略](phases/turn-policy.md)。
+
 ## Skills
 
 SDK 省略 `skills` 时不扫描任何来源；配置对象默认启用，`enabled: false` 时不扫描。Core 不调用 home 目录探测；相对路径按 `cwd` 解析，不展开 `~`。

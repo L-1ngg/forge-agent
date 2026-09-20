@@ -1,3 +1,4 @@
+import { TurnPolicy } from "./turn-policy.ts";
 import { loadSkill } from "./skills/load.ts";
 import { calculateContextUsage } from "./usage.ts";
 import { skillLoader, validateSkillArguments } from "./skills/tools.ts";
@@ -36,6 +37,10 @@ export class AgentSession implements AgentPort {
 	private disposed = false;
 	private executing = false;
 	private revision = 0;
+	private appliedRevision = 0;
+	private turnPolicy: TurnPolicy | undefined;
+	private taskUsage: ((usage?: SessionMessage["usage"]) => void) | undefined;
+	private responseConfiguration: { model: ModelPortOptions["model"]; configurationRevision: number } | undefined;
 	private readonly configurationController = new AbortController();
 	private configurationQueue: Promise<void> = Promise.resolve();
 	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void }> = [];
@@ -84,6 +89,13 @@ export class AgentSession implements AgentPort {
 			afterToolCall: (context, signal) => this.toolset.afterToolCall?.(context, signal) ?? Promise.resolve(undefined),
 			...(toolset.toolExecution ? { toolExecution: toolset.toolExecution } : {}),
 			...(options.sessionId ? { sessionId: options.sessionId } : {}),
+			shouldStopAfterTurn: ({ message, toolResults }, signal) => {
+				if (!this.turnPolicy) return false;
+				return this.turnPolicy.evaluate({
+					message: toSessionMessage(message)!, toolResults: toolResults.map(result => toSessionMessage(result)!),
+					...this.responseConfiguration!,
+				}, signal!);
+			},
 			shouldStopAfterResponse: ({ message }) => message.stopReason === "length" || message.stopReason === "deferred",
 			prepareNextTurnWithContext: () => {
 				this.applyConfigurations();
@@ -110,12 +122,16 @@ export class AgentSession implements AgentPort {
 			streamFn: (model, context, settings) => {
 				settings?.signal?.throwIfAborted();
 				this.responseDriver = this.driver;
+				if (this.turnPolicy) {
+					this.responseConfiguration = { model: structuredClone(model), configurationRevision: this.appliedRevision };
+					this.taskUsage = this.turnPolicy.beginRequest();
+				}
 				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens() });
 			},
 		});
 		this.compaction = new CompactionCoordinator({
 			runtime: this.runtime, usage: this.usage, assembler: this.assembler,
-			configuration: () => ({ options: this.options, driver: this.driver, settings: this.settings }),
+			configuration: () => ({ options: this.options, driver: this.summaryDriver(), settings: this.settings }),
 			history: () => this.state, persist: entry => this.persistEntry(entry), isFaulted: () => this.failure !== undefined,
 		});
 		this.runtime.subscribe(async event => {
@@ -129,6 +145,7 @@ export class AgentSession implements AgentPort {
 			if (event.type === "message_end") {
 				if (event.message.role === "user") this.recoveryUsed = false;
 				const message = toSessionMessage(event.message);
+				if (message?.role === "assistant") { this.taskUsage?.(message.usage); this.taskUsage = undefined; }
 				if (message?.role === "assistant" && !["error", "aborted", "length"].includes(message.stopReason ?? "")) { this.taskFailures = 0; this.recoveryUsed = false; }
 				if (message && this.settings.enabled && this.recoverableLength(message)) { message.contextExcluded = true; Object.assign(event.message, { contextExcluded: true }); }
 				if (message) {
@@ -166,6 +183,8 @@ export class AgentSession implements AgentPort {
 		let failure: unknown;
 		this.emit = event => { events.push(structuredClone(event)); wake?.(); };
 		this.usage.beginTurn(); this.accepting = true;
+		this.turnPolicy = this.options.shouldStopAfterTurn ? new TurnPolicy(this.options.shouldStopAfterTurn) : undefined;
+		this.taskUsage = undefined; this.responseConfiguration = undefined;
 		this.runController = new AbortController();
 		this.memoryTools?.reset();
 		const running = this.runSession(input, this.runController.signal, inputId)
@@ -184,6 +203,7 @@ export class AgentSession implements AgentPort {
 			this.closeInput(); this.toolset?.clear();
 			this.emit = () => { };
 			this.running = undefined; this.runController = undefined;
+			this.turnPolicy = undefined; this.taskUsage = undefined; this.responseConfiguration = undefined;
 			this.compaction.syncUsage(); this.usage.endTurn();
 			if (failure !== undefined) throw failure;
 		}
@@ -291,6 +311,17 @@ export class AgentSession implements AgentPort {
 		this.state.entries.push(entry); this.state.leafId = entry.id;
 	}
 
+	private summaryDriver(): SessionAssembly["driver"] {
+		const driver = this.driver, policy = this.turnPolicy;
+		if (!policy || !driver.summarize) return driver;
+		const summarize = driver.summarize.bind(driver);
+		return { ...driver, summarize: async (request, signal) => {
+			const settle = policy.beginRequest();
+			try { const response = await summarize(request, signal); settle(response.usage); return response; }
+			finally { settle(); }
+		} };
+	}
+
 	private recoverableLength(message: SessionMessage): boolean {
 		const driver = this.responseDriver ?? this.driver;
 		return message.stopReason === "length" && (driver.maxTokens ?? 0) > 0 && message.usage !== undefined && message.usage.output < driver.maxTokens!;
@@ -310,7 +341,7 @@ export class AgentSession implements AgentPort {
 				else await this.runtime.continue();
 				first = false;
 				if (this.failure !== undefined) throw this.failure;
-				if (signal.aborted) return;
+				if (signal.aborted || this.turnPolicy?.stopped || this.turnPolicy?.failed) return;
 				const last = this.runtime.state.messages.at(-1);
 				const message = last ? toSessionMessage(last) : undefined;
 				if (!message || signal.aborted) return;
@@ -346,9 +377,9 @@ export class AgentSession implements AgentPort {
 			this.closeInput(); this.executing = false; this.applyConfigurations();
 			const last = this.runtime.state.messages.at(-1);
 			const reason = last?.role === "assistant" ? last.stopReason : undefined;
-			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
+			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : this.turnPolicy?.failed ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
 			if (retried) this.emit({ type: "retry", phase: "end", attempt: lastRetryAttempt, outcome: outcome === "success" ? "success" : outcome === "aborted" ? "aborted" : "error", timestamp: Date.now() });
-			this.emit({ type: "agent_end", outcome, timestamp: Date.now() });
+			this.emit({ type: "agent_end", outcome, ...(outcome === "success" && this.turnPolicy?.stopped ? { terminationReason: "policy" as const } : {}), timestamp: Date.now() });
 		}
 	}
 
@@ -356,6 +387,7 @@ export class AgentSession implements AgentPort {
 	refreshSkills(): Promise<ConfigurationReceipt> { return this.updateConfiguration({}, true); }
 	updateConfiguration(patch: ConfigurationPatch, refresh = false): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
+		if ("shouldStopAfterTurn" in patch) return Promise.reject(new TypeError("shouldStopAfterTurn is configured at creation"));
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
 		const captured = snapshotConfiguration(patch);
 		const operation = this.configurationQueue.then(async () => {
@@ -376,6 +408,7 @@ export class AgentSession implements AgentPort {
 			if (this.disposed || this.failure !== undefined) { pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
 			this.toolset.clear();
 			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
+			this.appliedRevision = pending.revision;
 			this.options = pending.assembly.options; this.toolset = this.prepareTools(); this.driver = pending.assembly.driver;
 			this.runtime.state.model = this.options.model; this.runtime.state.systemPrompt = this.options.systemPrompt;
 			this.runtime.state.thinkingLevel = this.options.thinkingLevel; this.runtime.state.tools = this.toolset.tools;

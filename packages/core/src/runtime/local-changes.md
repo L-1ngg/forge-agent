@@ -17,3 +17,7 @@ Forge 使用此栅栏处理 `length` 与 `deferred`。前者保留已有“不�
 ## #35：异步输入准备（2026-09-19）
 
 新增可选 `prepareInputMessage(message, signal)`，在初始输入与 steering/follow-up 消费点、上下文变更和 user 事件之前等待宿主准备。默认未设置时保持原有循环；不新增队列或 Agent loop。Forge 使用它检查显式 Skill 输入的权限、取消、版本和预算，再形成一条 user message；失败沿 runtime 原有错误结算，未准备输入不进入 user 历史。Skill 的 processed 回执在 user 保存成功后结算，普通文本保持原有确认语义。输入 id 和拒绝事件归 session/SDK，不写入上游 AgentMessage 协议。
+
+## 回调异常合同澄清（2026-09-20）
+
+`types.ts` 的 transformContext/shouldStopAfterTurn 注释明确区分低层 loop 的异常传播与 RuntimeAgent 的失败生命周期。会话预算或取消失败必须阻止请求，宿主停止策略异常还必须阻断会话层的供应商重试/恢复。仅修正文档合同，不修改移植主循环；SDK 组合见 [逐轮停止策略](../../../../docs/phases/turn-policy.md)。

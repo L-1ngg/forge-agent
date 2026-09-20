@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-19)。
+> 状态:生效(2026-09-20)。
 > 文档组织的历史决策见 [decisions/001-doc-system.md](decisions/001-doc-system.md)。
 > 原则:文档领路,代码跟随;证据说话,不是信心说话。
 
@@ -22,6 +22,7 @@
 |---|---|
 | [plan.md](plan.md) | 项目路线、优先级与当前行动项（**热层**）；已建 issue 的任务使用链接 |
 | [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 当前内核与 SDK 的施工、证据与未测边界 |
+| [逐轮停止策略](phases/turn-policy.md) | shouldStopAfterTurn、调用用量统计与策略停止结算 |
 | [Pi 上下文策略](phases/context-management.md)、[原验收](phases/context-management-acceptance.md) | 已移除 pi 策略的历史设计与证据 |
 | [默认启用上下文压缩](decisions/018-adaptive-default.md) | CLI/SDK 默认策略与旧会话恢复行为 |
 | [上下文压缩施工图](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md) | 独立状态、证据、预算及首次真实模型对照 |
