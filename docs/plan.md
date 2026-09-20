@@ -8,7 +8,7 @@
 
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
 - [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次上下文压缩的已用保留集宣称新投影有效。
-- [ ] 制定第三批能力扩展施工图，明确选型、范围与验收，再开始实现。
+- [ ] 制定第三批能力扩展施工图；Skills 首轮按 [Issue #35 规格](https://github.com/L-1ngg/forge-agent/issues/35)明确接入设计与验收，再开始实现。
 
 ## 2. 后续路线
 
