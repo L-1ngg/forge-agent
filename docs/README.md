@@ -33,6 +33,7 @@
 | [压缩设计](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md) | 独立状态、证据、预算及首次真实模型对照；首次实验不证明后续投影质量 |
 | [短检查点与历史搜索](phases/context-notes-search.md) | 当前请求投影、search_context、软件验证和未测质量边界 |
 | [持久记忆](phases/persistent-memory.md) | Markdown、会话内更新、worktree 副本与质量/成本验收 |
+| [宿主上下文变换](phases/context-transform.md)、[分层预算决策](decisions/021-host-context-transform-and-request-budget.md) | transformContext、记忆组合、最终请求预算的接口与本地验收证据 |
 | [会话管理](phases/session-management.md)、[首次写入](phases/session-first-write.md) | 新会话、清屏、项目内恢复及增量落盘 |
 | [会话恢复体验](phases/session-resume-experience.md)、[记录浏览](phases/transcript-browser.md) | 会话标题、原文预览、缓存与历史浏览 |
 | [实验与验收数据](research/README.md) | 仍被现行验收引用的原始数据、运行方法及证据限制 |

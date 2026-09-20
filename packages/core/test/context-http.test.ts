@@ -114,3 +114,62 @@ test("HTTP partial overflow preserves the failed record and recovers to a separa
 		expect(JSON.stringify(events)).toContain("final answer");
 	} finally { await agent.dispose(); server.stop(true); }
 });
+
+// The helper-only counterexample must also hold at the production HTTP boundary.
+for (const thinking of ["off", "medium"] as const) test(`host final gate prevents builtin output clamping: ${thinking}`, async () => {
+	const { withScenario } = await import("../../../tests/support/scenario.ts");
+	const { modelResponse } = await import("./helpers/model-response.ts");
+	await withScenario(`builtin-clamp-${thinking}`, async s => {
+		const body = await modelResponse().text();
+		const expectedOutput = thinking === "off" ? 1024 : 9216;
+		const fixture = s.httpFixture("only-control-request", [{ id: "control", method: "POST", path: "/v1/messages", match(body) {
+			expect(body).toMatchObject({ max_tokens: expectedOutput });
+			if (thinking === "medium") expect(body).toMatchObject({ thinking: { type: "enabled", budget_tokens: 8192 } });
+		}, response: { chunks: [body] } }]);
+		let callbacks = 0;
+		const agent = await s.agent({ ...base, baseUrl: fixture.url, thinkingLevel: thinking, maxTokens: 1024, context: { enabled: false }, transformContext: context => {
+			if (++callbacks > 1) return context.messages;
+			const input = context.model.contextWindow - context.budget.effectiveOutputTokens - 2000;
+			expect(input).toBeLessThan(context.budget.maxInputTokens);
+			return [user("x".repeat((input - context.budget.fixedTokens - 1) * 4))];
+		} });
+		const rejected = agent.runTurn("too close to provider limit"); const events = await s.collect(rejected);
+		expect((await rejected.result).status).toBe("error"); expect(JSON.stringify(events)).toContain("builtin-output-clamp"); expect(fixture.count).toBe(0);
+		const control = agent.runTurn("short control"); await s.collect(control); expect((await control.result).status).toBe("success"); expect(fixture.count).toBe(1);
+	});
+});
+
+test("switching custom and builtin streams commits the preflight policy atomically", async () => {
+	const { withScenario } = await import("../../../tests/support/scenario.ts");
+	const { fauxModel } = await import("../../../tests/support/model.ts");
+	await withScenario("transport-switch", async s => {
+		const fixture = s.httpFixture("no-http", []); let customCalls = 0;
+		const custom = fauxModel({ responses: [{ text: "custom one" }, { text: "custom two" }] });
+		const streamFn: import("../src/sdk.ts").StreamFn = (model, context, options) => { customCalls++; return custom.streamFn(custom.model, context, options); };
+		const agent = await s.agent({ ...base, thinkingLevel: "off", maxTokens: 1024, baseUrl: fixture.url, streamFn, context: { enabled: false }, transformContext: context => {
+			const input = context.model.contextWindow - context.budget.effectiveOutputTokens - 2000;
+			return [user("x".repeat((input - context.budget.fixedTokens - 1) * 4))];
+		} });
+		const first = agent.runTurn("custom"); await s.collect(first); expect((await first.result).status).toBe("success");
+		await (await agent.updateConfiguration({ streamFn: null })).applied;
+		const second = agent.runTurn("builtin"); await s.collect(second); expect((await second.result).status).toBe("error"); expect(fixture.count).toBe(0);
+		await (await agent.updateConfiguration({ streamFn })).applied;
+		const third = agent.runTurn("custom again"); await s.collect(third); expect((await third.result).status).toBe("success"); expect(customCalls).toBe(2);
+	});
+});
+
+test("builtin request ignores stale historical usage and respects a smaller local window", async () => {
+	const { withScenario } = await import("../../../tests/support/scenario.ts");
+	const { modelResponse } = await import("./helpers/model-response.ts");
+	await withScenario("stale-usage-http", async s => {
+		const body = await modelResponse().text();
+		const fixture = s.httpFixture("one-request", [{ id: "short", method: "POST", path: "/v1/messages", match(body) { expect(body).toMatchObject({ max_tokens: 1024 }); }, response: { chunks: [body] } }]);
+		const old: SessionMessage = { ...assistant("old"), usage: { input: 10000000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 10000100 } };
+		const storage = new MemorySessionStorage([user("old"), old]);
+		let calls = 0;
+		const agent = await s.agent({ ...base, baseUrl: fixture.url, thinkingLevel: "off", contextWindow: 16000, maxTokens: 1024, storage, context: { enabled: false }, transformContext: context => ++calls === 1 ? context.messages : [user("x".repeat(64000))] });
+		const control = agent.runTurn("short"); await s.collect(control); expect((await control.result).status).toBe("success");
+		const rejected = agent.runTurn("local limit"); const events = await s.collect(rejected); expect((await rejected.result).status).toBe("error"); expect(JSON.stringify(events)).toContain("request-budget (general)"); expect(fixture.count).toBe(1);
+		expect(JSON.stringify(await storage.load())).toContain("10000100");
+	});
+});

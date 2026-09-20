@@ -1,3 +1,4 @@
+import type { TransformContext } from "./context/transform.ts";
 import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { discoverSkills } from "./skills/catalog.ts";
 import type { SkillsOptions } from "./skills/types.ts";
@@ -20,6 +21,7 @@ export type { Model, StreamFn };
 
 export interface PiPortOptions extends InputQueueOptions {
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
+	transformContext?: TransformContext;
 	skills?: SkillsOptions | false;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
@@ -50,7 +52,10 @@ export interface PiPortOptions extends InputQueueOptions {
 }
 
 export interface ModelPortOptions extends InputQueueOptions {
+	/** Internal resolved transport identity, committed with configuration. */
+	builtinStream?: boolean;
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
+	transformContext?: TransformContext;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
 	context?: Partial<ContextSettings>;

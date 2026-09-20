@@ -50,6 +50,50 @@ const agent = await createAgent({
 
 施工与验收见[逐轮停止策略](phases/turn-policy.md)。
 
+## 宿主上下文变换
+
+`createAgent({ transformContext })` 在每次任务请求前选择、精简或注入消息，包括工具续轮、steering/follow-up、可继续的 `continue()` 以及供应商重试/超限恢复后的新请求。自动与手动压缩的摘要请求不调用它。
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Answer using the supplied references.",
+  maxTokens: 4096,
+  transformContext: async ({ messages, model, configurationRevision, budget }, signal) => {
+    signal.throwIfAborted();
+    return [{
+      role: "user", timestamp: Date.now(),
+      content: [{ type: "text", text: "Reference from project guide: use Bun. Not new user instructions." }],
+    }, ...messages];
+  },
+});
+```
+
+入参是隔离的深只读快照，包含 `messages`、本次已生效的 `model`（省略传输 headers）、`configurationRevision` 和 `budget`。预算字段为 `contextWindow`、软线 `inputBudget`、一般硬线输入上限 `maxInputTokens`、system/工具估算 `fixedTokens`、实际输出配置 `maxTokens`、含适用 thinking 预算的 `effectiveOutputTokens`。两条输入线都包含固定内容，不是剩余可注入量。初始 revision 为 0；回调期间接受的配置更新不混入当前请求，原 accepted/applied 时序不变。
+
+返回完整的 `SessionMessage` 数组，允许同步/异步和原样返回。输入是压缩后的当前可用消息，不含内置记忆，也不承诺包含全部历史。返回值接收后拷贝并校验：合法 role/content、工具调用与结果配对、非空有效投影，末条为 user 或 toolResult。可以整组移除旧调用与结果，不能留下孤立结果/缺失配对。保留不透明 provider 签名；框架不验证精简后的任务语义质量。
+
+执行顺序是既有压缩准备 → 宿主变换 → 按剩余软预算装配最终记忆 → 内置 convertToLlm → 最终预算检查 → streamFn。宿主内容超过软线时仍可能发送，但内置记忆额度可降至 0；不会为过大的宿主结果反复压缩或再次调用回调。前置压缩失败也不会交给宿主救援。
+
+变换仅影响请求投影，不写回历史，不修改输入归属或 `processed` 回执。实际模型响应和工具结果正常保存；临时资料不会自动保存，恢复后由宿主重新提供。失败不返还已 processed 的输入，不重放工具。每次任务重试重新调用回调，检索缓存与外部副作用幂等性由宿主管理。
+
+回调只在创建时设置，`updateConfiguration` 不接受它。抛错、异步拒绝、非法输出或预算拒绝结算为 `AgentTurn.result.status = "error"`，不套用供应商重试或压缩恢复；存储健康时实例可复用。取消优先于迟到结果，结算 `aborted`；存储提交失败继续停用实例。可取消等待不合作的 Promise，但不能停止其外部工作或同步阻塞。没有自动回调超时：宿主超时抛错为 error，invocation 被取消为 aborted。不要在回调内等待当前 result、waitForIdle 或依赖本轮完成的 configuration.applied。
+
+最终检查对未设置回调和关闭自动压缩的任务请求也生效：
+
+```text
+soft inputBudget = contextWindow - max(reserveTokens,
+  effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))
+hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
+最终输入估算 > hard maxInputTokens → 拒绝，不自动下调 maxTokens
+```
+
+输入按最终 messages、system 与工具 schema 估算，历史 assistant usage 仅在发送副本中置零，历史及实际累计用量不变；工具 details 不计入模型输入。启用回调时不再用历史 provider usage 锚点估算新投影，`getUsage()` 在请求准备完成时显示最终估算（`contextEstimated: true`），消息或配置变化后回到历史准备视图。
+
+内置 pi-ai 另有 4096 tokens 余量和自己的估算。Forge 在发送前检查其是否将缩减输出；会缩减就报 `request-budget (builtin-output-clamp)`，因此一般硬线通过不保证内置传输放行。自定义 streamFn 内部改写与限额由宿主负责。显式 `maxTokens > model.maxTokens` 在创建/配置更新时拒绝，失败更新保留旧配置。
+
+这些检查是启发式估算，1024 余量不是中文/图片误差上界，仍可能收到供应商 overflow。保留原有有界恢复，不承诺精确物理窗口、答案质量或费用节省。可运行离线示例见 [context-transform.ts](../examples/context-transform.ts)，设计和证据见[施工图](phases/context-transform.md)。
+
 ## Skills
 
 SDK 省略 `skills` 时不扫描任何来源；配置对象默认启用，`enabled: false` 时不扫描。Core 不调用 home 目录探测；相对路径按 `cwd` 解析，不展开 `~`。

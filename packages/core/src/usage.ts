@@ -76,12 +76,13 @@ export class UsageTracker {
 		this.setContext(context);
 	}
 
-	recordUsage(usage: TokenUsage): void {
+	recordUsage(usage: TokenUsage, useAnchor = true): void {
 		this.latest = cloneUsage(usage);
 		const messages = this.context.messages ?? [];
 		const last = messages.at(-1);
 		const tokens = usageTokens(usage);
-		if (last?.role === "assistant" && last.stopReason !== "error" && last.stopReason !== "aborted" && tokens > 0) {
+		if (!useAnchor) this.invalidate();
+		if (useAnchor && last?.role === "assistant" && last.stopReason !== "error" && last.stopReason !== "aborted" && tokens > 0) {
 			this.anchor = { prefix: JSON.stringify(messages), length: messages.length, identity: this.context.identity, tokens };
 		}
 	}

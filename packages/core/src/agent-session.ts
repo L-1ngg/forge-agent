@@ -1,3 +1,5 @@
+import { transformMessages } from "./context/transform.ts";
+import { checkRequestBudget, isolateRequest, REQUEST_MARGIN, type RequestBudget } from "./context/request-budget.ts";
 import { TurnPolicy } from "./turn-policy.ts";
 import { loadSkill } from "./skills/load.ts";
 import { calculateContextUsage } from "./usage.ts";
@@ -33,6 +35,9 @@ export class AgentSession implements AgentPort {
 	private options: ModelPortOptions;
 	private toolset: SessionToolset;
 	private driver: SessionAssembly["driver"];
+	private preparationFailed = false;
+	private requestProjection: { messages: SessionMessage[]; tokens?: number; contextWindow: number } | undefined;
+	private publishedMemory: string | undefined;
 	private responseDriver: SessionAssembly["driver"] | undefined;
 	private disposed = false;
 	private executing = false;
@@ -105,21 +110,18 @@ export class AgentSession implements AgentPort {
 				}
 				return { context: { systemPrompt: this.runtime.state.systemPrompt, tools: this.runtime.state.tools, messages: this.runtime.state.messages.slice() }, model: this.options.model, thinkingLevel: this.options.thinkingLevel };
 			},
-			transformContext: async (messages, signal) => {
-				signal?.throwIfAborted();
-				await this.assembleMemory(signal); this.compaction.syncUsage();
-				const limit = compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens);
-				if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > limit) {
-					const result = await this.compaction.run("threshold", signal ?? this.runController!.signal, this.emit);
-					if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
-					await this.assembleMemory(signal); this.compaction.syncUsage();
-				}
-				signal?.throwIfAborted();
-				if (this.skills.enabled && (this.getUsage().contextTokens ?? 0) > limit) throw new Error("Skills context exceeds request budget; reduce sources or split instructions into references.");
-				return [...this.assembler.projection.messages.map(message => fromSessionMessage(message, this.options.model)), ...this.runtime.state.messages];
+			transformContext: (_messages, signal) => this.prepareRequestContext(signal ?? this.runController!.signal),
+			convertToLlm: messages => {
+				try { return projectMessages(messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model)); }
+				catch (error) { this.preparationFailed = true; throw error; }
 			},
-			convertToLlm: messages => projectMessages(messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model)),
 			streamFn: (model, context, settings) => {
+				settings?.signal?.throwIfAborted();
+				try {
+					context = isolateRequest(context);
+					const tokens = checkRequestBudget(model, context, this.requestBudget(), this.appliedRevision, this.options.builtinStream === true);
+					if (this.requestProjection) this.requestProjection.tokens = tokens;
+				} catch (error) { this.preparationFailed = true; throw error; }
 				settings?.signal?.throwIfAborted();
 				this.responseDriver = this.driver;
 				if (this.turnPolicy) {
@@ -143,6 +145,7 @@ export class AgentSession implements AgentPort {
 				if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
 			}
 			if (event.type === "message_end") {
+				this.requestProjection = undefined;
 				if (event.message.role === "user") this.recoveryUsed = false;
 				const message = toSessionMessage(event.message);
 				if (message?.role === "assistant") { this.taskUsage?.(message.usage); this.taskUsage = undefined; }
@@ -154,7 +157,7 @@ export class AgentSession implements AgentPort {
 					await this.persistEntry(entry);
 					if (this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); this.preparedSkills.delete(event.message); }
 					this.compaction.syncUsage();
-					if (message.usage) this.usage.recordUsage(message.usage);
+					if (message.usage) this.usage.recordUsage(message.usage, !this.options.transformContext);
 				}
 			}
 			if (event.type === "turn_end") this.applyConfigurations();
@@ -185,6 +188,7 @@ export class AgentSession implements AgentPort {
 		this.usage.beginTurn(); this.accepting = true;
 		this.turnPolicy = this.options.shouldStopAfterTurn ? new TurnPolicy(this.options.shouldStopAfterTurn) : undefined;
 		this.taskUsage = undefined; this.responseConfiguration = undefined;
+		this.preparationFailed = false; this.requestProjection = undefined;
 		this.runController = new AbortController();
 		this.memoryTools?.reset();
 		const running = this.runSession(input, this.runController.signal, inputId)
@@ -204,6 +208,7 @@ export class AgentSession implements AgentPort {
 			this.emit = () => { };
 			this.running = undefined; this.runController = undefined;
 			this.turnPolicy = undefined; this.taskUsage = undefined; this.responseConfiguration = undefined;
+			this.requestProjection = undefined;
 			this.compaction.syncUsage(); this.usage.endTurn();
 			if (failure !== undefined) throw failure;
 		}
@@ -259,19 +264,57 @@ export class AgentSession implements AgentPort {
 		this.receipts.clear(); this.skillInputs.clear();
 	}
 	abort(): void { this.runController?.abort(); this.compactController?.abort(); this.closeInput(); this.runtime.abort(); this.options.requestBus?.abort(); }
-	getUsage() { return this.usage.snapshot(); }
+	getUsage() {
+		const snapshot = this.usage.snapshot(), request = this.requestProjection;
+		return request?.tokens === undefined ? snapshot : { ...snapshot, contextTokens: request.tokens, contextWindow: request.contextWindow, contextEstimated: true };
+	}
 	getMemoryBudget(): number {
 		if (this.options.memory?.injection === false) return 0;
-		return memoryInjectionBudget(projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
+		return memoryInjectionBudget(this.requestProjection?.messages ?? projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
 	}
 
-	private async assembleMemory(signal?: AbortSignal): Promise<void> {
-		const messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
+	private requestBudget(): RequestBudget {
+		const budget = this.compaction.budget();
+		return { contextWindow: budget.window, inputBudget: compactionInputBudget(budget, this.settings.reserveTokens), maxInputTokens: budget.window - budget.output - REQUEST_MARGIN,
+			fixedTokens: Math.ceil(budget.fixedText.length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output };
+	}
+	private async prepareRequestContext(signal: AbortSignal): Promise<AgentMessage[]> {
+		try {
+			signal.throwIfAborted(); this.requestProjection = undefined;
+			const history = () => projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
+			await this.assembleMemory(history(), signal, false); this.compaction.syncUsage();
+			const budget = this.requestBudget();
+			if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > budget.inputBudget) {
+				const result = await this.compaction.run("threshold", signal, this.emit);
+				if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
+			}
+			signal.throwIfAborted();
+			let messages = history();
+			if (this.options.transformContext) {
+				this.usage.invalidate();
+				messages = await transformMessages(this.options.transformContext, { messages, model: this.options.model, configurationRevision: this.appliedRevision, budget }, signal);
+			}
+			signal.throwIfAborted();
+			this.requestProjection = { messages, contextWindow: budget.contextWindow };
+			await this.assembleMemory(messages, signal, true);
+			signal.throwIfAborted();
+			return [...this.assembler.projection.messages, ...messages].map(message => fromSessionMessage(message, this.options.model));
+		} catch (error) {
+			this.requestProjection = undefined;
+			signal.throwIfAborted();
+			this.preparationFailed = true;
+			throw error;
+		}
+	}
+	private async assembleMemory(messages: SessionMessage[], signal: AbortSignal, publish: boolean): Promise<void> {
+		this.publishedMemory ??= JSON.stringify(this.assembler.projection);
 		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
 		const before = JSON.stringify(this.assembler.projection);
 		const projection = await this.assembler.assemble(messages, this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
-		if (JSON.stringify(projection) !== before) {
-			this.usage.invalidate();
+		const serialized = JSON.stringify(projection);
+		if (serialized !== before) this.usage.invalidate();
+		if (publish && serialized !== this.publishedMemory) {
+			this.publishedMemory = serialized;
 			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
 		}
 	}
@@ -341,7 +384,7 @@ export class AgentSession implements AgentPort {
 				else await this.runtime.continue();
 				first = false;
 				if (this.failure !== undefined) throw this.failure;
-				if (signal.aborted || this.turnPolicy?.stopped || this.turnPolicy?.failed) return;
+				if (signal.aborted || this.preparationFailed || this.turnPolicy?.stopped || this.turnPolicy?.failed) return;
 				const last = this.runtime.state.messages.at(-1);
 				const message = last ? toSessionMessage(last) : undefined;
 				if (!message || signal.aborted) return;
@@ -377,7 +420,7 @@ export class AgentSession implements AgentPort {
 			this.closeInput(); this.executing = false; this.applyConfigurations();
 			const last = this.runtime.state.messages.at(-1);
 			const reason = last?.role === "assistant" ? last.stopReason : undefined;
-			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : this.turnPolicy?.failed ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
+			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : (this.preparationFailed || this.turnPolicy?.failed) ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
 			if (retried) this.emit({ type: "retry", phase: "end", attempt: lastRetryAttempt, outcome: outcome === "success" ? "success" : outcome === "aborted" ? "aborted" : "error", timestamp: Date.now() });
 			this.emit({ type: "agent_end", outcome, ...(outcome === "success" && this.turnPolicy?.stopped ? { terminationReason: "policy" as const } : {}), timestamp: Date.now() });
 		}
@@ -387,6 +430,7 @@ export class AgentSession implements AgentPort {
 	refreshSkills(): Promise<ConfigurationReceipt> { return this.updateConfiguration({}, true); }
 	updateConfiguration(patch: ConfigurationPatch, refresh = false): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
+		if ("transformContext" in patch) return Promise.reject(new TypeError("transformContext is configured at creation"));
 		if ("shouldStopAfterTurn" in patch) return Promise.reject(new TypeError("shouldStopAfterTurn is configured at creation"));
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
 		const captured = snapshotConfiguration(patch);
@@ -408,6 +452,7 @@ export class AgentSession implements AgentPort {
 			if (this.disposed || this.failure !== undefined) { pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
 			this.toolset.clear();
 			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
+			this.requestProjection = undefined;
 			this.appliedRevision = pending.revision;
 			this.options = pending.assembly.options; this.toolset = this.prepareTools(); this.driver = pending.assembly.driver;
 			this.runtime.state.model = this.options.model; this.runtime.state.systemPrompt = this.options.systemPrompt;

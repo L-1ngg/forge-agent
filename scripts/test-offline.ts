@@ -7,7 +7,7 @@ const groups = ["contract", "integration", "cli"] as const;
 type Group = typeof groups[number];
 export function testGroup(path: string): Group {
 	if (path.startsWith("tests/tui-integration/")) return "cli";
-	if (path.startsWith("tests/integration/") || path === "scripts/live-probe.test.ts" || /^packages\/core\/test\/(sdk|runtime-|provider-|responses-|context-http|memory-session|compaction-lifecycle|incremental-session|input-ownership)/.test(path)) return "integration";
+	if (path.startsWith("tests/integration/") || path === "scripts/live-probe.test.ts" || /^packages\/core\/test\/(sdk|runtime-|provider-|responses-|context-http|context-transform|memory-session|compaction-lifecycle|incremental-session|input-ownership)/.test(path)) return "integration";
 	return "contract";
 }
 

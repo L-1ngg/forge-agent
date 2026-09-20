@@ -121,6 +121,8 @@ The SDK only uses memory when its host supplies `memory: { store: new LongTermMe
 
 ## Context Management
 
+SDK hosts can use `transformContext` to select, shorten, or inject request messages without changing durable history. Task requests pass a final input/output budget check even when automatic compaction is disabled; output limits are not automatically reduced. See [host context transformation](docs/sdk.en.md#host-context-transformation) for callback lifecycle, built-in transport limits, and estimation boundaries.
+
 CLI and SDK use context compaction by default, including short task notes, history search/read, and request budgets. No opt-in is required. The following optional configuration makes the defaults explicit:
 
 ```json

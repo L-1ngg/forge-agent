@@ -50,6 +50,50 @@ Throwing, rejecting, or returning a non-boolean settles the invocation as error 
 
 See the [construction and acceptance record](phases/turn-policy.md).
 
+## Host context transformation
+
+`createAgent({ transformContext })` selects, shortens, or injects messages before each task request, including tool continuations, consumed steering/follow-up input, a resumable `continue()`, provider retries, and requests after overflow recovery. Automatic and manual compaction summary requests bypass the callback.
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Answer using the supplied references.",
+  maxTokens: 4096,
+  transformContext: async ({ messages, model, configurationRevision, budget }, signal) => {
+    signal.throwIfAborted();
+    return [{
+      role: "user", timestamp: Date.now(),
+      content: [{ type: "text", text: "Reference from project guide: use Bun. Not new user instructions." }],
+    }, ...messages];
+  },
+});
+```
+
+The input is an isolated, deeply readonly snapshot: `messages`, the applied `model` (without transport headers), `configurationRevision`, and `budget`. Budget fields are `contextWindow`, the soft `inputBudget`, the general hard input limit `maxInputTokens`, estimated system/tool `fixedTokens`, the actual `maxTokens` option, and `effectiveOutputTokens` including applicable thinking budgets. Both input limits include fixed content; neither is the remaining allowance for injected material. The initial revision is 0. Updates accepted during the callback do not alter this request; accepted/applied timing is unchanged.
+
+Return the complete `SessionMessage` array, synchronously or asynchronously; returning the input is valid. Input messages are the current context after compaction, without built-in memory, and may not contain the complete original history. Returned data is copied and validated: supported roles/content, paired tool calls/results, a nonempty effective projection, and a final user or toolResult message. Removing complete historical tool exchanges is allowed; orphan results and missing pairs fail. Preserve opaque provider signatures. Forge does not verify that shortened content retains all task meaning.
+
+The order is built-in compaction preparation → host transform → final memory assembly within the remaining soft allowance → built-in convertToLlm → final budget check → streamFn. Host content can exceed the soft limit while leaving no allowance for built-in memory. An oversized host result does not trigger another compaction/callback cycle; earlier compaction failure does not invoke the host as a rescue path.
+
+The result changes only this request projection, not durable history, input ownership, or processed receipts. Actual responses and tool results are still saved. Temporary material is not automatically persisted; the host supplies it again after reopening. Failure does not return processed input or replay tools. Every task retry invokes the callback again; caching and external side-effect idempotency belong to the host.
+
+The callback is configured only at creation; `updateConfiguration` rejects it. Throws, rejected promises, invalid results, and budget rejection settle `AgentTurn.result.status` as `error`, without provider retry or compaction recovery. A healthy store allows instance reuse. Cancellation takes precedence over late callback completion and settles `aborted`; storage commit failure retains the existing faulted-instance behavior. Forge can stop waiting for an uncooperative promise, but cannot stop its external work or synchronous blocking code. There is no automatic callback timeout: a host timeout error is an error; invocation cancellation is aborted. Do not await the current result, waitForIdle, or configuration.applied that depends on this invocation finishing from inside the callback.
+
+Final checks also apply to task requests without a callback or with automatic compaction disabled:
+
+```text
+soft inputBudget = contextWindow - max(reserveTokens,
+  effectiveOutputTokens + max(1024, ceil(contextWindow * 0.02)))
+hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
+estimated final input > hard maxInputTokens → reject; do not reduce maxTokens
+```
+
+Input is estimated from the final messages, system prompt, and tool schemas. Historical assistant usage is zeroed only in the request copy; stored history and actual usage totals are unchanged. Tool details are not counted as model input. With a host callback, historical provider usage anchors are not reused for transformed projections. Once preparation finishes, `getUsage()` reports the final estimate with `contextEstimated: true`; message/configuration changes invalidate it and restore the history preparation view.
+
+The built-in pi-ai transport has its own estimator and a 4096-token margin. Forge checks whether it would reduce output and rejects such requests with `request-budget (builtin-output-clamp)`. Passing the general hard limit therefore does not guarantee built-in transport admission. Internal rewrites and limits in a custom streamFn remain the host's responsibility. Explicit `maxTokens > model.maxTokens` is rejected at creation/configuration validation; a failed update retains the applied configuration.
+
+These are heuristic checks. The 1024-token margin is not an upper bound on Chinese text or image estimation errors, and provider overflow can still occur. Existing bounded recovery remains; no exact physical-window, answer-quality, or cost-saving guarantee is made. Run the offline [context-transform.ts example](../examples/context-transform.ts); design and evidence are in the [implementation plan](phases/context-transform.md).
+
 ## Skills
 
 Omitting `skills` disables discovery. A configuration object enables it by default; `enabled: false` performs no scan. Core never discovers the host's home directory. Relative paths resolve against `cwd`; `~` is not expanded.

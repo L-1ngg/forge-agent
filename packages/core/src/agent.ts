@@ -1,3 +1,4 @@
+import type { TransformContext } from "./context/transform.ts";
 import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { emptySkills, type SkillsOptions, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
@@ -18,6 +19,7 @@ import type { MemoryOptions } from "./memory/tools.ts";
 
 export interface CreateAgentOptions extends InputQueueOptions {
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
+	transformContext?: TransformContext;
 	skills?: SkillsOptions;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
@@ -70,6 +72,7 @@ export type AgentOptions = CreateAgentOptions;
 export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 	if (arguments.length !== 1) throw new TypeError("createAgent accepts one options argument; use streamFn, storage or tools for customization");
 	if (options.shouldStopAfterTurn !== undefined && typeof options.shouldStopAfterTurn !== "function") throw new TypeError("shouldStopAfterTurn must be a function");
+	if (options.transformContext !== undefined && typeof options.transformContext !== "function") throw new TypeError("transformContext must be a function");
 	options = snapshotConfiguration(options);
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
@@ -83,6 +86,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 			...(options.provider !== undefined ? { provider: options.provider } : {}),
 			model: options.model,
 			...(options.shouldStopAfterTurn ? { shouldStopAfterTurn: options.shouldStopAfterTurn } : {}),
+			...(options.transformContext ? { transformContext: options.transformContext } : {}),
 			...(options.streamFn !== undefined ? { streamFn: options.streamFn } : {}),
 			systemPrompt: options.systemPrompt,
 			cwd: options.cwd,

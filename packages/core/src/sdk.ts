@@ -1,3 +1,4 @@
+export type { TransformContext, TransformContextContext } from "./context/transform.ts";
 
 export type { Agent, AgentTurn, AgentOptions, CreateAgentOptions, TurnResult } from "./agent.ts";
 export type { InputAcceptance, InputQueueMode } from "./agent-port.ts";

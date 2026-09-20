@@ -8,7 +8,6 @@
 
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
 - [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次上下文压缩的已用保留集宣称新投影有效。
-- [ ] 按“一项一项讨论”继续评估宿主上下文变换的具体场景与最小契约；当前仅讨论，实施需另行确认。已有 [StreamFn](phases/stream-fn.md) 与 [逐轮停止策略](phases/turn-policy.md) 作为基线，不重复施工。
 - [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。
 
 ## 2. 后续路线
