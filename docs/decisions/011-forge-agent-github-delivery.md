@@ -5,7 +5,7 @@ created: 2026-09-06
 
 # ADR-011: Forge Agent 命名与 GitHub 交付
 
-> 状态:已批准(2026-09-06,operator 确认方案并要求实施)。施工与验证见 [GitHub 交付施工图](../phases/github-delivery.md)。本文取代 ADR-008 后果中的不更名约定。
+> 状态:已批准(2026-09-06,operator 确认方案并要求实施)。首次施工与验证见[历史交付记录](../archive/phases/github-delivery.md)，当前发布操作见[发布指南](../release.md)。本文取代 ADR-008 后果中的不更名约定。
 
 ## 决策
 

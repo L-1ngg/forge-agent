@@ -6,10 +6,10 @@ created: 2026-09-07
 # ADR-014: 对齐 Pi 的上下文管理
 
 > 命名更新(2026-09-17)：后续实现统一称为上下文压缩；本文保留当时策略名称，当前入口见 [ADR-018](018-adaptive-default.md)。
-> 状态:已实现并完成本地自动化及受控真实任务验收，未推送或发布(2026-09-07)；见[实现证据](../phases/context-management-acceptance.md)。
+> 状态:旧 `pi` 策略已被 [ADR-017](017-evidence-backed-context-compaction.md) 与 [ADR-018](018-adaptive-default.md) 替代并移除；未被替代的会话保存约束继续有效(2026-09-21 校正入口)。现行接口见 [SDK](../sdk.md)，当前投影见[检查点与搜索](../phases/context-notes-search.md)。2026-09-07 的实现及验收见[历史证据](../archive/phases/context-management-acceptance.md)。
 > 参与者:operator、Codex。
 
-增强策略的部分替代决策见 [ADR-017](017-evidence-backed-context-compaction.md)。本文继续定义默认 `pi` 策略；`adaptive` 的独立状态、材料选择、原文找回与预算合同按新决策实施，验收见其施工入口。
+下文记录旧策略当时的决策与依据，不再定义当前默认策略；压缩的独立状态、材料选择、原文找回与预算合同从 [ADR-017](017-evidence-backed-context-compaction.md) 及后续决策进入。
 
 ## 背景与替代范围
 
@@ -17,7 +17,7 @@ operator 在逐项比较后要求：“剩余还有和上下文工程相关的�
 
 基准为 `earendil-works/pi` 的 coding-agent，SHA `9767ba275f3e9a5ee0f5c5342249b629ab1b2282`；不是新的 AgentHarness，也不要求升级整个上游应用。Forge 当前 `pi-ai` 为 0.84.4，执行循环仍由自研 ExecutionCore 拥有。
 
-本决策取代 [ADR-012](012-context-management-direction.md) 的当前方案入口，历史比较记录保留；并补充 [ADR-013](013-incremental-session-persistence.md) 的保存时序和格式，替代其中模型按历史引用找回、损坏行一律拒绝等与本文冲突的方向。ADR-013 的逐步保存、取消保留、请求修补及存储失败停用继续有效。完整施工与验收只维护在[上下文管理方案](../phases/context-management.md)。
+本决策取代 [ADR-012](012-context-management-direction.md) 的当前方案入口，历史比较记录保留；并补充 [ADR-013](013-incremental-session-persistence.md) 的保存时序和格式，替代其中模型按历史引用找回、损坏行一律拒绝等与本文冲突的方向。ADR-013 的逐步保存、取消保留、请求修补及存储失败停用继续有效。完整施工与验收只维护在[上下文管理方案](../archive/phases/context-management.md)。
 
 ## 统一决策
 
@@ -71,4 +71,4 @@ operator 在逐项比较后要求：“剩余还有和上下文工程相关的�
 
 机制和状态显著减少，主要路径接近 Pi；代价是工具整批输出、长任务累计费用、临时日志磁盘占用不具有全局固定上界，超大摘要输入也没有分块兜底。模型可能遗漏摘要细节，原始记录可查看不代表模型会自动读取。
 
-来源：[Pi 主调研](../research/pi-context-management.md)、[工具最终核对](../research/pi-context-tools-final.md)、[会话最终核对](../research/pi-context-session-final.md)。源码能证明调用与状态结构，不能代替供应商、磁盘故障和 SDK 生命周期验证。实现后的自动化、测试副本转换与 xAI 受控任务证据，以及物理超窗、真实 provider 矩阵、断电和跨平台未测项见[验收记录](../phases/context-management-acceptance.md)。
+来源：[Pi 主调研](../archive/research/pi-context-management.md)、[工具最终核对](../archive/research/pi-context-tools-final.md)、[会话最终核对](../archive/research/pi-context-session-final.md)。源码能证明调用与状态结构，不能代替供应商、磁盘故障和 SDK 生命周期验证。实现后的自动化、测试副本转换与 xAI 受控任务证据，以及物理超窗、真实 provider 矩阵、断电和跨平台未测项见[验收记录](../archive/phases/context-management-acceptance.md)。

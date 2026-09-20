@@ -3,3 +3,4 @@ dist/
 .forge-agent/
 *.log
 .test-results/
+/review-notes/

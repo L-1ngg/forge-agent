@@ -5,7 +5,7 @@ created: 2026-09-07
 
 # ADR-013: 会话逐步持久化
 
-> 状态:有效部分已按 [ADR-014](014-pi-aligned-context-management.md) 实现并完成本地验收；历史引用找回与损坏行处理方向被其部分替代(2026-09-07)，见[实现证据](../phases/context-management-acceptance.md)。
+> 状态:有效部分已按 [ADR-014](014-pi-aligned-context-management.md) 实现并完成本地验收；历史引用找回与损坏行处理方向被其部分替代(2026-09-07)，见[当时实现证据](../archive/phases/context-management-acceptance.md)。当前存储接口与首次写入行为见 [SDK](../sdk.md)和[首次写入](../phases/session-first-write.md)。
 > 参与者:operator、Codex。
 
 ## 背景
@@ -14,7 +14,7 @@ created: 2026-09-07
 
 决策提出时的 [AgentRunner](https://github.com/L-1ngg/forge-agent/blob/36107fbfffb5a1df5204a3799ed171e2448c6156/packages/core/src/agent-runner.ts) 收集整次 invocation 的消息，仅在正常结束、未取消且工具配对完整时调用 appendTurn。长任务中途停止会放弃本次过程记录，但已经发生的工具副作用不会回滚。随着任务内自动压缩和长工具循环引入，这一差异会增大。
 
-pi 的 coding-agent 在 message_end 追加消息、压缩成功后追加 compaction 记录；首个 assistant 前存在延迟 flush，不能泛化为每个 token 或每个事件立即刷盘。固定证据见 [pi 调研](../research/pi-context-management.md)。本决策采用逐步保存方向，不强制复制上游缓冲细节或整个 AgentSession。
+pi 的 coding-agent 在 message_end 追加消息、压缩成功后追加 compaction 记录；首个 assistant 前存在延迟 flush，不能泛化为每个 token 或每个事件立即刷盘。固定证据见 [pi 调研](../archive/research/pi-context-management.md)。本决策采用逐步保存方向，不强制复制上游缓冲细节或整个 AgentSession。
 
 ## 决策
 
@@ -45,7 +45,7 @@ operator 在 pi 逐项对比第 10 项确认：采用 pi 的请求视图补齐�
 - 原始历史可包含未完成调用，不据此判为损坏文件。发模型请求前才校验/补齐协议配对；任意非法 ID、跨分支引用及物理损坏仍需拒绝，不因这一规则放宽。
 - 正在执行的当前工具批次仍等待终止或收尾，不为了提前发下一请求而给运行中的工具补缺失提示。该规则处理的是历史中缺少结果的调用。
 
-该选择对应 pi-ai 的请求转换机制，细节与供应商适用范围见 [源码核对](../research/pi-context-management.md#后续核对未完成工具调用的请求转换)。Forge 需要在自己的请求准备路径保证生效，不盲目依赖特定 pi-ai 版本或供应商的隐式修补。
+该选择对应 pi-ai 的请求转换机制，细节与供应商适用范围见 [源码核对](../archive/research/pi-context-management.md#后续核对未完成工具调用的请求转换)。Forge 需要在自己的请求准备路径保证生效，不盲目依赖特定 pi-ai 版本或供应商的隐式修补。
 
 ## 中断模型响应
 
@@ -75,4 +75,4 @@ operator 在 pi 逐项对比第 11 项确认：保留中断记录，但下一次
 
 保留中断任务的证据与进度，代价是需要表达未完成历史、在循环中处理存储失败，并增加追加操作次数。执行完成与历史保存不再共用一个最终事务边界。
 
-施工见 [上下文管理设计](../phases/context-management.md)，实现结果见[验收证据](../phases/context-management-acceptance.md)。SDK 双语指南、输入/取消测试及内核路径已同步；未迁移用户数据、推送或发布版本。
+历史施工见 [上下文管理设计](../archive/phases/context-management.md)，实现结果见[验收证据](../archive/phases/context-management-acceptance.md)。SDK 双语指南、输入/取消测试及内核路径已同步；未迁移用户数据、推送或发布版本。

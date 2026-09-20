@@ -8,7 +8,7 @@
 
 ## 真相源层级
 
-历史 TUI 交付见 [Phase 2.2](docs/phases/phase-2.2.md);B6 按 [ADR-007](docs/decisions/007-no-compile-grok-reference.md) 使用 in-repo cell golden,不编译 grok-build。Phase 1 人工验收与 Phase 2 E1-E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理,不得据此声明人工验收通过。
+日常从[当前文档导航](docs/README.md)按任务读取；仅在追溯历史决策、回归来源或用户指定时进入 `docs/archive/`。归档按其记录版本解释，读取规则见[归档规范](docs/README.md#归档与读取规则)。验收结论沿用[证据边界](docs/README.md#验收边界)，归档不改变未测或豁免结论。
 
 拿不准哪个文档说了算时按此表;文档与代码冲突时**先修文档,再对齐代码**:
 
@@ -16,9 +16,9 @@
 |---|---|
 | 项目路线、优先级与当前阶段入口 | [docs/plan.md](docs/plan.md)(只放当前行动项与链接) |
 | Issue 规格、任务验收与任务状态 | GitHub Issues;与施工图的分工见 [issue-tracker.md](docs/agents/issue-tracker.md) |
-| 当前内核与 SDK 怎么施工、如何验收 | [内核接入](docs/phases/pi-core-migration.md)、[验收证据](docs/phases/pi-core-migration-acceptance.md);历史阶段见 [docs/phases/](docs/phases/) |
+| 当前内核与 SDK 怎么施工、如何验收 | [内核接入](docs/phases/pi-core-migration.md)、[验收证据](docs/phases/pi-core-migration-acceptance.md);后续能力按[当前文档导航](docs/README.md)进入 |
 | 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
-| 为什么这样设计 | [docs/design-rationale.md](docs/design-rationale.md) |
+| 为什么这样设计 | [架构决策](docs/decisions/);早期论证仅在历史追溯时按[归档索引](docs/archive/README.md)读取 |
 | 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |
 | 踩过的坑 | [docs/lessons.md](docs/lessons.md) |
 | 怎么协作、怎么写文档 | [docs/SOP.md](docs/SOP.md)、[docs/README.md](docs/README.md) |
@@ -30,7 +30,7 @@
 ## 写文档时
 
 - 目录分工、命名规范、模板:[docs/README.md](docs/README.md)
-- 新决策 → ADR(docs/decisions/);新教训 → docs/lessons.md;跨 session 交接 → review-notes/
+- 新决策 → ADR(docs/decisions/);新教训 → docs/lessons.md;跨 session 本地交接 → review-notes/(Git 忽略)
 - 文档用中文;标识符、路径、命令、配置 key 用英文,不翻译标识符。
 - 对外 README、SDK 指南和贡献入口按 ADR-011 提供英文;README 与 SDK 的中文版一起维护,内部文档继续中文。
 

@@ -1,6 +1,6 @@
 # SOP — 开发协作流程
 
-> 状态:生效(2026-09-09)。机制出处:[decisions/001-doc-system.md](decisions/001-doc-system.md)。
+> 状态:生效(2026-09-21)。机制出处:[ADR-001](decisions/001-doc-system.md)；归档与本地交接按 [ADR-020](decisions/020-document-archival.md) 补充。
 > 本文件是「怎么开发」的唯一真相源;[AGENTS.md](../AGENTS.md) 只放摘要并指向这里。
 
 ## 核心立场
@@ -68,10 +68,12 @@
 
 跨 session / 跨工具换人继续或评审时,写交接信,模板 [templates/review-request.md](templates/review-request.md)。要点:
 
-- 项目交接(含 `handoff`)统一保存为 `review-notes/YYYY-MM-DD-{topic}-review-request.md`；已有规格、ADR、issue 与验证记录使用路径或 URL 引用，交接信只补充恢复工作所需的上下文。
+- 项目交接(含 `handoff`)统一保存为 `review-notes/YYYY-MM-DD-{topic}-review-request.md`，仅本地保存，由 Git 忽略。已有规格、ADR、issue 与验证记录使用路径或 URL 引用，交接信只补充恢复工作所需的上下文；需要共享的项目合同与证据放入版本化文档或 Issue。
 - 原始需求**引用 operator 原话**,不写二手转述
 - verdict 绑定具体 commit SHA 或文档版本
 - 同 session 内的轻量评审直接对话完成,**不落盘** —— 避免为追溯再造追溯
+
+文档被替代或研究完成使命后，按[归档与读取规则](README.md#归档与读取规则)处理，并修复引用、核对当前入口。归档不改变历史验收结果。
 
 ## 教训入库(lessons.md)
 

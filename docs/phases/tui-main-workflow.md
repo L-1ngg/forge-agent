@@ -32,7 +32,7 @@ operator 原话:
 
 > 还需要加一点UI相关的，就是初始页面(刚启动agent)，可以参考opencode的设计，类像素画，但文案换成forge-agent
 
-前次修复及测试证据保留在 [Phase 2.2](phase-2.2.md#2026-09-07-后续-ui-修复)。新设计以完整阅读与操作路径验收。原有 golden 只能证明 Forge 的已知输出不漂移,不能证明达到 grok 的 UIUX。
+前次修复及测试证据保留在 [Phase 2.2](../archive/phases/phase-2.2.md#2026-09-07-后续-ui-修复)。新设计以完整阅读与操作路径验收。原有 golden 只能证明 Forge 的已知输出不漂移,不能证明达到 grok 的 UIUX。
 
 ## 已确认范围与依据
 

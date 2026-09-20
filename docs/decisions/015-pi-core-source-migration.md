@@ -20,7 +20,7 @@ operator 在 2026-09-08 调研后明确：
 > 但是如果有涉及到接口改动，你也可以进行对应的更改。
 > 本轮目标是迁移和拥有足够清晰的接口。因此只要是pi设计优秀的可以考虑
 
-因此，工作方向是从固定上游源码建立本地拥有的 Core 基线，再完成项目接入。旧 SDK 的方法名、类型和封装层可以调整，不能为了保留旧接口逐项重写上游循环。基础事实见[上游研究](../research/pi-core-upstream-semantics.md)与[接入研究](../research/pi-core-integration-surface.md)。
+因此，工作方向是从固定上游源码建立本地拥有的 Core 基线，再完成项目接入。旧 SDK 的方法名、类型和封装层可以调整，不能为了保留旧接口逐项重写上游循环。基础事实见[上游研究](../archive/research/pi-core-upstream-semantics.md)与[接入研究](../archive/research/pi-core-integration-surface.md)。
 
 ## 决策
 

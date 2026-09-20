@@ -10,7 +10,7 @@ created: 2026-09-04
 
 ## 背景
 
-立项时的规划与 [design-rationale.md](../design-rationale.md) C.2 把 TUI 钉在 `pi-tui` 原语上:UX 概念自写成 `Component`,`render()` 返回 `string[]`。Phase 2 M3-M6 按这条路径落地;Phase 2.1 试图在同一底座上补 typed entry、EntryShell、row budget 和 cell/PNG zero-diff。
+立项时的规划与 [design-rationale.md](../archive/design-rationale.md) C.2 把 TUI 钉在 `pi-tui` 原语上:UX 概念自写成 `Component`,`render()` 返回 `string[]`。Phase 2 M3-M6 按这条路径落地;Phase 2.1 试图在同一底座上补 typed entry、EntryShell、row budget 和 cell/PNG zero-diff。
 
 operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造的,我认为改造的效果很不好」,要求完全删掉现有 TUI 实现后重新设计。随后确认三项:
 
@@ -20,7 +20,7 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 | 2A | 自有 cell compositor | `packages/tui` 自写 `TerminalFrame` 绘制与终端 I/O,不再依赖 `@earendil-works/pi-tui` |
 | 3A | 批准后清空重写 | 删掉现有 src/test 的 pi-tui Component 实现,只保留 CLI 需要的 `App` / `scanFiles` 契约 |
 
-根因不是 TypeScript 不如 Rust,也不是缺几个 widget。`pi-tui` 是行导向(`Component.render(): string[]`),grok-build 是单元格导向(typed entry → 共享 chrome → 预先算好的 rect → 写入 cell)。Phase 2.1 在前者上叠后者,两套模型并存。证据见 [grok-build-tui-gap.md](../research/grok-build-tui-gap.md) §1、[phase-2.1.md](../phases/phase-2.1.md) §2.9。
+根因不是 TypeScript 不如 Rust,也不是缺几个 widget。`pi-tui` 是行导向(`Component.render(): string[]`),grok-build 是单元格导向(typed entry → 共享 chrome → 预先算好的 rect → 写入 cell)。Phase 2.1 在前者上叠后者,两套模型并存。证据见 [grok-build-tui-gap.md](../archive/research/grok-build-tui-gap.md) §1、[phase-2.1.md](../archive/phases/phase-2.1.md) §2.9。
 
 `pi-ai` / `pi-agent-core` 不在当时 TUI 重写范围内;后续内核替换以 [ADR-009](009-self-owned-agent-core.md) 为准。
 
@@ -38,7 +38,7 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 5. **第一版只实现 alt-screen**。`ui.host = "main"` 不再承诺与 alt 共用一棵 Component 树(Phase 2 AC-13 退役)。config 键保留;`main` 在 inline host 落地前允许 alias 到 alt,并在施工图里标明这是暂缓,不是已实现。
 6. **清空后重写**,不在现有 Component 树上继续打补丁。Phase 2.1 的 projector / layout / fold / theme 槽名 / request-card 语义可作为参考,不是运行时依赖。
 
-施工批次、验收与回退见 [phase-2.2.md](../phases/phase-2.2.md)。
+施工批次、验收与回退见 [phase-2.2.md](../archive/phases/phase-2.2.md)。
 
 ### 被否方案
 
@@ -62,15 +62,15 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 
 - 必须自写:终端宿主(raw mode、alt-screen、resize、退出恢复)、editor、Unicode 宽度、按键解码、markdown、差分 paint
 - 交互模式在 B0-B2 期间能力下降;headless 是唯一不受影响的入口
-- [design-rationale.md](../design-rationale.md) D 节「不自己重写 TUI 差分渲染器」对本包作废,只保留「不重写 `pi-ai` / 不重写 Rust」
+- [design-rationale.md](../archive/design-rationale.md) D 节「不自己重写 TUI 差分渲染器」对本包作废,只保留「不重写 `pi-ai` / 不重写 Rust」
 
 **需要同步的文档:**
 
 - [plan.md](../plan.md) 决策 2、架构图、Phase 0 Plan B、下一步
 - [ADR-004](./004-single-process-protocol-isolation.md) 依赖条款
-- [phase-2.1.md](../phases/phase-2.1.md) 中止,改由 phase-2.2 接手
-- [phase-2.md](../phases/phase-2.md) 人工 UX 入口改指 2.2;AC-13 退役
-- [design-rationale.md](../design-rationale.md) C.2 标为历史论证
+- [phase-2.1.md](../archive/phases/phase-2.1.md) 中止,改由 phase-2.2 接手
+- [phase-2.md](../archive/phases/phase-2.md) 人工 UX 入口改指 2.2;AC-13 退役
+- [design-rationale.md](../archive/design-rationale.md) C.2 标为历史论证
 - `scripts/check-deps.ts` 的 tui 允许集去掉 `pi-tui`
 - 根 `package.json` 不再声明 `@earendil-works/pi-tui`
 

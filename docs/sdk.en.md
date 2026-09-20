@@ -281,7 +281,7 @@ The host should stop its request-consumer task when disposal closes the stream a
 
 ## Validation Boundaries
 
-Automated tests use local HTTP providers, tool and storage fault injection, generated interleavings, and PTY interaction. They do not establish a stable public API, full real-provider coverage, long-task reliability, or filesystem crash consistency. Current internal acceptance evidence is in the [SDK construction record](phases/sdk.md) (Chinese).
+Automated tests use local HTTP providers, model stream fixtures, tool and storage fault injection, controlled interleavings, and PTY interaction. They do not establish a stable public API, full real-provider coverage, long-task reliability, or filesystem crash consistency. Current internal acceptance evidence is in the [Pi core migration record](phases/pi-core-migration-acceptance.md), [StreamFn contract](phases/stream-fn.md), and [turn policy record](phases/turn-policy.md) (Chinese).
 
 ## Source-owned Runtime Interface Update
 

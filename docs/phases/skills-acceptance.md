@@ -5,7 +5,7 @@ created: 2026-09-19
 
 # Skills 首轮接入证据
 
-> 状态：本地实现、软件合同验收、全量门禁与提交前双轴审查通过（2026-09-19）。任务规格与 AC 唯一来源为 [#35](https://github.com/L-1ngg/forge-agent/issues/35)。本轮仅本地提交，未 push 或关闭 Issue；模型质量未验收。
+> 状态：本地实现、软件合同验收、全量门禁与提交前双轴审查通过（2026-09-19）。任务规格与 AC 唯一来源为 [#35](https://github.com/L-1ngg/forge-agent/issues/35)。实现交付提交为 `7a8fbff`；2026-09-21 核对 Issue 已于 2026-09-19 关闭。下文保留实现当日的验证记录，未因本次文档整理重跑；模型质量未验收。
 
 起点 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`。开始时暂存区为空，`docs/plan.md` 已修改，`docs/phases/skills.md` 与两份 Skills 研究文档未跟踪；这些初始内容不纳入本次实现提交。
 

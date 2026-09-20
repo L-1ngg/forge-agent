@@ -14,7 +14,7 @@ created: 2026-09-12
 
 ## Why
 
-实现 [Issue #31](https://github.com/L-1ngg/forge-agent/issues/31)。需求及 AC-1 至 AC-14 的唯一正文在 Issue；本文件只定义实现选择、验证方法和实施批次。架构决策见 [ADR-017](../decisions/017-evidence-backed-context-compaction.md)，原策略见 [既有施工图](context-management.md)。
+实现 [Issue #31](https://github.com/L-1ngg/forge-agent/issues/31)。需求及 AC-1 至 AC-14 的唯一正文在 Issue；本文件只定义实现选择、验证方法和实施批次。架构决策见 [ADR-017](../decisions/017-evidence-backed-context-compaction.md)，原策略见 [既有施工图](../archive/phases/context-management.md)。
 
 ## Entry Criteria
 

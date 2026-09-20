@@ -255,6 +255,10 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 每实例默认有独立权限记忆和请求总线。CLI 为兼容现有 TUI 显式传入独占 RequestBus,交互模式允许无限等待;SDK dispose 会关闭该总线,不得跨实例共享。请求观察、授权与释放不依赖 pi 类型。
 
+## 验证边界
+
+自动化验证使用本地 HTTP provider、模型流替身、工具与存储故障注入、受控交错及 PTY 交互，不代表公共 API 稳定承诺、完整真实供应商覆盖、长任务可靠性或文件系统崩溃一致性。当前证据见[内核迁移验收](phases/pi-core-migration-acceptance.md)、[StreamFn 合同](phases/stream-fn.md)和[逐轮停止策略](phases/turn-policy.md)。
+
 ## 本地执行内核接口升级
 
 包名与 `createAgent` 不变。生产循环来自本地维护的固定 Agent 源码，Forge 会话层继续负责存储、权限、上下文与 usage。内部 `ExecutionCore`、`AgentRunner` 和旧权限适配工厂不再导出；宿主从 SDK 创建实例。

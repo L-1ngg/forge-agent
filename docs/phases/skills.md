@@ -5,23 +5,25 @@ created: 2026-09-19
 
 # Pi Skills 首轮接入施工图
 
-> 状态:草稿，待 operator 确认施工设计(2026-09-19)。尚未实现或验收。
+> 状态:已完成首轮实现与软件验收，交付提交 `7a8fbff`(2026-09-19；2026-09-21 校正文档状态)。现行接入见 [SDK](../sdk.md)，交付证据与未测边界见 [Skills 验收](skills-acceptance.md)。
 > 需求与任务级验收唯一来源：[Issue #35](https://github.com/L-1ngg/forge-agent/issues/35)。本文定义施工接口、提交时序与验证批次，不复制 Issue 的 AC。
 
-## Why 与当前基线
+## Why 与施工前基线
 
 在现有单 Agent 执行路径接入本地 Instruction Skills，提供分层发现、按需加载、显式调用和刷新。路线入口为 [plan.md](../plan.md)，本轮不含安装器、MCP、脚本执行或第二套 Agent loop。
 
-核查基线为 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`：
+以下基线与初始工作区描述记录施工开始时的状态，不代表当前缺少 Skills。核查基线为 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`：
 
 - `createAgent` → `createPiPort` → `AgentSession` 已统一 SDK 与 CLI 的执行、权限和存储。
 - `createPiPort` 保存 desired configuration；`AgentSession.updateConfiguration` 串行准备，`applyConfigurations` 在空闲或请求边界应用。当前模型响应及整批工具使用原配置。
 - `prepareSessionTools` 已统一参数重写、schema 校验、hooks、权限及结果复制；持久记忆与上下文读取工具从 session 侧装配。
 - `HostedAgent` 的 `AgentTurn.id`、`InputAcceptance.processed` 与 TUI `generation` 管理输入归属。Skills 的异步读取不能绕开这些边界。
 - `config.ts` 拒绝未知顶层配置；CLI 默认目录、slash 分发和 headless 需要同时接线，不能只注册补全。
-- 初始用户改动：`docs/plan.md` 一处未暂存修改；两份未跟踪文件 `docs/research/skills-integration-options.md`、`docs/research/skills-community-options.md`；暂存区为空。这些是上下文，不属于本任务提交。
+- 初始用户改动：`docs/plan.md` 一处未暂存修改；两份未跟踪文件 `docs/research/skills-integration-options.md`、`docs/research/skills-community-options.md`（现已迁入[归档索引](../archive/README.md)）；暂存区为空。这些是上下文，不属于本任务提交。
 
 ## Entry Criteria
+
+以下保留首轮施工的入口条件；本轮已交付，不作为重新实现或再次等待确认的指令。
 
 | 检查 | 通过标准 | 不通过怎么办 |
 |---|---|---|
@@ -61,7 +63,7 @@ Pi 固定提交为 `36b60d2e8985899743c4cf5bd5f8929832a3f05d`。本次只读核�
 
 缺失的默认来源为空；显式来源缺失/非目录/不可读属于来源扫描失败。断链、无效 YAML、坏候选文件为局部诊断，其余候选继续。无法枚举来源或分组子树属于整体扫描失败，不用不完整空目录覆盖旧 catalog。创建时失败显式报错；刷新时失败保留旧状态及其 revision。
 
-## SDK 接口草案
+## SDK 接口设计
 
 下列接口经 `packages/core/src/sdk.ts` 导出，内部通过 `AgentPort` 到 session；旧的字符串输入调用保持兼容。
 
@@ -149,6 +151,8 @@ CLI 将 `/skill <name> [task]` 解析为 `SkillInvocation`；SDK 使用同一输
 
 ## Batches 与 Test plan
 
+以下是已执行首轮施工的批次与验证设计，实际结果见[验收记录](skills-acceptance.md)。
+
 测试直接沿用 #35 的 Testing Decisions：主边界为真实公开 SDK、生产装配、受控 HTTP/SSE provider、临时目录和真实存储；CLI/headless/PTY 只补宿主接线。沿用 [现有测试施工](testing-system-implementation.md) 的 Linux OS 断网与 macOS fixture 兼容性边界。真实模型选用效果单列，不作为确定性软件出口。
 
 每批纵向按 TDD 推进，一条可观察失败测试 → 最小实现 → 类型检查/目标测试，不先铺满内部 helper 单测。
@@ -161,7 +165,7 @@ CLI 将 `/skill <name> [task]` 解析为 `SkillInvocation`；SDK 使用同一输
 | B4 | 正式 CLI/headless/真实 PTY 的命令、补全、禁用、权限失败、取消/排队/切会话/恢复；双语接入说明 | AC-8、AC-14 |
 | B5 | 反向验证、必要全量门禁、两轴代码审查、修复后复查，仅提交已审查的本任务文件 | AC-15 |
 
-SDK 主用例拟放 `packages/core/test/sdk-skills.test.ts`，复用 `tests/support/` 的 Scenario/HTTP fixture/barrier；模块复用测试另列，CLI 实际进程与 PTY 放 `tests/tui-integration/`。严格检查多余/缺失 HTTP 请求；失败保存请求、事件和历史诊断。不得用内部 Map 或 mock loader 替代这些证据。
+施工设计指定 SDK 主用例放 `packages/core/test/sdk-skills.test.ts`，复用 `tests/support/` 的 Scenario/HTTP fixture/barrier；模块复用测试另列，CLI 实际进程与 PTY 放 `tests/tui-integration/`。严格检查多余/缺失 HTTP 请求；失败保存请求、事件和历史诊断。不得用内部 Map 或 mock loader 替代这些证据。
 
 反向验证至少一次临时颠倒 workspace/user 覆盖，确认 SDK 可观察正文与来源用例变红，然后恢复并重跑目标用例。检查脚本执行哨兵始终不存在，发现/刷新/恢复无副作用。
 
@@ -171,11 +175,11 @@ SDK 主用例拟放 `packages/core/test/sdk-skills.test.ts`，复用 `tests/supp
 
 软件出口是 #35 AC-1–15 的对应证据齐全、门禁通过及审查问题已处理。真实模型小规模探针、人工长期使用、原生 Windows/Node.js 兼容不作为这个软件出口，仍须分别报告 Ran / Not run / Why / Risk。
 
-`implement` 收尾前以起始 SHA 和本任务文件/hunk 范围做 Standards/Spec 双轴审查；原始用户改动只作上下文。修复后刷新审查输入，再检查暂存 diff，提交到当前分支。本请求未要求 push 或关闭 Issue，远端动作不纳入本次本地提交。
+原施工请求的交付范围（历史记录）：`implement` 收尾前以起始 SHA 和本任务文件/hunk 范围做 Standards/Spec 双轴审查；原始用户改动只作上下文。修复后刷新审查输入，再检查暂存 diff，提交到当前分支。当时的实现请求未要求 push 或关闭 Issue，远端动作不纳入该次本地提交；后续任务状态以 [#35](https://github.com/L-1ngg/forge-agent/issues/35) 为准，不能将这段历史授权当作当前未关闭结论。
 
 配置 `skills.enabled: false`/CLI `--no-skills` 为运行时退出路径：撤下目录和加载工具，保留已经保存的历史证据。源码回退按依赖逆序 B4 → B3 → B2 → B1；每批保持编译和既有测试通过。关闭功能不删除用户 Skill 文件、历史或既有配置目录。
 
-## Risk 与当前证据
+## Risk 与证据边界
 
 | 风险 | 验证/防护 |
 |---|---|
@@ -185,4 +189,4 @@ SDK 主用例拟放 `packages/core/test/sdk-skills.test.ts`，复用 `tests/supp
 | 大目录/大文件占用或超预算 | 有界激活、元数据资源限制、完整固定文本预算，不静默截断 |
 | 当前正文覆盖历史证据 | 原始历史不改写，持久化来源及 SHA-256，重开文件变化用例 |
 
-本次草稿的 Ran：读取 #35、现行 SOP/输入与配置合同、相关 SDK/CLI/runtime 源码，核对上述两份固定 Pi 源文件 SHA-256。Not run：生产实现、类型检查、测试、真实模型、macOS。Why：当前只完成需确认的施工设计。Risk：本文是设计，不是功能完成或验收证据；实现阶段按上述公共边界逐批证明。
+设计阶段历史记录（2026-09-19，非交付结论）的 Ran：读取 #35、现行 SOP/输入与配置合同、相关 SDK/CLI/runtime 源码，核对上述两份固定 Pi 源文件 SHA-256。Not run：生产实现、类型检查、测试、真实模型、macOS。Why：当时只完成需确认的施工设计。Risk：设计阶段调查不能充当软件验收。后续实现、门禁与审查结果见 [Skills 验收](skills-acceptance.md)，不能依据这段历史 Not run 重做已交付功能。

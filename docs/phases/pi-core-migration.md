@@ -11,7 +11,7 @@ created: 2026-09-08
 
 ## Why
 
-以固定 Pi Agent Core 源码建立可验证、由 Forge 本地维护的执行底座。保留 Forge CLI/TUI 和已完成的上下文工程，允许为清晰接口修改 SDK、工具与协议消费者。方向见 [ADR-015](../decisions/015-pi-core-source-migration.md)，历史差异依据见[调研方案](../research/pi-core-alignment-plan.md)。
+以固定 Pi Agent Core 源码建立可验证、由 Forge 本地维护的执行底座。保留 Forge CLI/TUI 和已完成的上下文工程，允许为清晰接口修改 SDK、工具与协议消费者。方向见 [ADR-015](../decisions/015-pi-core-source-migration.md)，历史差异依据见[调研方案](../archive/research/pi-core-alignment-plan.md)。
 
 ## Entry Criteria
 
@@ -109,7 +109,7 @@ M0 与接入改动保留独立提交边界。迁移期可以并存测试对照�
 
 ## 当前验证
 
-本轮修改仅为设计文档和导航；检查本地引用及 whitespace，不重跑未变更的产品测试。此前 55 项基线及源码研究见[调研验证](../research/pi-core-alignment-plan.md#今晚的验证与局限)，不能标为本施工图已完成的验收。
+本轮修改仅为设计文档和导航；检查本地引用及 whitespace，不重跑未变更的产品测试。此前 55 项基线及源码研究见[调研验证](../archive/research/pi-core-alignment-plan.md#今晚的验证与局限)，不能标为本施工图已完成的验收。
 
 ## 实际模块落点
 

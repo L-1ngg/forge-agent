@@ -1,14 +1,15 @@
 # 通用 Agent — 规划
 
-> 状态:后续路线(2026-09-19)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md);既有交付与未测项见 [Phase 2.2](phases/phase-2.2.md)。本文件只维护后续路线与行动项。
-> 设计论证与历史研究见 [design-rationale.md](design-rationale.md) 和 [research/](research/)。
+> 状态:后续路线(2026-09-21)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
+> 按[当前文档导航](README.md)读取合同与证据；历史路线仅在追溯时进入[归档索引](archive/README.md)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
 
 ## 1. 当前行动项
 
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
 - [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次上下文压缩的已用保留集宣称新投影有效。
-- [ ] 制定第三批能力扩展施工图；Skills 首轮按 [Issue #35 规格](https://github.com/L-1ngg/forge-agent/issues/35)明确接入设计与验收，再开始实现。
+- [ ] 按“一项一项讨论”继续评估宿主上下文变换的具体场景与最小契约；当前仅讨论，实施需另行确认。已有 [StreamFn](phases/stream-fn.md) 与 [逐轮停止策略](phases/turn-policy.md) 作为基线，不重复施工。
+- [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。
 
 ## 2. 后续路线
 
@@ -16,7 +17,7 @@
 
 ### 第三批 — 能力扩展与调研场景
 
-- 建立工具和 Skills 扩展路径,允许宿主与派生项目配置领域能力。
+- 基于现有工具和 Skills 扩展路径，为宿主与派生项目补充经具体场景验证的领域能力。
 - 用资料获取、来源追踪、交叉核对和报告产出验证通用性;报告必须能追溯引用。
 - 将调研方法与业务知识放在扩展层,不硬编码成内核专用执行流程。
 - 搜索服务、文档解析、知识源和 MCP 接入按场景另行选型;不预建通用 RAG 平台。
@@ -37,8 +38,10 @@
 
 ## 3. 暂缓事项与边界
 
-- Phase 0/1 与 Phase 2 M1-M6 的历史施工见 [Phase 1](phases/phase-1.md)、[Phase 2](phases/phase-2.md);pixel parity 中止记录见 [Phase 2.1](phases/phase-2.1.md)。
-- [Phase 2.2](phases/phase-2.2.md) 已由 operator 关闭,不因重新定位重开;旧验收不代表通用 agent 或对外 SDK 已验收。
+- `onPayload/onResponse` 现阶段不做；`onResponse` 指 HTTP status/headers 观测，不是模型答案回调。不启动 Forge 统一传输观测或更换 Vercel AI SDK；有实际需求和可证明的适配器覆盖后再议。
+- 保留 `AgentTurn.result`、输入归属/`processed` 回执及配置 `accepted/applied` 时序；不暴露整个 `RuntimeOptions`，不恢复 `portFactory`，不升级 Pi。`transformContext` 异常注释已澄清，不重复修改。
+- Phase 0/1 与 Phase 2 M1-M6 的历史施工见 [Phase 1](archive/phases/phase-1.md)、[Phase 2](archive/phases/phase-2.md);pixel parity 中止记录见 [Phase 2.1](archive/phases/phase-2.1.md)。
+- [Phase 2.2](archive/phases/phase-2.2.md) 已由 operator 关闭,不因重新定位重开;旧验收不代表通用 agent 或对外 SDK 已验收。
 - TUI 体验优化见 [主界面工作流设计](phases/tui-main-workflow.md);5 天 dogfooding、真实 provider 多轮工具/session/取消验证和 AC-14 继续按后续要求安排,未测项不改写成通过。
 - 旧 Phase 2.5 Team 与 Phase 4 内置子 Agent 编排不再作为本项目行动项;相关研究保留,不是外部项目的实现承诺。
 - Node.js/Python 兼容、npm 发布与长期版本承诺另行评估;当前仓库内 Bun SDK 不构成这些承诺。

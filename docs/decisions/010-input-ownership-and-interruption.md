@@ -5,7 +5,7 @@ created: 2026-09-05
 
 # ADR-010: 输入归属、执行干预与提交边界
 
-> 状态:提交方向部分被 [ADR-013](013-incremental-session-persistence.md) 及 [ADR-014](014-pi-aligned-context-management.md) 取代(2026-09-07)，新方向已实现并完成本地验收，见[实现证据](../phases/context-management-acceptance.md)；下文保留 2026-09-05 历史规则与验收证据，输入归属等未替代部分继续有效。
+> 状态:提交方向部分被 [ADR-013](013-incremental-session-persistence.md) 及 [ADR-014](014-pi-aligned-context-management.md) 取代(2026-09-07)，新方向已实现并完成本地验收，见[当时实现证据](../archive/phases/context-management-acceptance.md)；当前输入与结算合同见 [SDK](../sdk.md)和[职责收敛](../phases/architecture-responsibilities.md)。下文保留 2026-09-05 历史规则与验收证据，输入归属等未替代部分继续有效。
 > 参与者:operator 提出体验问题并要求记录方案,Codex 调研与起草。
 
 ## 背景
@@ -92,9 +92,9 @@ Codex 源码固定为 `ddf04ad26789d040f9ef6a96736f76602e35a6cc`。Claude Code �
 
 配套施工与接入契约:
 
-- [SDK 施工图](../phases/sdk.md):修订原“保留两条 FIFO 队列”的适用范围,定义接收确认、提交边界和未启动取消;重新验收受影响的 AC-SDK-02/04/05/06。
+- [SDK 施工图](../archive/phases/sdk.md):修订原“保留两条 FIFO 队列”的适用范围,定义接收确认、提交边界和未启动取消;重新验收受影响的 AC-SDK-02/04/05/06。
 - [SDK 接入说明](../sdk.md):修订“取消不提交”的适用阶段,记录宿主队列、停止和提交失败策略。
-- [自研内核施工图](../phases/owned-core.md):区分取消后清理内核队列与宿主恢复草稿,保留活动执行内的 steering/follow-up 顺序。
+- [自研内核施工图](../archive/phases/owned-core.md):区分取消后清理内核队列与宿主恢复草稿,保留活动执行内的 steering/follow-up 顺序。
 
 本决策收窄既有“取消不持久化”契约至提交开始前;此前自动化记录保留为历史证据,不代表本方案已验收。具体 API 与确认点见 SDK 施工图。
 

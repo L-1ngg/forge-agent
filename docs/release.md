@@ -32,4 +32,4 @@ GitHub may hide unpublished drafts from the read-only validation token. The writ
 
 If asset upload fails after draft creation, the draft may be incomplete. Inspect it before taking action; a retry refuses to overwrite it. Remove an incomplete draft only after reviewing its state, or use a new version. The workflow does not delete drafts, replace tags, publish a stable release, or grant write access to verification jobs.
 
-CI uses read-only tokens, Actions pinned to full commit SHAs, and local provider fixtures. Real-provider smoke tests and manual terminal acceptance remain separate. Internal delivery evidence is recorded in [GitHub delivery](phases/github-delivery.md) (Chinese).
+CI uses read-only tokens, Actions pinned to full commit SHAs, and local provider fixtures. Real-provider smoke tests and manual terminal acceptance remain separate. Historical evidence from the initial delivery is preserved in the archived [GitHub delivery record](archive/phases/github-delivery.md) (Chinese); it does not validate later releases.

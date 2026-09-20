@@ -20,10 +20,10 @@ created: 2026-09-04
 
 ## 决策
 
-1. **视觉出口 = 锁定参考环境内,myh `TerminalFrame` 与 grok-build reference cell dump 逐 cell 零差异**(grapheme、width/continuation、foreground、background、全部 attributes、cursor)。覆盖 [grok-build-tui-gap.md](../research/grok-build-tui-gap.md) §6.2 的 canonical scenarios 与 §6.3 的逐区域字段。
+1. **视觉出口 = 锁定参考环境内,myh `TerminalFrame` 与 grok-build reference cell dump 逐 cell 零差异**(grapheme、width/continuation、foreground、background、全部 attributes、cursor)。覆盖 [grok-build-tui-gap.md](../archive/research/grok-build-tui-gap.md) §6.2 的 canonical scenarios 与 §6.3 的逐区域字段。
 2. **PNG/RGBA diff 保留为辅证落盘,不作硬门禁**;跨 terminal/font/DPI 环境不作像素承诺,环境不一致标 `environment-mismatch`(沿用 gap 调研 §6.1)。
 3. **ADR-005 的决策 2(自有 compositor)与决策 3(清空重写)不变**,pi-tui 不回归。cell 零差异要求完全控制 cell 输出,自有 compositor 是更配的底座。B0 已删的旧 harness(`scripts/tui-frame.ts`)仅以 git 历史作参考,按新 compositor 重写,不恢复旧文件。
-4. reference capture 与 parity harness 进 [phase-2.2](../phases/phase-2.2.md):新增批次 B6;reference 获取路径(直接 PTY 驱动 grok-build vs 借其内部渲染测试)以 spike 结论为准,探测与 B1 并行。
+4. reference capture 与 parity harness 进 [phase-2.2](../archive/phases/phase-2.2.md):新增批次 B6;reference 获取路径(直接 PTY 驱动 grok-build vs 借其内部渲染测试)以 spike 结论为准,探测与 B1 并行。
 5. 反向验证升格为出口纪律:人为改 1 个 cell,对应 scenario 测试必须变红;不得以跳过区域、后处理或放宽比较字段通过。
 
 ## 被否方案
@@ -49,11 +49,11 @@ created: 2026-09-04
 
 **需要同步的文档:**
 
-- [phase-2.2.md](../phases/phase-2.2.md):出口条件、新增 B6 与 AC-48/49/50、退役清单调整
+- [phase-2.2.md](../archive/phases/phase-2.2.md):出口条件、新增 B6 与 AC-48/49/50、退役清单调整
 - [plan.md](../plan.md) 决策 2、状态行、§3 下一步
 - [ADR-005](./005-tui-own-compositor.md) 状态行:决策 1 被本 ADR 修订
-- [grok-build-tui-gap.md](../research/grok-build-tui-gap.md) 状态行:pixel parity 以 cell 口径回归
-- [phase-2.1.md](../phases/phase-2.1.md) 状态行:AC-38 语义去向标注
+- [grok-build-tui-gap.md](../archive/research/grok-build-tui-gap.md) 状态行:pixel parity 以 cell 口径回归
+- [phase-2.1.md](../archive/phases/phase-2.1.md) 状态行:AC-38 语义去向标注
 
 **不改的:**
 
