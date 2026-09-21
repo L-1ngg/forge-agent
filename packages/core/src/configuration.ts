@@ -4,7 +4,7 @@ import type { AgentTool } from "./runtime/types.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import type { SummaryDriver } from "./context/compaction.ts";
 
-export type ConfigurationPatch = Partial<Pick<PiPortOptions, "provider" | "model" | "streamFn" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "skills">>;
+export type ConfigurationPatch = { mcp?: import("./mcp/types.ts").McpConfiguration | false } & Partial<Pick<PiPortOptions, "provider" | "model" | "streamFn" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "skills">>;
 export interface ConfigurationReceipt {
 	accepted: true;
 	revision: number;
@@ -12,6 +12,7 @@ export interface ConfigurationReceipt {
 }
 export interface SessionToolset extends ToolHooks { tools: AgentTool[]; clear(): void; }
 export interface SessionAssembly {
+	mcp?: import("./mcp/manager.ts").McpAssembly;
 	skills?: SkillsSnapshot;
 	options: ModelPortOptions;
 	driver: SummaryDriver & { isOverflow(message: SessionMessage): boolean };

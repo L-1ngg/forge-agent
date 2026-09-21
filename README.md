@@ -227,3 +227,22 @@ Design references: [pi](https://github.com/earendil-works/pi) and [grok-build](h
 ## License
 
 [MIT](LICENSE), copyright 2026 L1ngg.
+
+### MCP servers
+
+Forge can connect to local stdio and remote Streamable HTTP or legacy SSE MCP servers. Tools use the existing permission pipeline; Resources, URI templates, Prompts, OAuth, and form/URL elicitation are available through the SDK and `/mcp`. Configure `mcp.servers` in `.forge-agent/config.json` or the user configuration; a project definition replaces the entire server with the same ID.
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
+      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
+    }
+  }
+}
+```
+
+`bun run forge-agent -- --mcp 'status'` needs no model credentials. Use `/mcp login remote` for explicit browser authorization, `/mcp resources files` to browse, and `/mcp use-prompt files review --args '{"topic":"change"}' -- Review this change` to submit a Prompt as context. `--no-mcp` disables connections. Persistent CLI changes require `--mcp 'disable files --scope project'` (or `user`); TUI enable/disable without a scope affects the current Agent.
+
+CLI credentials use the system credential store. Linux requires Secret Service by default; explicitly selecting `mcp.credentialStore: "linux-keyutils"` saves credentials within the current Linux/WSL instance and may require login again after a system restart. There is no silent fallback. SDK stores default to instance-local memory. See [SDK MCP contracts](docs/sdk.en.md#mcp), the runnable [catalog example](examples/mcp-client.ts), and [current acceptance evidence](docs/phases/mcp-client-acceptance.md) for tested behavior and remaining external validation.

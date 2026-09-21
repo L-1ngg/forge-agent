@@ -227,3 +227,22 @@ bun run typecheck:examples
 ## 许可证
 
 [MIT](LICENSE),copyright 2026 L1ngg。
+
+### MCP 服务
+
+Forge 可连接本地 stdio、远程 Streamable HTTP 和旧版 SSE MCP 服务。Tools 走现有权限流程；SDK 与 `/mcp` 提供 Resources、URI templates、Prompts、OAuth 和 form/URL Elicitation。在 `.forge-agent/config.json` 或用户配置中设置 `mcp.servers`；项目配置按同名 server 整条覆盖。
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
+      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
+    }
+  }
+}
+```
+
+`bun run forge-agent -- --mcp 'status'` 无需模型凭据。`/mcp login remote` 显式启动浏览器授权；`/mcp resources files` 浏览目录；`/mcp use-prompt files review --args '{"topic":"change"}' -- 审查这个变更` 将 Prompt 作为上下文提交。`--no-mcp` 禁止连接。CLI 持久修改使用 `--mcp 'disable files --scope project'`（或 `user`）；TUI 不带 scope 的 enable/disable 只改变当前 Agent。
+
+CLI 凭据默认使用系统凭据库，Linux 要求 Secret Service；显式设置 `mcp.credentialStore: "linux-keyutils"` 时只在当前 Linux/WSL 实例内保存，系统重启后可能需要重新登录，不静默 fallback。SDK 默认使用实例内存存储。具体合同见 [SDK MCP](docs/sdk.md#mcp)，可运行[目录示例](examples/mcp-client.ts)；已测行为和未完成的外部验收见[验收证据](docs/phases/mcp-client-acceptance.md)。

@@ -6,6 +6,7 @@
 
 ## 1. 当前行动项
 
+- [ ] 在具备真实账号、模型预算及平台环境后，按 [MCP 验收记录](phases/mcp-client-acceptance.md)验证仍未实测的边界；[Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 代码交付与任务关闭不将未测项改写为通过。
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
 - [ ] 为[短检查点与历史搜索](phases/context-notes-search.md)冻结新的真实模型保留集，验证任务质量、额外找回及总费用；不复用首次上下文压缩的已用保留集宣称新投影有效。
 - [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。
@@ -19,7 +20,7 @@
 - 基于现有工具和 Skills 扩展路径，为宿主与派生项目补充经具体场景验证的领域能力。
 - 用资料获取、来源追踪、交叉核对和报告产出验证通用性;报告必须能追溯引用。
 - 将调研方法与业务知识放在扩展层,不硬编码成内核专用执行流程。
-- 搜索服务、文档解析、知识源和 MCP 接入按场景另行选型;不预建通用 RAG 平台。
+- MCP 已按 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 与[完整施工设计](phases/mcp-client.md)接入，外部验收边界见[验收记录](phases/mcp-client-acceptance.md)；搜索服务、文档解析和具体知识源仍按场景选型，不预建通用 RAG 平台。
 
 ### 第四批 — 长任务可靠性
 

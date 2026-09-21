@@ -47,6 +47,7 @@ export function toSessionMessage(message: Message): SessionMessage | undefined {
 		role: standard.role,
 		content: toSessionContent(standard),
 		timestamp: standard.timestamp,
+		...("inputContext" in standard ? { inputContext: structuredClone(standard.inputContext as NonNullable<SessionMessage["inputContext"]>) } : {}),
 	};
 	if (standard.role === "assistant") {
 		const stopReason = toProtocolStopReason(standard.stopReason);
@@ -90,7 +91,7 @@ export function fromSessionMessage(message: SessionMessage, model: Model<string>
 		.filter((block) => block.type === "text" || block.type === "image")
 		.map((block) => ({ ...block }));
 	if (message.role === "user") {
-		return { role: "user", content: textAndImages, timestamp: message.timestamp } satisfies UserMessage;
+		return Object.assign({ role: "user", content: textAndImages, timestamp: message.timestamp } satisfies UserMessage, message.inputContext ? { inputContext: structuredClone(message.inputContext) } : {});
 	}
 	if (message.role === "toolResult") {
 		return {

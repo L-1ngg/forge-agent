@@ -12,6 +12,7 @@ export type InputAcceptance = { accepted: false } | { accepted: true; processed:
 
 /** Internal contract between the hosted SDK lifecycle and its production session. */
 export interface AgentPort {
+	readonly mcp?: import("./mcp/types.ts").McpController;
 	getSkills?(): SkillsSnapshot;
 	refreshSkills?(): Promise<ConfigurationReceipt>;
 	updateConfiguration(patch: ConfigurationPatch): Promise<ConfigurationReceipt>;

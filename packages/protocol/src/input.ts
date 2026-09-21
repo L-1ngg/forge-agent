@@ -33,4 +33,14 @@ export interface InputCompletionSuggestions {
 }
 
 export interface SkillInvocation { kind: "skill"; name: string; task: string; }
-export type AgentInput = string | SkillInvocation;
+export interface McpPromptInvocation { kind: "mcp_prompt"; serverId: string; name: string; arguments?: Record<string, string>; task: string; }
+export interface McpResourceInvocation { kind: "mcp_resource"; serverId: string; uri: string; task: string; }
+export interface McpInputContext {
+ kind: "mcp_prompt" | "mcp_resource"; serverId: string; name: string; arguments?: Record<string, string>;
+ fetchedAt: number; catalogRevision: number;
+ originalMessages?: unknown;
+ messages: Array<{ role: "user" | "assistant"; content: import("./events.ts").SessionContentBlock[] }>;
+ artifacts: Array<{ id: string; mimeType: string; size: number }>;
+ task?: string;
+}
+export type AgentInput = string | SkillInvocation | McpPromptInvocation | McpResourceInvocation;

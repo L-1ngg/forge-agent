@@ -23,6 +23,7 @@
 | [职责收敛](phases/architecture-responsibilities.md)、[会话装配](phases/agent-assembly.md) | AgentTurn.result、输入归属、压缩协调和统一装配 |
 | [StreamFn](phases/stream-fn.md)、[逐轮停止策略](phases/turn-policy.md) | 模型流注入、双调用路径、shouldStopAfterTurn 与调用用量 |
 | [Skills 设计](phases/skills.md)、[Skills 验收](phases/skills-acceptance.md) | 本地分层发现、按需加载、显式输入及配置提交边界 |
+| [MCP 完整施工设计](phases/mcp-client.md)、[ADR-022](decisions/022-mcp-host-integration.md) | Issue #36 的完整实现与统一验收：官方 SDK、连接所有权、OAuth、Tools/Resources/Prompts、Elicitation；当前证据见[验收记录](phases/mcp-client-acceptance.md) |
 | [架构决策](decisions/) | ADR 及替代关系；先读状态行，再沿当前决策指针读取 |
 
 ### 上下文、记忆与会话

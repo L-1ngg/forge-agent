@@ -1,3 +1,4 @@
+import type { McpOptions, McpController } from "./mcp/types.ts";
 import type { TransformContext } from "./context/transform.ts";
 import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { emptySkills, type SkillsOptions, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
@@ -18,6 +19,7 @@ import { randomUUID } from "node:crypto";
 import type { MemoryOptions } from "./memory/tools.ts";
 
 export interface CreateAgentOptions extends InputQueueOptions {
+	mcp?: McpOptions | false;
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	transformContext?: TransformContext;
 	skills?: SkillsOptions;
@@ -51,6 +53,7 @@ export interface AgentTurn extends SessionTurn {
 }
 
 export interface Agent extends Omit<AgentPort, "runTurn" | "steer" | "followUp" | "setStorage"> {
+	readonly mcp: McpController;
 	getSkills(): SkillsSnapshot;
 	refreshSkills(): Promise<ConfigurationReceipt>;
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
@@ -96,6 +99,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 			...(options.context ? { context: options.context } : {}),
 			...(options.memory ? { memory: options.memory } : {}),
 			...(options.skills ? { skills: options.skills } : {}),
+			...(options.mcp !== undefined ? { mcp: options.mcp } : {}),
 			...(options.retry ? { retry: options.retry } : {}),
 			...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
 			...(options.contextWindow !== undefined ? { contextWindow: options.contextWindow } : {}),
@@ -218,6 +222,7 @@ class HostedAgent implements Agent {
 		this.active.canceled = true;
 		if (this.active.begun) this.runner?.abort();
 	}
+	get mcp(): McpController { this.assertAvailable(); return this.runner!.mcp!; }
 	getSkills(): SkillsSnapshot { return this.runner?.getSkills?.() ?? emptySkills(); }
 	refreshSkills(): Promise<ConfigurationReceipt> { this.assertAvailable(); if (!this.runner!.refreshSkills) return Promise.reject(new Error("Adapter does not support Skills")); return this.runner!.refreshSkills(); }
 	getUsage(): UsageTruthPoint | undefined { return this.runner?.getUsage(); }

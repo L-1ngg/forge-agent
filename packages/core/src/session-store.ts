@@ -1,3 +1,4 @@
+import { expandMcpInput } from "./session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { normalizeSessionEntry, selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -36,6 +37,7 @@ function parseSession(text: string, allowOld = false): { header: SessionHeader; 
 	for (const entry of entries) {
 		if (!entry || (entry.type !== "message" && entry.type !== "compaction") || typeof entry.id !== "string" || !entry.id || ids.has(entry.id) || (entry.parentId !== null && typeof entry.parentId !== "string") || typeof entry.timestamp !== "string") throw new Error("Session contains an invalid entry");
 		if (entry.type === "message" && (!entry.message || !["user", "assistant", "toolResult"].includes(entry.message.role) || !Array.isArray(entry.message.content))) throw new Error("Invalid session message");
+		if (entry.type === "message" && entry.message.inputContext) expandMcpInput(entry.message);
 		if (entry.type === "compaction" && (typeof entry.summary !== "string" || typeof entry.firstKeptEntryId !== "string" || !Number.isFinite(entry.tokensBefore))) throw new Error("Invalid compaction record");
 		ids.add(entry.id);
 	}

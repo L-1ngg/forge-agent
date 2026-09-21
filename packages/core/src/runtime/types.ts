@@ -401,6 +401,7 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	 * Must return an object that matches `TParameters`.
 	 */
 	prepareArguments?: ((args: unknown) => Static<TParameters>) | undefined;
+	validateArguments?: ((args: unknown) => Static<TParameters>) | undefined;
 	/** Execute the tool call. Throw on failure instead of encoding errors in `content`. */
 	execute: (
 		toolCallId: string,

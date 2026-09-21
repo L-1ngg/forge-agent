@@ -1,3 +1,5 @@
+import { McpManager } from "./mcp/manager.ts";
+import type { McpOptions } from "./mcp/types.ts";
 import type { TransformContext } from "./context/transform.ts";
 import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import { discoverSkills } from "./skills/catalog.ts";
@@ -20,6 +22,7 @@ export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" 
 export type { Model, StreamFn };
 
 export interface PiPortOptions extends InputQueueOptions {
+	mcp?: McpOptions | false;
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	transformContext?: TransformContext;
 	skills?: SkillsOptions | false;
@@ -52,6 +55,7 @@ export interface PiPortOptions extends InputQueueOptions {
 }
 
 export interface ModelPortOptions extends InputQueueOptions {
+	mcpManager?: McpManager;
 	/** Internal resolved transport identity, committed with configuration. */
 	builtinStream?: boolean;
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
@@ -78,16 +82,30 @@ export interface ModelPortOptions extends InputQueueOptions {
 
 /** Assemble the single source-owned session runtime. */
 export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
-	let desired = snapshotConfiguration(options);
-	let catalog = await discoverSkills(desired.skills, desired.cwd);
-	const initial = await prepareSessionConfiguration(desired, catalog);
-	return new AgentSession(initial, async (patch: ConfigurationPatch, refresh = false, signal?: AbortSignal) => {
-		const next = snapshotConfiguration({ ...desired, ...patch });
-		const nextCatalog = refresh || "skills" in patch ? await discoverSkills(next.skills, next.cwd, signal) : catalog;
-		const assembly = await prepareSessionConfiguration(next, nextCatalog);
-		signal?.throwIfAborted();
-		catalog = nextCatalog;
-		desired = next;
-		return assembly;
-	});
+ const manager = new McpManager(options.mcp, { cwd: options.cwd, ...(options.permission ? { permission: options.permission } : {}), ...(options.requestBus ? { requestBus: options.requestBus } : {}) });
+ let desired = snapshotConfiguration(options);
+ let catalog = await discoverSkills(desired.skills, desired.cwd);
+ const prepare = async (next: PiPortOptions, nextCatalog: typeof catalog, signal?: AbortSignal) => {
+   const assembly = await prepareSessionConfiguration(next, nextCatalog);
+   const mcpConfig = next.mcp ? { enabled: next.mcp.enabled ?? true, servers: next.mcp.servers } : next.mcp;
+   const mcp = await manager.prepare(mcpConfig, [...(next.tools ?? []).map(tool => tool.name), "load_skill", "read_context", "search_context"], signal);
+   assembly.mcp = mcp; assembly.options.mcpManager = manager;
+   if (mcp.instructions) assembly.options.systemPrompt += "\n\n" + mcp.instructions;
+   assembly.options.tools = [...assembly.options.tools ?? [], ...mcp.tools];
+   return assembly;
+ };
+ try {
+   const initial = await prepare(desired, catalog);
+   initial.mcp!.commit(0);
+   const session = new AgentSession(initial, async (patch: ConfigurationPatch, refresh = false, signal?: AbortSignal) => {
+     const next = snapshotConfiguration({ ...desired, ...patch });
+     const nextCatalog = refresh || "skills" in patch ? await discoverSkills(next.skills, next.cwd, signal) : catalog;
+     const assembly = await prepare(next, nextCatalog, signal);
+     if (signal?.aborted) { await assembly.mcp?.discard(); signal.throwIfAborted(); }
+     catalog = nextCatalog; desired = next;
+     return assembly;
+   });
+   manager.bind(patch => session.updateConfiguration(patch));
+   return session;
+ } catch (error) { await manager.dispose(); throw error; }
 }

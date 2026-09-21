@@ -1,6 +1,6 @@
 import type { ToolCallBlock } from "./events.ts";
 
-export const REQUEST_KINDS = ["permission", "cancel_confirm", "question", "plan_approval", "oauth"] as const;
+export const REQUEST_KINDS = ["permission", "cancel_confirm", "question", "plan_approval", "oauth", "mcp_elicitation"] as const;
 
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
@@ -43,7 +43,10 @@ export interface OAuthRequestPayload {
 	instructions?: string;
 }
 
+export interface McpElicitationPayload { serverId: string; operationId: string; message: string; mode: "form" | "url"; requestedSchema?: Record<string, unknown>; url?: string; }
+
 export interface RequestPayloadByKind {
+	mcp_elicitation: McpElicitationPayload;
 	permission: PermissionRequestPayload;
 	cancel_confirm: CancelConfirmRequestPayload;
 	question: QuestionRequestPayload;
@@ -65,6 +68,7 @@ export type PlanApprovalResponseResult = { decision: "approve" } | { decision: "
 export type OAuthResponseResult = { decision: "completed" } | { decision: "cancel" };
 
 export interface ResponseResultByKind {
+	mcp_elicitation: { decision: "accept"; content?: Record<string, string | number | boolean | string[]> } | { decision: "decline" | "cancel" };
 	permission: PermissionResponseResult;
 	cancel_confirm: CancelConfirmResponseResult;
 	question: QuestionResponseResult;

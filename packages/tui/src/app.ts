@@ -60,6 +60,7 @@ export interface AppRequestBus {
 
 /** Structural view of the core agent port; the Forge SDK agent satisfies this. */
 export interface AppPort {
+    mcp?: { subscribe(listener: (event: { type: string; serverId: string; state?: string; message?: string }) => void): () => void };
 	compact?(instructions?: string, emit?: (event: SessionEvent) => void): Promise<unknown>;
 	runTurn(input: AgentInput): SessionTurn;
 	abort?(): void;
@@ -89,6 +90,8 @@ export interface AppSessionHost {
 
 export interface AppOptions {
 	prepareInput?: (input: string) => AgentInput;
+	mcpCommand?: (input: string, report: (text: string) => void) => Promise<void>;
+	openExternal?: (url: string) => Promise<void>;
 	skillsCommand?: (input: string, report: (text: string) => void) => Promise<void>;
 	memoryCommand?: (input: string) => Promise<{ text: string; prompt?: string }>;
 	sessions?: AppSessionHost;
@@ -149,6 +152,11 @@ export class App {
 	private picker: PickerState | undefined;
 	private suggestionVersion = 0;
 	private started = false;
+    private stopMcpEvents: (() => void) | undefined;
+    private bindMcpEvents(): void {
+        this.stopMcpEvents?.();
+        this.stopMcpEvents = this.port.mcp?.subscribe(event => { if (!this.started) return; if (event.type === "state" || event.type === "authentication" || event.type === "diagnostic") { this.projector.addNotice(`MCP ${event.serverId}: ${event.state ?? event.message ?? event.type}`); this.repaint(); } });
+    }
 	private stoppedPromise: Promise<void> | undefined;
 	private resolveStopped: (() => void) | undefined;
 
@@ -174,6 +182,7 @@ export class App {
 		});
 		try {
 			this.host.start();
+            this.bindMcpEvents();
 			this.repaint();
 			void this.consumeRequests();
 			void this.consumeTerminals();
@@ -186,6 +195,7 @@ export class App {
 	async stop(): Promise<void> {
 		if (!this.started) return this.stoppedPromise;
 		this.started = false;
+        this.stopMcpEvents?.();
 		clearTimeout(this.feedbackTimer);
 		this.pauseSending();
 		this.suggestionVersion++;
@@ -216,7 +226,7 @@ export class App {
 			cardFocused: this.focus.active,
 			cardParked: !this.focus.active && this.focus.hasParked,
 			cardKind: (top ?? parked)?.request.kind,
-			cardSubInput: this.focus.active && !!top && requestCardActions(top.request)[this.focus.focusIndex] === "answer_text",
+			cardSubInput: this.focus.active && !!top && (requestCardActions(top.request)[this.focus.focusIndex] === "answer_text" || requestCardActions(top.request)[this.focus.focusIndex]?.startsWith("field:")),
 			editorFocused: !this.browsing,
 			running: this.running || this.compactTask !== undefined,
 			selectedCanView: this.browser.canView,
@@ -267,6 +277,7 @@ export class App {
 
 	private handleCardKey(key: Key): void {
 		const card = this.visibleCard();
+        if (key.type === "escape" && card?.record.request.kind === "mcp_elicitation") { this.chooseAction(requestCardActions(card.record.request).indexOf("cancel")); return; }
 		if (key.type === "escape" && this.routerState().cardSubInput) {
 			this.focus.handleKey({ type: "tab" });
 			this.repaint();
@@ -281,7 +292,7 @@ export class App {
 			this.repaint();
 			return;
 		}
-		const result = this.focus.handleKey(key);
+		const result = this.focus.handleKey(key.type === "ctrl" && key.key === "p" && card?.record.request.kind === "mcp_elicitation" ? { type: "escape" } : key);
 		if (result.action === "park" && result.card) {
 			this.cards.get(result.card.id)?.park();
 			this.browsing = true;
@@ -473,6 +484,7 @@ export class App {
 		const card = record ? this.cards.get(record.id) : undefined;
 		if (!card) return;
 		const action = requestCardActions(card.record.request)[index];
+		if (action === "open_url" && card.record.request.kind === "mcp_elicitation" && card.record.request.payload.url) { void this.options.openExternal?.(card.record.request.payload.url).catch(error => { this.projector.addNotice(String(error)); this.repaint(); }); return; }
 		if (!action) return;
 		const envelope = card.responseFor(action);
 		if (!envelope) {
@@ -547,7 +559,15 @@ export class App {
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
-		if (command === "/skills" || command.startsWith("/skills ")) {
+		if ((command === "/mcp" || command.startsWith("/mcp ")) && !/^\/mcp use-(?:prompt|resource)\s/.test(command)) {
+            if (!this.options.mcpCommand) { this.projector.addNotice("MCP management unavailable"); return true; }
+            if (this.skillsTask) { this.projector.addNotice("Management operation is still running"); return true; }
+            const generation = this.generation, session = this.session?.id;
+            const report = (text: string) => { if (this.started && this.generation === generation && this.session?.id === session) { this.projector.addNotice(text); this.repaint(); } };
+            this.skillsTask = this.options.mcpCommand(command, report).catch(error => report(String(error))).finally(() => { this.skillsTask = undefined; this.repaint(); });
+            return true;
+        }
+        if (command === "/skills" || command.startsWith("/skills ")) {
 			if (!this.options.skillsCommand) { this.projector.addNotice("Skills management unavailable"); return true; }
 			if (this.skillsTask) { this.projector.addNotice("Skills operation is still running"); return true; }
 			const generation = this.generation, session = this.session?.id;
@@ -591,7 +611,7 @@ export class App {
 			return true;
 		}
 		if (command === "/help") {
-			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /memory · /skills · /skill <name> [task] · /quit · @file to mention");
+			this.projector.addNotice("/help · /clear · /new · /resume · /compact · /memory · /mcp · /skills · /skill <name> [task] · /quit · @file to mention");
 			return true;
 		}
 		return false;
@@ -653,6 +673,7 @@ export class App {
 				if (old.hasHistory()) this.savedDrafts.set(old.id, editorText(this.draft));
 				this.generation++;
 				this.session = next;
+                this.bindMcpEvents();
 				this.focus = new FocusStack<RequestCardRecord>();
 				this.cards.clear();
 				this.projector.clear();

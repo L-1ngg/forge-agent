@@ -1,7 +1,7 @@
 import type { RequestKind } from "@forge-agent/protocol";
 
 export type KeyOwner = "card" | "scrollback" | "composer" | "global";
-export type EscStep = "leave_input" | "park_card" | "abort_turn" | "arm_rewind" | "rewind" | "noop";
+export type EscStep = "leave_input" | "cancel_card" | "park_card" | "abort_turn" | "arm_rewind" | "rewind" | "noop";
 
 export interface InputRouterState {
 	cardFocused: boolean;
@@ -25,6 +25,7 @@ export function resolveKeyOwner(state: InputRouterState): KeyOwner {
 
 /** Pure Esc ladder. A parked card must never fall through to turn abort. */
 export function nextEscStep(state: InputRouterState, idle: "arm_rewind" | "rewind" | "noop" = "arm_rewind"): EscStep {
+	if (state.cardFocused && state.cardKind === "mcp_elicitation") return "cancel_card";
 	if (state.cardSubInput) return "leave_input";
 	if (state.cardFocused) return "park_card";
 	if (state.cardParked) return "noop";
@@ -42,11 +43,12 @@ export interface ShortcutRoute {
 export function shortcutRoutes(state: InputRouterState): readonly ShortcutRoute[] {
 	const owner = resolveKeyOwner(state);
 	if (owner === "card") {
-		const escLabel = nextEscStep(state) === "leave_input" ? "back" : "scrollback";
+		const escLabel = state.cardKind === "mcp_elicitation" ? "cancel" : nextEscStep(state) === "leave_input" ? "back" : "scrollback";
 		return [
 			{ keys: ["pgup/pgdn"], label: "scroll" },
 			{ keys: ["tab"], label: "next" },
 			{ keys: ["enter"], label: "choose" },
+            ...(state.cardKind === "mcp_elicitation" ? [{ keys: ["ctrl+p"], label: "park" }] : []),
 			{ keys: ["esc"], label: escLabel, pinned: true },
 		];
 	}

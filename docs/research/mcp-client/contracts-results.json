@@ -1,0 +1,32 @@
+{
+  "aggregatePages": 2,
+  "explicitCursorCount": 1,
+  "invalidOutputRejected": true,
+  "outputError": "ProtocolError: Structured content does not match the tool's output schema: data/value must be string",
+  "listChanged": {
+    "tools": 2
+  },
+  "schemaResults": [
+    {
+      "dialect": "unspecified",
+      "positive": true,
+      "negative": true
+    },
+    {
+      "dialect": "http://json-schema.org/draft-07/schema#",
+      "positive": true,
+      "negative": true
+    },
+    {
+      "dialect": "https://json-schema.org/draft/2019-09/schema",
+      "positive": true,
+      "negative": true
+    },
+    {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "positive": true,
+      "negative": true
+    }
+  ],
+  "uriTemplate": true
+}

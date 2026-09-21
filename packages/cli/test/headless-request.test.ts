@@ -35,6 +35,7 @@ const requests: { [K in RequestKind]: RequestEnvelopeFor<K> } = {
 		kind: "plan_approval",
 		payload: { plan: "run tests" },
 	},
+	mcp_elicitation: { type: "request", id: "mcp", kind: "mcp_elicitation", payload: { serverId: "fixture", operationId: "op", message: "Confirm", mode: "url", url: "https://example.test" } },
 	oauth: {
 		type: "request",
 		id: "oauth-id",
@@ -59,7 +60,7 @@ test("headless policy returns a conservative response and stable code for every 
 		feedback: "Interactive request is not available in headless mode",
 	});
 	expect(headlessRequestDecision(requests.oauth).response.result).toEqual({ decision: "cancel" });
-	expect(Object.values(HEADLESS_REQUEST_EXIT_CODES)).toEqual([20, 21, 22, 23, 24]);
+	expect(Object.values(HEADLESS_REQUEST_EXIT_CODES)).toEqual([20, 21, 22, 23, 24, 25]);
 });
 
 test("runHeadless drains a blocking request and returns its deterministic exit code", async () => {

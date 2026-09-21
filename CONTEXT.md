@@ -49,6 +49,16 @@
 **Worktree 记忆副本 (Worktree Memory Copy)**:
 从仓库主记忆继承的初始项目笔记，随后由当前 worktree 独立维护。继承不表示内容已在新分支重新验证。
 
+## MCP 接入术语
+
+以下术语用于 [MCP 实现](docs/phases/mcp-client.md)；实现与未完成的外部验收边界见[验收证据](docs/phases/mcp-client-acceptance.md)。
+
+**外部模板输入 (External Prompt Input)**:
+用户或宿主显式选择远端提示模板后形成的一次输入，包含当时取得的有序消息、参数、来源及用户任务。模板中的 assistant 内容属于提供给模型的上下文，不是当前 Agent 已经完成工作的证据。
+
+**资源快照 (Resource Snapshot)**:
+某次读取实际取得的资源内容及其来源。资源后来变化不改变已保存在会话历史中的快照，恢复会话也不表示重新读取远端资源。
+
 ## 主界面工具浏览
 
 **工具调用条目 (Tool Call Entry)**:

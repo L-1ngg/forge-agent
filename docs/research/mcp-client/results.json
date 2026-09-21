@@ -1,0 +1,81 @@
+{
+  "bun": "1.3.12",
+  "results": [
+    {
+      "transport": "stdio",
+      "mode": "legacy",
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 53,
+      "childExited": true
+    },
+    {
+      "transport": "stdio",
+      "mode": "auto",
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 52,
+      "childExited": true
+    },
+    {
+      "transport": "stdio",
+      "mode": {
+        "pin": "2026-07-28"
+      },
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 51,
+      "childExited": true
+    },
+    {
+      "transport": "http",
+      "mode": "legacy",
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 52,
+      "childExited": null
+    },
+    {
+      "transport": "http",
+      "mode": "auto",
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 52,
+      "childExited": null
+    },
+    {
+      "transport": "http",
+      "mode": {
+        "pin": "2026-07-28"
+      },
+      "tools": 2,
+      "resource": true,
+      "resourceTemplate": true,
+      "completion": true,
+      "prompt": true,
+      "structuredOutput": true,
+      "cancelMs": 50,
+      "childExited": null
+    }
+  ]
+}

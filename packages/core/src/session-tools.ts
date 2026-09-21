@@ -59,6 +59,7 @@ export function prepareSessionTools(options: ModelPortOptions) {
 	const tools: AgentTool[] = (options.tools ?? []).map(tool => ({
 		name: tool.name, label: tool.label, description: tool.description, parameters: Type.Unsafe(tool.parameters),
 		...(tool.prepareArguments ? { prepareArguments: tool.prepareArguments } : {}),
+		...(tool.validateArguments ? { validateArguments: tool.validateArguments } : {}),
 		...(tool.executionMode ? { executionMode: tool.executionMode } : {}),
 		async execute(id, _args, signal, onUpdate) {
 			signal?.throwIfAborted();
@@ -66,22 +67,26 @@ export function prepareSessionTools(options: ModelPortOptions) {
 			prepared.delete(id);
 			if (!input) throw new Error("Tool input has not been authorized");
 			const snapshot = <T>(result: T): T => { JSON.stringify(result); return structuredClone(result); };
-			return snapshot(await tool.execute(input, { cwd: options.cwd, toolCallId: id, ...(signal ? { signal } : {}), ...(onUpdate ? { onUpdate: result => onUpdate(snapshot(result)) } : {}) }));
+			const result = snapshot(await tool.execute(input, { cwd: options.cwd, toolCallId: id, ...(signal ? { signal } : {}), ...(onUpdate ? { onUpdate: result => onUpdate(snapshot(result)) } : {}) }));
+            if (tool.name.startsWith("mcp_") && !options.model.input.includes("image")) result.content = result.content.map(block => block.type === "image" ? { type: "text", text: "This model does not support image input. Original MCP image bytes remain available in the attachment references." } : block);
+            return result;
 		},
 	}));
 	const beforeToolCall: NonNullable<RuntimeOptions["beforeToolCall"]> = async (context, signal) => {
 		signal?.throwIfAborted();
 		prepared.delete(context.toolCall.id);
 		const schema = tools.find(tool => tool.name === context.toolCall.name)!;
+		const hostTool = options.tools?.find(tool => tool.name === context.toolCall.name);
+		const validate = (args: unknown) => hostTool?.validateArguments ? hostTool.validateArguments(args) as Record<string, unknown> : validateToolArguments(schema, { ...context.toolCall, arguments: args as Record<string, unknown> });
 		const nativeArgs = context.args as Record<string, unknown>;
 		let args = nativeArgs;
 		const rewrite = options.toolInputRewrites?.[context.toolCall.name];
 		if (rewrite) args = await rewrite(args, { cwd: options.cwd, toolCallId: context.toolCall.id, ...(signal ? { signal } : {}) }) as Record<string, unknown>;
-		args = validateToolArguments(schema, { ...context.toolCall, arguments: args });
+		args = validate(args);
 		const result = await options.toolHooks?.beforeToolCall?.({ ...context, args }, signal);
 		if (result?.block) return result;
 		signal?.throwIfAborted();
-		const finalArgs = structuredClone(validateToolArguments(schema, { ...context.toolCall, arguments: args }));
+		const finalArgs = structuredClone(validate(args));
 		const finalCall = makeToolCall(context.toolCall.id, context.toolCall.name, finalArgs);
 		const check = await checkPermission(finalCall, { context: options.permission ?? {}, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
 		if (!check.allowed) return { block: true, reason: finalCall.name === "load_skill" ? JSON.stringify({ code: "permission-denied", message: check.reason }) : check.reason, terminate: true };
@@ -100,4 +105,28 @@ export function prepareSessionTools(options: ModelPortOptions) {
 		return structuredClone(result);
 	};
 	return { tools, beforeToolCall, afterToolCall, ...(options.toolHooks?.toolExecution ? { toolExecution: options.toolHooks.toolExecution } : {}), clear: () => prepared.clear() };
+}
+
+/** Restore the original MCP schemas at the existing provider payload seam.
+ * Pi's Anthropic adapter otherwise rebuilds only properties/required, silently
+ * dropping $defs, oneOf and additionalProperties. Other adapters retain schemas
+ * or use their documented JSON-schema slots. Unknown payloads fail explicitly. */
+export function preserveMcpSchemas(payload: unknown, tools: ModelPortOptions["tools"]): unknown {
+ const definitions = new Map((tools ?? []).filter(tool => tool.name.startsWith("mcp_")).map(tool => [tool.name, tool.parameters]));
+ if (!definitions.size) return payload;
+ const seen = new Set<string>();
+ const visit = (value: unknown): void => {
+   if (!value || typeof value !== "object") return;
+   if (Array.isArray(value)) { value.forEach(visit); return; }
+   const object = value as Record<string, unknown>;
+   const name = typeof object.name === "string" ? object.name : undefined;
+   if (name && definitions.has(name)) {
+     for (const field of ["input_schema", "parameters", "parametersJsonSchema"]) if (field in object) { object[field] = structuredClone(definitions.get(name)); seen.add(name); }
+     if (object.inputSchema && typeof object.inputSchema === "object") { object.inputSchema = { json: structuredClone(definitions.get(name)) }; seen.add(name); }
+   }
+   for (const [key, child] of Object.entries(object)) if (!["messages", "contents", "input", "input_schema", "parameters", "parametersJsonSchema", "inputSchema"].includes(key)) visit(child);
+ };
+ visit(payload);
+ if ([...definitions.keys()].some(name => !seen.has(name))) throw new Error("Provider payload does not expose a supported JSON Schema slot for MCP tools");
+ return payload;
 }

@@ -7,7 +7,7 @@ import type { Key } from "./keys.ts";
 import type { FocusCard } from "./focus-stack.ts";
 import type { EntryRow } from "./transcript/types.ts";
 
-export type RequestCardAction = "allow_once" | "allow_always" | "deny" | "cancel" | "confirm" | "reject" | "answer_text" | `choice:${number}`;
+export type RequestCardAction = "allow_once" | "allow_always" | "deny" | "cancel" | "confirm" | "reject" | "answer_text" | `choice:${number}` | `field:${number}` | "open_url";
 export type RequestCardState = "active" | "parked" | "resolved" | "dismissed";
 
 export interface RequestCardRecord extends FocusCard {
@@ -21,6 +21,8 @@ export class RequestCard {
 	readonly record: RequestCardRecord;
 	readonly selectedChoices = new Set<string>();
 	readonly answerDraft = createEditor();
+	readonly fields = new Map<string, ReturnType<typeof createEditor>>();
+	validationError = "";
 	bodyOffset = 0;
 
 	constructor(request: RequestEnvelopeUnion) {
@@ -55,7 +57,40 @@ export class RequestCard {
 	responseFor(action: RequestCardAction): ResponseEnvelope | undefined {
 		if (this.record.state !== "active") return undefined;
 		const request = this.record.request;
-		if (request.kind === "question") {
+		if (request.kind === "mcp_elicitation" && action === "confirm" && request.payload.mode === "form") {
+            try {
+                const content: Record<string, unknown> = {};
+                const schema = request.payload.requestedSchema ?? {};
+                const required = Array.isArray(schema.required) ? schema.required : [];
+                for (const [name, definition] of formFields(request)) {
+                    const editor = this.fields.get(name); const value = editor ? editorText(editor) : "";
+                    if (!value && !required.includes(name)) continue;
+                    if (!value && required.includes(name)) throw new Error(`${name} is required`);
+                    const type = definition.type;
+                    if (!["string", "number", "integer", "boolean", "array"].includes(String(type))) throw new Error(`${name}: unsupported field type`);
+                    const typed: unknown = type === "string" ? value : JSON.parse(value);
+                    if (type === "boolean" && typeof typed !== "boolean" || ["number", "integer"].includes(String(type)) && (typeof typed !== "number" || !Number.isFinite(typed) || type === "integer" && !Number.isInteger(typed)) || type === "array" && (!Array.isArray(typed) || typed.some(item => typeof item !== "string"))) throw new Error(`${name}: expected ${String(type)}`);
+                    if (Array.isArray(definition.enum) && !definition.enum.includes(typed)) throw new Error(`${name}: select a listed value`);
+                    if (typeof typed === "number") {
+                        if (typeof definition.minimum === "number" && typed < definition.minimum || typeof definition.maximum === "number" && typed > definition.maximum) throw new Error(`${name}: outside the allowed range`);
+                    }
+                    if (typeof typed === "string") {
+                        const length = [...typed].length;
+                        if (typeof definition.minLength === "number" && length < definition.minLength || typeof definition.maxLength === "number" && length > definition.maxLength) throw new Error(`${name}: invalid length`);
+                        if (Array.isArray(definition.oneOf) && !definition.oneOf.some(option => option && typeof option === "object" && "const" in option && option.const === typed)) throw new Error(`${name}: select a listed option`);
+                    }
+                    if (Array.isArray(typed)) {
+                        if (typeof definition.minItems === "number" && typed.length < definition.minItems || typeof definition.maxItems === "number" && typed.length > definition.maxItems || definition.uniqueItems === true && new Set(typed).size !== typed.length) throw new Error(`${name}: invalid selection count`);
+                        const items = definition.items as { enum?: unknown[]; anyOf?: Array<{ const?: unknown }> } | undefined;
+                        const allowed = items?.enum ?? items?.anyOf?.map(option => option.const);
+                        if (allowed && typed.some(value => !allowed.includes(value))) throw new Error(`${name}: select listed options`);
+                    }
+                    content[name] = typed;
+                }
+                this.validationError = ""; return response(request.id, { decision: "accept", content });
+            } catch (error) { this.validationError = error instanceof Error ? error.message : "Invalid input"; return undefined; }
+        }
+        if (request.kind === "question") {
 			const choice = action.startsWith("choice:") ? request.payload.choices?.[Number(action.slice(7))] : undefined;
 			if (choice) {
 				if (!request.payload.multiple) return response(request.id, { decision: "answer", answers: [choice.id] });
@@ -74,7 +109,18 @@ export class RequestCard {
 	}
 
 	handleTextKey(key: Key, focusIndex: number): boolean {
-		if (requestCardActions(this.record.request)[focusIndex] !== "answer_text") return false;
+		const action = requestCardActions(this.record.request)[focusIndex];
+        if (action?.startsWith("field:") && this.record.request.kind === "mcp_elicitation") {
+            const field = formFields(this.record.request)[Number(action.slice(6))]; if (!field) return false;
+            let editor = this.fields.get(field[0]); if (!editor) { editor = createEditor(); this.fields.set(field[0], editor); }
+            if (key.type === "char" || key.type === "paste") insertText(editor, key.text);
+            else if (key.type === "backspace") backspace(editor);
+            else if (key.type === "arrow" && key.direction === "left") moveLeft(editor);
+            else if (key.type === "arrow" && key.direction === "right") moveRight(editor);
+            else return false;
+            return true;
+        }
+        if (action !== "answer_text") return false;
 		if (key.type === "char" || key.type === "paste") insertText(this.answerDraft, key.text);
 		else if (key.type === "backspace") backspace(this.answerDraft);
 		else if (key.type === "arrow" && key.direction === "left") moveLeft(this.answerDraft);
@@ -92,6 +138,8 @@ export class RequestCard {
 
 export function requestCardActions(request: RequestEnvelopeUnion): readonly RequestCardAction[] {
 	switch (request.kind) {
+		case "mcp_elicitation":
+			return request.payload.mode === "form" ? [...formFields(request).map((_, index): RequestCardAction => `field:${index}`), "confirm", "reject", "cancel"] : ["open_url", "confirm", "reject", "cancel"];
 		case "permission":
 			return request.payload.rememberRule ? ["allow_once", "allow_always", "deny"] : ["allow_once", "deny"];
 		case "cancel_confirm":
@@ -110,6 +158,8 @@ export function requestCardActions(request: RequestEnvelopeUnion): readonly Requ
 
 /** User-facing labels are deliberately separate from protocol action ids. */
 export function requestCardActionLabel(request: RequestEnvelopeUnion, action: RequestCardAction): string {
+	if (request.kind === "mcp_elicitation" && action.startsWith("field:")) { const field = formFields(request)[Number(action.slice(6))]; return field ? `${field[0]} (${String(field[1].type)}): ` : ""; }
+	if (action === "open_url") return "Open URL";
 	if (request.kind === "question") {
 		if (action.startsWith("choice:")) return request.payload.choices?.[Number(action.slice(7))]?.label ?? "";
 		if (action === "answer_text") return "Answer: ";
@@ -135,6 +185,11 @@ export function requestCardActionLabel(request: RequestEnvelopeUnion, action: Re
 
 export function responseForRequestAction(request: RequestEnvelopeUnion, action: RequestCardAction): ResponseEnvelope | undefined {
 	switch (request.kind) {
+		case "mcp_elicitation":
+			if (action === "cancel") return response(request.id, { decision: "cancel" });
+			if (action === "reject") return response(request.id, { decision: "decline" });
+			if (action === "confirm" && request.payload.mode === "url") return response(request.id, { decision: "accept" });
+			return undefined;
 		case "permission": {
 			if (action === "allow_once") return response(request.id, { decision: "allow_once" });
 			if (action === "deny") return response(request.id, { decision: "deny", reason: "Denied by user" });
@@ -181,6 +236,7 @@ function formatArgumentsCompact(value: Record<string, unknown>): string {
 export function archivedCardLine(record: RequestCardRecord): string {
 	const status = archivedStatus(record);
 	switch (record.request.kind) {
+		case "mcp_elicitation": return `MCP ${record.request.payload.serverId}: ${status}`;
 		case "permission":
 			return `Permission: ${summarizeToolCall(record.request.payload.toolCall)} — ${status}`;
 		case "cancel_confirm":
@@ -216,6 +272,10 @@ export function cardBodyRows(request: RequestEnvelopeUnion, width: number, theme
 		}
 	};
 	switch (request.kind) {
+		case "mcp_elicitation":
+			add(`MCP ${request.payload.serverId}`, "title"); add(request.payload.message); add(request.payload.url, "accent");
+			for (const [name, definition] of formFields(request)) { add(`${name}: ${String(definition.description ?? "")}`); if (definition.enum || definition.oneOf || definition.items) add(JSON.stringify(definition.enum ?? definition.oneOf ?? definition.items)); }
+			break;
 		case "permission":
 			add(`Permission: ${request.payload.toolCall.name}`, "title");
 			add(summarizeToolCall(request.payload.toolCall), "accent");
@@ -281,6 +341,7 @@ export function paintRequestCard(input: CardPaintInput): void {
 	const railStyle: CellStyle = { ...defaultStyle(), foreground: theme.color("accent_user"), background: surface };
 
 	const body = cardBodyRows(card.record.request, contentWidth, theme);
+	if (card.validationError) body.push({ spans: [{ text: card.validationError, style: cardTextStyle("accent", theme) }] });
 	if (!focused && body[0]) body[0].spans.push({ text: " (parked)", style: { ...defaultStyle(), foreground: theme.color("muted") } });
 	const actions = requestCardActions(card.record.request);
 	const actionRows: EntryRow[] = actions.map((action, index) => {
@@ -293,7 +354,7 @@ export function paintRequestCard(input: CardPaintInput): void {
 			spans: [
 				{ text: `${index + 1} `, style: numberStyle },
 				{ text: choice && card.record.request.kind === "question" && card.record.request.payload.multiple ? checked ? "[x] " : "[ ] " : selected ? "(●) " : "(○) ", style: markerStyle },
-				{ text: requestCardActionLabel(card.record.request, action) + (action === "answer_text" ? editorText(card.answerDraft) : ""), style: markerStyle },
+				{ text: requestCardActionLabel(card.record.request, action) + (action === "answer_text" ? editorText(card.answerDraft) : action.startsWith("field:") ? editorText(card.fields.get(formFields(card.record.request)[Number(action.slice(6))]?.[0] ?? "") ?? createEditor()) : ""), style: markerStyle },
 			],
 		};
 	});
@@ -331,4 +392,11 @@ export function paintRequestCard(input: CardPaintInput): void {
 export function cardDesiredHeight(request: RequestEnvelopeUnion, width: number, theme: Theme): number {
 	const contentWidth = Math.max(1, width - CARD_RAIL.length - CARD_LEFT_PADDING - 2);
 	return 2 + cardBodyRows(request, contentWidth, theme).length + requestCardActions(request).length;
+}
+
+function formFields(request: RequestEnvelopeUnion): Array<[string, Record<string, unknown>]> {
+ if (request.kind !== "mcp_elicitation" || request.payload.mode !== "form") return [];
+ const fields = request.payload.requestedSchema?.properties;
+ if (!fields || typeof fields !== "object") return [];
+ return Object.entries(fields).filter((entry): entry is [string, Record<string, unknown>] => !!entry[1] && typeof entry[1] === "object" && !Array.isArray(entry[1]));
 }

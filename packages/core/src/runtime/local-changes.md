@@ -21,3 +21,7 @@ Forge 使用此栅栏处理 `length` 与 `deferred`。前者保留已有“不�
 ## 回调异常合同澄清（2026-09-20）
 
 `types.ts` 的 transformContext/shouldStopAfterTurn 注释明确区分低层 loop 的异常传播与 RuntimeAgent 的失败生命周期。会话预算或取消失败必须阻止请求，宿主停止策略异常还必须阻断会话层的供应商重试/恢复。仅修正文档合同，不修改移植主循环；SDK 组合见 [逐轮停止策略](../../../../docs/phases/turn-policy.md)。
+
+## #36：宿主精确参数校验（2026-09-21）
+
+新增可选 `AgentTool.validateArguments`，参数准备后优先使用宿主校验器，未设置时保持 Pi 默认校验。MCP 使用官方 Ajv 多 dialect 校验且不做 coercion，避免授权前后参数漂移；权限与最终参数冻结继续归 `session-tools.ts`，执行内核不识别 MCP 协议。

@@ -13,7 +13,7 @@ import { Agent as RuntimeAgent } from "./runtime/agent.ts";
 import { fromSessionMessage, createEventProjection, toSessionMessage } from "./event-projection.ts";
 import type { AgentPort, InputAcceptance } from "./agent-port.ts";
 import type { ModelPortOptions } from "./pi-port.ts";
-import { prepareSessionTools, validateSessionTools, checkPermission } from "./session-tools.ts";
+import { prepareSessionTools, validateSessionTools, checkPermission, preserveMcpSchemas } from "./session-tools.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
 import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
@@ -59,7 +59,8 @@ export class AgentSession implements AgentPort {
 	private taskFailures = 0;
 	private accepting = false;
 	private readonly preparedSkills = new WeakSet<AgentMessage>();
-	private skillInputs = new Map<AgentMessage, { invocation: SkillInvocation; inputId: string }>();
+	private readonly stagedMcp = new Map<AgentMessage, string[]>();
+	private skillInputs = new Map<AgentMessage, { invocation: Exclude<AgentInput, string>; inputId: string }>();
 	private receipts = new Map<AgentMessage, (processed: boolean) => void>();
 	private failure: unknown;
 	private readonly usage: UsageTracker;
@@ -128,7 +129,7 @@ export class AgentSession implements AgentPort {
 					this.responseConfiguration = { model: structuredClone(model), configurationRevision: this.appliedRevision };
 					this.taskUsage = this.turnPolicy.beginRequest();
 				}
-				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens() });
+				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens(), onPayload: async (payload, model) => preserveMcpSchemas(await settings?.onPayload?.(payload, model) ?? payload, this.options.tools) });
 			},
 		});
 		this.compaction = new CompactionCoordinator({
@@ -154,6 +155,8 @@ export class AgentSession implements AgentPort {
 				if (message) {
 					const entry = messageEntry(message, this.state.leafId);
 					if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
+					// Append now owns any artifact references, including an uncertain storage outcome.
+					this.stagedMcp.delete(event.message);
 					await this.persistEntry(entry);
 					if (this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); this.preparedSkills.delete(event.message); }
 					this.compaction.syncUsage();
@@ -234,25 +237,37 @@ export class AgentSession implements AgentPort {
 			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
 			if (selected) {
 				const { invocation, inputId } = selected;
-				if (invocation.kind !== "skill" || typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
+				if (invocation.kind !== "skill") {
+					const manager = this.options.mcpManager; if (!manager) throw new Error("MCP is unavailable");
+					let context: import("@forge-agent/protocol").McpInputContext;
+					if (invocation.kind === "mcp_prompt") context = await manager.getPrompt(invocation.serverId, invocation.name, invocation.arguments, signal ? { signal } : {});
+					else { const result = await manager.readResource(invocation.serverId, invocation.uri, signal ? { signal } : {}); context = { kind: "mcp_resource", serverId: invocation.serverId, name: invocation.uri, catalogRevision: result.catalogRevision, fetchedAt: result.fetchedAt, messages: [{ role: "user", content: result.content }], artifacts: result.artifacts }; }
+					this.stagedMcp.set(message, context.artifacts.map(ref => ref.id));
+					context.task = invocation.task;
+					if (!this.options.model.input.includes("image")) for (const item of context.messages) item.content = item.content.map(block => block.type === "image" ? { type: "text", text: "This model does not support image input; original bytes are retained in MCP attachments." } : block);
+					Object.assign(message, { inputContext: context });
+					message.content = [{ type: "text", text: `MCP ${context.serverId}/${context.name}\n${context.messages.map(item => `[${item.role}] ` + item.content.filter(block => block.type === "text").map(block => block.text).join("\n")).join("\n")}\nUser task:\n${invocation.task}` }];
+				} else {
+				if (typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
 				const args = { name: invocation.name }; validateSkillArguments(args);
 				const check = await checkPermission({ type: "tool_call", id: inputId, name: "load_skill", arguments: args }, { context: this.options.permission ?? {}, ...(this.options.requestBus ? { requestBus: this.options.requestBus } : {}) }, signal);
 				if (!check.allowed) throw new SkillError("permission-denied", check.reason);
 				const loaded = await loadSkill(this.skills, invocation.name, true, signal);
 				const { body, ...source } = loaded;
 				message.content = [{ type: "text", text: `Skill instructions (${JSON.stringify(source)}):\n${body}\n\nUser task:\n${invocation.task}` }];
+				}
 			}
 			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
-			if (this.skills.enabled) {
+			if (this.skills.enabled || selected?.invocation.kind === "mcp_prompt" || selected?.invocation.kind === "mcp_resource") {
 				const budget = this.compaction.budget();
-				const size = calculateContextUsage({ fixedText: budget.fixedText, messages: [toSessionMessage(message)!] }).contextTokens ?? 0;
+				const size = calculateContextUsage({ fixedText: budget.fixedText, messages: projectMessages([toSessionMessage(message)!]) }).contextTokens ?? 0;
 				if (size > compactionInputBudget(budget, this.settings.reserveTokens)) throw new SkillError("too-large", "Skills and input exceed context budget; reduce Skill sources or split instructions into references.");
 			}
 			if (selected) this.preparedSkills.add(message);
 		} catch (error) {
 			if (selected) {
 				const code = signal?.aborted || this.runController?.signal.aborted ? "canceled" : error instanceof SkillError ? error.code : "read-failed";
-				this.emit({ type: "skill_input", phase: "rejected", inputId: selected.inputId, name: selected.invocation.name, code, message: String(error), timestamp: Date.now() });
+				if (selected.invocation.kind === "skill") this.emit({ type: "skill_input", phase: "rejected", inputId: selected.inputId, name: selected.invocation.name, code, message: String(error), timestamp: Date.now() });
 				this.receipts.get(message)?.(false); this.receipts.delete(message);
 			}
 			throw error;
@@ -417,7 +432,9 @@ export class AgentSession implements AgentPort {
 				return;
 			}
 		} finally {
-			this.closeInput(); this.executing = false; this.applyConfigurations();
+			this.closeInput();
+			for (const [message, ids] of this.stagedMcp) { this.stagedMcp.delete(message); await Promise.all(ids.map(id => this.options.mcpManager?.artifacts.delete?.(id))); }
+			this.executing = false; this.applyConfigurations();
 			const last = this.runtime.state.messages.at(-1);
 			const reason = last?.role === "assistant" ? last.stopReason : undefined;
 			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : (this.preparationFailed || this.turnPolicy?.failed) ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
@@ -426,10 +443,12 @@ export class AgentSession implements AgentPort {
 		}
 	}
 
+	get mcp() { return this.options.mcpManager!; }
 	getSkills(): SkillsSnapshot { return structuredClone(this.skills); }
 	refreshSkills(): Promise<ConfigurationReceipt> { return this.updateConfiguration({}, true); }
 	updateConfiguration(patch: ConfigurationPatch, refresh = false): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
+		if (patch.mcp && Object.keys(patch.mcp).some(key => !["enabled", "servers"].includes(key))) return Promise.reject(new TypeError("MCP stores and interaction are configured at creation"));
 		if ("transformContext" in patch) return Promise.reject(new TypeError("transformContext is configured at creation"));
 		if ("shouldStopAfterTurn" in patch) return Promise.reject(new TypeError("shouldStopAfterTurn is configured at creation"));
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
@@ -437,7 +456,7 @@ export class AgentSession implements AgentPort {
 		const operation = this.configurationQueue.then(async () => {
 			this.assertHealthy();
 			const assembly = await this.prepareConfiguration(captured, refresh, this.configurationController.signal);
-			this.assertHealthy();
+			try { this.assertHealthy(); } catch (error) { await assembly.mcp?.discard(); throw error; }
 			const revision = ++this.revision;
 			const applied = new Promise<Awaited<ConfigurationReceipt["applied"]>>(resolve => { this.pendingConfigurations.push({ assembly, revision, resolve }); });
 			this.emit({ type: "configuration", phase: "accepted", revision, timestamp: Date.now() });
@@ -449,8 +468,9 @@ export class AgentSession implements AgentPort {
 	}
 	private applyConfigurations(): void {
 		for (const pending of this.pendingConfigurations.splice(0)) {
-			if (this.disposed || this.failure !== undefined) { pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
+			if (this.disposed || this.failure !== undefined) { void pending.assembly.mcp?.discard().catch(() => {}); pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
 			this.toolset.clear();
+			pending.assembly.mcp?.commit(pending.revision);
 			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
 			this.requestProjection = undefined;
 			this.appliedRevision = pending.revision;
@@ -462,6 +482,6 @@ export class AgentSession implements AgentPort {
 			this.emit({ type: "configuration", phase: "applied", revision: pending.revision, timestamp: Date.now() });
 		}
 	}
-	async dispose(): Promise<void> { this.disposed = true; this.configurationController.abort(); this.abort(); this.applyConfigurations(); await this.running; await this.configurationQueue; }
+	async dispose(): Promise<void> { this.disposed = true; this.configurationController.abort(); this.abort(); this.applyConfigurations(); await this.running; await this.configurationQueue; await this.options.mcpManager?.dispose(); }
 	private assertHealthy(): void { if (this.disposed) throw new Error("Agent has been disposed"); if (this.failure !== undefined) throw new Error("Agent is faulted; recreate it from storage", { cause: this.failure }); }
 }

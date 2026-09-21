@@ -12,6 +12,7 @@
     "@earendil-works/pi-ai": "0.85.1",
     "@forge-agent/protocol": "workspace:*",
     "@forge-agent/tools": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
     "diff": "8.0.4",
     "ignore": "7.0.5",
     "typebox": "1.3.7",

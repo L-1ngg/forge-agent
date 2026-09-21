@@ -359,3 +359,52 @@ const application = await receipt.applied;
 可更新 provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应或工具执行中接受更新后，整批沿用原配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
 
 源码基线、必要定制、验证与版本回退说明见[迁移验收](phases/pi-core-migration-acceptance.md)。
+
+## MCP
+
+`createAgent({ mcp })` 显式装配 MCP；SDK 不读取宿主配置文件。`mcp: false` 禁止连接。每个 Agent 独立拥有连接、目录、交互和取消范围，外部服务通过官方 `@modelcontextprotocol/client@2.0.0` 接入。可执行示例：
+
+```sh
+bun examples/mcp-client.ts bun packages/core/test/helpers/mcp-server.ts
+```
+
+示例只读取 fixture 目录/资源，不请求模型。宿主配置示例：
+
+```ts
+const agent = await createAgent({
+  provider, model, apiKey, cwd,
+  mcp: {
+    servers: {
+      local: { transport: "stdio", command: "your-mcp-server", args: [] },
+      remote: {
+        transport: "http", url: "https://example.com/mcp",
+        auth: { type: "oauth", scopes: ["read"] },
+      },
+    },
+    // credentials, artifacts, interaction 可注入宿主 adapter。
+  },
+});
+try {
+  console.log(agent.mcp.snapshot());
+  const receipt = await agent.mcp.refresh();
+  await receipt.applied; // 在 turn 事件消费循环之外等待。
+} finally { await agent.dispose(); }
+```
+
+server 定义支持 `stdio` 的 command/args/cwd/env、`http`/`sse` 的 url/headers、`enabled`、`protocol`（stdio/SSE 默认 `legacy`、HTTP 默认 `auto`，可固定 `2026-07-28`）、`auth`、`tools.include/exclude` 和 `timeouts`。env/headers 值支持 `$VAR` 或 `${VAR}`，不执行 shell；缺失变量只使对应 server 失败。OAuth 与 Authorization header 互斥。SDK cwd 相对宿主 cwd；CLI 配置里的 cwd 相对来源文件。默认 connect/request 15 秒、tool 60 秒、total/interaction 300 秒、cleanup 5 秒；total 不得小于 tool。无能力或部分启动失败可在 snapshot 诊断，其他服务继续使用。
+
+`agent.mcp` 提供 snapshot/subscribe、refresh/reconnect/setEnabled、login/logout、listResources/listResourceTemplates/listPrompts/complete、readResource/getPrompt、subscribeResource/unsubscribeResource/readArtifact。目录与配置更新返回 `ConfigurationReceipt`，在当前模型响应及整批工具之后应用；`updateConfiguration({ mcp })` 替换纯配置，不接受新的 adapter。工具捕获原定义及 outputSchema，通知不会改变在途校验；断线/超时不重放业务调用。恢复只供后续请求使用。订阅通知只发事件，不修改历史；同身份且 URI 仍有效时 reconnect 恢复订阅，取消订阅后忽略迟到通知。
+
+读资源、取 Prompt、订阅、附件与工具调用均需现有权限检查；服务 annotations 不授予权限。`mcp_list_resources` 同时返回 resources 和 templates，`mcp_read_resource` 支持已发现 URI 模板及参数，`mcp_read_artifact` 分段读取附件。MCP JSON Schema 保留本地引用、组合和额外属性规则，参数不强制转换类型；供应商拒绝某 schema 时请求失败，不默默删字段。
+
+显式输入可为 `{ kind: "mcp_prompt", serverId, name, arguments, task }` 或 `{ kind: "mcp_resource", serverId, uri, task }`，同样用于 runTurn/steer/followUp。准备成功后保存一条带 `inputContext` 的 user 封套；模型请求按原角色展开并保留 task 原文。外部 assistant 内容不表示现场执行成功。恢复不重新取远端模板；准备失败不消费输入、不请求模型。预算和压缩使用展开视图，原封套保留作证据。
+
+内容上限为整个结果 16 MiB、单附件 8 MiB、模型正文 64 KiB，截断有显式标记和附件引用。图片仅在模型支持时作为图片输入；音频保留 bytes，不声称已转写；链接不会自动抓取。`readArtifact` 读取原附件，缺失时报 `artifact-missing`，不重新请求服务器。SDK 默认 `MemoryMcpArtifactStore` 随实例释放；持久历史的宿主应注入持久 artifact store。自定义 store 若不实现可选 `delete`，失败准备阶段的附件清理由宿主负责。
+
+SDK 默认 `MemoryMcpCredentialStore` 仅在当前实例保留凭据；共享 store 必须由宿主显式注入。`McpCredentialStore.withLock` 必须覆盖整个读取、refresh、写回或 logout 交易；原生操作若忽略取消，仍须持锁到真实结算，不能用 Promise.race 提前解锁。取消返回 `credential-outcome-unknown` 不证明回滚；logout 只删除本地 grant，不保证远端撤销。CLI 复用系统凭据库和跨进程文件锁，Linux 默认 Secret Service；显式 `linux-keyutils` 不承诺系统重启持久化。
+
+浏览器登录只由 `login` 发起。注入 `McpInteraction.beginAuthorization` 返回 `{ redirectUri, authorize(url), close() }`，authorize 返回 callback 的 URLSearchParams。Core 校验 state、官方 SDK 校验 issuer/code/PKCE，成功保存且连接可用后才报告 authenticated；Continue 不是成功凭据。正常业务无 grant 或 scope 不足报告 auth-required，显式 login 才执行授权。宿主应响应 signal 并关闭自己创建的 callback listener；Core 在 adapter 返回后保证调用 close。
+
+`agent.requests` 的 `mcp_elicitation` 包含 form/url、来源及 operationId。response 使用 `{ decision: "accept", content }`、`{ decision: "decline" }` 或 `{ decision: "cancel" }`；content 保留 typed number/boolean/array，官方 SDK 校验表单。迟到或重复响应不复活请求。
+
+CLI/TUI 命令：status、tools/resources/templates/prompts、enable/disable/refresh/reconnect、login/logout、read、subscribe/unsubscribe、prompt/use-prompt/use-resource、artifact。`--args '<JSON>'` 仅接受字符串值对象，`--` 后 task 保留原文。`artifact <id> --output <path>` 使用独占创建，拒绝覆盖；不带 output 返回 base64。TUI 表单 Tab 切字段、Esc cancel，Ctrl+P park 保留字段草稿；管理期间 composer 可编辑。standalone `--mcp` 管理无需模型配置；普通终端读操作明确请求权限，`--json` 不等待交互：OAuth 24、Elicitation 25、参数错误 2、其他失败 1。SDK/CLI 生命周期测试和未完成的真实服务/平台验收见[证据](phases/mcp-client-acceptance.md)。

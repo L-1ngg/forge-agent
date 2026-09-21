@@ -103,6 +103,8 @@ function isValidResponseResult(kind: RequestKind, result: unknown): boolean {
 			return decision === "cancel" || (decision === "answer" && Array.isArray((result as { answers?: unknown }).answers) && (result as { answers: unknown[] }).answers.every((answer) => typeof answer === "string"));
 		case "plan_approval":
 			return decision === "approve" || (decision === "reject" && (!("feedback" in result) || typeof (result as { feedback?: unknown }).feedback === "string"));
+		case "mcp_elicitation":
+			return decision === "cancel" || decision === "decline" || (decision === "accept" && (!("content" in result) || (typeof result.content === "object" && result.content !== null && !Array.isArray(result.content))));
 		case "oauth":
 			return decision === "completed" || decision === "cancel";
 	}

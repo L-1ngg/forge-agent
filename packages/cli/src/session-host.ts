@@ -1,3 +1,4 @@
+import { FileMcpArtifactStore, SystemMcpCredentialStore, browserMcpInteraction } from "./mcp-host.ts";
 import { createAgent, RequestBus, SessionStore, type Agent, type CreateAgentOptions } from "@forge-agent/core";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { randomUUID } from "node:crypto";
@@ -15,7 +16,7 @@ export interface SessionView {
 	hasHistory(): boolean;
 }
 
-type HostOptions = Omit<CreateAgentOptions, "storage" | "sessionId" | "requestBus"> & { requestTimeoutMs?: number | null };
+type HostOptions = Omit<CreateAgentOptions, "storage" | "sessionId" | "requestBus"> & { requestTimeoutMs?: number | null; mcpCredentialStore?: "system" | "linux-keyutils"; mcpInteractive?: boolean };
 
 async function fileRevision(path: string): Promise<string> {
 	const info = await stat(path);
@@ -82,7 +83,8 @@ export class SessionHost {
 		const storage = store ?? SessionStore.create(file, this.options.cwd, id);
 		const requestBus = new RequestBus({ timeoutMs: this.options.requestTimeoutMs ?? null });
 		try {
-			const port = await createAgent({ ...this.options, sessionId: id, storage, requestBus });
+			const mcp = this.options.mcp ? { ...this.options.mcp, credentials: this.options.mcp.credentials ?? new SystemMcpCredentialStore(this.options.mcpCredentialStore), artifacts: this.options.mcp.artifacts ?? new FileMcpArtifactStore(join(this.root, ".forge-agent", "artifacts", id)), ...(this.options.mcpInteractive ? { interaction: browserMcpInteraction(requestBus) } : {}) } : this.options.mcp;
+            const port = await createAgent({ ...this.options, ...(mcp !== undefined ? { mcp } : {}), sessionId: id, storage, requestBus });
 			return { id: file, port, requestBus, history: store?.messages() ?? [], hasHistory: () => storage.saved };
 		} catch (error) { requestBus.close(); throw error; }
 	}
@@ -119,7 +121,7 @@ export class SessionHost {
 					const store = await SessionStore.open(file, this.options.cwd, { create: false });
 					const messages = store.messages();
 					const first = messages.find(message => message.role === "user");
-					const title = first?.content.flatMap(part => part.type === "text" ? [part.text] : []).join(" ").replace(/\s+/g, " ").trim() ?? "";
+					const title = first?.inputContext ? `${first.inputContext.task ?? ""} [MCP ${first.inputContext.serverId}/${first.inputContext.name}]` : first?.content.flatMap(part => part.type === "text" ? [part.text] : []).join(" ").replace(/\s+/g, " ").trim() ?? "";
 					cached = { revision, diagnostics: store.appendable ? [] : [`${file}: damaged records; convert a verified copy before resuming`], ...(first ? { summary: { id: file, title: excerpt(title, 160).text || "无文本会话", updatedAt: messages.reduce((latest, message) => Math.max(latest, message.timestamp), 0) } } : {}) };
 					// Do not cache a read that raced an append or replacement.
 					if (await fileRevision(file) === revision) this.summaries.set(file, cached);

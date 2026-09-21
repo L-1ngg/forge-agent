@@ -11,10 +11,16 @@
     "@forge-agent/core": "workspace:*",
     "@forge-agent/protocol": "workspace:*",
     "@forge-agent/tools": "workspace:*",
-    "@forge-agent/tui": "workspace:*"
+    "@forge-agent/tui": "workspace:*",
+    "@napi-rs/keyring": "2.1.0",
+    "open": "11.0.4",
+    "proper-lockfile": "4.1.2"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/proper-lockfile": "4.1.4"
   }
 }

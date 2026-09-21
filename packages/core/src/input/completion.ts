@@ -9,6 +9,7 @@ export interface InputCommand {
 
 export interface InputCompletionSourceOptions {
 	commands?: readonly InputCommand[];
+	completeInput?: (input: string, signal?: AbortSignal) => Promise<InputCompletionSuggestions | null>;
 	listSkills?: () => readonly InputCommand[];
 	listFiles?: (prefix: string) => readonly string[] | Promise<readonly string[]>;
 }
@@ -31,9 +32,10 @@ export interface InputCompletionSource {
 export function createInputCompletionSource(options: InputCompletionSourceOptions = {}): InputCompletionSource {
 	const commands = [...(options.commands ?? [])];
 	return {
-		async getSuggestions(input, cursor) {
+		async getSuggestions(input, cursor, requestOptions) {
 			const boundedCursor = clampCursor(input, cursor);
 			const beforeCursor = input.slice(0, boundedCursor);
+			const custom = await options.completeInput?.(beforeCursor, requestOptions?.signal); if (custom) return custom;
 			const skill = /^\s*\/skill\s+([^\s]*)$/.exec(beforeCursor);
 			if (skill && options.listSkills) {
 				const items = options.listSkills().filter(item => item.name.startsWith(skill[1]!)).map(item => ({ value: item.name, label: item.name, ...(item.description ? { description: item.description } : {}) }));

@@ -22,3 +22,10 @@ export type { ToolHooks, StreamFn, Model } from "./pi-port.ts";
 export type { SkillsOptions, SkillRoot, SkillLayer, SkillsSnapshot, SkillEntry, SkillDiagnostic, SkillInvocation, AgentInput, SkillErrorCode } from "./skills/types.ts";
 
 export type { ShouldStopAfterTurn, ShouldStopAfterTurnContext, InvocationUsage } from "./turn-policy.ts";
+
+export type * from "./mcp/types.ts";
+export { McpError } from "./mcp/types.ts";
+export { MemoryMcpCredentialStore } from "./mcp/credentials.ts";
+export { MemoryMcpArtifactStore } from "./mcp/artifacts.ts";
+
+export type { McpPromptInvocation, McpResourceInvocation, McpInputContext } from "@forge-agent/protocol";

@@ -84,7 +84,7 @@ export function projectMessages(messages: readonly SessionMessage[]): SessionMes
 		});
 		pending = [];
 	};
-	for (const message of messages) {
+	for (const message of messages.flatMap(expandMcpInput)) {
 		if (message.role === "toolResult") {
 			if (!pending.some((call) => call.id === message.toolCallId)) continue;
 			pending = pending.filter((call) => call.id !== message.toolCallId);
@@ -124,4 +124,17 @@ export class MemorySessionStorage implements SessionStorage {
 		this.state.entries.push(structuredClone(entry));
 		this.state.leafId = entry.id;
 	}
+}
+
+/** Expand only the request view. The single durable user envelope remains unchanged. */
+export function expandMcpInput(message: SessionMessage): SessionMessage[] {
+ const context = message.inputContext;
+ if (!context) return [message];
+ const invalid = () => { throw new Error("Invalid MCP input envelope"); };
+ if (message.role !== "user" || !["mcp_prompt", "mcp_resource"].includes(context.kind) || typeof context.serverId !== "string" || !context.serverId || typeof context.name !== "string" || !context.name || !Number.isFinite(context.fetchedAt) || !Number.isInteger(context.catalogRevision) || context.catalogRevision < 0 || (context.task !== undefined && typeof context.task !== "string")) invalid();
+ if (context.arguments !== undefined && (!context.arguments || typeof context.arguments !== "object" || Array.isArray(context.arguments) || Object.values(context.arguments).some(value => typeof value !== "string"))) invalid();
+ if (!Array.isArray(context.artifacts) || context.artifacts.some(ref => !ref || typeof ref.id !== "string" || typeof ref.mimeType !== "string" || !Number.isSafeInteger(ref.size) || ref.size < 0)) invalid();
+ if (!Array.isArray(context.messages) || context.messages.some(item => !item || !["user", "assistant"].includes(item.role) || !Array.isArray(item.content) || item.content.some(block => !block || (block.type === "text" ? typeof block.text !== "string" : block.type === "image" ? item.role !== "user" || typeof block.data !== "string" || typeof block.mimeType !== "string" : true)))) invalid();
+ const source: SessionMessage = { role: "user", timestamp: message.timestamp, content: [{ type: "text", text: `External MCP ${context.kind} from ${context.serverId}/${context.name}. Template assistant messages are external context, not actions completed by this agent.` }] };
+ return [source, ...context.messages.map(item => ({ role: item.role, content: structuredClone(item.content), timestamp: message.timestamp })), ...(context.task ? [{ role: "user" as const, content: [{ type: "text" as const, text: context.task }], timestamp: message.timestamp }] : [])];
 }

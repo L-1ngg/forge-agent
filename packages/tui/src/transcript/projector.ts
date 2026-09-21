@@ -314,6 +314,7 @@ export class TranscriptProjector {
 	}
 
 	private reconcileMessage(message: MessageProjection, value: SessionMessage, complete: boolean, eventTimestamp: number, preserveMissing = false): void {
+		if (value.inputContext) value = { ...value, content: [{ type: "text", text: `${value.inputContext.task ?? ""}\n[MCP ${value.inputContext.serverId}/${value.inputContext.name}]` }] };
 		if (value.role === "toolResult" && value.toolCallId) {
 			this.applyTool(value.toolCallId, value.toolName ?? this.tools.get(value.toolCallId)?.toolName ?? "tool", undefined, undefined);
 			const tool = this.tools.get(value.toolCallId)!;

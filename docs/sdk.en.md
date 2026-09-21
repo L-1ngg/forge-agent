@@ -383,3 +383,50 @@ const application = await receipt.applied;
 Updates support provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow. Asynchronous validation failure rejects the update and preserves the previous configuration. Idle updates apply immediately. During execution, the current response and its complete tool batch retain their original configuration; the update applies before the next request. Manual summaries finish before updates apply. No extra model request is made solely to apply a configuration. Disposal or storage faults cancel pending updates. Await `applied` outside the event consumption loop. Tool schemas are snapshotted before acceptance; callback closures remain host-owned. Applying an update invalidates the current usage anchor while preserving historical last-call counters.
 
 See the [migration evidence](phases/pi-core-migration-acceptance.md) (Chinese) for provenance, local changes, verification and version rollback.
+
+## MCP
+
+`createAgent({ mcp })` explicitly enables MCP; the SDK never reads host configuration files. `mcp: false` prevents connections. Each Agent owns its connections, catalogs, interactions, and cancellation scope, using the official `@modelcontextprotocol/client@2.0.0`. Run the catalog/read-only example without model requests:
+
+```sh
+bun examples/mcp-client.ts bun packages/core/test/helpers/mcp-server.ts
+```
+
+```ts
+const agent = await createAgent({
+  provider, model, apiKey, cwd,
+  mcp: {
+    servers: {
+      local: { transport: "stdio", command: "your-mcp-server", args: [] },
+      remote: {
+        transport: "http", url: "https://example.com/mcp",
+        auth: { type: "oauth", scopes: ["read"] },
+      },
+    },
+    // Inject credentials, artifacts, and interaction host adapters here.
+  },
+});
+try {
+  console.log(agent.mcp.snapshot());
+  const receipt = await agent.mcp.refresh();
+  await receipt.applied; // Wait outside the turn event consumer.
+} finally { await agent.dispose(); }
+```
+
+Server definitions accept command/args/cwd/env for `stdio`, url/headers for `http` or `sse`, plus enabled, protocol (stdio/SSE default `legacy`, HTTP defaults to `auto`, or pin `2026-07-28`), auth, tools.include/exclude, and timeouts. env/header values expand `$VAR` or `${VAR}` without running a shell; a missing variable fails only that server. OAuth and an Authorization header are mutually exclusive. SDK relative cwd resolves against the host cwd; CLI cwd resolves against its source configuration file. Default timeouts are 15 seconds for connect/request, 60 seconds for tool, 300 seconds for total/interaction, and 5 seconds for cleanup; total must be at least tool. Partial startup failures appear in the snapshot while healthy servers remain usable.
+
+`agent.mcp` exposes snapshot/subscribe, refresh/reconnect/setEnabled, login/logout, listResources/listResourceTemplates/listPrompts/complete, readResource/getPrompt, subscribeResource/unsubscribeResource/readArtifact. Configuration changes return `ConfigurationReceipt` and apply after the current model response and entire tool batch. `updateConfiguration({ mcp })` replaces pure configuration; adapters can only be supplied at creation. Tools capture their original definition and outputSchema, so notifications cannot change validation during execution. Connection loss or timeouts never trigger business-call replay; recovery is for subsequent requests. Resource updates emit events without modifying history. Reconnect restores subscriptions when the identity is unchanged and the URI remains available; late notifications after unsubscribe are ignored.
+
+Resource reads, Prompt retrieval, subscriptions, attachments, and tools use the existing permission checks. Remote annotations never grant permission. `mcp_list_resources` returns resources and templates; `mcp_read_resource` accepts a discovered URI template and arguments; `mcp_read_artifact` reads saved bytes in bounded chunks. MCP JSON Schema retains local references, combinations, and additional-property rules without argument coercion. Provider rejection of a schema fails the request instead of silently removing keywords.
+
+Explicit inputs are `{ kind: "mcp_prompt", serverId, name, arguments, task }` and `{ kind: "mcp_resource", serverId, uri, task }`, accepted by runTurn/steer/followUp. Preparation saves one user envelope with `inputContext`; request projection expands original roles followed by the literal task. External assistant context is not evidence of live execution. Restore never fetches the Prompt again. Failed preparation leaves input unprocessed and makes no model request. Budgeting and compaction use the expanded view while history retains the source envelope.
+
+Limits are 16 MiB per result, 8 MiB per attachment, and 64 KiB of model text. Truncation is explicit and links to saved bytes. Images require model image support; audio bytes are retained without claiming transcription; resource links are not fetched automatically. Missing attachments fail with `artifact-missing`, never a new remote request. The default `MemoryMcpArtifactStore` lasts for the instance; persistent-history hosts should inject persistent storage. If a custom store omits optional `delete`, the host owns cleanup of artifacts created by failed input preparation.
+
+The default `MemoryMcpCredentialStore` is instance-local; sharing requires explicit host injection. `McpCredentialStore.withLock` must cover the entire read/refresh/write or logout transaction. Native operations that ignore cancellation retain the lock until actual settlement; a Promise.race must not release it early. `credential-outcome-unknown` does not prove rollback. Logout deletes the local grant and does not guarantee remote revocation. CLI uses a system credential store and a process-shared file lock. Linux defaults to Secret Service; explicit `linux-keyutils` may require login again after a system restart.
+
+Only explicit `login` starts browser authorization. Inject `McpInteraction.beginAuthorization` returning `{ redirectUri, authorize(url), close() }`; authorize returns callback URLSearchParams. Core verifies state, the official SDK handles issuer/code/PKCE, and authentication succeeds only after credentials are saved and a connection is usable. Continue alone is not success. Missing grants or insufficient scope return auth-required; explicit login performs authorization. Adapters should honor signal and close their callback listeners; Core calls close after the adapter returns.
+
+`agent.requests` exposes `mcp_elicitation` with form/url mode, source, and operationId. Respond with `{ decision: "accept", content }`, `{ decision: "decline" }`, or `{ decision: "cancel" }`. Values remain typed numbers, booleans, or arrays; the official SDK validates the form. Late or duplicate responses cannot revive a request.
+
+CLI/TUI commands include status, tools/resources/templates/prompts, enable/disable/refresh/reconnect, login/logout, read, subscribe/unsubscribe, prompt/use-prompt/use-resource, and artifact. `--args '<JSON>'` accepts string-valued objects; the task after `--` is preserved literally. `artifact <id> --output <path>` exclusively creates the destination and refuses overwrite; without output it returns base64. TUI form Tab changes fields, Esc cancels, and Ctrl+P parks the card and retains field drafts. The composer remains editable during management operations. Standalone `--mcp` management needs no model configuration; an interactive terminal asks permission for reads. `--json` never waits for interaction: OAuth exits 24, Elicitation 25, invalid arguments 2, and other failures 1. See [acceptance evidence](phases/mcp-client-acceptance.md) for tested contracts and outstanding real-service/platform validation.

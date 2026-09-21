@@ -8,6 +8,7 @@ export const HEADLESS_REQUEST_EXIT_CODES: Record<RequestKind, number> = {
 	question: 22,
 	plan_approval: 23,
 	oauth: 24,
+	mcp_elicitation: 25,
 };
 
 const HEADLESS_INTERACTION_REASON = "Interactive request is not available in headless mode";
@@ -29,6 +30,7 @@ export function headlessRequestDecision<K extends RequestKind>(request: RequestE
 			return { response: response(request.id, { decision: "cancel" }), exitCode } as HeadlessRequestDecision<K>;
 		case "plan_approval":
 			return { response: response(request.id, { decision: "reject", feedback: HEADLESS_INTERACTION_REASON }), exitCode } as HeadlessRequestDecision<K>;
+		case "mcp_elicitation":
 		case "oauth":
 			return { response: response(request.id, { decision: "cancel" }), exitCode } as HeadlessRequestDecision<K>;
 	}

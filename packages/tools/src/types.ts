@@ -2,9 +2,10 @@ import type { ImageBlock, TextBlock } from "@forge-agent/protocol";
 
 export interface ObjectSchema {
 	type: "object";
-	properties: Record<string, Record<string, unknown>>;
-	required: string[];
-	additionalProperties: false;
+	properties?: Record<string, unknown> | undefined;
+	required?: string[] | undefined;
+	additionalProperties?: boolean | Record<string, unknown> | undefined;
+	[key: string]: unknown;
 }
 
 export interface ToolContext {
@@ -22,6 +23,8 @@ export interface HarnessTool<TInput extends object, TOutput> {
 	description: string;
 	parameters: ObjectSchema;
 	prepareArguments?: (args: unknown) => TInput;
+	/** Exact final-input validator; runs before authorization without coercion. */
+	validateArguments?: (args: unknown) => TInput;
 	executionMode?: "parallel" | "sequential";
 	execute(input: TInput, context: ToolContext): Promise<ToolResult<TOutput>>;
 }

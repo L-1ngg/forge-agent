@@ -36,6 +36,7 @@ export interface ImageBlock {
 export type SessionContentBlock = TextBlock | ThinkingBlock | ToolCallBlock | ImageBlock;
 
 export interface SessionMessage {
+	inputContext?: import("./input.ts").McpInputContext;
 	role: SessionRole;
 	content: SessionContentBlock[];
 	timestamp: number;

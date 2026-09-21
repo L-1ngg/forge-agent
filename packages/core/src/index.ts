@@ -13,3 +13,5 @@ export * from "./session-store.ts";
 export * from "./usage.ts";
 
 export type { ShouldStopAfterTurn, ShouldStopAfterTurnContext, InvocationUsage } from "./turn-policy.ts";
+
+export { McpManager } from "./mcp/manager.ts";

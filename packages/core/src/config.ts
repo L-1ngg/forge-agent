@@ -1,5 +1,6 @@
+import { normalizeMcpConfiguration } from "./mcp/config.ts";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import type { PermissionMode } from "./permission/decide.ts";
 import type { ContextSettings, RetryPolicy } from "./context/compaction.ts";
@@ -11,6 +12,7 @@ export interface HarnessUiConfig {
 }
 
 export interface HarnessConfig {
+	mcp?: import("./mcp/types.ts").McpConfiguration & { credentialStore?: "system" | "linux-keyutils" };
 	skills?: { enabled?: boolean; roots?: Partial<Record<"workspace" | "user" | "builtin", string>> };
 	memory?: { autoUpdate?: boolean; injection?: boolean };
 	context?: Partial<ContextSettings>;
@@ -51,7 +53,7 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory", "skills"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory", "skills", "mcp"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);
@@ -68,7 +70,12 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 		const memory = config.memory;
 		if (!memory || typeof memory !== "object" || Array.isArray(memory) || Object.entries(memory).some(([key, value]) => !["autoUpdate", "injection"].includes(key) || typeof value !== "boolean")) throw new Error(`Invalid config ${path}: memory accepts only boolean autoUpdate and injection`);
 	}
-	return config as Partial<HarnessConfig>;
+	if ("mcp" in config) {
+        const mcp = config.mcp;
+        if (!mcp || typeof mcp !== "object" || Array.isArray(mcp) || Object.keys(mcp).some(key => !["enabled", "servers", "credentialStore"].includes(key))) throw new Error(`Invalid config ${path}: invalid mcp`);
+        if ("credentialStore" in mcp && !["system", "linux-keyutils"].includes(String(mcp.credentialStore))) throw new Error(`Invalid config ${path}: invalid mcp.credentialStore`);
+    }
+    return config as Partial<HarnessConfig>;
 }
 
 export async function loadConfig(options: LoadConfigOptions): Promise<HarnessConfig> {
@@ -78,7 +85,12 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 	const projectPath = join(options.cwd, ".forge-agent", "config.json");
 	const globalConfig = await readConfig(globalPath);
 	const projectConfig = await readConfig(projectPath);
-	const mergedUi = {
+	const mcpServers: Record<string, import("./mcp/types.ts").McpServerConfiguration> = {};
+    for (const [config, path] of [[globalConfig, globalPath], [projectConfig, projectPath]] as const) {
+        for (const [id, server] of Object.entries(config.mcp?.servers ?? {})) mcpServers[id] = { ...server, ...(server.transport === "stdio" ? { cwd: resolve(dirname(path), server.cwd ?? ".") } : {}), source: path };
+    }
+    const mcp = globalConfig.mcp || projectConfig.mcp ? { ...normalizeMcpConfiguration({ enabled: projectConfig.mcp?.enabled ?? globalConfig.mcp?.enabled ?? true, servers: mcpServers }, options.cwd, env, false), servers: mcpServers, credentialStore: projectConfig.mcp?.credentialStore ?? globalConfig.mcp?.credentialStore ?? "system" as const } : undefined;
+    const mergedUi = {
 		...defaults.ui,
 		...(globalConfig.ui ?? {}),
 		...(projectConfig.ui ?? {}),
@@ -89,6 +101,7 @@ export async function loadConfig(options: LoadConfigOptions): Promise<HarnessCon
 		...globalConfig,
 		...projectConfig,
 		ui: mergedUi,
+		...(mcp ? { mcp } : {}),
 		memory: { ...globalConfig.memory, ...projectConfig.memory },
 	skills: { ...globalConfig.skills, ...projectConfig.skills, roots: { ...globalConfig.skills?.roots, ...projectConfig.skills?.roots } },
 		...(env.FORGE_AGENT_PROVIDER ? { provider: env.FORGE_AGENT_PROVIDER } : {}),
