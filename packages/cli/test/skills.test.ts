@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdtemp, mkdir, writeFile, rm, readdir } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, readdir, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { HttpFixture } from "../../../tests/support/http-fixture.ts";
@@ -40,7 +40,7 @@ test("CLI resolves worktree defaults and distributed builtin directory, and comp
 	const cwd = await mkdtemp(join(tmpdir(), "forge-skills-paths-"));
 	try {
 		const roots = (await cliSkills(cwd, undefined, false)).roots;
-		expect(roots.workspace?.path).toBe(join(cwd, ".forge/skills")); expect(roots.user?.path).toEndWith("/.forge/skills");
+		expect(roots.workspace?.path).toBe(join(await realpath(cwd), ".forge/skills")); expect(roots.user?.path).toEndWith("/.forge/skills");
 		expect(await readdir(roots.builtin!.path)).toContain(".gitkeep");
 		const source = createInputCompletionSource({ listSkills: () => [{ name: "manual", description: "Explicit-only" }] });
 		const suggestions = await source.getSuggestions("/skill ma", 9); expect(suggestions?.items[0]?.value).toBe("manual");

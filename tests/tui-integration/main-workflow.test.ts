@@ -20,9 +20,9 @@ test("PTY: startup to historical tool detail, search, copy, resize and return th
 			}
 		},
 	});
-	const waitFor = async (condition: () => boolean) => {
+	const waitFor = async (condition: () => boolean | Promise<boolean>) => {
 		for (let attempt = 0; attempt < 600; attempt++) {
-			if (condition()) return;
+			if (await condition()) return;
 			if (child.exitCode !== null) throw new Error(`PTY exited ${child.exitCode}: ${output.slice(-1000)}`);
 			await Bun.sleep(10);
 		}
@@ -88,6 +88,9 @@ test("PTY: startup to historical tool detail, search, copy, resize and return th
 		await send("\r"); await waitFor(() => completed === 2);
 		await resize(120, 32);
 		await send("\tG");
+		// Copy feedback expiry changes the viewport height while G follows the bottom.
+		// Locate the edit only after it expires, so the click cannot use a stale row.
+		await waitFor(async () => !(await capture()).includes("Copy requested"));
 		let text = await reveal("Edit sample-0.ts");
 		let y = text.split("\n").findIndex((line) => line.includes("Edit sample-0.ts")) + 1;
 		await send(`\x1b[<0;8;${y}M\x1b[<0;8;${y}m\r`);
