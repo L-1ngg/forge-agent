@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "recordingVersion": 2,
+    "phase": "preflight",
+    "split": "development",
+    "implementation": "candidate",
+    "sdkRoot": "/home/l1ngg/dev/forge-agent",
+    "repeats": 1,
+    "fixtureSha256": "a1994edd3a539d707b3ef626ac35b4d29fc1bf16ff08f0ee6ae25221926638aa",
+    "runnerSha256": "516be73a28cdbcb220f6d9943c87b76e584b335ac489f436898561cea37ed5b2",
+    "implementationSha256": "dfed1e4ddbfff526054d9ac6bda946d12cd7fab821a980b0de09612c3fb0910b",
+    "compactSha256": "7e47a87deab8e26db28299e3ab891dd6ec5d39d9b38cbda6e93b7d95a78d5c3c",
+    "settings": {
+      "contextWindow": 32000,
+      "maxTokens": 2048,
+      "reserveTokens": 10000,
+      "keepRecentTokens": 900,
+      "thinking": "off",
+      "retry": 0
+    }
+  },
+  "rows": [
+    {
+      "task": "dev2-old-constraint",
+      "kind": "old-constraint",
+      "keptIds": [
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-correction",
+      "kind": "correction",
+      "keptIds": [
+        "correction",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-barrier",
+      "kind": "barrier",
+      "keptIds": [
+        "recent-note",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-exact-evidence",
+      "kind": "exact-evidence",
+      "keptIds": [
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-duplicates",
+      "kind": "duplicates",
+      "keptIds": [
+        "duplicate-0",
+        "duplicate-1",
+        "duplicate-2",
+        "duplicate-3",
+        "duplicate-4",
+        "duplicate-5",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-task-switch",
+      "kind": "task-switch",
+      "keptIds": [
+        "switch",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-recorded-effect",
+      "kind": "recorded-effect",
+      "keptIds": [
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "dev2-control",
+      "kind": "control",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "log-call",
+        "log-result",
+        "ready"
+      ],
+      "clippedIds": [
+        "log-result"
+      ],
+      "action": "none",
+      "modelCalls": 0
+    }
+  ]
+}

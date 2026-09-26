@@ -1,0 +1,147 @@
+{
+  "metadata": {
+    "recordingVersion": 2,
+    "phase": "preflight",
+    "split": "holdout",
+    "implementation": "baseline",
+    "sdkRoot": "/tmp/forge-context-selection-baseline-62c7f257",
+    "repeats": 1,
+    "fixtureSha256": "a1994edd3a539d707b3ef626ac35b4d29fc1bf16ff08f0ee6ae25221926638aa",
+    "runnerSha256": "516be73a28cdbcb220f6d9943c87b76e584b335ac489f436898561cea37ed5b2",
+    "implementationSha256": "13757869c7f22dcf1d4d1bbca9fe674ef54c3d0f5edab9a4aed860c651e8e923",
+    "compactSha256": "4b04604b8c65ca852792b3a1284b1f3580e4ec06aed794d8dd4c985b1dfd9aa3",
+    "settings": {
+      "contextWindow": 32000,
+      "maxTokens": 2048,
+      "reserveTokens": 10000,
+      "keepRecentTokens": 900,
+      "thinking": "off",
+      "retry": 0
+    }
+  },
+  "rows": [
+    {
+      "task": "holdout2-old-constraint",
+      "kind": "old-constraint",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-correction",
+      "kind": "correction",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "correction",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-barrier",
+      "kind": "barrier",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "recent-note",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-exact-evidence",
+      "kind": "exact-evidence",
+      "keptIds": [
+        "requirements",
+        "table-call",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [
+        "evidence"
+      ],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-duplicates",
+      "kind": "duplicates",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "duplicate-5",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-task-switch",
+      "kind": "task-switch",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "switch",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-recorded-effect",
+      "kind": "recorded-effect",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "initial",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout2-control",
+      "kind": "control",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "log-call",
+        "log-result",
+        "ready"
+      ],
+      "clippedIds": [
+        "log-result"
+      ],
+      "action": "none",
+      "modelCalls": 0
+    }
+  ]
+}

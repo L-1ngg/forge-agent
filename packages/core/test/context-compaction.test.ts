@@ -91,6 +91,41 @@ test("compaction clips recoverable old tool output with zero summary calls", asy
 	finally { await agent.dispose(); server.stop(true); }
 });
 
+test("compaction keeps a contiguous recent tail instead of selecting an older source across a large message", async () => {
+	const storage = new MemorySessionStorage([
+		msg("user", "Old instruction SOURCE-ONLY-MARKER: do not deploy."),
+		msg("assistant", "Old investigation ".repeat(500)),
+		msg("user", "Older optional message"),
+		msg("assistant", "Middle barrier ".repeat(100)),
+		msg("user", "RECENT-MARKER: inspect the latest result"),
+		msg("assistant", "Recent finding"),
+		msg("user", "Continue"),
+	]);
+	const source = (await storage.load()).entries[0]!.id;
+	const requests: string[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		const body = await request.text(); requests.push(body);
+		return body.includes("task-system") ? modelResponse() : modelResponse([], "end_turn", JSON.stringify({ states: [{ id: "rule", kind: "constraint", text: "do not deploy", status: "active", sources: [{ entryId: source, quote: "do not deploy" }], supersedes: [] }], claims: [], taskChanged: false }));
+	} });
+	const agent = await createAgent({ ...options, context: { ...options.context, keepRecentTokens: 100 }, storage, baseUrl: server.url.toString() });
+	try {
+		expect((await agent.compact()).status).toBe("complete");
+		const saved = await storage.load();
+		const checkpoint = saved.entries.at(-1);
+		expect(checkpoint?.type).toBe("compaction");
+		if (checkpoint?.type !== "compaction") throw new Error("Missing compaction entry");
+		expect(checkpoint.checkpoint?.keptIds).toContain(saved.entries[4]!.id);
+		expect(checkpoint.checkpoint?.keptIds).not.toContain(source);
+		expect(checkpoint.checkpoint?.keptIds).not.toContain(saved.entries[2]!.id);
+		for await (const _event of agent.runTurn("Proceed")) { }
+		const task = requests.at(-1)!;
+		expect(task).toContain("RECENT-MARKER");
+		expect(task).toContain("do not deploy");
+		expect(task).not.toContain("SOURCE-ONLY-MARKER");
+		expect(task).not.toContain("Older optional message");
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
 test.each(["missing", "foreign", "denied"] as const)("context retrieval respects %s access boundaries", async mode => {
 	const storage = new MemorySessionStorage([msg("user", "PRIVATE-BRANCH-EVIDENCE")]);
 	const initial = await storage.load();
@@ -222,13 +257,22 @@ test.each(["removed", "rewritten", "version"] as const)("reopening rejects %s pe
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("identical assistant text with different timestamps is deduplicated without a summary request", async () => {
-	const first = msg("assistant", "repeated observation ".repeat(400));
-	const storage = new MemorySessionStorage([msg("user", "Keep the original requirements"), first, { ...first, timestamp: 5000 }, msg("user", "Continue")]);
+test("identical assistant entries remain separate when both fit the recent budget", async () => {
+	const first = msg("assistant", "repeated observation ".repeat(20));
+	const storage = new MemorySessionStorage([msg("user", "Keep the original requirements"), msg("assistant", "Old log ".repeat(1000)), first, { ...first, timestamp: 5000 }, msg("user", "Continue")]);
+	const entries = (await storage.load()).entries;
 	let calls = 0;
-	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return modelResponse(); } });
-	const agent = await createAgent({ ...options, context: { ...options.context, keepRecentTokens: 20000 }, storage, baseUrl: server.url.toString() });
-	try { expect((await agent.compact()).status).toBe("complete"); expect(calls).toBe(0); }
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { calls++; return modelResponse([], "end_turn", JSON.stringify({ states: [], claims: [], taskChanged: false })); } });
+	const agent = await createAgent({ ...options, context: { ...options.context, keepRecentTokens: 500 }, storage, baseUrl: server.url.toString() });
+	try {
+		expect((await agent.compact()).status).toBe("complete");
+		expect(calls).toBe(1);
+		const checkpoint = (await storage.load()).entries.at(-1);
+		expect(checkpoint?.type).toBe("compaction");
+		if (checkpoint?.type !== "compaction") throw new Error("Missing compaction entry");
+		expect(checkpoint.checkpoint?.keptIds).toContain(entries[2]!.id);
+		expect(checkpoint.checkpoint?.keptIds).toContain(entries[3]!.id);
+	}
 	finally { await agent.dispose(); server.stop(true); }
 });
 

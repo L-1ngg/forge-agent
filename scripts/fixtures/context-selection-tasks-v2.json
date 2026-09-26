@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "cases": [
+    { "id": "dev2-old-constraint", "split": "development", "kind": "old-constraint", "subject": "artifact mirror", "initialPort": 8401, "port": 8401, "marker": "MIRROR-REF-51", "target": "mirror.json", "rounds": 1 },
+    { "id": "dev2-correction", "split": "development", "kind": "correction", "subject": "mail dispatcher", "initialPort": 8402, "port": 9402, "marker": "MAIL-REF-62", "target": "mail.json", "rounds": 1 },
+    { "id": "dev2-barrier", "split": "development", "kind": "barrier", "subject": "search relay", "initialPort": 8403, "port": 8403, "marker": "SEARCH-REF-73", "target": "search.json", "rounds": 1 },
+    { "id": "dev2-exact-evidence", "split": "development", "kind": "exact-evidence", "subject": "archive ledger", "initialPort": 8404, "port": 8404, "marker": "", "target": "archive.json", "rounds": 1 },
+    { "id": "dev2-duplicates", "split": "development", "kind": "duplicates", "subject": "token monitor", "initialPort": 8405, "port": 8405, "marker": "TOKEN-REF-95", "target": "token.json", "rounds": 1 },
+    { "id": "dev2-task-switch", "split": "development", "kind": "task-switch", "subject": "manifest builder", "initialPort": 8406, "port": 8406, "marker": "MANIFEST-REF-16", "target": "manifest.json", "rounds": 4 },
+    { "id": "dev2-recorded-effect", "split": "development", "kind": "recorded-effect", "subject": "quota reporter", "initialPort": 8407, "port": 8407, "marker": "QUOTA-REF-27", "target": "quota.json", "rounds": 1 },
+    { "id": "dev2-control", "split": "development", "kind": "control", "subject": "node observer", "initialPort": 8408, "port": 8408, "marker": "NODE-REF-38", "target": "node.json", "rounds": 1 },
+    { "id": "holdout2-old-constraint", "split": "holdout", "kind": "old-constraint", "subject": "registry copier", "initialPort": 8551, "port": 8551, "marker": "REGISTRY-REF-64", "target": "registry.json", "rounds": 1 },
+    { "id": "holdout2-correction", "split": "holdout", "kind": "correction", "subject": "image scheduler", "initialPort": 8552, "port": 9552, "marker": "IMAGE-REF-75", "target": "image.json", "rounds": 1 },
+    { "id": "holdout2-barrier", "split": "holdout", "kind": "barrier", "subject": "webhook broker", "initialPort": 8553, "port": 8553, "marker": "WEBHOOK-REF-86", "target": "webhook.json", "rounds": 1 },
+    { "id": "holdout2-exact-evidence", "split": "holdout", "kind": "exact-evidence", "subject": "invoice ledger", "initialPort": 8554, "port": 8554, "marker": "", "target": "invoice.json", "rounds": 1 },
+    { "id": "holdout2-duplicates", "split": "holdout", "kind": "duplicates", "subject": "segment index", "initialPort": 8555, "port": 8555, "marker": "SEGMENT-REF-18", "target": "segment.json", "rounds": 1 },
+    { "id": "holdout2-task-switch", "split": "holdout", "kind": "task-switch", "subject": "payment digest", "initialPort": 8556, "port": 8556, "marker": "PAYMENT-REF-29", "target": "payment.json", "rounds": 4 },
+    { "id": "holdout2-recorded-effect", "split": "holdout", "kind": "recorded-effect", "subject": "backup catalog", "initialPort": 8557, "port": 8557, "marker": "BACKUP-REF-30", "target": "backup.json", "rounds": 1 },
+    { "id": "holdout2-control", "split": "holdout", "kind": "control", "subject": "probe sampler", "initialPort": 8558, "port": 8558, "marker": "SAMPLE-REF-41", "target": "sample.json", "rounds": 1 }
+  ]
+}

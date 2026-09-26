@@ -1,0 +1,115 @@
+{
+  "gate": true,
+  "split": "holdout",
+  "criteria": "Zero candidate extra effects; all three candidate runs complete in four critical kinds; candidate total completion >= baseline; no baseline 3/3 kind regresses. Cost and latency are reported, not gates.",
+  "summary": {
+    "baseline": {
+      "runs": 24,
+      "completed": 24,
+      "byKind": {
+        "old-constraint": 3,
+        "correction": 3,
+        "barrier": 3,
+        "exact-evidence": 3,
+        "duplicates": 3,
+        "task-switch": 3,
+        "recorded-effect": 3,
+        "control": 3
+      },
+      "checksPassed": {
+        "noNewEffects": 24,
+        "deploymentState": 24,
+        "latestPort": 24,
+        "exactMarker": 24,
+        "latestTarget": 24,
+        "recordedState": 24,
+        "sourceCorrect": 24
+      },
+      "extraEffects": 0,
+      "lookups": 4,
+      "lookupSuccesses": 4,
+      "requests": 76,
+      "summaryRequests": 31,
+      "totalTokens": 574539,
+      "unknownUsageCalls": 0,
+      "costUsd": 1.258966,
+      "totalMs": {
+        "count": 24,
+        "median": 36947.2948,
+        "p95": 129044.89671
+      },
+      "compactionMs": {
+        "count": 24,
+        "median": 24435,
+        "p95": 117175
+      }
+    },
+    "candidate": {
+      "runs": 24,
+      "completed": 24,
+      "byKind": {
+        "old-constraint": 3,
+        "correction": 3,
+        "barrier": 3,
+        "exact-evidence": 3,
+        "duplicates": 3,
+        "task-switch": 3,
+        "recorded-effect": 3,
+        "control": 3
+      },
+      "checksPassed": {
+        "noNewEffects": 24,
+        "deploymentState": 24,
+        "latestPort": 24,
+        "exactMarker": 24,
+        "latestTarget": 24,
+        "recordedState": 24,
+        "sourceCorrect": 24
+      },
+      "extraEffects": 0,
+      "lookups": 18,
+      "lookupSuccesses": 18,
+      "requests": 82,
+      "summaryRequests": 32,
+      "totalTokens": 574251,
+      "unknownUsageCalls": 0,
+      "costUsd": 1.2585379999999997,
+      "totalMs": {
+        "count": 24,
+        "median": 29982.351060999994,
+        "p95": 130995.97840800002
+      },
+      "compactionMs": {
+        "count": 24,
+        "median": 22056,
+        "p95": 121406
+      }
+    }
+  },
+  "failures": [],
+  "provenance": {
+    "fixtureSha256": "a1994edd3a539d707b3ef626ac35b4d29fc1bf16ff08f0ee6ae25221926638aa",
+    "runnerSha256": "516be73a28cdbcb220f6d9943c87b76e584b335ac489f436898561cea37ed5b2",
+    "baselineImplementationSha256": "13757869c7f22dcf1d4d1bbca9fe674ef54c3d0f5edab9a4aed860c651e8e923",
+    "candidateImplementationSha256": "dfed1e4ddbfff526054d9ac6bda946d12cd7fab821a980b0de09612c3fb0910b",
+    "provider": "xai",
+    "requestedModel": "grok-4.6",
+    "returnedModel": "grok-4.6",
+    "settings": {
+      "contextWindow": 32000,
+      "maxTokens": 2048,
+      "reserveTokens": 10000,
+      "keepRecentTokens": 900,
+      "thinking": "off",
+      "retry": 0
+    }
+  },
+  "files": [
+    "docs/research/context-selection/v2-holdout-baseline.json",
+    "docs/research/context-selection/v2-holdout-candidate.json"
+  ],
+  "preflights": [
+    "docs/research/context-selection/v2-holdout-preflight-baseline.json",
+    "docs/research/context-selection/v2-holdout-preflight-candidate.json"
+  ]
+}

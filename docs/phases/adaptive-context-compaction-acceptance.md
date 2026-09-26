@@ -8,6 +8,7 @@ created: 2026-09-12
 > 命名说明(2026-09-17)：当前功能与代码统一称为上下文压缩；下文 `adaptive`、旧路径和命令仅保留历史记录含义。当前接口见 [SDK 指南](../sdk.md#上下文管理)。
 
 > 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，统一称为上下文压缩；双策略复现需使用对应历史提交。
+> 证据边界更新(2026-09-26)：本次对照也早于 [ADR-023](../decisions/023-deterministic-context-selection.md) 的近期选择规则，不能用于证明新选择规则的模型质量或费用。
 
 
 > 状态:已通过本次限定验收(2026-09-12)。任务状态与 AC 原文见 [Issue #31](https://github.com/L-1ngg/forge-agent/issues/31)。

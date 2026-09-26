@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "cases": [
+    { "id": "dev-old-constraint", "split": "development", "kind": "old-constraint", "subject": "build service", "initialPort": 8121, "port": 8121, "marker": "BUILD-ACK-42", "target": "build.json", "rounds": 1 },
+    { "id": "dev-correction", "split": "development", "kind": "correction", "subject": "queue worker", "initialPort": 8122, "port": 9122, "marker": "QUEUE-ACK-71", "target": "queue.json", "rounds": 1 },
+    { "id": "dev-barrier", "split": "development", "kind": "barrier", "subject": "metrics gateway", "initialPort": 8123, "port": 8123, "marker": "METRIC-ACK-83", "target": "metrics.json", "rounds": 1 },
+    { "id": "dev-exact-evidence", "split": "development", "kind": "exact-evidence", "subject": "audit index", "initialPort": 8124, "port": 8124, "marker": "", "target": "audit.json", "rounds": 1 },
+    { "id": "dev-duplicates", "split": "development", "kind": "duplicates", "subject": "cache service", "initialPort": 8125, "port": 8125, "marker": "CACHE-ACK-95", "target": "cache.json", "rounds": 1 },
+    { "id": "dev-task-switch", "split": "development", "kind": "task-switch", "subject": "release job", "initialPort": 8126, "port": 8126, "marker": "RELEASE-ACK-16", "target": "release.json", "rounds": 4 },
+    { "id": "dev-recorded-effect", "split": "development", "kind": "recorded-effect", "subject": "report exporter", "initialPort": 8127, "port": 8127, "marker": "EXPORT-ACK-27", "target": "export.json", "rounds": 1 },
+    { "id": "dev-control", "split": "development", "kind": "control", "subject": "status probe", "initialPort": 8128, "port": 8128, "marker": "PROBE-ACK-38", "target": "probe.json", "rounds": 1 },
+    { "id": "holdout-old-constraint", "split": "holdout", "kind": "old-constraint", "subject": "ledger bridge", "initialPort": 8261, "port": 8261, "marker": "LEDGER-ACK-64", "target": "ledger.json", "rounds": 1 },
+    { "id": "holdout-correction", "split": "holdout", "kind": "correction", "subject": "media processor", "initialPort": 8262, "port": 9262, "marker": "MEDIA-ACK-75", "target": "media.json", "rounds": 1 },
+    { "id": "holdout-barrier", "split": "holdout", "kind": "barrier", "subject": "event router", "initialPort": 8263, "port": 8263, "marker": "ROUTER-ACK-86", "target": "router.json", "rounds": 1 },
+    { "id": "holdout-exact-evidence", "split": "holdout", "kind": "exact-evidence", "subject": "receipt index", "initialPort": 8264, "port": 8264, "marker": "", "target": "receipt.json", "rounds": 1 },
+    { "id": "holdout-duplicates", "split": "holdout", "kind": "duplicates", "subject": "index refresher", "initialPort": 8265, "port": 8265, "marker": "INDEX-ACK-18", "target": "index.json", "rounds": 1 },
+    { "id": "holdout-task-switch", "split": "holdout", "kind": "task-switch", "subject": "billing batch", "initialPort": 8266, "port": 8266, "marker": "BILLING-ACK-29", "target": "billing.json", "rounds": 4 },
+    { "id": "holdout-recorded-effect", "split": "holdout", "kind": "recorded-effect", "subject": "snapshot maker", "initialPort": 8267, "port": 8267, "marker": "SNAP-ACK-30", "target": "snapshot.json", "rounds": 1 },
+    { "id": "holdout-control", "split": "holdout", "kind": "control", "subject": "health checker", "initialPort": 8268, "port": 8268, "marker": "HEALTH-ACK-41", "target": "health.json", "rounds": 1 }
+  ]
+}

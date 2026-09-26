@@ -223,13 +223,13 @@ interface SessionStorage {
 
 ## 上下文管理
 
-上下文压缩提供带证据短检查点、相关性选择、历史搜索/读取与请求预算，见 [ADR-018](decisions/018-adaptive-default.md)。旧 pi 策略及 `context.strategy` 已删除，传入该字段会报错；省略 `context` 或传 `{}` 即启用上下文压缩。
+上下文压缩提供带证据短检查点、确定性的近期历史选择、历史搜索/读取与请求预算，见 [ADR-018](decisions/018-adaptive-default.md) 和 [ADR-023](decisions/023-deterministic-context-selection.md)。旧 pi 策略及 `context.strategy` 已删除，传入该字段会报错；省略 `context` 或传 `{}` 即启用上下文压缩。
 
 CLI 配置与 SDK 创建选项均支持 `context: { enabled, reserveTokens, keepRecentTokens, summaryReasoning }`，默认分别为 `true`、`16384`、`20000`、`"inherit"`。SDK 可在空闲时通过 `configureContext` 更新。搜索和读取仍需宿主权限允许，启用压缩不授予权限。
 
 ### 上下文压缩：状态与预算
 
-上下文压缩保留未归档用户输入及最新完整交互单元，先尝试裁剪可找回的旧工具正文和选择相关材料；需要时由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
+上下文压缩保留未归档用户输入、最新用户消息及最后一个完整交互单元。先尝试裁剪可找回的旧工具正文；若仅靠裁剪就能让全部历史符合预算并缩小投影，则保留全部交互单元，否则从最新单元向前连续保留可选原文，遇到首个超出 `keepRecentTokens` 额度或输入预算的单元即停止。不按词项、检查点来源或重复正文重新挑选更旧的消息。需要省略未归档内容时，由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
 
 上下文压缩发送给任务模型的检查点采用短投影：状态/结论的类型、完整文本与去重的来源 entryId；完整 quote、状态 ID 和替代关系继续保存在本地检查点，降级 summary 也保留完整版本。执行结果 ledger 不省略。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。
 
@@ -249,7 +249,7 @@ v4 `compaction` 记录使用可选、版本化的 `checkpoint` 载荷，SDK 导�
 
 `compaction` 事件提供 `action`、`inputBudget`、`contextEstimated`、`modelCalls`、`generations`、`elapsedMs`、`stopReason` 和合计 `usage`，不再提供 `strategy`。这些字段为累计快照，统计时按 `operationId` 取最新值，不重复相加。
 
-当前短投影的软件验证和费用估算边界见[后续验证记录](phases/context-notes-search.md)；不要将首次上下文压缩的旧保留集结果视为新投影的质量验收。
+短投影的软件验证和费用估算边界见[后续验证记录](phases/context-notes-search.md)；近期选择的软件验证见[施工与验收](phases/context-selection-simplification.md)，限定的真实模型 A/B 结果见[质量评估](phases/context-selection-evaluation.md)。首次上下文压缩的旧保留集结果不证明短投影或近期选择的真实模型质量。
 
 ### 自动压缩与恢复
 

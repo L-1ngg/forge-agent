@@ -30,8 +30,8 @@
 
 | 文档 | 职责 |
 |---|---|
-| [默认上下文压缩](decisions/018-adaptive-default.md) | CLI/SDK 默认策略与旧会话恢复行为 |
-| [压缩设计](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md) | 独立状态、证据、预算及首次真实模型对照；首次实验不证明后续投影质量 |
+| [默认上下文压缩](decisions/018-adaptive-default.md)、[近期选择](decisions/023-deterministic-context-selection.md) | CLI/SDK 默认策略、旧会话恢复与当前材料选择规则 |
+| [压缩设计](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md)、[近期选择施工与验收](phases/context-selection-simplification.md)、[新质量评估](phases/context-selection-evaluation.md) | 独立状态、证据、预算及历史模型对照；近期选择的软件证据与新质量实验 |
 | [短检查点与历史搜索](phases/context-notes-search.md) | 当前请求投影、search_context、软件验证和未测质量边界 |
 | [持久记忆](phases/persistent-memory.md) | Markdown、会话内更新、worktree 副本与质量/成本验收 |
 | [宿主上下文变换](phases/context-transform.md)、[分层预算决策](decisions/021-host-context-transform-and-request-budget.md) | transformContext、记忆组合、最终请求预算的接口与本地验收证据 |

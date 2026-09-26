@@ -1,0 +1,147 @@
+{
+  "metadata": {
+    "recordingVersion": 1,
+    "phase": "preflight",
+    "split": "holdout",
+    "implementation": "baseline",
+    "sdkRoot": "/tmp/forge-context-selection-baseline-62c7f257",
+    "repeats": 1,
+    "fixtureSha256": "d841545d0d8729afeba506bb2f5c3256298f0c99eb31da8d4424da545867d163",
+    "runnerSha256": "968d75f79ef96de4ea66e319c3ea8283ad54b407d6a3dee0e05f243eb9d3b956",
+    "implementationSha256": "13757869c7f22dcf1d4d1bbca9fe674ef54c3d0f5edab9a4aed860c651e8e923",
+    "compactSha256": "4b04604b8c65ca852792b3a1284b1f3580e4ec06aed794d8dd4c985b1dfd9aa3",
+    "settings": {
+      "contextWindow": 32000,
+      "maxTokens": 2048,
+      "reserveTokens": 10000,
+      "keepRecentTokens": 900,
+      "thinking": "off",
+      "retry": 0
+    }
+  },
+  "rows": [
+    {
+      "task": "holdout-old-constraint",
+      "kind": "old-constraint",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-correction",
+      "kind": "correction",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "correction",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-barrier",
+      "kind": "barrier",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "recent-note",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-exact-evidence",
+      "kind": "exact-evidence",
+      "keptIds": [
+        "requirements",
+        "table-call",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [
+        "evidence"
+      ],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-duplicates",
+      "kind": "duplicates",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "duplicate-5",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-task-switch",
+      "kind": "task-switch",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "switch",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-recorded-effect",
+      "kind": "recorded-effect",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "ready"
+      ],
+      "clippedIds": [],
+      "action": "rebuild",
+      "modelCalls": 1
+    },
+    {
+      "task": "holdout-control",
+      "kind": "control",
+      "keptIds": [
+        "requirements",
+        "evidence",
+        "record-call",
+        "record-result",
+        "log-call",
+        "log-result",
+        "ready"
+      ],
+      "clippedIds": [
+        "log-result"
+      ],
+      "action": "selection",
+      "modelCalls": 0
+    }
+  ]
+}
