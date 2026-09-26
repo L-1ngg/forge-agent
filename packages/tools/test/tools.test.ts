@@ -5,6 +5,24 @@ import { tmpdir } from "node:os";
 import { bashTool, editTool, readTool, writeTool } from "../src/index.ts";
 import { createBashTool } from "../src/bash.ts";
 
+test("built-in schemas and validators share strict input contracts", () => {
+	expect(readTool.parameters).toMatchObject({
+		type: "object", required: ["path"], additionalProperties: false,
+		properties: { path: { type: "string", minLength: 1 }, offset: { type: "integer", minimum: 1 } },
+	});
+	expect(writeTool.parameters).toMatchObject({ required: ["path", "content"], additionalProperties: false });
+	expect(editTool.parameters).toMatchObject({ required: ["path", "old_text", "new_text"], additionalProperties: false });
+	expect(bashTool.parameters).toMatchObject({
+		required: ["command"], additionalProperties: false,
+		properties: { timeout_ms: { type: "integer", minimum: 1, maximum: 600000 } },
+	});
+	expect(() => readTool.validateArguments?.({ path: "file", offset: "2" })).toThrow();
+	expect(() => writeTool.validateArguments?.({ path: "file", content: "ok", extra: true })).toThrow();
+	expect(() => editTool.validateArguments?.({ path: "file", old_text: "", new_text: "ok" })).toThrow();
+	expect(() => bashTool.validateArguments?.({ command: "ok", timeout_ms: "1000" })).toThrow();
+	expect(readTool.validateArguments?.({ path: "file", offset: 2 })).toEqual({ path: "file", offset: 2 });
+});
+
 function errorDetails(result: { isError?: boolean; content: Array<{ type: string; text?: string }> }): unknown {
  expect(result.isError).toBe(true);
  const first = result.content[0];

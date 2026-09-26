@@ -5,7 +5,7 @@ created: 2026-09-21
 
 # 宿主上下文变换与最终请求预算
 
-> 状态:已实现并通过本地验收(2026-09-21)，尚未发布。Owner: operator / Codex。
+> 状态:核心合同已实现并通过本地验收；pi-ai 内置输出预检已在 2026-09-26 的 TanStack 传输迁移中撤下，尚未发布。Owner: operator / Codex。
 > 决策与取舍见 [ADR-021](../decisions/021-host-context-transform-and-request-budget.md)。本文件记录施工合同与验收证据，公共接入见 [SDK](../sdk.md#宿主上下文变换)。
 
 ## Why / Entry
@@ -105,30 +105,15 @@ I 由最终 convertToLlm 输出的消息、最终 system 与工具 schema 计算
 
 输出配置不因剩余窗口变化而缩减。复用并集中现有 provider thinking 规则，按实际适配路径推导 O；配置不合法或不能确定有效输出时显式失败，不能把未知输出当零。显式 maxTokens 超过 model.maxTokens 时在创建/更新验证阶段拒绝，更新失败保留旧配置；不靠截小预算数字掩盖传给流函数的更大值。模型既有的 thinking 分配/能力上限规则与“因剩余上下文缩减输出”分开说明。
 
-最终拒绝分类为 request-budget 失败，至少报告估算输入、有效输出、余量、窗口、revision 与阶段（general 或 builtin-output-clamp），不包含请求正文或凭据。不新增公共 TurnResult 状态或传输观测事件；继续用既有错误记录与 result.status=error。
+最终拒绝分类为 `request-budget (general)`，报告估算输入、有效输出、余量、窗口与 revision，不包含请求正文或凭据。不新增公共 TurnResult 状态或传输观测事件；继续用既有错误记录与 result.status=error。
 
 一般硬线对所有任务请求生效，包括关闭自动压缩或未设置回调的实例。摘要继续使用独立输入/输出预检与调用次数限制，不调用宿主变换；若复用内部输出预检 helper，不改变摘要材料、压缩算法或错误返回形式。
 
-### 5. 锁定 Pi 的自动输出缩减
+### 5. 输出预检的迁移状态
 
-本轮补查到 `pi-ai@0.85.1` 的 `api/simple-options.js`：
+2026-09-21 的原施工曾为 pi-ai 内置传输调用 `clampMaxTokensToContext`，以检测它独立的 4096 tokens 余量和静默输出缩减。2026-09-26 受支持的内置传输改用 TanStack AI 后，这项 pi-ai 专属预检已删除；Forge 的一般硬线保留，并在真实 HTTP 适配器边界回归。原探针与验收是历史证据，不代表当前请求还会触发 `builtin-output-clamp`。
 
-```text
-Pi available = model.contextWindow - Pi estimate(context) - 4096
-Pi maxTokens = min(requestedMaxTokens, max(1, available))
-```
-
-buildBaseOptions 使用该 helper；Anthropic/Bedrock 的部分 thinking 路径在调整输出后再次调用。其 estimate 还可能读取历史 assistant usage。因而不能只在 Forge 把旧锚点失效，却把同一旧 usage 留给 Pi 当成新投影依据。
-
-具体方案：
-
-- resolved 配置保留内部的内置/自定义传输标志，随现有配置提交原子切换，不扩展公共选项。
-- 最终任务请求中的 assistant usage 仅在隔离的请求副本中清除/置零，令预算判断不被历史 usage 污染；SessionStorage、runtime 历史和累计请求用量不变。不删除 provider continuation/signature 字段。
-- 内置传输发送前调用锁定包已有的 clampMaxTokensToContext，使用实际传给该传输的 model/context，分别确认基础 maxTokens 与适用的有效 thinking 输出都不会因上下文被缩减。失败则报 builtin-output-clamp，不修改输出配置、不调用供应商。
-- 不复制整套 provider 适配器，不修改 Pi，不升级依赖；输出映射覆盖锁定版本的 Anthropic/Bedrock thinking 规则，Bedrock inference profile 按模型 ID 和显示名称判断；本地 HTTP 证据覆盖普通输出与 Anthropic thinking，不外推为所有供应商实测通过。
-- 自定义 streamFn 只受一般硬线和现有输出合同约束；其内部二次改写/限额由宿主负责。如果包装者主动调用 Pi streamSimple，需遵守 Pi 自身规则；Forge 不通过函数身份猜测其内部行为。
-
-最小本地探针已确认：W=16000、文字估算 10500（Forge 每消息开销后为 10501）、maxTokens=4096 时，一般 1024 余量检查通过，但 Pi helper 会把输出降到 1404。故内置预检是必要条件，不能声称一般硬线通过就绝不缩减。此探针仅证明 helper 行为；本轮另以本地 HTTP fixture 完成普通输出与 thinking 的实际接线验收，见下方证据。
+最终任务请求中的历史 assistant usage 仍只在隔离的请求副本中清零，防止旧锚点影响本次估算；SessionStorage、runtime 历史、累计用量和 provider continuation 不变。自定义 `streamFn` 的内部二次改写与限额由宿主负责。
 
 ### 6. Usage、配置与取消
 
@@ -151,7 +136,7 @@ AbortSignal 可中止等待不合作的异步回调，取消优先于迟到返�
 | 批次 | 文件与工作 | 完成判据 |
 |---|---|---|
 | B1 | 新增 `packages/core/src/context/request-budget.ts` 集中最终估算/输出预检；由 session-configuration 集中有效输出规则并维持既有 Pi 依赖边界；更新 AgentSession 和 usage 的请求快照/失败分类 | 无回调时最终硬线端到端生效；输出不缩减；摘要独立合同保持 |
-| B2 | 新增 `packages/core/src/context/transform.ts` 管理回调快照/校验/取消；agent、pi-port、sdk 接线；AgentSession 为现有 assembler/coordinator 提供组合顺序与最终消息依据 | 任务调用覆盖、最终记忆额度、usage 失效与失败阻断通过 |
+| B2 | 新增 `packages/core/src/context/transform.ts` 管理回调快照/校验/取消；agent、session-port、sdk 接线；AgentSession 为现有 assembler/coordinator 提供组合顺序与最终消息依据 | 任务调用覆盖、最终记忆额度、usage 失效与失败阻断通过 |
 | B3 | SDK 集成与本地 HTTP 验证；双语 sdk/README、离线示例与当前入口 | 全部 AC 与必要检查完成，提供实际证据 |
 
 B1/B2 不改移植 runtime 主循环；使用现有 transformContext/convertToLlm/streamFn 位置组合。已从停止策略抽取 `host-callback.ts` 的冻结与可取消等待 helper，复用原语义，不建立统一 hook 框架。新测试须接入现有离线测试分类清单，不能以文件存在替代 runner 执行证据。

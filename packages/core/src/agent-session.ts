@@ -12,8 +12,8 @@ import type { AgentMessage } from "./runtime/types.ts";
 import { Agent as RuntimeAgent } from "./runtime/agent.ts";
 import { fromSessionMessage, createEventProjection, toSessionMessage } from "./event-projection.ts";
 import type { AgentPort, InputAcceptance } from "./agent-port.ts";
-import type { ModelPortOptions } from "./pi-port.ts";
-import { prepareSessionTools, validateSessionTools, checkPermission, preserveMcpSchemas } from "./session-tools.ts";
+import type { ModelPortOptions } from "./session-port.ts";
+import { prepareSessionTools, validateSessionTools, checkPermission, preserveToolSchemas } from "./session-tools.ts";
 import { snapshotConfiguration } from "./session-configuration.ts";
 import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
@@ -120,7 +120,7 @@ export class AgentSession implements AgentPort {
 				settings?.signal?.throwIfAborted();
 				try {
 					context = isolateRequest(context);
-					const tokens = checkRequestBudget(model, context, this.requestBudget(), this.appliedRevision, this.options.builtinStream === true);
+					const tokens = checkRequestBudget(context, this.requestBudget(), this.appliedRevision);
 					if (this.requestProjection) this.requestProjection.tokens = tokens;
 				} catch (error) { this.preparationFailed = true; throw error; }
 				settings?.signal?.throwIfAborted();
@@ -129,7 +129,7 @@ export class AgentSession implements AgentPort {
 					this.responseConfiguration = { model: structuredClone(model), configurationRevision: this.appliedRevision };
 					this.taskUsage = this.turnPolicy.beginRequest();
 				}
-				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens(), onPayload: async (payload, model) => preserveMcpSchemas(await settings?.onPayload?.(payload, model) ?? payload, this.options.tools) });
+				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.builtinStream && model.provider === "openai" ? {} : { onPayload: async (payload, model) => preserveToolSchemas(await settings?.onPayload?.(payload, model) ?? payload, this.options.tools) }) });
 			},
 		});
 		this.compaction = new CompactionCoordinator({

@@ -27,22 +27,24 @@ for (const protocol of protocols) {
 		let effects = 0;
 		const prefix = frames(protocol, true).slice(0, 3);
 		const chunks = failure === "error-terminal" ? failedFrames(protocol) : failure === "truncated-json" ? [...prefix, 'data: {"type":'] : prefix;
-		const step = exchange(protocol, failure, bytes(chunks.join("")));
-		if (failure === "cancel") step.response.end = "hold";
+		let partialSent!: () => void;
+		const partialDelivery = new Promise<void>(resolve => { partialSent = resolve; });
+		const step = exchange(protocol, failure, [...bytes(chunks.join("")), ...(failure === "cancel" ? [new Uint8Array()] : [])]);
+		if (failure === "cancel") {
+			step.response.end = "hold";
+			step.response.beforeChunk = async index => { if (index === step.response.chunks.length - 1) partialSent(); };
+		}
 		const fixture = scenario.httpFixture(scenario.id, [step]);
 		const agent = await scenario.agent({ ...settings(protocol), baseUrl: fixture.url,
 			permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
 			tools: [{ name: "capture", label: "Capture", description: "capture", parameters, async execute() { effects++; return { content: [], details: {} }; } }],
 		});
 		const turn = agent.runTurn("protocol prompt");
-		let canceled = false;
-		for await (const event of turn) {
-			scenario.trace.record("event", event);
-			if (failure === "cancel" && event.type === "message_delta" && event.contentType === "tool_call") { canceled = true; agent.abort(); }
-		}
+		const collecting = scenario.collect(turn);
+		if (failure === "cancel") { await partialDelivery; agent.abort(); }
+		await collecting;
 		expect(effects).toBe(0);
 		expect(await turn.result).toEqual({ status: failure === "cancel" ? "aborted" : "error" });
-		if (failure === "cancel") expect(canceled).toBe(true);
 		expect((await scenario.storage.load()).entries.length).toBeGreaterThanOrEqual(2);
 	}));
 }

@@ -6,7 +6,7 @@
 
 ## 自定义模型流（StreamFn）
 
-SDK 直接复用 Pi Agent 内核的 `StreamFn` 类型，导出 `StreamFn` 和 `Model`。宿主提供完整模型元数据及流函数，即可使用内置 catalog 之外的模型。可运行的离线示例：[custom-stream.ts](../examples/custom-stream.ts)，命令 `bun examples/custom-stream.ts`。
+SDK 导出 Forge 自有的 `StreamFn` 和 `Model` 类型。宿主提供完整模型元数据及流函数，即可使用内置 catalog 之外的模型。可运行的离线示例：[custom-stream.ts](../examples/custom-stream.ts)，命令 `bun examples/custom-stream.ts`。
 
 ```ts
 import { createAgent, type Model, type StreamFn } from "@forge-agent/core/sdk";
@@ -16,7 +16,7 @@ async function openAgent(model: Model<string>, streamFn: StreamFn) {
 }
 ```
 
-`StreamFn(model, context, options)` 返回 `AssistantMessageEventStream` 或其 Promise，协议沿用当前锁定的 pi-ai。`context` 包含本次 systemPrompt、投影后的 messages 和 tools。完整模型对象必须配套 `streamFn`；宿主负责准确提供 provider、api、contextWindow、maxTokens 等元数据及认证。若同时传 `provider`，必须与 `model.provider` 一致；显式 `baseUrl` 覆盖模型的 baseUrl。
+`StreamFn(model, context, options)` 返回 `AssistantMessageEventStream` 或其 Promise，使用 Forge 自有模型事件类型。`context` 包含本次 systemPrompt、投影后的 messages 和 tools。完整模型对象必须配套 `streamFn`；宿主负责准确提供 provider、api、contextWindow、maxTokens 等元数据及认证。若同时传 `provider`，必须与 `model.provider` 一致；显式 `baseUrl` 覆盖模型的 baseUrl。
 
 原有 `provider: string, model: string` 仍查内置 catalog。它也可以配套 `streamFn`，此时跳过内置认证检查；省略函数则沿用内置传输及认证。自定义函数收到显式 `apiKey`（如有）、`signal`、`sessionId`、输出上限和推理设置。函数须响应取消，将请求失败/取消编码为流中的 error 事件及最终 error/aborted AssistantMessage；不要用 throw/rejected Promise 表达正常的请求失败。不得把函数只写成固定返回任务答案：压缩摘要也使用同一生效配置的流函数，但有不同的上下文、输出预算及 `cacheRetention: "none"`。`maxRetries: 0` 保留会话层统一重试控制，传输应遵守此设置。
 
@@ -42,7 +42,7 @@ const agent = await createAgent({
 
 `message`、`toolResults` 使用 SessionMessage 协议，包含工具正文和 details；整个参数是隔离的深只读快照，不暴露可变 AgentContext。`model` 与 `configurationRevision` 属于刚完成的任务请求（初始 revision 为 0），即使 turn_end 已应用新配置也保留旧值。accepted/applied 时序不变。回调仅在创建时配置，`updateConfiguration` 不接受它；闭包仍由宿主管理，不序列化。
 
-`usage` 是本次 invocation 的累计模型请求统计，覆盖任务请求、失败重试和自动摘要请求，不包含历史或独立手动压缩。它提供 `requests`、`tokens`（input/output/cacheRead/cacheWrite/totalTokens）、`costUsd`、`missingUsageRequests`、`missingCostRequests`。任何请求缺失有效 token usage 时 tokens 为 null；任何请求缺失 usage 或费用时 costUsd 为 null。Pi 的全零占位 usage 保守视为未知；正 token usage 附带明确零费用仍为 0。费用沿用传输返回的报告值或 pi-ai 定价计算结果，不推测未知定价。宿主自行决定未知时继续、停止或报错；示例以轮数上限兜底。判断发生在批次之后，是软限制，不能保证实际账单不超阈值。
+`usage` 是本次 invocation 的累计模型请求统计，覆盖任务请求、失败重试和自动摘要请求，不包含历史或独立手动压缩。它提供 `requests`、`tokens`（input/output/cacheRead/cacheWrite/totalTokens）、`costUsd`、`missingUsageRequests`、`missingCostRequests`。任何请求缺失有效 token usage 时 tokens 为 null；任何请求缺失 usage 或费用时 costUsd 为 null。全零占位 usage 保守视为未知；正 token usage 附带明确零费用仍为 0。费用沿用传输返回的报告值或 Forge 目录定价，不推测未知定价。宿主自行决定未知时继续、停止或报错；示例以轮数上限兜底。判断发生在批次之后，是软限制，不能保证实际账单不超阈值。
 
 策略命中后不再启动任务续跑、重试、恢复或自动摘要；完成消息和工具副作用保留，可能没有最后一条自然语言答案。`agent_end` 为 `outcome: "success", terminationReason: "policy"`；消费完成后 `AgentTurn.result` 为 `{ status: "success", terminationReason: "policy" }`。success 表示正常结算，业务目标是否完成由宿主判断；模型 stopReason 不改写。尚未消费的输入以 processed=false 结算，已处理输入不返还或重放。
 
@@ -90,7 +90,7 @@ hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
 
 输入按最终 messages、system 与工具 schema 估算，历史 assistant usage 仅在发送副本中置零，历史及实际累计用量不变；工具 details 不计入模型输入。启用回调时不再用历史 provider usage 锚点估算新投影，`getUsage()` 在请求准备完成时显示最终估算（`contextEstimated: true`），消息或配置变化后回到历史准备视图。
 
-内置 pi-ai 另有 4096 tokens 余量和自己的估算。Forge 在发送前检查其是否将缩减输出；会缩减就报 `request-budget (builtin-output-clamp)`，因此一般硬线通过不保证内置传输放行。自定义 streamFn 内部改写与限额由宿主负责。显式 `maxTokens > model.maxTokens` 在创建/配置更新时拒绝，失败更新保留旧配置。
+受支持的内置 TanStack 传输统一使用 Forge 的一般硬线。自定义 streamFn 内部改写与限额由宿主负责。显式 `maxTokens > model.maxTokens` 在创建/配置更新时拒绝，失败更新保留旧配置。
 
 这些检查是启发式估算，1024 余量不是中文/图片误差上界，仍可能收到供应商 overflow。保留原有有界恢复，不承诺精确物理窗口、答案质量或费用节省。可运行离线示例见 [context-transform.ts](../examples/context-transform.ts)，设计和证据见[施工图](phases/context-transform.md)。
 
@@ -263,7 +263,7 @@ v4 `compaction` 记录使用可选、版本化的 `checkpoint` 载荷，SDK 导�
 
 `contextWindow` 可覆盖本地容量声明，默认采用模型元数据；降低该值可测试触发流程，不证明供应商物理窗口超限。`maxTokens` 是普通任务的宿主输出配置，与压缩 reserve 分开，省略时使用上方的显式输出预留。`getUsage()` 的 `contextEstimated` 区分有效 usage 与估算。模型、system、tools、分支或投影改变后失效，摘要 usage 不作为任务锚点。
 
-历史 user/toolResult 可携带 `{ type: "image", data: base64, mimeType }`，请求保留图片，启发式按每张 1024 tokens 估算，摘要仅序列化图片占位。`sessionId` 在任务与摘要的 pi-ai 调用间保持一致；默认每实例生成，宿主可传稳定 ID，CLI 使用会话 header ID。是否发送 HTTP affinity 字段由 provider 适配和缓存设置决定，`cacheRetention: "none"` 可能抑制这些字段。
+历史 user/toolResult 可携带 `{ type: "image", data: base64, mimeType }`，请求保留图片，启发式按每张 1024 tokens 估算，摘要仅序列化图片占位。`sessionId` 默认每实例生成，宿主可传稳定 ID，CLI 使用会话 header ID。内置 TanStack 传输重放完整历史；Responses 请求设置 `store: false`，不以 `sessionId` 续接服务端响应。`sessionId` 仍传给宿主自定义 `streamFn`。需要 `mistral-conversations` 或 `openai-codex-responses` 的模型不在内置目录中；宿主仍可为完整模型对象提供自定义 `streamFn`。
 
 `await agent.compact(instructions?, onEvent?)` 先取消当前执行并等待工具及保存收尾，再压缩一次，完成后保持空闲。返回 `{ status, operationId, beforeTokens, afterTokens?, error? }`；status 为 `complete`、`skipped` 或 `error`。存储故障仍抛错并停用实例。取消可以中止摘要与退避；已开始的写入仍需等待。instructions 只进入历史摘要的 Additional focus。
 
@@ -341,7 +341,7 @@ const lookup: HarnessTool<{ key: string }, { source: string }> = {
 };
 ```
 
-`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 同步规范化输入；旧 `toolInputRewrites` 可异步改写。执行前按调用顺序完成 schema 校验、改写、before hook、最终校验和授权，然后默认并行执行；`executionMode: "sequential"` 可指定单工具串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。
+`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段，不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行，其返回对象也必须符合 schema。执行前按调用顺序完成初检、改写、before hook、最终校验和授权，然后默认并行执行；`executionMode: "sequential"` 可指定单工具串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`，授权请使用 SDK 权限配置。
 
 普通任务和摘要共用 `retry` 配置，但计数独立。任务仅对临时故障重试，默认三次、2/4/8 秒；原错误响应保存在历史并从重试请求排除。已消费输入和完成工具结果复用，不重复用户输入、不重放工具。overflow 使用独立的一次上下文恢复，不能套入普通 retry。`retry` 事件提供 scheduled/attempt/end，取消会中止等待。
 

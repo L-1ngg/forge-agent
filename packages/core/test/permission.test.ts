@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../../../tests/support/test-port.ts";
+import { createTestPort } from "../../../tests/support/test-port.ts";
 import { expect, test } from "bun:test";
 import { MemoryPermissionStore, decide, type PermissionContext } from "../src/index.ts";
 import { RequestBus } from "../src/request-bus.ts";
@@ -125,7 +125,7 @@ test("remembered scopes treat wildcard characters in argument values literally",
 
 test("session tool policy blocks deny and remembers only the scope shown", async () => {
  const invoke = async (context: PermissionContext, call = writeCall, requestBus?: RequestBus) => {
-  const port = createPiTestPort({ permission: context, ...(requestBus ? { requestBus } : {}),
+  const port = createTestPort({ permission: context, ...(requestBus ? { requestBus } : {}),
    tools: [{ name: call.name, label: "Policy fixture", description: "No effects", parameters: { type: "object", properties: Object.fromEntries(Object.keys(call.arguments).map(key => [key, { type: "string" }])), required: [], additionalProperties: false }, async execute() { return { content: [], details: {} }; } }],
    responses: [{ toolCalls: [{ id: call.id, name: call.name, arguments: call.arguments }] }, { text: "done" }],
   });

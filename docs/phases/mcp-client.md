@@ -49,7 +49,7 @@ flowchart LR
 | 位置 | 职责与修改原因 |
 |---|---|
 | `packages/core/src/mcp/` | `manager.ts` 隐藏连接/目录/状态；`config.ts` 校验与身份；`tools.ts` 工具映射；`content.ts` 内容映射；`oauth.ts` provider；`credentials.ts`/`artifacts.ts` 可变存储 adapter；`types.ts` 公开类型 |
-| `packages/core/src/agent.ts`、`sdk.ts`、`agent-port.ts`、`pi-port.ts` | 显式 MCP 选项、控制接口、创建/失败/释放接线；不导出整个官方 Client |
+| `packages/core/src/agent.ts`、`sdk.ts`、`agent-port.ts`、`session-port.ts` | 显式 MCP 选项、控制接口、创建/失败/释放接线；不导出整个官方 Client |
 | `packages/core/src/agent-session.ts`、`configuration.ts`、`session-configuration.ts` | 目录快照提交、连接世代持有、结构化输入准备与一次持久化 |
 | `packages/core/src/session-tools.ts`、`packages/tools/src/types.ts` | schema 类型扩大、授权参数一致、MCP 调用仍走同一工具路径 |
 | `packages/protocol/src/input.ts`、`events.ts`、`requests.ts` | MCP 输入封套、来源/附件描述、状态及 Elicitation 请求响应；保持无 SDK/native 依赖 |
@@ -166,7 +166,7 @@ flowchart LR
 
 引用只解析 schema 文档内已有定义，不为外部 `$ref` 自动发起网络请求；无法解析的引用拒绝该工具并显示具体原因。缓存 validator 按不可变 schema 身份/内容 revision 建立，不把同名工具的新定义覆写到旧执行快照中。
 
-校验流程：模型原始参数 → 现有准备/改写 → 最终参数校验 → hooks/permission → 固定参数发送。MCP 调用避免额外 coercion；既有内置工具的行为保持原合同。若 pi-ai 转换与 MCP 原 schema 存在冲突，在 `session-tools` 集中处理必要的校验策略，不修改每个 provider，不允许 execute 内部首次发现权限之外的参数变化。
+本段记录 #36 原施工范围；当前工具参数统一严格校验及内置工具行为变更见[后续施工图](tool-argument-validation.md)。模型原始参数经准备、schema 校验、改写、hook 后再次校验，再授权并固定参数发送。MCP 工具仍使用官方 Ajv 校验器和远端原 schema；不允许 execute 内部首次发现权限之外的参数变化。
 
 SDK outputSchema 验证使用执行快照 Tool，不重复手写输出 validator。调用传 `toolDefinition`、`signal`、`onprogress`，并将 Forge 内部 deadline 换算为 SDK 的 `timeout`、`resetTimeoutOnProgress` 和 `maxTotalTimeout`，不假设官方有 deadline 字段；未知副作用禁止自动重试。MCP 工具默认使用现有 `executionMode:'sequential'`，不会因 readOnlyHint 自动并发；本次不增加每 server 调度器或承诺跨 server 并行。明确具备并行合同的能力可以通过现有宿主工具配置讨论，但不是本规格的隐藏前置。
 

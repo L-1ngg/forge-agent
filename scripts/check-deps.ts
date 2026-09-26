@@ -13,13 +13,17 @@ function dependencyNames(manifest: Record<string, unknown>): string[] {
 
 function importSpecifiers(source: string): string[] {
 	const specifiers: string[] = [];
-	const staticImport = /(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g;
-	const dynamicImport = /import\s*\(\s*["']([^"']+)["']\s*\)/g;
-	for (const pattern of [staticImport, dynamicImport]) {
-		for (const match of source.matchAll(pattern)) {
-			if (match[1]) specifiers.push(match[1]);
+	const file = ts.createSourceFile("source.ts", source, ts.ScriptTarget.Latest, true);
+	function visit(node: ts.Node): void {
+		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+			specifiers.push(node.moduleSpecifier.text);
 		}
+		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]!)) {
+			specifiers.push(node.arguments[0]!.text);
+		}
+		ts.forEachChild(node, visit);
 	}
+	visit(file);
 	return specifiers;
 }
 
@@ -42,6 +46,9 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 		if (dependencyNames(manifest).includes("@earendil-works/pi-agent-core")) {
 			violations.push("package.json must not depend on pi-agent-core");
 		}
+		if (dependencyNames(manifest).includes("@earendil-works/pi-ai")) {
+			violations.push("package.json must not depend on pi-ai");
+		}
 	}
 	for (const packageName of packageNames) {
 		const packageUrl = new URL(`packages/${packageName}/`, projectRoot);
@@ -49,6 +56,9 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 		const dependencies = dependencyNames(manifest);
 		if (dependencies.includes("@earendil-works/pi-agent-core")) {
 			violations.push(`packages/${packageName}/package.json must not depend on pi-agent-core`);
+		}
+		if (dependencies.includes("@earendil-works/pi-ai")) {
+			violations.push(`packages/${packageName}/package.json must not depend on pi-ai`);
 		}
 
 		if (packageName === "core" && dependencies.includes("@forge-agent/tui")) {
@@ -88,15 +98,19 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol" && specifier !== "marked" && specifier !== "lowlight") {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
-				if (
-					(specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) &&
-					displayPath !== "packages/core/src/pi-port.ts" &&
-					displayPath !== "packages/core/src/session-configuration.ts" &&
-					displayPath !== "packages/core/src/session-tools.ts" &&
-					displayPath !== "packages/core/src/event-projection.ts" &&
-					!/^packages\/core\/src\/runtime\/(agent|agent-loop|types)\.ts$/.test(displayPath)
-				) {
-					violations.push(`${displayPath} imports pi agent/model APIs outside core runtime/model adapters`);
+				if (specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) {
+					violations.push(`${displayPath} must not import pi-ai`);
+				}
+			}
+		}
+	}
+	for (const directory of ["examples", "scripts"]) {
+		const glob = new Bun.Glob(`${directory}/**/*.ts`);
+		for await (const path of glob.scan({ cwd: projectRoot.pathname, absolute: true })) {
+			const source = await readFile(path, "utf8");
+			for (const specifier of importSpecifiers(source)) {
+				if (specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) {
+					violations.push(`${relative(projectRoot.pathname, path)} must not import pi-ai`);
 				}
 			}
 		}

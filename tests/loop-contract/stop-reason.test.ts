@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../support/test-port.ts";
+import { createTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
 
 const stopReasons = ["stop", "length", "tool_use", "error", "aborted", "deferred"] as const;
@@ -15,7 +15,7 @@ function nextAction(reason: StopReason): "idle" | "continue" | "retry" | "report
 test("pi exposes every stop reason with an explicit follow-up action", async () => {
 	const observed = new Map<StopReason, ReturnType<typeof nextAction>>();
 	for (const reason of stopReasons) {
-		const port = createPiTestPort({
+		const port = createTestPort({
 			responses: [{ text: reason, stopReason: reason, ...(reason === "error" ? { errorMessage: "scripted error" } : {}) }],
 		});
 		for await (const event of port.runTurn(reason)) {

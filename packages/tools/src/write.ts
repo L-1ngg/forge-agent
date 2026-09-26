@@ -3,11 +3,12 @@ import { open, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
+import { z } from "zod";
 
 export interface WriteInput {
 	path: string;
 	content: string;
-	mode?: "overwrite" | "create";
+	mode?: "overwrite" | "create" | undefined;
 }
 
 export interface WriteOutput {
@@ -19,16 +20,11 @@ export const writeTool: HarnessTool<WriteInput, WriteOutput> = defineBuiltinTool
 	name: "write",
 	label: "Write file",
 	description: "Write UTF-8 content to a file. Parent directories must already exist.",
-	parameters: {
-		type: "object",
-		properties: {
-			path: { type: "string", minLength: 1, description: "Absolute path or path relative to the working directory." },
-			content: { type: "string", description: "Complete UTF-8 file content." },
-			mode: { type: "string", enum: ["overwrite", "create"], description: "overwrite replaces a file; create fails if it exists." },
-		},
-		required: ["path", "content"],
-		additionalProperties: false,
-	},
+	inputSchema: z.strictObject({
+		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
+		content: z.string().meta({ description: "Complete UTF-8 file content." }),
+		mode: z.enum(["overwrite", "create"]).optional().meta({ description: "overwrite replaces a file; create fails if it exists." }),
+	}),
 	async execute(input, context) {
 		if (!input.path?.trim()) return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/new.ts");
 		if (typeof input.content !== "string") return toolError("INVALID_ARGUMENT", "content must be a string", "content", "UTF-8 string", "export {};\n");

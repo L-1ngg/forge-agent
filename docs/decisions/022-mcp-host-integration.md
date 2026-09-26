@@ -5,7 +5,7 @@ created: 2026-09-21
 
 # ADR-022: 官方 MCP client 与 Forge 宿主接入
 
-> 状态:已批准(2026-09-21)。需求范围见 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36)，具体接口及验收映射见[完整施工设计](../phases/mcp-client.md)。operator 于 2026-09-21 在实施启动指令中明确确认本设计；批准不表示产品已实现。
+> 状态:已批准(2026-09-21)，其中不替换 pi-ai 的施工期范围由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订。需求范围见 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36)，具体接口及验收映射见[完整施工设计](../phases/mcp-client.md)。operator 于 2026-09-21 在实施启动指令中明确确认本设计；批准不表示产品已实现。
 > 参与者:operator 提出完整交付和优先复用要求；Codex 完成调研、探针与设计。
 
 ## 背景

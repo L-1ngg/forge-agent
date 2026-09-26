@@ -22,7 +22,7 @@ created: 2026-09-08
 | 父规格覆盖 | 可复现证据 |
 |---|---|
 | AC-MIG-01/02 | `bun test packages/core/test/runtime`：45 项固定上游测试；`bun scripts/compare-core.ts <fixed-checkout>`：独立基线编译后的 JS 与原版一致，当前默认 Core 与原版 25 组差分，仅归一化 timestamp |
-| AC-MIG-03/09/10 | `bun run check:deps`；SDK/CLI 默认 `createPiPort → AgentSession → runtime/Agent`；旧执行器与权限转发桥删除；`bun run typecheck:examples`；中英文 README/SDK 升级说明 |
+| AC-MIG-03/09/10 | `bun run check:deps`；SDK/CLI 默认 `createSessionPort → AgentSession → runtime/Agent`；旧执行器与权限转发桥删除；`bun run typecheck:examples`；中英文 README/SDK 升级说明 |
 | AC-MIG-04 | `runtime-session`、`session`、`sdk`、`input-ownership`、`incremental-session`、`tests/loop-contract/owned-core`：消费归属、慢/失败保存、未启动取消、释放等待、多实例隔离、禁止不确定效果重放 |
 | AC-MIG-05 | `runtime-context`、`compaction`、`input-ownership`：阈值与工具续轮、完整历史、手动摘要、禁用自动、usage、overflow/length 单次恢复；`runtime-configuration` 覆盖摘要期间更新 |
 | AC-MIG-06 | `runtime-tools`：串行准备/授权、并行/串行效果、拒绝/异常/terminate、进度、图片与 details 文件重开、坏结果等待兄弟工具；`runtime-retry`：工具后 529、取消与 2/4/8 秒退避及新 invocation 计数重置 |

@@ -6,6 +6,7 @@
 
 ## 1. 当前行动项
 
+- [ ] 按 [ADR-024](decisions/024-incremental-tanstack-ai-adoption.md) 在凭据与预算可用后完成内置 TanStack 传输 AC-7 真实供应商验收；AC-2 至 AC-5 离线矩阵与 `pi-ai` 包依赖清零已通过。工具参数校验见[施工与证据](phases/tool-argument-validation.md)，OpenAI 见[试点施工图](phases/openai-tanstack-transport.md)，其余协议与未测边界见[传输施工图](phases/tanstack-provider-transport-migration.md)。
 - [ ] 在具备真实账号、模型预算及平台环境后，按 [MCP 验收记录](phases/mcp-client-acceptance.md)验证仍未实测的边界；[Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 代码交付与任务关闭不将未测项改写为通过。
 - [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
 - [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。

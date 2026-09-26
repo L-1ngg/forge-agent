@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { effectiveOutputTokens } from "../src/session-configuration.ts";
-import type { Model } from "../src/pi-port.ts";
+import type { Model } from "../src/session-port.ts";
 
 const model: Model<string> = { id: "anthropic.claude-sonnet-4-5", name: "Claude Sonnet 4.5", api: "bedrock-converse-stream", provider: "amazon-bedrock", baseUrl: "", reasoning: true, input: ["text"], contextWindow: 200000, maxTokens: 64000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 for (const [name, expected] of [["Claude Sonnet 4.5", 9216], ["Claude Sonnet 4.6", 1024], ["Claude Opus 5", 1024], ["Claude Fable 5", 1024]] as const) test(`Bedrock inference profile output mapping uses display name: ${name}`, () => {

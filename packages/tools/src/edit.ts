@@ -3,12 +3,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
+import { z } from "zod";
 
 export interface EditInput {
 	path: string;
 	old_text: string;
 	new_text: string;
-	replace_all?: boolean;
+	replace_all?: boolean | undefined;
 }
 
 export interface EditOutput {
@@ -20,17 +21,12 @@ export const editTool: HarnessTool<EditInput, EditOutput> = defineBuiltinTool({
 	name: "edit",
 	label: "Edit file",
 	description: "Replace an exact UTF-8 text fragment. A non-unique match is rejected unless replace_all is true.",
-	parameters: {
-		type: "object",
-		properties: {
-			path: { type: "string", minLength: 1, description: "Absolute path or path relative to the working directory." },
-			old_text: { type: "string", minLength: 1, description: "Exact text currently present in the file." },
-			new_text: { type: "string", description: "Exact replacement text." },
-			replace_all: { type: "boolean", description: "Replace every exact match instead of requiring one unique match." },
-		},
-		required: ["path", "old_text", "new_text"],
-		additionalProperties: false,
-	},
+	inputSchema: z.strictObject({
+		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
+		old_text: z.string().min(1).meta({ description: "Exact text currently present in the file." }),
+		new_text: z.string().meta({ description: "Exact replacement text." }),
+		replace_all: z.boolean().optional().meta({ description: "Replace every exact match instead of requiring one unique match." }),
+	}),
 	async execute(input, context) {
 		if (!input.path?.trim()) return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/index.ts");
 		if (!input.old_text) return toolError("INVALID_ARGUMENT", "old_text must be non-empty", "old_text", "exact text to replace", "const oldName = true;");

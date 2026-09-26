@@ -3,7 +3,6 @@ export * from "./edit.ts";
 export * from "./errors.ts";
 export * from "./read.ts";
 export * from "./types.ts";
-export * from "./wrap.ts";
 export * from "./write.ts";
 
 import { bashTool } from "./bash.ts";

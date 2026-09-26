@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
+import { z } from "zod";
 
 export interface BashInput {
 	command: string;
-	description?: string;
-	timeout_ms?: number;
+	description?: string | undefined;
+	timeout_ms?: number | undefined;
 }
 
 export interface BashOutput {
@@ -46,16 +47,11 @@ return defineBuiltinTool<BashInput, BashOutput>({
 	name: "bash",
 	label: "Run command",
 	description: "Run a shell command. Return a combined 2000-line / 50 KiB tail preview; large output is saved to a system temporary log readable with Read.",
-	parameters: {
-		type: "object",
-		properties: {
-			command: { type: "string", minLength: 1, description: "Shell command to execute." },
-			description: { type: "string", description: "Short human-readable purpose shown in the tool call title." },
-			timeout_ms: { type: "integer", minimum: 1, maximum: 600000, description: "Kill the command after this many milliseconds." },
-		},
-		required: ["command"],
-		additionalProperties: false,
-	},
+	inputSchema: z.strictObject({
+		command: z.string().min(1).meta({ description: "Shell command to execute." }),
+		description: z.string().optional().meta({ description: "Short human-readable purpose shown in the tool call title." }),
+		timeout_ms: z.number().int().min(1).max(600000).optional().meta({ description: "Kill the command after this many milliseconds." }),
+	}),
 	async execute(input, context) {
 		if (!input.command?.trim()) return toolError("INVALID_ARGUMENT", "command must be a non-empty string", "command", "non-empty shell command", "bun test");
 		const timeout = input.timeout_ms ?? 120_000;

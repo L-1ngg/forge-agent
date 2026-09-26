@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createAgent, MemorySessionStorage, type Agent } from "@forge-agent/core/sdk";
 import { response, type SessionEvent } from "@forge-agent/protocol";
+import { builtinTools } from "@forge-agent/tools";
 
 interface ModelRequest {
 	system: unknown;
@@ -80,5 +81,31 @@ test("public SDK drives isolated HTTP tool loops without implicit config or file
 		for (const agent of agents) await agent.dispose();
 		server.stop(true);
 		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("built-in tool schema reaches the provider with strict constraints", async () => {
+	let readSchema: unknown;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		const body = await request.json() as { tools: Array<{ name: string; input_schema: unknown }> };
+		readSchema = body.tools.find(tool => tool.name === "read")?.input_schema;
+		return modelResponse(false);
+	} });
+	const agent = await createAgent({
+		provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test-key", baseUrl: server.url.toString(),
+		cwd: process.cwd(), systemPrompt: "test", storage: new MemorySessionStorage(), tools: builtinTools,
+	});
+	try {
+		for await (const _event of agent.runTurn("done")) {}
+		expect(readSchema).toMatchObject({
+			type: "object", required: ["path"], additionalProperties: false,
+			properties: {
+				path: { type: "string", minLength: 1, description: "Absolute path or path relative to the working directory." },
+				offset: { type: "integer", minimum: 1 },
+			},
+		});
+	} finally {
+		await agent.dispose();
+		server.stop(true);
 	}
 });

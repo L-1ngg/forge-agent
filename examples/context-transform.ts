@@ -1,19 +1,17 @@
-import { createAgent, MemorySessionStorage, type StreamFn } from "../packages/core/src/sdk.ts";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { createAgent, MemorySessionStorage } from "../packages/core/src/sdk.ts";
+import { scriptedResponses } from "./scripted-stream.ts";
 
 // bun examples/context-transform.ts — no credentials or network required.
-const fixture = fauxProvider({ tokensPerSecond: 10_000 });
-fixture.setResponses([fauxAssistantMessage([fauxText("The retrieved guide recommends Bun.")])]);
-const models = createModels(); models.setProvider(fixture.provider);
+const fixture = scriptedResponses([[{ type: "text", text: "The retrieved guide recommends Bun." }]]);
 const storage = new MemorySessionStorage();
 let requests = 0;
-const streamFn: StreamFn = (model, context, options) => {
+const streamFn: typeof fixture.streamFn = (model, context, options) => {
 	requests++;
 	if (!JSON.stringify(context.messages).includes("TEMPORARY_REFERENCE")) throw new Error("Missing host reference");
-	return models.streamSimple(model, context, options);
+	return fixture.streamFn(model, context, options);
 };
 const agent = await createAgent({
-	model: fixture.getModel(), streamFn, storage, cwd: process.cwd(), systemPrompt: "Answer using the supplied references.",
+	model: fixture.model, streamFn, storage, cwd: process.cwd(), systemPrompt: "Answer using the supplied references.",
 	maxTokens: 1024,
 	transformContext: ({ messages, configurationRevision, budget }, signal) => {
 		signal.throwIfAborted();

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createPiPort } from "../src/pi-port.ts";
+import { createSessionPort } from "../src/session-port.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
 for (const terminal of ["completed", "incomplete", "failed", "missing"] as const) {
@@ -33,7 +33,7 @@ for (const terminal of ["completed", "incomplete", "failed", "missing"] as const
 		});
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
-			const port = await createPiPort({ provider: "xai", model: "grok-4.6", apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: process.cwd(), systemPrompt: "test", thinkingLevel: "off" });
+			const port = await createSessionPort({ provider: "xai", model: "grok-4.6", apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: process.cwd(), systemPrompt: "test", thinkingLevel: "off" });
 			timer = setTimeout(() => port.abort(), 1000);
 			let reply: SessionMessage | undefined;
 			for await (const event of port.runTurn("hello")) {

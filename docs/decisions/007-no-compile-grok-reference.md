@@ -37,4 +37,4 @@ ADR-006 把视觉出口定为锁定环境内、myh `TerminalFrame` 与 grok-buil
 
 - AC-49 改写为 in-repo golden 零差异 + grok 几何不变量;不再声称「格子等于当时跑出来的 grok-build」。
 - 更新 golden 是有意识的视觉变更,走 `tui-frame dump-scenarios` 后人工看 diff 再合入。
-- `~/dev/grok-build-spike` 只作读源码的参考,不进工具链。
+- grok-build 源码参考固定在 [`bc7f02ed`](https://github.com/xai-org/grok-build/tree/bc7f02eddd3d84085849dc19ed216f11c23b0571);不依赖本地副本,不进工具链。

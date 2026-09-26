@@ -1,5 +1,4 @@
-import type { StreamFn, Model } from "../pi-port.ts";
-import { clampMaxTokensToContext } from "../session-configuration.ts";
+import type { StreamFn } from "../session-port.ts";
 import { toSessionMessage } from "../event-projection.ts";
 import { estimateContextTokens } from "../usage.ts";
 
@@ -30,12 +29,8 @@ export function isolateRequest(context: Context): Context {
 	return { ...context, messages, ...(context.tools ? { tools: context.tools.map(({ name, description, parameters }) => ({ name, description, parameters: structuredClone(parameters) })) } : {}) };
 }
 
-export function checkRequestBudget(model: Model<string>, context: Context, budget: RequestBudget, revision: number, builtin: boolean): number {
+export function checkRequestBudget(context: Context, budget: RequestBudget, revision: number): number {
 	const input = estimateContextTokens(context.messages.map(message => toSessionMessage(message)!)) + Math.ceil(requestFixedText(context).length / 4);
-	const fail = (stage: string): never => {
-		throw new Error(`request-budget (${stage}): input=${input}, output=${budget.effectiveOutputTokens}, margin=${REQUEST_MARGIN}, window=${budget.contextWindow}, revision=${revision}${stage === "builtin-output-clamp" ? `, builtinWindow=${model.contextWindow}, builtinMargin=4096` : ""}`);
-	};
-	if (!Number.isFinite(input) || input > budget.maxInputTokens) fail("general");
-	if (builtin && (clampMaxTokensToContext(model, context, budget.maxTokens) < budget.maxTokens || clampMaxTokensToContext(model, context, budget.effectiveOutputTokens) < budget.effectiveOutputTokens)) fail("builtin-output-clamp");
+	if (!Number.isFinite(input) || input > budget.maxInputTokens) throw new Error(`request-budget (general): input=${input}, output=${budget.effectiveOutputTokens}, margin=${REQUEST_MARGIN}, window=${budget.contextWindow}, revision=${revision}`);
 	return input;
 }

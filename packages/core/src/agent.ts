@@ -9,7 +9,7 @@ import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.t
 import type { RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
 import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
 import type { AgentPort, InputAcceptance, InputQueueOptions } from "./agent-port.ts";
-import { createPiPort, type PiPortOptions, type ToolHooks, type StreamFn } from "./pi-port.ts";
+import { createSessionPort, type SessionPortOptions, type ToolHooks, type StreamFn } from "./session-port.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
 import { MemorySessionStorage, sessionMessages, type SessionStorage } from "./session-storage.ts";
@@ -32,7 +32,7 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	maxTokens?: number;
 	contextWindow?: number;
 	provider?: string;
-	model: PiPortOptions["model"];
+	model: SessionPortOptions["model"];
 	streamFn?: StreamFn | null;
 	apiKey?: string;
 	baseUrl?: string;
@@ -84,7 +84,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 	let port: AgentPort | undefined;
 	try {
 		const history = await storage.load();
-		port = await createPiPort({
+		port = await createSessionPort({
 			sessionId: options.sessionId ?? randomUUID(),
 			...(options.provider !== undefined ? { provider: options.provider } : {}),
 			model: options.model,

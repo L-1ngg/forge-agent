@@ -9,7 +9,7 @@ import type { ConfigurationPatch } from "./configuration.ts";
 import type { AgentOptions as RuntimeOptions } from "./runtime/agent.ts";
 import type { StreamFn } from "./runtime/types.ts";
 import { AgentSession } from "./agent-session.ts";
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model } from "./model-types.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { type HarnessTool, type ToolInputRewrite } from "@forge-agent/tools";
 import type { PermissionContext } from "./permission/index.ts";
@@ -21,7 +21,7 @@ import type { MemoryOptions } from "./memory/tools.ts";
 export type ToolHooks = Pick<RuntimeOptions, "beforeToolCall" | "afterToolCall" | "toolExecution">;
 export type { Model, StreamFn };
 
-export interface PiPortOptions extends InputQueueOptions {
+export interface SessionPortOptions extends InputQueueOptions {
 	mcp?: McpOptions | false;
 	shouldStopAfterTurn?: ShouldStopAfterTurn;
 	transformContext?: TransformContext;
@@ -35,7 +35,7 @@ export interface PiPortOptions extends InputQueueOptions {
 	contextWindow?: number;
 	provider?: string;
 	model: string | Model<string>;
-	/** Pi stream protocol; null selects the built-in transport for a catalog model. */
+	/** Model stream protocol; null selects the built-in transport for a catalog model. */
 	streamFn?: StreamFn | null;
 	baseUrl?: string;
 	apiKey?: string;
@@ -71,7 +71,7 @@ export interface ModelPortOptions extends InputQueueOptions {
 	apiKey?: string;
 	sessionId?: string;
 	systemPrompt: string;
-	thinkingLevel: PiPortOptions["thinkingLevel"];
+	thinkingLevel: SessionPortOptions["thinkingLevel"];
 	history?: SessionMessage[];
 	tools?: Array<HarnessTool<object, unknown>>;
 	cwd: string;
@@ -81,11 +81,11 @@ export interface ModelPortOptions extends InputQueueOptions {
 }
 
 /** Assemble the single source-owned session runtime. */
-export async function createPiPort(options: PiPortOptions): Promise<AgentPort> {
+export async function createSessionPort(options: SessionPortOptions): Promise<AgentPort> {
  const manager = new McpManager(options.mcp, { cwd: options.cwd, ...(options.permission ? { permission: options.permission } : {}), ...(options.requestBus ? { requestBus: options.requestBus } : {}) });
  let desired = snapshotConfiguration(options);
  let catalog = await discoverSkills(desired.skills, desired.cwd);
- const prepare = async (next: PiPortOptions, nextCatalog: typeof catalog, signal?: AbortSignal) => {
+ const prepare = async (next: SessionPortOptions, nextCatalog: typeof catalog, signal?: AbortSignal) => {
    const assembly = await prepareSessionConfiguration(next, nextCatalog);
    const mcpConfig = next.mcp ? { enabled: next.mcp.enabled ?? true, servers: next.mcp.servers } : next.mcp;
    const mcp = await manager.prepare(mcpConfig, [...(next.tools ?? []).map(tool => tool.name), "load_skill", "read_context", "search_context"], signal);

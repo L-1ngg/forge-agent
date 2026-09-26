@@ -14,11 +14,31 @@ test("dependency check rejects the replaced execution engine even inside the mod
 		const manifest = JSON.stringify({ dependencies: { "@earendil-works/pi-agent-core": "0.84.4" } });
 		await writeFile(join(rootPath, "package.json"), manifest);
 		await writeFile(join(rootPath, "packages", "core", "package.json"), manifest);
-		await writeFile(join(rootPath, "packages", "core", "src", "pi-port.ts"), 'import "@earendil-works/pi-agent-core";\nexport * from "@earendil-works/pi-agent-core/agent-loop";\n');
+		await writeFile(join(rootPath, "packages", "core", "src", "session-port.ts"), 'import "@earendil-works/pi-agent-core";\nexport * from "@earendil-works/pi-agent-core/agent-loop";\n');
 		const violations = await findViolations(new URL(`file://${rootPath}/`));
 		expect(violations).toContain("package.json must not depend on pi-agent-core");
 		expect(violations).toContain("packages/core/package.json must not depend on pi-agent-core");
-		expect(violations.filter((violation) => violation === "packages/core/src/pi-port.ts must not import pi-agent-core")).toHaveLength(2);
+		expect(violations.filter((violation) => violation === "packages/core/src/session-port.ts must not import pi-agent-core")).toHaveLength(2);
+	} finally {
+		await rm(rootPath, { recursive: true, force: true });
+	}
+});
+
+test("dependency check rejects pi-ai imports in examples and scripts", async () => {
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-legacy-"));
+	try {
+		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
+			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
+		}
+		await mkdir(join(rootPath, "examples"));
+		await mkdir(join(rootPath, "scripts"));
+		await writeFile(join(rootPath, "package.json"), "{}");
+		await writeFile(join(rootPath, "examples", "demo.ts"), 'import { createModels } from "@earendil-works/pi-ai";');
+		await writeFile(join(rootPath, "scripts", "demo.ts"), 'import type { Model } from "@earendil-works/pi-ai";');
+		const violations = await findViolations(new URL(`file://${rootPath}/`));
+		expect(violations).toContain("examples/demo.ts must not import pi-ai");
+		expect(violations).toContain("scripts/demo.ts must not import pi-ai");
 	} finally {
 		await rm(rootPath, { recursive: true, force: true });
 	}

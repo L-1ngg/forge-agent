@@ -1,4 +1,5 @@
-import { EventStream, type AssistantMessage, type AssistantMessageEvent } from "@earendil-works/pi-ai";
+import { EventStream } from "../../src/model-stream.ts";
+import type { AssistantMessage, AssistantMessageEvent } from "../../src/model-types.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import type { StreamFn } from "../../src/sdk.ts";
 import { fromSessionMessage, toSessionMessage } from "../../src/event-projection.ts";

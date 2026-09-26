@@ -5,7 +5,7 @@ export * from "./config.ts";
 export * from "./diff.ts";
 export * from "./digest.ts";
 export * from "./input/index.ts";
-export type { ToolHooks, StreamFn, Model } from "./pi-port.ts";
+export type { ToolHooks, StreamFn, Model } from "./session-port.ts";
 export * from "./permission/index.ts";
 export * from "./request-bus.ts";
 export * from "./session-search.ts";

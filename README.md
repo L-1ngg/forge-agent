@@ -5,19 +5,19 @@
 
 **A general-purpose single-agent framework, currently under personal development.**
 
-Forge Agent combines a self-owned execution core, an embeddable Bun SDK, and a terminal application. Use the CLI for coding tasks, assemble tools and prompts through the SDK, or fork the project to build a specialized agent.
+Forge Agent builds a unified execution and session layer around an Agent runtime, defining input ownership, turn outcomes, incremental persistence, and context management. It provides an embeddable Bun SDK and a terminal application. Use the CLI for coding tasks, assemble tools and prompts through the SDK, or fork the project to build a specialized agent.
 
 [简体中文](README.zh-CN.md) · [SDK guide](docs/sdk.en.md) · [Contributing](CONTRIBUTING.md)
 
 ## Current Capabilities
 
-- **Owned execution loop:** model streaming, tool execution, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence.
+- **Execution and session control:** input ownership, turn outcomes, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence around model streaming and tool execution.
 - **Long tasks:** automatic or manual context compaction and bounded overflow recovery; provides sourced task notes, branch history search, and original-text retrieval. Read/Bash provide bounded previews and temporary command logs.
 - **Embeddable SDK:** independent instances with host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
 - **Coding CLI:** read, write, edit, and shell tools; interactive TUI or JSON event output for scripts.
 - **Terminal interface:** streaming transcript, tool and diff views, permission cards, queued input, and a cell-based renderer.
 
-Model transport and authentication use [pi-ai](https://github.com/earendil-works/pi). The execution loop and TUI renderer are owned by this project. Research and report generation are planned extensions, not completed features.
+Built-in model streams use [TanStack AI](https://tanstack.com/ai). Forge owns the model catalog, authentication, types, and cost helpers; the `pi-ai` package is no longer a dependency. Models requiring Mistral Conversations or Codex Responses are absent from the built-in catalog because this release has no equivalent transport. The runtime's source and local changes are described under Architecture. Research and report generation are planned extensions, not completed features.
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ export FORGE_AGENT_MODEL=grok-4.6
 bun run forge-agent
 ```
 
-Set `FORGE_AGENT_API_KEY` through your environment or use the provider's native variable, such as `XAI_API_KEY`. Never commit credentials. Other models use the provider/model identifiers supported by pi-ai.
+Set `FORGE_AGENT_API_KEY` through your environment or use the provider's native variable, such as `XAI_API_KEY` or `OPENAI_API_KEY`. Never commit credentials. Built-in model identifiers come from Forge's pinned catalog snapshot; supported models use TanStack transport.
 
 For headless JSON events:
 
@@ -184,9 +184,9 @@ Assistant replies render Markdown in both the transcript and detail view, includ
 | `@forge-agent/tui` | Cell compositor and terminal interaction; protocol, Node built-ins, and pure Markdown/highlighting dependencies |
 | `@forge-agent/cli` | Configuration, credentials, tool/storage assembly, and TUI/headless entrypoints |
 
-The dependency gate keeps UI dependencies out of the core and restricts pi-ai imports to the model adapter, event projection, and source-owned runtime. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
+The dependency gate keeps UI dependencies out of the core and rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
 
-The execution runtime is maintained in this repository, derived from the fixed Pi Agent source recorded in [runtime provenance](packages/core/src/runtime/README.md). Forge owns the session policies, SDK, CLI and TUI. The SDK supports `continue()`, invocation results, awaited idle/disposal, native text/image tool results, transient task retries, and controlled configuration updates; see the [SDK guide](docs/sdk.en.md).
+Forge designs the session execution layer for input ownership, persistence, context policy, and turn settlement, and extends the underlying loop with input preparation, post-response stopping, and tool-argument validation hooks. The loop starts from a fixed Pi Agent source baseline and is maintained here; see [runtime provenance](packages/core/src/runtime/README.md) and [local changes](packages/core/src/runtime/local-changes.md). Forge builds the SDK, CLI, and TUI on the same execution path. The SDK supports `continue()`, invocation results, awaited idle/disposal, native text/image tool results, transient task retries, and controlled configuration updates; see the [SDK guide](docs/sdk.en.md).
 
 ## Roadmap
 
@@ -222,7 +222,7 @@ bun run typecheck:examples
 
 Maintainers can create [source prerelease drafts](docs/release.md) after dual-platform verification. Publishing a draft is a separate manual step.
 
-Design references: [pi](https://github.com/earendil-works/pi) and [grok-build](https://github.com/xai-org/grok-build). Their licenses apply to their own code; the local pi-ai patch retains upstream attribution.
+Design references: [pi](https://github.com/earendil-works/pi) and [grok-build](https://github.com/xai-org/grok-build). Their licenses apply to their own code.
 
 ## License
 

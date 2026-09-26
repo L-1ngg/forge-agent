@@ -1,5 +1,5 @@
 import type { SessionMessage } from "@forge-agent/protocol";
-import type { Model } from "../pi-port.ts";
+import type { Model } from "../session-port.ts";
 import type { RequestBudget } from "./request-budget.ts";
 import { freeze, cancellable } from "../host-callback.ts";
 

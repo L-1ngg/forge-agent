@@ -14,8 +14,8 @@ created: 2026-09-19
 
 以下基线与初始工作区描述记录施工开始时的状态，不代表当前缺少 Skills。核查基线为 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`：
 
-- `createAgent` → `createPiPort` → `AgentSession` 已统一 SDK 与 CLI 的执行、权限和存储。
-- `createPiPort` 保存 desired configuration；`AgentSession.updateConfiguration` 串行准备，`applyConfigurations` 在空闲或请求边界应用。当前模型响应及整批工具使用原配置。
+- `createAgent` → `createSessionPort` → `AgentSession` 已统一 SDK 与 CLI 的执行、权限和存储。
+- `createSessionPort` 保存 desired configuration；`AgentSession.updateConfiguration` 串行准备，`applyConfigurations` 在空闲或请求边界应用。当前模型响应及整批工具使用原配置。
 - `prepareSessionTools` 已统一参数重写、schema 校验、hooks、权限及结果复制；持久记忆与上下文读取工具从 session 侧装配。
 - `HostedAgent` 的 `AgentTurn.id`、`InputAcceptance.processed` 与 TUI `generation` 管理输入归属。Skills 的异步读取不能绕开这些边界。
 - `config.ts` 拒绝未知顶层配置；CLI 默认目录、slash 分发和 headless 需要同时接线，不能只注册补全。
@@ -114,7 +114,7 @@ SDK 不提供 `skills` 时完全禁用；显式 `enabled: false` 不扫描。`ro
 
 ### 原子配置
 
-`createPiPort` 保留基础 `systemPrompt` 与宿主原始 tools；准备出的 `SessionAssembly` 同时持有 catalog snapshot、组合后的 prompt 和装配工具。每次从基础 prompt 组合，不能把上一次组合结果当基础。模型切换或基础 prompt 更新复用当前 desired catalog，只有来源变化、启停或明确刷新才重新扫描。
+`createSessionPort` 保留基础 `systemPrompt` 与宿主原始 tools；准备出的 `SessionAssembly` 同时持有 catalog snapshot、组合后的 prompt 和装配工具。每次从基础 prompt 组合，不能把上一次组合结果当基础。模型切换或基础 prompt 更新复用当前 desired catalog，只有来源变化、启停或明确刷新才重新扫描。
 
 刷新与普通 patch 共用 `AgentSession.configurationQueue`，失败不更新 desired/applied。`applyConfigurations` 一次切换 options、catalog、prompt、tools 和计量依据。当前响应及工具批次继续持有旧 snapshot；下一模型请求前才使用新状态。`dispose` 取消未应用 receipt，并等待扫描/准备收尾，禁止释放后继续发布状态。
 

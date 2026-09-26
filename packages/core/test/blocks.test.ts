@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../../../tests/support/test-port.ts";
+import { createTestPort } from "../../../tests/support/test-port.ts";
 import { expect, test } from "bun:test";
 import { block, type BlockEnvelope } from "@forge-agent/protocol";
 import { bashTool, editTool } from "@forge-agent/tools";
@@ -48,7 +48,7 @@ test("digest omits a trailing placeholder for short values", () => {
 });
 
 test("execute block keeps its original command when a failed result has no details", async () => {
-	const port = createPiTestPort({
+	const port = createTestPort({
 		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [bashTool],
 		responses: [{ stopReason: "stop", toolCalls: [{ id: "failed-exec", name: "bash", arguments: { command: "false" } }] }],
@@ -61,7 +61,7 @@ test("execute block keeps its original command when a failed result has no detai
 
 test("execute descriptions survive start and completion without replacing the command", async () => {
 	for (const command of ["printf ok", "false"]) {
-		const port = createPiTestPort({ tools: [bashTool], responses: [
+		const port = createTestPort({ tools: [bashTool], responses: [
 			{ toolCalls: [{ id: "described-exec", name: "bash", arguments: { command, description: "Check preview response" } }] }, { text: "done" },
 		] });
 		const events = [];
@@ -75,7 +75,7 @@ test("execute descriptions survive start and completion without replacing the co
 
 test("edit execution ends with a terminal block for both success and failure", async () => {
 	for (const fails of [false, true]) {
-		const port = createPiTestPort({
+		const port = createTestPort({
 		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 			tools: [{ ...editTool, async execute() {
 				if (fails) throw new Error("edit failed");

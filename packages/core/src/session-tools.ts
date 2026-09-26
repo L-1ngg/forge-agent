@@ -1,11 +1,11 @@
-import { Type, validateToolArguments } from "@earendil-works/pi-ai";
 import { permissionScopeForToolCall, type ToolCallBlock } from "@forge-agent/protocol";
 import type { AgentOptions as RuntimeOptions } from "./runtime/agent.ts";
 import type { AgentTool } from "./runtime/types.ts";
-import type { ModelPortOptions } from "./pi-port.ts";
+import type { ModelPortOptions } from "./session-port.ts";
 import { decide, formatPermissionRule, type PermissionContext } from "./permission/index.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { MEMORY_TOOL_NAMES } from "./memory/tools.ts";
+import { validateToolArguments } from "./tool-arguments.ts";
 
 export function validateSessionTools(options: Pick<ModelPortOptions, "tools" | "memory">): void {
 	if (options.memory && options.tools?.some(tool => MEMORY_TOOL_NAMES.includes(tool.name))) throw new Error("Memory tool names are reserved when memory is configured");
@@ -57,7 +57,7 @@ export async function checkPermission(toolCall: ToolCallBlock, options: Permissi
 export function prepareSessionTools(options: ModelPortOptions) {
 	const prepared = new Map<string, object>();
 	const tools: AgentTool[] = (options.tools ?? []).map(tool => ({
-		name: tool.name, label: tool.label, description: tool.description, parameters: Type.Unsafe(tool.parameters),
+		name: tool.name, label: tool.label, description: tool.description, parameters: tool.parameters as AgentTool["parameters"],
 		...(tool.prepareArguments ? { prepareArguments: tool.prepareArguments } : {}),
 		...(tool.validateArguments ? { validateArguments: tool.validateArguments } : {}),
 		...(tool.executionMode ? { executionMode: tool.executionMode } : {}),
@@ -76,8 +76,7 @@ export function prepareSessionTools(options: ModelPortOptions) {
 		signal?.throwIfAborted();
 		prepared.delete(context.toolCall.id);
 		const schema = tools.find(tool => tool.name === context.toolCall.name)!;
-		const hostTool = options.tools?.find(tool => tool.name === context.toolCall.name);
-		const validate = (args: unknown) => hostTool?.validateArguments ? hostTool.validateArguments(args) as Record<string, unknown> : validateToolArguments(schema, { ...context.toolCall, arguments: args as Record<string, unknown> });
+		const validate = (args: unknown) => validateToolArguments(schema, args);
 		const nativeArgs = context.args as Record<string, unknown>;
 		let args = nativeArgs;
 		const rewrite = options.toolInputRewrites?.[context.toolCall.name];
@@ -107,12 +106,10 @@ export function prepareSessionTools(options: ModelPortOptions) {
 	return { tools, beforeToolCall, afterToolCall, ...(options.toolHooks?.toolExecution ? { toolExecution: options.toolHooks.toolExecution } : {}), clear: () => prepared.clear() };
 }
 
-/** Restore the original MCP schemas at the existing provider payload seam.
- * Pi's Anthropic adapter otherwise rebuilds only properties/required, silently
- * dropping $defs, oneOf and additionalProperties. Other adapters retain schemas
- * or use their documented JSON-schema slots. Unknown payloads fail explicitly. */
-export function preserveMcpSchemas(payload: unknown, tools: ModelPortOptions["tools"]): unknown {
- const definitions = new Map((tools ?? []).filter(tool => tool.name.startsWith("mcp_")).map(tool => [tool.name, tool.parameters]));
+/** Pi's Anthropic adapter rebuilds tool schemas and drops JSON Schema keywords.
+ * Restore each host/MCP definition at the provider payload seam. */
+export function preserveToolSchemas(payload: unknown, tools: ModelPortOptions["tools"]): unknown {
+ const definitions = new Map((tools ?? []).map(tool => [tool.name, tool.parameters]));
  if (!definitions.size) return payload;
  const seen = new Set<string>();
  const visit = (value: unknown): void => {
@@ -127,6 +124,6 @@ export function preserveMcpSchemas(payload: unknown, tools: ModelPortOptions["to
    for (const [key, child] of Object.entries(object)) if (!["messages", "contents", "input", "input_schema", "parameters", "parametersJsonSchema", "inputSchema"].includes(key)) visit(child);
  };
  visit(payload);
- if ([...definitions.keys()].some(name => !seen.has(name))) throw new Error("Provider payload does not expose a supported JSON Schema slot for MCP tools");
+ if ([...definitions.keys()].some(name => !seen.has(name))) throw new Error("Provider payload does not expose a supported JSON Schema slot for tools");
  return payload;
 }

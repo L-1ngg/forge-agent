@@ -1,6 +1,6 @@
 import { block, type ExecuteBlockData, type BlockEnvelope } from "@forge-agent/protocol";
 import { createEditBlockData } from "./diff.ts";
-import type { AssistantMessage, Message, Model, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, Model, ToolResultMessage, UserMessage } from "./model-types.ts";
 import type { SessionContentBlock, SessionMessage, SessionEvent, StopReason } from "@forge-agent/protocol";
 import type { AgentEvent } from "./runtime/types.ts";
 
@@ -10,7 +10,7 @@ function toProtocolStopReason(reason: AssistantMessage["stopReason"]): StopReaso
 	return reason;
 }
 
-export function toPiStopReason(reason: StopReason | undefined): AssistantMessage["stopReason"] {
+export function toRuntimeStopReason(reason: StopReason | undefined): AssistantMessage["stopReason"] {
 	if (reason === undefined) return "stop";
 	if (reason === "tool_use") return "toolUse";
 	return reason;
@@ -114,7 +114,7 @@ export function fromSessionMessage(message: SessionMessage, model: Model<string>
 		provider: message.provider ?? model.provider,
 		model: message.model ?? model.id,
 		usage: message.usage ? mergeUsage(message.usage) : zeroUsage(),
-		stopReason: toPiStopReason(message.stopReason),
+		stopReason: toRuntimeStopReason(message.stopReason),
 		...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
 		...(message.contextExcluded ? { contextExcluded: true } : {}),
 		timestamp: message.timestamp,

@@ -1,6 +1,6 @@
 import { freeze, cancellable } from "./host-callback.ts";
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
-import type { Model } from "./pi-port.ts";
+import type { Model } from "./session-port.ts";
 
 type Snapshot<T> = T extends object ? { readonly [K in keyof T]: Snapshot<T[K]> } : T;
 

@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../support/test-port.ts";
+import { createTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
 
@@ -20,7 +20,7 @@ test("pi parallel tool settlement retains every result when one tool fails", asy
 				: { content: [{ type: "text", text: "ok" }], details: "ok" };
 		},
 	};
-	const port = createPiTestPort({
+	const port = createTestPort({
 		...{ permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] } },
 		tools: [tool as HarnessTool<object, unknown>],
 		responses: [

@@ -1,0 +1,364 @@
+diff --git a/node_modules/@tanstack/ai-anthropic/.bun-tag-e1601353a28d766f b/.bun-tag-e1601353a28d766f
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index f8f43dfe1a313bce8e3d8144081952c84534f822..956f38e294843229a5d616001421d71c3099bb7c 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -442,6 +442,10 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 		if (!thinkingParts?.length) return;
+ 		for (const thinking of thinkingParts) {
+ 			if (!thinking.signature) continue;
++			if (thinking.redacted) {
++				contentBlocks.push({ type: "redacted_thinking", data: thinking.signature });
++				continue;
++			}
+ 			const block = {
+ 				type: "thinking",
+ 				thinking: thinking.content,
+@@ -506,7 +510,10 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 		let hasClosedReasoning = false;
+ 		let hasEmittedRunStarted = false;
+ 		let hasEmittedTextMessageStart = false;
+-		let hasEmittedRunFinished = false;
++		let stopReason;
++		let stopUsage;
++		let sawMessageStop = false;
++		let startUsage;
+ 		let currentBlockType = null;
+ 		try {
+ 			for await (const event of stream) {
+@@ -522,7 +529,9 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 						parentRunId: options.parentRunId
+ 					};
+ 				}
+-				if (event.type === "content_block_start") {
++				if (event.type === "message_start") {
++					startUsage = event.message.usage;
++				} else if (event.type === "content_block_start") {
+ 					currentBlockType = event.content_block.type;
+ 					if (event.content_block.type === "tool_use") {
+ 						currentToolIndex++;
+@@ -587,7 +596,11 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 							};
+ 							hasEmittedTextMessageStart = false;
+ 						}
+-					} else if (event.content_block.type === "thinking") {
++						} else if (event.content_block.type === "redacted_thinking") {
++							const redactedStepId = genId();
++							yield { type: EventType.STEP_STARTED, stepName: redactedStepId, stepId: redactedStepId, model, timestamp: Date.now(), stepType: "thinking" };
++							yield { type: EventType.STEP_FINISHED, stepName: redactedStepId, stepId: redactedStepId, model, timestamp: Date.now(), delta: "", content: "[Reasoning redacted]", signature: event.content_block.data, redacted: true };
++						} else if (event.content_block.type === "thinking") {
+ 						accumulatedThinking = "";
+ 						accumulatedSignature = "";
+ 						stepId = genId();
+@@ -764,6 +777,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 					};
+ 					currentBlockType = null;
+ 				} else if (event.type === "message_stop") {
++					sawMessageStop = true;
+ 					if (reasoningMessageId && !hasClosedReasoning) {
+ 						hasClosedReasoning = true;
+ 						yield {
+@@ -779,17 +793,13 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 							timestamp: Date.now()
+ 						};
+ 					}
+-					if (!hasEmittedRunFinished) yield {
+-						type: EventType.RUN_FINISHED,
+-						runId,
+-						threadId,
+-						model,
+-						timestamp: Date.now(),
+-						finishReason: "stop"
+-					};
++					if (!stopReason) yield { type: EventType.RUN_ERROR, model, timestamp: Date.now(), message: "Anthropic response has no stop reason", code: "incomplete-stream" };
++					else if (stopReason === "max_tokens") yield { type: EventType.RUN_ERROR, model, timestamp: Date.now(), message: "The response was cut off because the maximum token limit was reached.", code: "max_tokens", usage: buildAnthropicUsage(stopUsage) };
++					else yield { type: EventType.RUN_FINISHED, runId, threadId, model, timestamp: Date.now(), finishReason: stopReason === "tool_use" ? "tool_calls" : "stop", usage: buildAnthropicUsage(stopUsage) };
+ 				} else if (event.type === "message_delta") {
+ 					if (event.delta.stop_reason) {
+-						hasEmittedRunFinished = true;
++						stopReason = event.delta.stop_reason;
++						stopUsage = { ...startUsage, ...event.usage };
+ 						if (reasoningMessageId && !hasClosedReasoning) {
+ 							hasClosedReasoning = true;
+ 							yield {
+@@ -805,19 +815,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 								timestamp: Date.now()
+ 							};
+ 						}
+-						switch (event.delta.stop_reason) {
+-							case "tool_use":
+-								yield {
+-									type: EventType.RUN_FINISHED,
+-									runId,
+-									threadId,
+-									model,
+-									timestamp: Date.now(),
+-									finishReason: "tool_calls",
+-									usage: buildAnthropicUsage(event.usage)
+-								};
+-								break;
+-							case "max_tokens":
++						if (stopReason === "max_tokens") {
+ 								if (options.modelOptions?.max_tokens == null) {
+ 									const defaultedMaxTokens = getAnthropicDefaultMaxTokens(model);
+ 									logger.warn(`anthropic response truncated at the default max_tokens (${defaultedMaxTokens}) for model=${model}; pass maxTokens (or modelOptions.max_tokens) to raise the output ceiling`, {
+@@ -826,31 +824,11 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 										defaultedMaxTokens
+ 									});
+ 								}
+-								yield {
+-									type: EventType.RUN_ERROR,
+-									model,
+-									timestamp: Date.now(),
+-									message: "The response was cut off because the maximum token limit was reached.",
+-									code: "max_tokens",
+-									error: {
+-										message: "The response was cut off because the maximum token limit was reached.",
+-										code: "max_tokens"
+-									}
+-								};
+-								break;
+-							default: yield {
+-								type: EventType.RUN_FINISHED,
+-								runId,
+-								threadId,
+-								model,
+-								timestamp: Date.now(),
+-								finishReason: "stop",
+-								usage: buildAnthropicUsage(event.usage)
+-							};
++							}
+ 						}
+-					}
+ 				}
+ 			}
++			if (!sawMessageStop) yield { type: EventType.RUN_ERROR, model, timestamp: Date.now(), message: "Anthropic response ended before message_stop", code: "incomplete-stream" };
+ 		} catch (error) {
+ 			const err = error;
+ 			const rawEvent = toRunErrorRawEvent(error);
+diff --git a/dist/esm/tools/custom-tool.js b/dist/esm/tools/custom-tool.js
+index 87f3d43985ba5218d1aeb64520aaccd28c7d6de3..0b93040dcbabf7020fede9c166b5269d96ed0833 100644
+--- a/dist/esm/tools/custom-tool.js
++++ b/dist/esm/tools/custom-tool.js
+@@ -7,6 +7,7 @@ function convertCustomToolToAdapterFormat(tool) {
+ 		required: []
+ 	};
+ 	const inputSchema = {
++		...jsonSchema,
+ 		type: "object",
+ 		properties: jsonSchema.properties || null,
+ 		required: jsonSchema.required || null
+diff --git a/src/adapters/text.ts b/src/adapters/text.ts
+index b84a7a65c42f02765c5544c7d4d7b8bf1108073d..0bb016784dd8fa75ee8dfc66a35df2e681c94ef7 100644
+--- a/src/adapters/text.ts
++++ b/src/adapters/text.ts
+@@ -952,6 +952,10 @@ export class AnthropicTextAdapter<
+ 
+     for (const thinking of thinkingParts) {
+       if (!thinking.signature) continue
++      if ((thinking as typeof thinking & { redacted?: boolean }).redacted) {
++        contentBlocks.push({ type: 'redacted_thinking', data: thinking.signature })
++        continue
++      }
+       const block: ThinkingBlockParam = {
+         type: 'thinking',
+         thinking: thinking.content,
+@@ -1063,7 +1067,10 @@ export class AnthropicTextAdapter<
+     let hasClosedReasoning = false
+     let hasEmittedRunStarted = false
+     let hasEmittedTextMessageStart = false
+-    let hasEmittedRunFinished = false
++    let stopReason: string | undefined
++    let stopUsage: Anthropic_SDK.Beta.BetaUsage | undefined
++    let sawMessageStop = false
++    let startUsage: Anthropic_SDK.Beta.BetaUsage | undefined
+     // Track current content block type for proper content_block_stop handling
+     let currentBlockType: string | null = null
+ 
+@@ -1085,7 +1092,9 @@ export class AnthropicTextAdapter<
+           }
+         }
+ 
+-        if (event.type === 'content_block_start') {
++        if (event.type === 'message_start') {
++          startUsage = event.message.usage
++        } else if (event.type === 'content_block_start') {
+           currentBlockType = event.content_block.type
+           if (event.content_block.type === 'tool_use') {
+             currentToolIndex++
+@@ -1183,6 +1192,10 @@ export class AnthropicTextAdapter<
+               // Text after the server tool starts a fresh message segment.
+               hasEmittedTextMessageStart = false
+             }
++          } else if (event.content_block.type === 'redacted_thinking') {
++            const redactedStepId = genId()
++            yield { type: EventType.STEP_STARTED, stepName: redactedStepId, stepId: redactedStepId, model, timestamp: Date.now(), stepType: 'thinking' }
++            yield { type: EventType.STEP_FINISHED, stepName: redactedStepId, stepId: redactedStepId, model, timestamp: Date.now(), delta: '', content: '[Reasoning redacted]', signature: event.content_block.data, redacted: true }
+           } else if (event.content_block.type === 'thinking') {
+             accumulatedThinking = ''
+             accumulatedSignature = ''
+@@ -1421,6 +1434,7 @@ export class AnthropicTextAdapter<
+           }
+           currentBlockType = null
+         } else if (event.type === 'message_stop') {
++          sawMessageStop = true
+           // Close reasoning events if still open
+           if (reasoningMessageId && !hasClosedReasoning) {
+             hasClosedReasoning = true
+@@ -1438,22 +1452,39 @@ export class AnthropicTextAdapter<
+             }
+           }
+ 
+-          // Only emit RUN_FINISHED from message_stop if message_delta didn't already emit one.
+-          // message_delta carries the real stop_reason (tool_use, end_turn, etc.),
+-          // while message_stop is just a completion signal.
+-          if (!hasEmittedRunFinished) {
++          if (!stopReason) {
++            yield {
++              type: EventType.RUN_ERROR,
++              model,
++              timestamp: Date.now(),
++              message: 'Anthropic response has no stop reason',
++              code: 'incomplete-stream',
++            }
++          } else if (stopReason === 'max_tokens') {
++            yield {
++              type: EventType.RUN_ERROR,
++              model,
++              timestamp: Date.now(),
++              message:
++                'The response was cut off because the maximum token limit was reached.',
++              code: 'max_tokens',
++              usage: buildAnthropicUsage(stopUsage),
++            }
++          } else {
+             yield {
+               type: EventType.RUN_FINISHED,
+               runId,
+               threadId,
+               model,
+               timestamp: Date.now(),
+-              finishReason: 'stop',
++              finishReason: stopReason === 'tool_use' ? 'tool_calls' : 'stop',
++              usage: buildAnthropicUsage(stopUsage),
+             }
+           }
+         } else if (event.type === 'message_delta') {
+           if (event.delta.stop_reason) {
+-            hasEmittedRunFinished = true
++            stopReason = event.delta.stop_reason
++            stopUsage = { ...startUsage, ...event.usage } as Anthropic_SDK.Beta.BetaUsage
+ 
+             // Close reasoning events if still open
+             if (reasoningMessageId && !hasClosedReasoning) {
+@@ -1472,76 +1503,32 @@ export class AnthropicTextAdapter<
+               }
+             }
+ 
+-            switch (event.delta.stop_reason) {
+-              case 'tool_use': {
+-                yield {
+-                  type: EventType.RUN_FINISHED,
+-                  runId,
+-                  threadId,
+-                  model,
+-                  timestamp: Date.now(),
+-                  finishReason: 'tool_calls',
+-                  usage: buildAnthropicUsage(event.usage),
+-                }
+-                break
+-              }
+-              case 'max_tokens': {
+-                // Surface a warning when the truncating cap was the
+-                // adapter-supplied default (caller didn't pass `max_tokens`), so
+-                // the truncation isn't silently attributed to the model "doing
+-                // nothing" (issue #849). When the caller set `max_tokens`
+-                // themselves, hitting it is their own deliberate ceiling.
+-                if (options.modelOptions?.max_tokens == null) {
+-                  const defaultedMaxTokens = getAnthropicDefaultMaxTokens(model)
+-                  logger.warn(
+-                    `anthropic response truncated at the default max_tokens (${defaultedMaxTokens}) for model=${model}; pass maxTokens (or modelOptions.max_tokens) to raise the output ceiling`,
+-                    {
+-                      source: 'anthropic.processAnthropicStream',
+-                      model,
+-                      defaultedMaxTokens,
+-                    },
+-                  )
+-                }
+-                yield {
+-                  type: EventType.RUN_ERROR,
+-                  model,
+-                  timestamp: Date.now(),
+-                  message:
+-                    'The response was cut off because the maximum token limit was reached.',
+-                  code: 'max_tokens',
+-                  error: {
+-                    message:
+-                      'The response was cut off because the maximum token limit was reached.',
+-                    code: 'max_tokens',
++            if (stopReason === 'max_tokens') {
++              // Surface a warning only when the adapter supplied the cap.
++              if (options.modelOptions?.max_tokens == null) {
++                const defaultedMaxTokens = getAnthropicDefaultMaxTokens(model)
++                logger.warn(
++                  `anthropic response truncated at the default max_tokens (${defaultedMaxTokens}) for model=${model}; pass maxTokens (or modelOptions.max_tokens) to raise the output ceiling`,
++                  {
++                    source: 'anthropic.processAnthropicStream',
++                    model,
++                    defaultedMaxTokens,
+                   },
+-                }
+-                break
+-              }
+-              case 'stop_sequence':
+-              case 'end_turn':
+-              case 'pause_turn':
+-              case 'refusal':
+-              case 'model_context_window_exceeded':
+-              case 'compaction':
+-              default: {
+-                // All remaining Anthropic stop_reason variants map to the
+-                // generic "stop" finish reason — they describe *why* the
+-                // stream ended, but for AG-UI consumers the resulting event
+-                // shape is identical.
+-                yield {
+-                  type: EventType.RUN_FINISHED,
+-                  runId,
+-                  threadId,
+-                  model,
+-                  timestamp: Date.now(),
+-                  finishReason: 'stop',
+-                  usage: buildAnthropicUsage(event.usage),
+-                }
++                )
+               }
+             }
+           }
+         }
+       }
++      if (!sawMessageStop) {
++        yield {
++          type: EventType.RUN_ERROR,
++          model,
++          timestamp: Date.now(),
++          message: 'Anthropic response ended before message_stop',
++          code: 'incomplete-stream',
++        }
++      }
+     } catch (error: unknown) {
+       const err = error as Error & { status?: number; code?: string }
+       const rawEvent = toRunErrorRawEvent(error)
+diff --git a/src/tools/custom-tool.ts b/src/tools/custom-tool.ts
+index 582b7cc03beacdaea71773d291c6f2f804ba5a0d..ae6f4068fba770abea5b034291d9692b3bde5ad0 100644
+--- a/src/tools/custom-tool.ts
++++ b/src/tools/custom-tool.ts
+@@ -37,6 +37,7 @@ export function convertCustomToolToAdapterFormat(tool: Tool): CustomToolConfig {
+   }) as JSONSchema
+ 
+   const inputSchema = {
++    ...jsonSchema,
+     type: 'object' as const,
+     properties: jsonSchema.properties || null,
+     required: jsonSchema.required || null,

@@ -20,6 +20,6 @@ export class Trace {
 		this.entries.push({ order: this.entries.length, kind, value: structuredClone(value) });
 	}
 	format(id: string, error: unknown): string {
-		return JSON.stringify({ id, environment: { bun: Bun.version, os: process.platform, arch: process.arch, piAi: "0.85.1", fastCheck: "4.3.0" }, error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error), trace: this.entries }, (key, value) => /^(authorization|api.?key|token|secret|cookie)$/i.test(key) ? "[redacted]" : value, 2);
+		return JSON.stringify({ id, environment: { bun: Bun.version, os: process.platform, arch: process.arch, fastCheck: "4.3.0" }, error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error), trace: this.entries }, (key, value) => /^(authorization|api.?key|token|secret|cookie)$/i.test(key) ? "[redacted]" : value, 2);
 	}
 }

@@ -42,7 +42,7 @@ flowchart TD
 |---|---|---|---|
 | 本地 Pi Core | 活动模型/工具执行、messages、流中消息、pending tools、steering/follow-up、loop 事件 | 保留上游 Agent/loop/types 与生命周期；不 import Forge session、权限总线或 TUI | `packages/core/src/runtime/`，保留 `agent.ts`、`agent-loop.ts`、`types.ts` 等上游文件结构 |
 | Forge 会话执行 | invocation 归属、保存/故障、上下文策略、配置生效边界、会话级重试和 idle | 一个 SDK facade 装配 Core；外部指令与观察均由此进入 | 整理现有 `agent.ts`、`agent-runner.ts`、`sdk.ts`；不预设旧三层全部保留 |
-| 模型适配 | 认证、模型目录、pi-ai 流、provider 字段转换与补丁 | 注入 `streamFn`；provider 类型停留在 runtime/模型接入处 | 拆清当前 `pi-port.ts` 的模型职责 |
+| 模型适配 | 认证、模型目录、pi-ai 流、provider 字段转换与补丁 | 注入 `streamFn`；provider 类型停留在 runtime/模型接入处 | 当前职责见 `session-port.ts` 与 `session-configuration.ts` |
 | 工具接入 | 参数准备、权限、实际工具、content/details/update | 以原生工具接口为内核契约，既有实现迁到该接口；确有外部兼容需求才留适配 | `packages/tools/src/types.ts` 与 Core 装配 |
 | 事件投影 | 将 Core 事件和会话事件变成 Forge 展示/传输协议 | 转换一次；不通过展示协议反向恢复 Core transcript | protocol 定义与 Core 的单一投影模块；CLI/TUI 同批调整消费者 |
 
@@ -115,7 +115,7 @@ M0 与接入改动保留独立提交边界。迁移期可以并存测试对照�
 
 - `runtime/Agent`：唯一生产循环、临时请求消息、工具调度、原生事件和状态归约；基线与定制见 `packages/core/src/runtime/README.md`。
 - `agent-session.ts`：完整持久历史、awaited 保存、输入消费回执、usage、压缩/恢复、任务 retry、配置应用边界。
-- 模型接入：`pi-port.ts` 创建会话，`session-configuration.ts` 准备模型/认证与摘要 driver，`session-tools.ts` 桥接工具串行准备/授权及结果校验；`event-projection.ts` 投影协议及现有展示块。职责收敛与证据见 [Issue #34 施工记录](architecture-responsibilities.md)。依赖门禁只允许这些明确的 adapter 与 runtime 接触 pi-ai，TUI 仍只依赖 protocol。
+- 模型接入：`session-port.ts` 创建会话，`session-configuration.ts` 准备模型/认证与摘要 driver，`session-tools.ts` 桥接工具串行准备/授权及结果校验；`event-projection.ts` 投影协议及现有展示块。职责收敛与证据见 [Issue #34 施工记录](architecture-responsibilities.md)。模型目录、认证与传输已由 Forge 和 TanStack AI 承担，依赖门禁拒绝 `pi-ai`，TUI 仍只依赖 protocol。
 - `agent.ts` / `sdk.ts`：宿主 invocation 身份、惰性迭代消费、取消/释放和公开出口。旧 `ExecutionCore`、`AgentRunner`、临时双工具协议及权限转发桥已移除。
 - `packages/tools`：一个 `HarnessTool`，返回 `ToolResult`；内置文件/进程操作的 `ToolOutcome` 只在实现内部转换，不是第二套 SDK 工具协议。
 

@@ -1,5 +1,5 @@
 import type { AgentPort } from "../../packages/core/src/agent-port.ts";
-import { createPiTestPort } from "../support/test-port.ts";
+import { createTestPort } from "../support/test-port.ts";
 import { createAgent } from "../../packages/core/src/sdk.ts";
 import { fauxModel } from "../support/model.ts";
 import { expect, test } from "bun:test";
@@ -36,7 +36,7 @@ function userTexts(events: SessionEvent[]): string[] {
 test("owned core preserves a length-limited response without preparing or executing its tool calls", async () => {
 	let executions = 0;
 	let rewrites = 0;
-	const port = createPiTestPort({
+	const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		toolInputRewrites: { capture: (input) => { rewrites++; return input; } },
@@ -70,7 +70,7 @@ test("owned core settles unserializable results and waits for sibling tools befo
 	let markFinished!: () => void;
 	const finished = new Promise<void>((resolve) => { markFinished = resolve; });
 	let slowDone = false;
-	const port = createPiTestPort({
+	const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
@@ -113,7 +113,7 @@ test("owned core settles unserializable results and waits for sibling tools befo
 
 test.each([false, true])("owned core preserves batch termination semantics with mixed permissions: %s", async (mixed) => {
 	const executed: string[] = [];
-	const port = createPiTestPort({
+	const port = createTestPort({
 		tools: [tool(async (input) => { executed.push((input as { value: string }).value); return { content: [{ type: "text", text: "ok" }], details: "ok" }; })],
 		permission: { rules: [
 			{ tool: "capture", argsPattern: '{"value":"deny"}', effect: "deny", reason: "test deny" },
@@ -131,7 +131,7 @@ test.each([false, true])("owned core preserves batch termination semantics with 
 });
 
 test.each(["steer", "followUp"] as const)("owned core drains %s after an entirely denied batch without leaking it into the next invocation", async (queue) => {
-	const port = createPiTestPort({
+	const port = createTestPort({
 		tools: [tool(async () => { throw new Error("denied tool executed"); })],
 		permission: { rules: [{ tool: "capture", argsPattern: "*", effect: "deny", reason: "test deny" }] },
 		responses: [
@@ -159,7 +159,7 @@ test.each(["steer", "followUp"] as const)("owned core drains %s after an entirel
 
 test("owned core rejects unknown tools and invalid arguments without executing them", async () => {
 	let executions = 0;
-	const port = createPiTestPort({
+	const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		responses: [
@@ -181,7 +181,7 @@ test("owned core rejects unknown tools and invalid arguments without executing t
 
 test("owned core settles thrown tool failures before the next assistant message", async () => {
 	const completed: string[] = [];
-	const port = createPiTestPort({
+	const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
@@ -210,7 +210,7 @@ test("owned core settles thrown tool failures before the next assistant message"
 
 test("owned core preserves one result per call across generated tool failures", async () => {
 	await fc.assert(fc.asyncProperty(fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }), async (failures) => {
-		const port = createPiTestPort({
+		const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 			tools: [tool(async (input) => {
 				if ((input as { value: string }).value === "fail") throw new Error("generated failure");
@@ -233,7 +233,7 @@ test("owned core preserves one result per call across generated tool failures", 
 });
 
 test("owned core drains steering before follow-ups and preserves FIFO in both queues", async () => {
-	const port = createPiTestPort({ responses: Array.from({ length: 6 }, () => ({ echoLastUser: true })), tokensPerSecond: 500 });
+	const port = createTestPort({ responses: Array.from({ length: 6 }, () => ({ echoLastUser: true })), tokensPerSecond: 500 });
 	const events: SessionEvent[] = [];
 	let queued = false;
 	for await (const event of port.runTurn("initial")) {
@@ -254,7 +254,7 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 	let cleaned = false;
 	let markStarted!: () => void;
 	const started = new Promise<void>((resolve) => { markStarted = resolve; });
-	const port = createPiTestPort({
+	const port = createTestPort({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (_input, context) => {
 			markStarted();

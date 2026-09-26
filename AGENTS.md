@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-通用单 Agent 项目(TypeScript + Bun),执行内核为从固定 Pi 源码移植并本地维护的 `runtime/Agent`,模型流由 `pi-ai` 提供。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#architecture)。
+通用单 Agent 项目(TypeScript + Bun)，围绕 `runtime/Agent` 构建输入归属、执行终态、会话持久化与上下文管理的执行链路。`runtime/Agent` 以固定 Pi Agent 源码为基线，由本仓库维护并扩展生命周期接缝；当前内置模型流使用 TanStack AI，模型目录、认证、类型与辅助函数由 Forge 维护，不依赖 `pi-ai` 包。无等价传输的 Mistral Conversations、Codex Responses 模型已从内置目录移除。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#architecture)。
 
 ## 真相源层级
 

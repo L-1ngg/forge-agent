@@ -9,8 +9,8 @@ import { gate } from "./helpers/model-response.ts";
 const options = { systemPrompt: "", cwd: process.cwd() };
 
 test("SDK rejects the removed execution factory before loading storage or calling a model", async () => {
-	expect("createPiPort" in core).toBe(false);
-	expect("createPiTestPort" in core).toBe(false);
+	expect("createSessionPort" in core).toBe(false);
+	expect("createTestPort" in core).toBe(false);
 	let loads = 0, calls = 0, factories = 0;
 	const model = fauxModel({ responses: [{ text: "must not run" }] });
 	const configuration = { ...options, ...model, streamFn: (...args: Parameters<typeof model.streamFn>) => { calls++; return model.streamFn(...args); }, storage: { load: async () => { loads++; return { entries: [], leafId: null }; }, append: async () => {} } };

@@ -32,7 +32,7 @@ let equivalence: unknown = null;
 if (implementationHashes.size > 1) {
 	if (!equivalencePath) throw new Error("Mixed implementations require a verified whitespace equivalence proof");
 	const proof = await Bun.file(equivalencePath).json() as { path: string; line: number; oldWhitespace: string; oldHash: string; newHash: string };
-	const paths = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/pi-port.ts"];
+	const paths = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
 	if (!paths.includes(proof.path) || !Number.isSafeInteger(proof.line) || proof.line < 1 || !/^[ \t]*$/.test(proof.oldWhitespace)) throw new Error("Invalid whitespace proof");
 	const current = createHash("sha256"), previous = createHash("sha256");
 	for (const path of paths) {

@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../support/test-port.ts";
+import { createTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
 
@@ -13,7 +13,7 @@ test("pi drains steering after the active tool turn", async () => {
 			return { content: [{ type: "text", text: "done" }], details: "done" };
 		},
 	};
-	const port = createPiTestPort({
+	const port = createTestPort({
 		tools: [tool],
 		responses: [
 			{ toolCalls: [{ id: "hold-1", name: "hold", arguments: {} }], stopReason: "tool_use" },

@@ -3,14 +3,9 @@
  * Transforms to Message[] only at the LLM call boundary.
  */
 
-import {
-	type AssistantMessage,
-	type Context,
-	type SimpleStreamOptions,
-	EventStream,
-	type ToolResultMessage,
-	validateToolArguments,
-} from "@earendil-works/pi-ai";
+import type { AssistantMessage, Context, SimpleStreamOptions, ToolResultMessage } from "../model-types.ts";
+import { EventStream } from "../model-stream.ts";
+import { validateToolArguments } from "../tool-arguments.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
 import type {
 	AgentContext,
@@ -631,7 +626,7 @@ async function prepareToolCall(
 
 	try {
 		const preparedToolCall = prepareToolCallArguments(tool, toolCall);
-		const validatedArgs = tool.validateArguments ? tool.validateArguments(preparedToolCall.arguments) : validateToolArguments(tool, preparedToolCall);
+		const validatedArgs = validateToolArguments(tool, preparedToolCall.arguments);
 		if (config.beforeToolCall) {
 			const beforeResult = await config.beforeToolCall(
 				{

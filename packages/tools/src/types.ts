@@ -17,6 +17,8 @@ export interface ToolContext {
 	onUpdate?: (result: ToolResult<unknown>) => void;
 }
 
+export type ToolInputRewrite<TInput extends object> = (input: TInput, context: ToolContext) => TInput | Promise<TInput>;
+
 export interface HarnessTool<TInput extends object, TOutput> {
 	name: string;
 	label: string;

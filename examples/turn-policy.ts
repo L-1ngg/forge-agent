@@ -1,14 +1,12 @@
-import { createAgent, type StreamFn } from "../packages/core/src/sdk.ts";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { createAgent } from "../packages/core/src/sdk.ts";
+import { scriptedResponses } from "./scripted-stream.ts";
 
 // Run with: bun examples/turn-policy.ts (no credentials or network required).
-const fixture = fauxProvider({ tokensPerSecond: 10_000 });
-fixture.setResponses([fauxAssistantMessage([fauxToolCall("lookup", {}, { id: "lookup-1" })]), fauxAssistantMessage([fauxText("Unnecessary continuation")])]);
-const models = createModels(); models.setProvider(fixture.provider);
+const fixture = scriptedResponses([[{ type: "toolCall", id: "lookup-1", name: "lookup", arguments: {} }], [{ type: "text", text: "Unnecessary continuation" }]]);
 let requests = 0;
-const streamFn: StreamFn = (model, context, options) => { requests++; return models.streamSimple(model, context, options); };
+const streamFn: typeof fixture.streamFn = (model, context, options) => { requests++; return fixture.streamFn(model, context, options); };
 const agent = await createAgent({
-	model: fixture.getModel(), streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
+	model: fixture.model, streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
 	permission: { rules: [{ tool: "lookup", argsPattern: "*", effect: "allow" }] },
 	tools: [{ name: "lookup", label: "Lookup", description: "Find a record", parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 		async execute() { return { content: [{ type: "text", text: "Target record found" }], details: { id: "record-42" } }; } }],

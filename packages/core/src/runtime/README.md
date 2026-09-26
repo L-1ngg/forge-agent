@@ -6,20 +6,20 @@
 
 ## 构建适配
 
-- 根包及 core 固定 `pi-ai@0.85.1`；core 直接声明 `typebox@1.3.7`。仍由调用方提供 `streamFn`，不引入 npm Agent。
-- Forge 使用 `exactOptionalPropertyTypes` 与 `noUncheckedIndexedAccess`。独立基线 `3b4d961` 的运行语义不变；后续定制单列于 [local-changes.md](local-changes.md)。基线构建适配：可选属性类型显式容纳 `undefined`，已检查的尾消息索引增加非空类型标注，三个 pi-ai 对象边界增加纯类型断言。`compare-core.ts` 从独立基线提交读取源码，验证移除注释后的编译结果逐字一致；当前默认行为另与固定 oracle 差分。
+- core 声明 `typebox@1.3.7`；模型传输、目录和事件类型由 Forge 与 TanStack AI 提供，根包及 core 均不依赖 `pi-ai`。仍由调用方提供 `streamFn`，不引入 npm Agent。
+- Forge 使用 `exactOptionalPropertyTypes` 与 `noUncheckedIndexedAccess`。独立基线 `3b4d961` 的运行语义不变；后续定制单列于 [local-changes.md](local-changes.md)。`compare-core.ts` 从独立基线提交读取源码，核对当时的编译结果；当前 Core 与固定 oracle 另做行为差分，不要求当前编译结果与原版逐字相同。
 - `test/runtime/agent.test.ts` 与 `agent-loop.test.ts` 来自同一固定提交，仅调整测试 runner 为 `bun:test`、本地 import、已验证索引的类型标注，以及 Bun 对不完整对象的 identity matcher 类型兼容。测试同受上述 MIT 许可覆盖。
-- `check-deps.ts` 仅允许上述三个实际使用 pi-ai 的 runtime 源文件。检测全局阻塞调用使用 TypeScript AST，避免将 `Agent.prompt` 的方法声明误认为 UI 调用。
-- Responses 补丁重新基于 0.85.1 发布文件生成，在 completed/incomplete 后退出。旧补丁不能直接按旧行号复用；HTTP 终态测试验证这一边界。
+- `check-deps.ts` 拒绝各 workspace 包以及脚本和示例中的 `pi-ai` import，并用 TypeScript AST 检测全局阻塞调用。
+- 当前 Responses 传输使用 TanStack adapter；历史 `pi-ai` Responses 补丁已移除。HTTP 终态由当前传输测试验证。
 
 ## 验证与复现
 
 ```sh
-bun test packages/core/test/runtime packages/core/test/responses-terminal.test.ts
+bun test packages/core/test/runtime packages/core/test/openai-stream.test.ts
 bun scripts/compare-core.ts /path/to/pristine/pi-checkout
 ```
 
-对照 checkout 的 HEAD 必须为上述固定 SHA，四个源文件还会与 `git show` 核对。脚本临时隔离原版四文件，两侧使用相同的已锁定 pi-ai；不运行上游工作区的模型实现、不请求供应商。对照包含 25 组文本/推理/工具增量、prompt/continue、队列模式、准备与 hooks、串行/并行、stop/toolUse/error/aborted/length/deferred、事件与 idle 轨迹，只归一化时间戳。工具场景还断言实际执行次数，避免两侧同时失败造成假通过。
+对照 checkout 的 HEAD 必须为上述固定 SHA，四个源文件还会与 `git show` 核对。脚本临时隔离原版四文件，两侧注入相同的本地脚本流；不请求供应商。对照包含 25 组文本/推理/工具增量、prompt/continue、队列模式、准备与 hooks、串行/并行、stop/toolUse/error/aborted/length/deferred、事件与 idle 轨迹，只归一化时间戳。工具场景还断言实际执行次数，避免两侧同时失败造成假通过。
 
 反向验证：临时将默认 parallel 分支改成 sequential，以 `--behavior-only` 跳过源码相等检查，行为比较在 `toolUse/all/false` 失败，显示第二个工具准备/启动相对第一个工具执行的顺序发生变化；恢复后 25 组通过。此参数仅跳过历史基线执行代码核对；默认命令同时检查历史基线与当前默认行为。
 

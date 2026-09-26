@@ -1,11 +1,11 @@
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
-	EventStream,
 	type Message,
 	type Model,
 	type UserMessage,
-} from "@earendil-works/pi-ai";
+} from "../../src/model-types.ts";
+import { EventStream } from "../../src/model-stream.ts";
 import { Type } from "typebox";
 import { describe, expect, it } from "bun:test";
 import { agentLoop, agentLoopContinue } from "../../src/runtime/agent-loop.ts";

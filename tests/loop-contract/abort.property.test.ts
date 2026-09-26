@@ -1,4 +1,4 @@
-import { createPiTestPort } from "../support/test-port.ts";
+import { createTestPort } from "../support/test-port.ts";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { initialAbortState, runAbortMachine, stepAbortMachine, type AbortInput } from "./abort-machine.ts";
@@ -40,7 +40,7 @@ test("reference model self-check (not production coverage): terminal abort ignor
 });
 
 test("pi port terminates a streamed turn with aborted then agent_end", async () => {
-	const port = createPiTestPort({
+	const port = createTestPort({
 		responses: [{ text: "abcdefghijklmnopqrstuvwxyz" }],
 		tokensPerSecond: 20,
 	});

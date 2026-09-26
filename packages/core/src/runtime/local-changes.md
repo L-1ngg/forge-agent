@@ -25,3 +25,7 @@ Forge 使用此栅栏处理 `length` 与 `deferred`。前者保留已有“不�
 ## #36：宿主精确参数校验（2026-09-21）
 
 新增可选 `AgentTool.validateArguments`，参数准备后优先使用宿主校验器，未设置时保持 Pi 默认校验。MCP 使用官方 Ajv 多 dialect 校验且不做 coercion，避免授权前后参数漂移；权限与最终参数冻结继续归 `session-tools.ts`，执行内核不识别 MCP 协议。
+
+## 工具参数统一严格校验（2026-09-26）
+
+上述 #36 记录的是初始实现。现行工具参数合同见 [第一阶段施工与验收](../../../../docs/phases/tool-argument-validation.md)：运行时改用 Forge 入口，对原始参数及宿主校验器返回值均使用 JSON Schema 严格校验；内置工具从 Zod Standard Schema 生成模型可见 schema。`session-tools.ts` 在改写和 hook 后再次校验，授权与执行使用同一参数快照，并在 provider payload 恢复完整工具 schema。

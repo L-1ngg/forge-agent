@@ -19,7 +19,7 @@ created: 2026-09-10
 - 测试既分布在 `packages/*/test/`，也分布在根目录 `tests/` 和 `scripts/*.test.ts`；目录位置本身不足以判断测试边界。
 - `packages/cli/test/session-preview.test.ts` 通过真实会话文件验证预览和缓存；`tests/tui-integration/session-management.test.ts` 启动正式 CLI，通过 PTY 驱动交互并使用本地模型响应。
 - `scripts/test-headless.ts` 使用受控执行端口调用 CLI 入口，检查正常退出；它不能独立证明真实供应商连接正确。
-- 2026-09-17 核对：`createPiTestPort` 已使用 fauxProvider；`provider-replay` 使用手写 SSE 报文，不是自动录制器；`abort.property` 的部分随机测试只验证测试侧模型，另有真实执行端口的取消用例，两类证据不能混同。
+- 2026-09-17 核对：当前 `createTestPort` 夹具使用 fauxProvider；`provider-replay` 使用手写 SSE 报文，不是自动录制器；`abort.property` 的部分随机测试只验证测试侧模型，另有真实执行端口的取消用例，两类证据不能混同。
 - 以上为规格阶段的文档、源码与候选资料核对；该阶段未重新执行测试、统计稳定性或测量分组耗时。后续实施的运行证据单独保存在施工记录中。
 
 ## 与现有决策的关系

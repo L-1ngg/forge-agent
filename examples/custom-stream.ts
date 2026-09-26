@@ -1,18 +1,15 @@
 import { createAgent, type StreamFn } from "../packages/core/src/sdk.ts";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { scriptedResponses } from "./scripted-stream.ts";
 
 // Run with: bun examples/custom-stream.ts
 // This local provider exercises the real SDK without credentials or network access.
-const fixture = fauxProvider({ tokensPerSecond: 10_000 });
-fixture.setResponses([fauxAssistantMessage([fauxText("Hello from the injected StreamFn.")])]);
-const models = createModels();
-models.setProvider(fixture.provider);
+const fixture = scriptedResponses([[{ type: "text", text: "Hello from the injected StreamFn." }]]);
 
 // A host can resolve credentials or initialize its transport asynchronously here.
 // Forward options, including signal, sessionId, maxTokens and maxRetries.
-const streamFn: StreamFn = async (model, context, options) => models.streamSimple(model, context, options);
+const streamFn: StreamFn = async (model, context, options) => fixture.streamFn(model, context, options);
 const agent = await createAgent({
-	model: fixture.getModel(),
+	model: fixture.model,
 	streamFn,
 	cwd: process.cwd(),
 	systemPrompt: "Help with the task.",

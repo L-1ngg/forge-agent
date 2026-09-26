@@ -5,19 +5,19 @@
 
 **通用单 Agent 项目,目前处于个人开发中。**
 
-Forge Agent 提供自研执行内核、可嵌入的 Bun SDK 与终端应用。可以直接用 CLI 完成 coding 任务,通过 SDK 装配工具与提示词,或 fork 后构建专用 Agent。
+Forge Agent 围绕 Agent runtime 设计统一的执行与会话链路，处理输入归属、执行终态、逐步持久化和上下文管理，并提供可嵌入的 Bun SDK 与终端应用。可以直接用 CLI 完成 coding 任务,通过 SDK 装配工具与提示词,或 fork 后构建专用 Agent。
 
 [English](README.md) · [SDK 接入](docs/sdk.md) · [贡献说明](CONTRIBUTING.md)
 
 ## 当前能力
 
-- **自研执行循环:**模型流、工具执行、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
+- **执行与会话控制:**围绕模型流与工具执行处理输入归属、执行终态、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
 - **长任务:**自动或手动上下文压缩、有限超限恢复；提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
 - **可嵌入 SDK:**实例独立,工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
 - **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
 - **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。
 
-模型传输与认证由 [pi-ai](https://github.com/earendil-works/pi) 提供,执行循环与 TUI renderer 由本项目维护。资料调研与报告是后续扩展方向,尚未交付。
+当前内置模型流使用 [TanStack AI](https://tanstack.com/ai)；模型目录、认证、类型与费用辅助函数由 Forge 维护，不再依赖 `pi-ai` 包。缺少等价传输的 Mistral Conversations 和 Codex Responses 模型已从内置目录移除。执行 runtime 的来源与本地定制见下方架构说明；资料调研与报告是后续扩展方向,尚未交付。
 
 ## 快速开始
 
@@ -34,7 +34,7 @@ export FORGE_AGENT_MODEL=grok-4.6
 bun run forge-agent
 ```
 
-使用 `FORGE_AGENT_API_KEY` 或供应商原生变量(如 `XAI_API_KEY`)传入密钥,不要提交凭据。其他模型使用 pi-ai 支持的 provider/model 标识符。
+使用 `FORGE_AGENT_API_KEY` 或供应商原生变量(如 `XAI_API_KEY`、`OPENAI_API_KEY`)传入密钥,不要提交凭据。内置模型标识符来自 Forge 固定的目录快照；受支持的模型走 TanStack 传输。
 
 Headless JSON 事件输出:
 
@@ -184,9 +184,9 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 | `@forge-agent/tui` | cell compositor 与终端交互;依赖 protocol、Node 内置模块及纯 Markdown/高亮库 |
 | `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
 
-依赖门禁禁止 core 引入 UI,pi-ai 仅允许从模型适配器、事件投影和本地 runtime 导入。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
+依赖门禁禁止 core 引入 UI，并拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
 
-执行 runtime 来自固定 Pi Agent 源码，由本仓库维护，来源与接入差异见 [runtime 说明](packages/core/src/runtime/README.md)。会话策略、SDK、CLI/TUI 继续由 Forge 拥有。SDK 提供 `continue()`、执行结果、可等待空闲与释放、原生文本/图片工具结果、普通任务重试和受控配置更新，使用方式见 [SDK 指南](docs/sdk.md)。
+Forge 设计会话执行层，负责输入归属、持久化、上下文策略与执行结算，并在底层循环扩展输入准备、响应后停止和工具参数校验接缝。底层循环以固定 Pi Agent 源码为基线，由本仓库维护；来源与本地改动见 [runtime 说明](packages/core/src/runtime/README.md)及[接入差异](packages/core/src/runtime/local-changes.md)。SDK、CLI/TUI 由 Forge 实现并复用同一执行路径。SDK 提供 `continue()`、执行结果、可等待空闲与释放、原生文本/图片工具结果、普通任务重试和受控配置更新，使用方式见 [SDK 指南](docs/sdk.md)。
 
 ## Roadmap
 
@@ -222,7 +222,7 @@ bun run typecheck:examples
 
 维护者可在双平台验证后创建 [源码预发布草稿](docs/release.md),公开发布仍是单独的手动操作。
 
-参考项目:[pi](https://github.com/earendil-works/pi)、[grok-build](https://github.com/xai-org/grok-build)。各自代码适用其上游许可证;本地 pi-ai patch 保留上游归属。
+参考项目:[pi](https://github.com/earendil-works/pi)、[grok-build](https://github.com/xai-org/grok-build)。各自代码适用其上游许可证。
 
 ## 许可证
 

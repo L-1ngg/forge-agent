@@ -42,7 +42,7 @@
 - Ran：`bun run check` 通过，包含依赖边界、workspace/automation/tests 类型检查及 689 项测试（contract 513 / integration 163 / CLI-PTY 13，均为 0 fail）；Linux network namespace 外网阻断探针通过。数量减少来自原装配文件的 28 项测试替换为 4 项当前合同测试。
 - Ran：`bun run test:headless` 通过，真实 CLI 装配访问本地 HTTP fixture，返回 `replay ok` 和 `agent_end: success`；`bun run typecheck:examples`、`bun examples/custom-stream.ts`（`Result: success`）、`git diff --check` 通过。
 - 反向验证：临时移除 `createAgent` 的实参数量检查，旧第二参数拒绝用例按预期失败（Promise 被 resolve）；finally 恢复源码后，装配测试 4 pass / 0 fail。
-- 静态核对：SDK/CLI 无 `portFactory`、`PortFactory` 或旧装配 helper；AST 检查唯一多实参 `createAgent` 调用是验证拒绝旧 API 的负例。包入口不再导出 `createPiPort`、`createPiTestPort` 或内部执行类型；底层循环测试的直接会话 fixture 位于 `tests/support/test-port.ts`，复用仅提供模型流的 `fauxModel`。
+- 静态核对：SDK/CLI 无 `portFactory`、`PortFactory` 或旧装配 helper；AST 检查唯一多实参 `createAgent` 调用是验证拒绝旧 API 的负例。包入口不导出内部 `createSessionPort`、测试夹具 `createTestPort` 或执行类型；底层循环测试的直接会话 fixture 位于 `tests/support/test-port.ts`，复用仅提供模型流的 `fauxModel`。
 - Not run / Why：真实供应商、自定义生产网关、macOS 和人工 TUI 验收未执行；本次验证使用 Linux 离线流及本地 HTTP/PTY fixtures。
 - Risk：这是明确授权的 API 收紧，旧 factory 接入必须迁移到 `streamFn`、`storage` 或 `tools`；具体生产传输兼容性仍需宿主验证。
 

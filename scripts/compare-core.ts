@@ -5,8 +5,9 @@ import { readFileSync, mkdtempSync, writeFileSync, symlinkSync, rmSync } from "n
 import { tmpdir } from "node:os";
 import { strict as assert } from "node:assert";
 import ts from "typescript";
-import { EventStream, type AssistantMessageEvent, type AssistantMessage } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
+import { EventStream } from "../packages/core/src/model-stream.ts";
+import type { AssistantMessageEvent, AssistantMessage } from "../packages/core/src/model-types.ts";
+import { Type } from "typebox";
 import { Agent } from "../packages/core/src/runtime/agent.ts";
 import type { AgentEvent, AgentTool, QueueMode } from "../packages/core/src/runtime/types.ts";
 
@@ -33,7 +34,7 @@ for (const name of ["agent.ts", "agent-loop.ts", "types.ts", "stream-fn.ts"]) {
 // the exact same installed model transport, so the comparison isolates the core.
 const oracleDir = mkdtempSync(resolve(tmpdir(), "forge-core-oracle-"));
 for (const name of ["agent.ts", "agent-loop.ts", "types.ts", "stream-fn.ts"]) writeFileSync(resolve(oracleDir, name), readFileSync(resolve(upstream, "packages/agent/src", name)));
-symlinkSync(resolve("node_modules"), resolve(oracleDir, "node_modules"), "dir");
+symlinkSync(resolve(upstream, "node_modules"), resolve(oracleDir, "node_modules"), "dir");
 process.on("exit", () => rmSync(oracleDir, { recursive: true, force: true }));
 const Oracle: typeof Agent = (await import(pathToFileURL(resolve(oracleDir, "agent.ts")).href)).Agent;
 const model = { id: "script", name: "script", api: "openai-responses", provider: "openai", baseUrl: "", reasoning: true, input: ["text" as const], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 10000, maxTokens: 1000 };

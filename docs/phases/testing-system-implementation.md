@@ -82,7 +82,7 @@ macOS 证据为 [Actions 35346406650](https://github.com/L-1ngg/forge-agent/acti
 以下为既有审查、反向验证和已停止调查的历史记录：
 
 - Review：规范轴发现 HTTP 并发请求跨 await 复用同一 fixture 的假绿；新增双 socket + headers 屏障回归，修复前明确失败、修复后通过。规格轴发现续轮正文 matcher 仅比较子串；改为结构化完整消息/工具 schema 比较，仅去除声明的 cache 字段；增加工具参数、结果 ID、顺序、schema 被破坏时必须失败的双协议自检。修复后 14 个相关测试及测试类型检查通过；新增 3 个测试纳入后续 CI。
-- B1：绕过 `HttpFixture` 正文 matcher，匹配失败测试变红（退出 1）。B2：绕过 `pi-port` 权限拒绝、移除 assistant 保存等待，现有真实 SDK 拒绝/保存屏障测试分别变红（退出 1）。
+- B1：绕过 `HttpFixture` 正文 matcher，匹配失败测试变红（退出 1）。B2：绕过当前 `session-port` 权限拒绝、移除 assistant 保存等待，现有真实 SDK 拒绝/保存屏障测试分别变红（退出 1）。
 - B2 序列敏感性：去掉 `HostedAgent` 的 invocation id 检查后，seed `33004` 在第 1 组失败，缩减 3 次得到 `[["stale","run"]]`、path `0:2:2:2`；恢复后原 seed 的 50 组通过。
 - B3：将生产 `resolveRetryPolicy` 的 maxRetries 强制为 0；B4 绕过外层代理请求预算判断，两者均使对应测试变红（退出 1）；恢复后重试及 probe 的 16 个回归通过。变异未提交，生产源码保持不变。
 - 历史 macOS Seatbelt 验收失败：首次 CI `35318909475` 的 attempt 1/2 出现不固定位置的 loopback 监听失败。原生诊断 `35323361603` 确认 Bun 的 `EADDRINUSE` 包装下实际为 `listen → EPERM`；`35326840586` 在三台独立 runner 中进一步捕获 Python 与 Bun 对 `127.0.0.1` 的原生 listen/connect 拒绝，排除了 Bun/PTY 作为唯一原因。移除 bind 地址过滤、关闭日志、TCP 过滤和仅限制 IP 端点均未解决，不能记作修复。

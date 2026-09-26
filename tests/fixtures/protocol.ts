@@ -1,7 +1,7 @@
 /** Hand-authored protocol fixtures, not recordings. Changes require the review
  * procedure in README.md. No credentials or real conversation data. */
 export const fixtureProvenance = {
-	version: 1, source: "handwritten", adapter: "@earendil-works/pi-ai@0.85.1",
+	version: 2, source: "handwritten", adapters: ["@tanstack/ai-anthropic@0.19.1", "@tanstack/openai-base@0.11.1"],
 	protocols: ["anthropic-messages", "openai-responses"],
 	ignoredRequestFields: ["metadata.user_id", "prompt_cache_key", "cache_control"],
 	// Tests project relevant messages/tools explicitly; IDs, arguments and order are never normalized.

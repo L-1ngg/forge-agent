@@ -5,7 +5,8 @@ import type { SessionMessage, SessionEvent } from "@forge-agent/protocol";
 function response(text: string, partialError = false): Response {
 	const events = [
 		{ type: "message_start", message: { id: "msg_context", type: "message", role: "assistant", model: "claude-sonnet-4-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 20, output_tokens: 1 } } },
-		{ type: "content_block_start", index: 0, content_block: { type: "text", text } },
+		{ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+		{ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } },
 		{ type: "content_block_stop", index: 0 },
 		...(partialError ? [{ type: "error", error: { type: "invalid_request_error", message: "prompt is too long: 200001 tokens > 200000 maximum" } }] : [
 			{ type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 5 } },
@@ -54,6 +55,27 @@ for (const scenario of [
 		expect(requests[0]?.tools ?? []).toEqual([]);
 		expect(JSON.stringify(requests[0])).not.toContain("cache_control");
 		expect(requests[0]?.prompt_cache_key).toBeUndefined();
+} finally { await agent.dispose(); server.stop(true); }
+});
+
+for (const scenario of [
+	{ provider: "google", model: "gemini-2.5-flash", api: "gemini" },
+	{ provider: "google-vertex", model: "gemini-2.5-flash", api: "gemini" },
+	{ provider: "azure-openai-responses", model: "gpt-4o-mini", api: "responses" },
+	{ provider: "xai", model: "grok-4.3", api: "responses" },
+] as const) test(`TanStack summary uses ${scenario.provider} transport`, async () => {
+	const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+	const gemini = new Response(`data: ${JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: checkpoint }] }, finishReason: "STOP" }] })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		requests.push({ url: request.url, body: await request.json() });
+		return scenario.api === "gemini" ? gemini.clone() : openAIResponse(false);
+	} });
+	const agent = await createAgent({ ...base, provider: scenario.provider, model: scenario.model, baseUrl: server.url.toString(), thinkingLevel: "off", storage: new MemorySessionStorage([user("old"), assistant("work ".repeat(1500)), user("recent")]), context: { keepRecentTokens: 1, reserveTokens: 1000, summaryReasoning: "off" }, retry: { enabled: false } });
+	try {
+		expect((await agent.compact()).status).toBe("complete");
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.body).toMatchObject(scenario.api === "gemini" ? { contents: expect.any(Array) } : { input: expect.any(Array) });
+		expect(JSON.stringify(requests[0]?.body)).toContain("structured");
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
@@ -73,7 +95,7 @@ test("SDK replays image bytes through the real HTTP adapter and estimates them o
 	try {
 		expect(agent.getUsage()?.contextTokens).toBeGreaterThan(1024);
 		for await (const _event of agent.runTurn("continue")) {}
-		expect(JSON.stringify(requests[0])).toContain('"type":"base64","media_type":"image/png","data":"aW1hZ2U="');
+		expect((requests[0]?.messages as Array<{ content: unknown[] }>)[0]?.content[1]).toMatchObject({ type: "image", source: { type: "base64", media_type: "image/png", data: "aW1hZ2U=" } });
 		expect(JSON.stringify(await storage.load())).toContain("aW1hZ2U=");
 	} finally { await agent.dispose(); server.stop(true); }
 });
@@ -115,44 +137,34 @@ test("HTTP partial overflow preserves the failed record and recovers to a separa
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-// The helper-only counterexample must also hold at the production HTTP boundary.
-for (const thinking of ["off", "medium"] as const) test(`host final gate prevents builtin output clamping: ${thinking}`, async () => {
-	const { withScenario } = await import("../../../tests/support/scenario.ts");
-	const { modelResponse } = await import("./helpers/model-response.ts");
-	await withScenario(`builtin-clamp-${thinking}`, async s => {
-		const body = await modelResponse().text();
-		const expectedOutput = thinking === "off" ? 1024 : 9216;
-		const fixture = s.httpFixture("only-control-request", [{ id: "control", method: "POST", path: "/v1/messages", match(body) {
-			expect(body).toMatchObject({ max_tokens: expectedOutput });
-			if (thinking === "medium") expect(body).toMatchObject({ thinking: { type: "enabled", budget_tokens: 8192 } });
-		}, response: { chunks: [body] } }]);
-		let callbacks = 0;
-		const agent = await s.agent({ ...base, baseUrl: fixture.url, thinkingLevel: thinking, maxTokens: 1024, context: { enabled: false }, transformContext: context => {
-			if (++callbacks > 1) return context.messages;
-			const input = context.model.contextWindow - context.budget.effectiveOutputTokens - 2000;
-			expect(input).toBeLessThan(context.budget.maxInputTokens);
-			return [user("x".repeat((input - context.budget.fixedTokens - 1) * 4))];
-		} });
-		const rejected = agent.runTurn("too close to provider limit"); const events = await s.collect(rejected);
-		expect((await rejected.result).status).toBe("error"); expect(JSON.stringify(events)).toContain("builtin-output-clamp"); expect(fixture.count).toBe(0);
-		const control = agent.runTurn("short control"); await s.collect(control); expect((await control.result).status).toBe("success"); expect(fixture.count).toBe(1);
-	});
+for (const thinking of ["off", "medium"] as const) test(`TanStack request uses the general host budget: ${thinking}`, async () => {
+	const requests: Body[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.json() as Body); return response("accepted"); } });
+	const agent = await createAgent({ ...base, model: "claude-haiku-4-5", baseUrl: server.url.toString(), thinkingLevel: thinking, maxTokens: 1024, context: { enabled: false }, transformContext: context => {
+		const input = context.model.contextWindow - context.budget.effectiveOutputTokens - 2000;
+		return [user("x".repeat((input - context.budget.fixedTokens - 1) * 4))];
+	} });
+	try {
+		const turn = agent.runTurn("near limit");
+		for await (const _event of turn) {}
+		expect(await turn.result).toEqual({ status: "success" });
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.max_tokens).toBe(thinking === "off" ? 1024 : 9216);
+	} finally { await agent.dispose(); server.stop(true); }
 });
 
 test("switching custom and builtin streams commits the preflight policy atomically", async () => {
 	const { withScenario } = await import("../../../tests/support/scenario.ts");
 	const { fauxModel } = await import("../../../tests/support/model.ts");
 	await withScenario("transport-switch", async s => {
-		const fixture = s.httpFixture("no-http", []); let customCalls = 0;
+		const body = await (await import("./helpers/model-response.ts")).modelResponse().text();
+		const fixture = s.httpFixture("builtin-request", [{ id: "builtin", method: "POST", path: "/v1/messages", match() {}, response: { chunks: [body] } }]); let customCalls = 0;
 		const custom = fauxModel({ responses: [{ text: "custom one" }, { text: "custom two" }] });
 		const streamFn: import("../src/sdk.ts").StreamFn = (model, context, options) => { customCalls++; return custom.streamFn(custom.model, context, options); };
-		const agent = await s.agent({ ...base, thinkingLevel: "off", maxTokens: 1024, baseUrl: fixture.url, streamFn, context: { enabled: false }, transformContext: context => {
-			const input = context.model.contextWindow - context.budget.effectiveOutputTokens - 2000;
-			return [user("x".repeat((input - context.budget.fixedTokens - 1) * 4))];
-		} });
+		const agent = await s.agent({ ...base, thinkingLevel: "off", maxTokens: 1024, baseUrl: fixture.url, streamFn, context: { enabled: false } });
 		const first = agent.runTurn("custom"); await s.collect(first); expect((await first.result).status).toBe("success");
 		await (await agent.updateConfiguration({ streamFn: null })).applied;
-		const second = agent.runTurn("builtin"); await s.collect(second); expect((await second.result).status).toBe("error"); expect(fixture.count).toBe(0);
+		const second = agent.runTurn("builtin"); await s.collect(second); expect((await second.result).status).toBe("success"); expect(fixture.count).toBe(1);
 		await (await agent.updateConfiguration({ streamFn })).applied;
 		const third = agent.runTurn("custom again"); await s.collect(third); expect((await third.result).status).toBe("success"); expect(customCalls).toBe(2);
 	});

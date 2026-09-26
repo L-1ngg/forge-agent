@@ -1,0 +1,254 @@
+diff --git a/node_modules/@tanstack/ai-bedrock/.bun-tag-1fea84181535ae4a b/.bun-tag-1fea84181535ae4a
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
+index 4541a0a03889fdcd3c29dd1e33a022a64833529d..48865cb74733f14761603e0892e4d9153e781d9e 100644
+--- a/dist/esm/adapters/converse-text.js
++++ b/dist/esm/adapters/converse-text.js
+@@ -376,6 +376,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 		const topP = modelOptions?.top_p;
+ 		const maxTokens = modelOptions?.max_completion_tokens;
+ 		const stop = modelOptions?.stop;
++		const additionalModelRequestFields = modelOptions?.additionalModelRequestFields;
+ 		const stopSequences = stop == null ? void 0 : Array.isArray(stop) ? stop : [stop];
+ 		const inferenceConfig = temperature != null || topP != null || maxTokens != null || stopSequences != null ? {
+ 			...temperature != null && { temperature },
+@@ -388,7 +389,8 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 			messages,
+ 			...system.length > 0 && { system },
+ 			...toolConfig && { toolConfig },
+-			...inferenceConfig && { inferenceConfig }
++			...inferenceConfig && { inferenceConfig },
++			...additionalModelRequestFields && { additionalModelRequestFields }
+ 		};
+ 	}
+ };
+diff --git a/dist/esm/converse/message-converter.js b/dist/esm/converse/message-converter.js
+index 52d10bc2feffb067b3461d2aaba168cbb3780f1f..16b5ba554bc31359d528b93089e5a7922faad3ea 100644
+--- a/dist/esm/converse/message-converter.js
++++ b/dist/esm/converse/message-converter.js
+@@ -76,10 +76,16 @@ function messageToBlocks(msg, docCounter) {
+ 		blocks.push({ toolResult: {
+ 			toolUseId: msg.toolCallId,
+ 			content: [toolResult],
+-			status: "success"
++			status: msg.error ? "error" : "success"
+ 		} });
+ 		return blocks;
+ 	}
++	if (msg.role === "assistant" && msg.thinking) for (const thinking of msg.thinking) {
++		if (thinking.redacted === true) {
++			if (!thinking.signature) throw new Error("Bedrock Converse: redacted reasoning is missing its signature");
++			blocks.push({ reasoningContent: { redactedContent: base64ToBytes(thinking.signature) } });
++		} else blocks.push({ reasoningContent: { reasoningText: { text: thinking.content, ...thinking.signature && { signature: thinking.signature } } } });
++	}
+ 	if (typeof msg.content === "string") {
+ 		if (msg.content !== "") blocks.push({ text: msg.content });
+ 	} else if (Array.isArray(msg.content)) for (const part of msg.content) {
+diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-processor.js
+index baef7cac6284264c0bcb4483ebb406399d5d729d..41a8f92b8356f5b3a6f1c9b4f9b9ee2456b76aec 100644
+--- a/dist/esm/converse/stream-processor.js
++++ b/dist/esm/converse/stream-processor.js
+@@ -56,6 +56,7 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+ 	let hasEmittedTextMessageStart = false;
+ 	let reasoningMessageId;
+ 	let hasClosedReasoning = false;
++	const reasoningByIndex = new Map();
+ 	const toolCallsByIndex = /* @__PURE__ */ new Map();
+ 	let usage;
+ 	let finishReason;
+@@ -123,22 +124,27 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+ 				};
+ 				continue;
+ 			}
+-			if (delta && "reasoningContent" in delta && delta.reasoningContent && "text" in delta.reasoningContent && delta.reasoningContent.text !== void 0) {
+-				if (!reasoningMessageId) {
+-					reasoningMessageId = newMessageId();
+-					yield {
+-						type: EventType.REASONING_MESSAGE_START,
+-						messageId: reasoningMessageId,
+-						role: "reasoning",
+-						timestamp: Date.now()
+-					};
++			if (delta && "reasoningContent" in delta && delta.reasoningContent) {
++				const reasoning = delta.reasoningContent;
++				let step = reasoningByIndex.get(index);
++				if (!step) {
++					step = { id: newMessageId(), content: "" };
++					reasoningByIndex.set(index, step);
++					yield { type: EventType.STEP_STARTED, stepName: step.id, stepId: step.id, stepType: "thinking", timestamp: Date.now() };
++				}
++				if ("text" in reasoning && reasoning.text !== void 0) {
++					step.content += reasoning.text;
++					if (!reasoningMessageId) {
++						reasoningMessageId = newMessageId();
++						yield { type: EventType.REASONING_MESSAGE_START, messageId: reasoningMessageId, role: "reasoning", timestamp: Date.now() };
++					}
++					yield { type: EventType.REASONING_MESSAGE_CONTENT, messageId: reasoningMessageId, delta: reasoning.text, timestamp: Date.now() };
++				}
++				if ("signature" in reasoning && reasoning.signature !== void 0) step.signature = reasoning.signature;
++				if ("redactedContent" in reasoning && reasoning.redactedContent !== void 0) {
++					step.signature = Buffer.from(reasoning.redactedContent).toString("base64");
++					step.redacted = true;
+ 				}
+-				yield {
+-					type: EventType.REASONING_MESSAGE_CONTENT,
+-					messageId: reasoningMessageId,
+-					delta: delta.reasoningContent.text,
+-					timestamp: Date.now()
+-				};
+ 				continue;
+ 			}
+ 			if (delta && "text" in delta && delta.text !== void 0) {
+@@ -165,6 +171,11 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+ 		}
+ 		if ("contentBlockStop" in ev) {
+ 			const stopIndex = ev.contentBlockStop?.contentBlockIndex ?? 0;
++			const reasoning = reasoningByIndex.get(stopIndex);
++			if (reasoning) {
++				yield { type: EventType.STEP_FINISHED, stepName: reasoning.id, stepId: reasoning.id, content: reasoning.content, delta: reasoning.content, ...reasoning.signature && { signature: reasoning.signature }, ...reasoning.redacted && { redacted: true }, timestamp: Date.now() };
++				reasoningByIndex.delete(stopIndex);
++			}
+ 			const toolCall = toolCallsByIndex.get(stopIndex);
+ 			if (toolCall?.started) {
+ 				yield {
+@@ -201,6 +212,8 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+ 		};
+ 		toolCallsByIndex.delete(index);
+ 	}
++	if (!finishReason) throw new Error("Bedrock Converse stream ended before messageStop");
++	if (reasoningByIndex.size) throw new Error("Bedrock Converse stream ended with an incomplete reasoning block");
+ 	if (hasEmittedTextMessageStart) yield {
+ 		type: EventType.TEXT_MESSAGE_END,
+ 		messageId,
+diff --git a/src/adapters/converse-text.ts b/src/adapters/converse-text.ts
+index 10014e31ab6d38a1c1fcedd1cac01d2d74a70338..d006d1dec723b25c9e48dad5162cbe61677f50d6 100644
+--- a/src/adapters/converse-text.ts
++++ b/src/adapters/converse-text.ts
+@@ -557,6 +557,7 @@ export class BedrockConverseTextAdapter<
+     const topP = modelOptions?.top_p
+     const maxTokens = modelOptions?.max_completion_tokens
+     const stop = modelOptions?.stop
++    const additionalModelRequestFields = (modelOptions as typeof modelOptions & { additionalModelRequestFields?: Record<string, unknown> })?.additionalModelRequestFields
+     const stopSequences =
+       stop == null ? undefined : Array.isArray(stop) ? stop : [stop]
+ 
+@@ -579,6 +580,7 @@ export class BedrockConverseTextAdapter<
+       ...(system.length > 0 && { system }),
+       ...(toolConfig && { toolConfig }),
+       ...(inferenceConfig && { inferenceConfig }),
++      ...(additionalModelRequestFields && { additionalModelRequestFields }),
+     }
+   }
+ }
+diff --git a/src/converse/message-converter.ts b/src/converse/message-converter.ts
+index 7e2620c02ece81fd4edd64c93c8176f059654b2e..6e44e7bf537cd7f05007be6efcf43f4e818c64f2 100644
+--- a/src/converse/message-converter.ts
++++ b/src/converse/message-converter.ts
+@@ -167,12 +167,23 @@ function messageToBlocks(
+       toolResult: {
+         toolUseId: msg.toolCallId,
+         content: [toolResult],
+-        status: 'success',
++        status: msg.error ? 'error' : 'success',
+       },
+     })
+     return blocks
+   }
+ 
++  if (msg.role === 'assistant' && msg.thinking) {
++    for (const thinking of msg.thinking) {
++      if ('redacted' in thinking && thinking.redacted === true) {
++        if (!thinking.signature) throw new Error('Bedrock Converse: redacted reasoning is missing its signature')
++        blocks.push({ reasoningContent: { redactedContent: base64ToBytes(thinking.signature) } })
++      } else {
++        blocks.push({ reasoningContent: { reasoningText: { text: thinking.content, ...(thinking.signature && { signature: thinking.signature }) } } })
++      }
++    }
++  }
++
+   // Map content field to text/image/document blocks
+   if (typeof msg.content === 'string') {
+     if (msg.content !== '') {
+diff --git a/src/converse/stream-processor.ts b/src/converse/stream-processor.ts
+index 39ed54a1f9ff19bd7faee74e29476a851205a5ff..0c1268b5712d80f4252198a59235d51bf2ee821e 100644
+--- a/src/converse/stream-processor.ts
++++ b/src/converse/stream-processor.ts
+@@ -78,6 +78,7 @@ export async function* processConverseStream(
+   // Reasoning lifecycle
+   let reasoningMessageId: string | undefined
+   let hasClosedReasoning = false
++  const reasoningByIndex = new Map<number, { id: string; content: string; signature?: string; redacted?: boolean }>()
+ 
+   // Tool-call lifecycle, keyed by Converse contentBlockIndex. Converse opens a
+   // tool-use block with `contentBlockStart`, streams arg fragments via
+@@ -173,28 +174,27 @@ export async function* processConverseStream(
+         continue
+       }
+ 
+-      // Reasoning content.
+-      if (
+-        delta &&
+-        'reasoningContent' in delta &&
+-        delta.reasoningContent &&
+-        'text' in delta.reasoningContent &&
+-        delta.reasoningContent.text !== undefined
+-      ) {
+-        if (!reasoningMessageId) {
+-          reasoningMessageId = newMessageId()
+-          yield {
+-            type: EventType.REASONING_MESSAGE_START,
+-            messageId: reasoningMessageId,
+-            role: 'reasoning',
+-            timestamp: Date.now(),
++      // Preserve reasoning signatures and redacted content for the next turn.
++      if (delta && 'reasoningContent' in delta && delta.reasoningContent) {
++        const reasoning = delta.reasoningContent
++        let step = reasoningByIndex.get(index)
++        if (!step) {
++          step = { id: newMessageId(), content: '' }
++          reasoningByIndex.set(index, step)
++          yield { type: EventType.STEP_STARTED, stepName: step.id, stepId: step.id, stepType: 'thinking', timestamp: Date.now() }
++        }
++        if ('text' in reasoning && reasoning.text !== undefined) {
++          step.content += reasoning.text
++          if (!reasoningMessageId) {
++            reasoningMessageId = newMessageId()
++            yield { type: EventType.REASONING_MESSAGE_START, messageId: reasoningMessageId, role: 'reasoning', timestamp: Date.now() }
+           }
++          yield { type: EventType.REASONING_MESSAGE_CONTENT, messageId: reasoningMessageId, delta: reasoning.text, timestamp: Date.now() }
+         }
+-        yield {
+-          type: EventType.REASONING_MESSAGE_CONTENT,
+-          messageId: reasoningMessageId,
+-          delta: delta.reasoningContent.text,
+-          timestamp: Date.now(),
++        if ('signature' in reasoning && reasoning.signature !== undefined) step.signature = reasoning.signature
++        if ('redactedContent' in reasoning && reasoning.redactedContent !== undefined) {
++          step.signature = Buffer.from(reasoning.redactedContent).toString('base64')
++          step.redacted = true
+         }
+         continue
+       }
+@@ -225,6 +225,11 @@ export async function* processConverseStream(
+ 
+     if ('contentBlockStop' in ev) {
+       const stopIndex = ev.contentBlockStop?.contentBlockIndex ?? 0
++      const reasoning = reasoningByIndex.get(stopIndex)
++      if (reasoning) {
++        yield { type: EventType.STEP_FINISHED, stepName: reasoning.id, stepId: reasoning.id, content: reasoning.content, delta: reasoning.content, ...(reasoning.signature && { signature: reasoning.signature }), ...(reasoning.redacted && { redacted: true }), timestamp: Date.now() }
++        reasoningByIndex.delete(stopIndex)
++      }
+       const toolCall = toolCallsByIndex.get(stopIndex)
+       if (toolCall?.started) {
+         yield {
+@@ -262,6 +267,9 @@ export async function* processConverseStream(
+     }
+   }
+ 
++  if (!finishReason) throw new Error('Bedrock Converse stream ended before messageStop')
++  if (reasoningByIndex.size) throw new Error('Bedrock Converse stream ended with an incomplete reasoning block')
++
+   // Stream ended (possibly without any content) — still emit RUN_STARTED so
+   // consumers always see a run lifecycle.
+   yield* ensureRunStarted()

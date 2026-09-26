@@ -5,7 +5,7 @@
 import { createAgent, MemorySessionStorage, type SessionState } from "../packages/core/src/sdk.ts";
 import { loadConfig, resolveSecret } from "../packages/core/src/config.ts";
 import type { SessionMessage, SessionEvent } from "../packages/protocol/src/events.ts";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { getCatalogModel } from "../packages/core/src/model-catalog.ts";
 import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -21,13 +21,13 @@ const cases = fixture.cases.filter(item => item.split === split && (!args.includ
 if (!cases.length || !Number.isSafeInteger(repeats) || repeats < 1 || repeats > 3) throw new Error("Invalid benchmark case/split/repeats");
 const config = await loadConfig({ cwd: process.cwd() });
 if (!config.provider || !config.model) throw new Error("Configure an existing provider and model first");
-const model = builtinModels().getModel(config.provider, config.model);
+const model = getCatalogModel(config.provider, config.model);
 if (!model || !(model.cost.input > 0) || !(model.cost.output > 0)) throw new Error("Model pricing is required before paid evaluation");
 if (!["openai-completions", "openai-responses"].includes(model.api)) throw new Error("This evaluation recorder supports OpenAI-shaped usage only; add protocol coverage before using another API");
 const apiKey = await resolveSecret(config.apiKey);
 const safe = (value: string) => apiKey ? value.replaceAll(apiKey, "[redacted]") : value;
 const source = await new Response(Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe" }).stdout).text();
-const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/pi-port.ts"];
+const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
 const implementationHash = createHash("sha256");
 for (const path of implementationFiles) implementationHash.update(path).update(await Bun.file(path).text());
 

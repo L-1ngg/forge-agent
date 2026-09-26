@@ -3,11 +3,12 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
+import { z } from "zod";
 
 export interface ReadInput {
 	path: string;
-	offset?: number;
-	limit?: number;
+	offset?: number | undefined;
+	limit?: number | undefined;
 }
 
 export interface ReadOutput {
@@ -23,16 +24,11 @@ export const readTool: HarnessTool<ReadInput, ReadOutput> = defineBuiltinTool({
 	name: "read",
 	label: "Read file",
 	description: "Read a UTF-8 text file, optionally selecting an one-based offset and line count, with a 2000-line / 50 KiB head preview.",
-	parameters: {
-		type: "object",
-		properties: {
-			path: { type: "string", minLength: 1, description: "Absolute path or path relative to the working directory." },
-			offset: { type: "integer", minimum: 1, description: "First one-based line to return." },
-			limit: { type: "integer", minimum: 1, description: "Maximum number of lines to return." },
-		},
-		required: ["path"],
-		additionalProperties: false,
-	},
+	inputSchema: z.strictObject({
+		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
+		offset: z.number().int().min(1).optional().meta({ description: "First one-based line to return." }),
+		limit: z.number().int().min(1).optional().meta({ description: "Maximum number of lines to return." }),
+	}),
 	async execute(input, context) {
 		if (!input.path?.trim()) {
 			return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/index.ts");

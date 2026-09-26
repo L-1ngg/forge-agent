@@ -5,7 +5,7 @@ created: 2026-09-08
 
 # ADR-015: 移植并本地维护 Pi Agent Core
 
-> 状态:已批准(2026-09-08)。operator 已确认规格及配置时序并授权按 #15–#26 实施；正式需求见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)，源码基线及接入证据见[迁移验收](../phases/pi-core-migration-acceptance.md)。
+> 状态:已批准(2026-09-08)，其中保留 pi-ai 的历史原则由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订。operator 已确认规格及配置时序并授权按 #15–#26 实施；正式需求见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)，源码基线及接入证据见[迁移验收](../phases/pi-core-migration-acceptance.md)。
 > 参与者:operator、Codex。
 
 ## 背景

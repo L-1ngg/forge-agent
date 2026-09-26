@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createAgent, MemorySessionStorage, type Model, type StreamFn, type Agent } from "@forge-agent/core/sdk";
-import { EventStream, type AssistantMessage, type AssistantMessageEvent } from "@earendil-works/pi-ai";
+import { EventStream } from "../src/model-stream.ts";
+import type { AssistantMessage, AssistantMessageEvent } from "../src/model-types.ts";
 import { sessionMessages } from "../src/session-storage.ts";
 import { SUMMARY_SYSTEM } from "../src/context/compaction.ts";
 import { gate, modelResponse } from "./helpers/model-response.ts";

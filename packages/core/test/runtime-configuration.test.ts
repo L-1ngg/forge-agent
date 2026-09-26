@@ -3,6 +3,19 @@ import { createAgent } from "@forge-agent/core/sdk";
 import { modelResponse, gate } from "./helpers/model-response.ts";
 const settings = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "old prompt", cwd: process.cwd() };
 
+test("invalid Azure endpoint cannot replace the applied model configuration", async () => {
+	let requests = 0;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
+	const agent = await createAgent({ ...settings, baseUrl: server.url.toString() });
+	try {
+		await expect(agent.updateConfiguration({ provider: "azure-openai-responses", model: "gpt-4", apiKey: "azure-fixture", baseUrl: "not a URL" })).rejects.toThrow("Azure OpenAI endpoint");
+		const turn = agent.runTurn("still Anthropic");
+		for await (const _event of turn) {}
+		expect(await turn.result).toEqual({ status: "success" });
+		expect(requests).toBe(1);
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
 test("SDK accepts configuration during tools and applies it after the complete batch", async () => {
 	const started = gate(); const release = gate(); const nextRequest = gate(); const finish = gate();
 	const effects: string[] = []; const requests: Array<{ system: unknown; tools: unknown; model: string }> = [];

@@ -4,7 +4,7 @@
 import { createAgent, LongTermMemory, type MemoryScope, type Agent } from "../packages/core/src/sdk.ts";
 import { loadConfig, resolveSecret } from "../packages/core/src/config.ts";
 import { createMemoryHost } from "../packages/cli/src/memory-host.ts";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { getCatalogModel } from "../packages/core/src/model-catalog.ts";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,11 +21,11 @@ const cases = (JSON.parse(fixtureText) as { cases: Case[] }).cases.filter(item =
 if (!cases.length) throw new Error("No quality cases selected");
 const config = await loadConfig({ cwd: process.cwd() });
 if (!config.provider || !config.model) throw new Error("Configure provider/model before this explicit experiment");
-const model = builtinModels().getModel(config.provider, config.model);
+const model = getCatalogModel(config.provider, config.model);
 if (!model || model.cost.input <= 0 || model.cost.output <= 0) throw new Error("Known positive model prices required");
 const apiKey = await resolveSecret(config.apiKey);
 const root = await mkdtemp(join(tmpdir(), "forge-memory-quality-"));
-const implementation = ["packages/core/src/agent.ts", "packages/core/src/agent-port.ts", "packages/core/src/agent-session.ts", "packages/core/src/pi-port.ts", "packages/core/src/context/assembler.ts", "packages/core/src/memory/store.ts", "packages/core/src/memory/files.ts", "packages/core/src/memory/copy.ts", "packages/core/src/memory/tools.ts", "packages/cli/src/memory-host.ts"];
+const implementation = ["packages/core/src/agent.ts", "packages/core/src/agent-port.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-port.ts", "packages/core/src/context/assembler.ts", "packages/core/src/memory/store.ts", "packages/core/src/memory/files.ts", "packages/core/src/memory/copy.ts", "packages/core/src/memory/tools.ts", "packages/cli/src/memory-host.ts"];
 const hash = createHash("sha256"); for (const path of implementation) hash.update(path).update(await Bun.file(path).text());
 const fixtureHash = createHash("sha256").update(fixtureText).digest("hex");
 const harnessHash = createHash("sha256").update(await Bun.file(import.meta.path).text()).digest("hex");

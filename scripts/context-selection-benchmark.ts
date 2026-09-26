@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig, resolveSecret } from "../packages/core/src/config.ts";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { getCatalogModel } from "../packages/core/src/model-catalog.ts";
 import type { SessionMessage, SessionEvent } from "../packages/protocol/src/events.ts";
 import type { SessionState } from "../packages/core/src/sdk.ts";
 
@@ -26,7 +26,7 @@ if (fixture.version !== 2 || fixture.cases.length !== 16 || new Set(fixture.case
 const cases = fixture.cases.filter(item => item.split === split && (!argv.includes("--case") || item.id === option("--case", "")));
 if (!cases.length) throw new Error("No matching cases");
 const sdk = await import(pathToFileURL(resolve(sdkRoot, "packages/core/src/sdk.ts")).href) as typeof import("../packages/core/src/sdk.ts");
-const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/pi-port.ts"];
+const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
 const implementationHash = createHash("sha256");
 for (const path of implementationFiles) implementationHash.update(path).update(await Bun.file(resolve(sdkRoot, path)).text());
 const metadata = {
@@ -87,7 +87,7 @@ function settingsFor(storage: InstanceType<typeof sdk.MemorySessionStorage>, pro
 
 const config = await loadConfig({ cwd: process.cwd() });
 if (!config.provider || !config.model) throw new Error("Configure a provider and model first");
-const model = builtinModels().getModel(config.provider, config.model);
+const model = getCatalogModel(config.provider, config.model);
 if (!model || !(model.cost.input > 0) || !(model.cost.output > 0) || !["openai-completions", "openai-responses"].includes(model.api)) throw new Error("This recorder requires priced OpenAI-shaped usage");
 
 if (phase === "preflight") {
