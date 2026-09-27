@@ -2,7 +2,7 @@ import { open, realpath, stat as pathStat } from "node:fs/promises";
 import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
-import { parseFrontmatter } from "./upstream/frontmatter.ts";
+import { parse } from "yaml";
 import { SkillError } from "./types.ts";
 
 const HEADER_LIMIT = 64 * 1024;
@@ -18,6 +18,7 @@ export async function readSkillFile(entry: string, activation: boolean, signal?:
 		const fileIdentity = `${stat.dev}:${stat.ino}`;
 		const hash = createHash("sha256");
 		let header = Buffer.alloc(0), bodyBytes = 0, headerDone = false;
+		let yamlStart = 0, yamlEnd = 0;
 		const body: Buffer[] = [];
 		const addBody = (chunk: Buffer) => {
 			bodyBytes += chunk.length;
@@ -36,17 +37,19 @@ export async function readSkillFile(entry: string, activation: boolean, signal?:
 			// Latin-1 keeps byte offsets intact, including multibyte UTF-8 in YAML.
 			const raw = header.toString("latin1");
 			if (!/^(?:\xef\xbb\xbf)?---(?:\r\n|\n|\r)/.test(raw)) throw new SkillError("invalid-skill", "YAML frontmatter is required");
-			const start = raw.indexOf("---") + 3;
-			const end = /(?:\r\n|\n|\r)---(?:\r\n|\n|\r(?!$|\n))/g; end.lastIndex = start;
+			yamlStart = raw.indexOf("---") + 3;
+			const end = /(?:\r\n|\n|\r)---(?:\r\n|\n|\r(?!$|\n))/g; end.lastIndex = yamlStart;
 			const match = end.exec(raw);
 			if (!match) { if (header.length > HEADER_LIMIT) throw new SkillError("invalid-skill", "Frontmatter exceeds Forge's 64 KiB limit"); continue; }
 			const boundary = match.index + match[0].length;
 			if (boundary > HEADER_LIMIT) throw new SkillError("invalid-skill", "Frontmatter exceeds Forge's 64 KiB limit");
+			yamlEnd = match.index;
 			addBody(header.subarray(boundary)); header = header.subarray(0, boundary); headerDone = true;
 		}
 		if (!headerDone) {
 			// A closing delimiter may end at EOF without a trailing newline.
-			if (/(?:\r\n|\n|\r)---\r?$/.test(header.toString("latin1"))) headerDone = true;
+			const match = /(?:\r\n|\n|\r)---\r?$/.exec(header.toString("latin1"));
+			if (match) yamlEnd = match.index;
 			else throw new SkillError("invalid-skill", "Unclosed YAML frontmatter");
 		}
 		signal?.throwIfAborted();
@@ -54,7 +57,8 @@ export async function readSkillFile(entry: string, activation: boolean, signal?:
 		const current = await pathStat(entry);
 		if (`${current.dev}:${current.ino}` !== fileIdentity) throw new SkillError("changed", "Skill file replaced; refresh Skills.");
 		let metadata: Record<string, unknown>;
-		try { metadata = parseFrontmatter(header.toString("utf8")).frontmatter; JSON.stringify(metadata); }
+		// Only normalize YAML; the body retains its exact UTF-8 bytes.
+		try { metadata = parse(header.subarray(yamlStart, yamlEnd).toString("utf8").replace(/\r\n?/g, "\n")) ?? {}; JSON.stringify(metadata); }
 		catch (error) { throw new SkillError("invalid-skill", `Invalid YAML metadata: ${error}`); }
 		if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new SkillError("invalid-skill", "Frontmatter must be a mapping");
 		return { metadata, body: Buffer.concat(body).toString("utf8"), contentRevision: `sha256:${hash.digest("hex")}`, realEntry, baseDirectory: dirname(realEntry), fileIdentity };

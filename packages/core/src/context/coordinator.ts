@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
-import type { Agent as RuntimeAgent } from "../runtime/agent.ts";
 import type { SessionAssembly } from "../configuration.ts";
-import { fromSessionMessage, toSessionMessage } from "../event-projection.ts";
 import { projectMessages, type SessionEntry, type SessionState } from "../session-storage.ts";
 import { UsageTracker, estimateContextTokens } from "../usage.ts";
 import type { ContextAssembler } from "./assembler.ts";
@@ -10,7 +8,8 @@ import { buildContext, type CompactionReason, type CompactionResult, type Contex
 import { compactContext, type CompactionMetrics } from "./compact.ts";
 
 interface CompactionHost {
-	runtime: RuntimeAgent;
+	messages(): SessionMessage[];
+	tools(): NonNullable<SessionAssembly["options"]["tools"]>;
 	usage: UsageTracker;
 	assembler: ContextAssembler;
 	configuration(): SessionAssembly & { settings: ContextSettings };
@@ -28,16 +27,15 @@ export class CompactionCoordinator {
 	}
 	budget() {
 		const { options, driver } = this.host.configuration();
-		return { window: options.contextWindow ?? options.model.contextWindow, output: driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: options.systemPrompt + JSON.stringify(this.host.runtime.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }))) };
+		return { window: options.contextWindow ?? options.model.contextWindow, output: driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: options.systemPrompt + JSON.stringify(this.host.tools().map(({ name, description, parameters }) => ({ name, description, parameters }))) };
 	}
 	syncUsage(): void {
 		const { options } = this.host.configuration();
 		const memory = this.host.assembler.projection.messages;
-		this.host.usage.setContext({ messages: [...memory, ...projectMessages(this.host.runtime.state.messages.map(message => toSessionMessage(message)!))], contextWindow: options.contextWindow ?? options.model.contextWindow, identity: JSON.stringify([options.model, options.systemPrompt, options.thinkingLevel, options.tools, memory]), fixedText: this.budget().fixedText });
+		this.host.usage.setContext({ messages: [...memory, ...projectMessages(this.host.messages())], contextWindow: options.contextWindow ?? options.model.contextWindow, identity: JSON.stringify([options.model, options.systemPrompt, options.thinkingLevel, options.tools, memory]), fixedText: this.budget().fixedText });
 	}
 	rebuild(): void {
-		const { options } = this.host.configuration();
-		this.host.runtime.state.messages = buildContext(this.host.history()).map(message => fromSessionMessage(message, options.model));
+		buildContext(this.host.history()); // Validate the committed branch before publishing usage.
 		this.host.usage.invalidate();
 		this.syncUsage();
 	}
@@ -45,7 +43,7 @@ export class CompactionCoordinator {
 		const { settings, driver } = this.host.configuration();
 		const operationId = randomUUID();
 		this.syncUsage();
-		const beforeTokens = estimateContextTokens(projectMessages(this.host.runtime.state.messages.map(message => toSessionMessage(message)!))) + Math.ceil(this.budget().fixedText.length / 4);
+		const beforeTokens = estimateContextTokens(projectMessages(this.host.messages())) + Math.ceil(this.budget().fixedText.length / 4);
 		let compactionMetrics: CompactionMetrics | undefined;
 		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...compactionMetrics, ...extra });
 		try {

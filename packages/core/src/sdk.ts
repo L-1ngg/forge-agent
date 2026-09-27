@@ -1,7 +1,7 @@
 export type { TransformContext, TransformContextContext } from "./context/transform.ts";
 
-export type { Agent, AgentTurn, AgentOptions, CreateAgentOptions, TurnResult } from "./agent.ts";
-export type { InputAcceptance, InputQueueMode } from "./agent-port.ts";
+export type { Agent, AgentTurn, CreateAgentOptions, TurnResult } from "./agent.ts";
+export type { InputAcceptance, InputQueueMode } from "./agent.ts";
 export { MemorySessionStorage, type SessionStorage } from "./session-storage.ts";
 export { SessionStore, type SessionDiagnostic, type SessionOpenOptions } from "./session-store.ts";
 export type { SessionState, SessionEntry, MessageEntry, CompactionEntry } from "./session-storage.ts";
@@ -17,7 +17,9 @@ export { initializeMemoryCopy } from "./memory/copy.ts";
 export type { MemoryFileSystem } from "./memory/files.ts";
 export type { HarnessTool, ToolResult, ToolContext } from "@forge-agent/tools";
 export type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
-export type { ToolHooks, StreamFn, Model } from "./session-port.ts";
+export type { ToolHooks, ToolCallContext, BeforeToolCallResult, AfterToolCallContext, AfterToolCallResult } from "./session-tools.ts";
+export type { Model } from "./model-types.ts";
+export type { ModelAdapter } from "./model-adapter.ts";
 
 export type { SkillsOptions, SkillRoot, SkillLayer, SkillsSnapshot, SkillEntry, SkillDiagnostic, SkillInvocation, AgentInput, SkillErrorCode } from "./skills/types.ts";
 

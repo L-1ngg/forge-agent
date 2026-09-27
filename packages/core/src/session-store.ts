@@ -105,7 +105,6 @@ export class SessionStore implements SessionStorage {
 	currentBranch(): SessionEntry[] { return structuredClone(selectedBranch(this.state)); }
 	messages(): SessionMessage[] { return sessionMessages(this.state); }
 	async load(): Promise<SessionState> { this.validateBranch(); return structuredClone(this.state); }
-	asStorage(): SessionStorage { return this; }
 	append(entry: SessionEntry): Promise<void> {
 		const saved = structuredClone(entry);
 		const writing = this.writing.then(async () => {

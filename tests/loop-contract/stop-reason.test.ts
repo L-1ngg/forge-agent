@@ -1,4 +1,4 @@
-import { createTestPort } from "../support/test-port.ts";
+import { createTestAgent } from "../support/test-agent.ts";
 import { expect, test } from "bun:test";
 
 const stopReasons = ["stop", "length", "tool_use", "error", "aborted", "deferred"] as const;
@@ -12,10 +12,10 @@ function nextAction(reason: StopReason): "idle" | "continue" | "retry" | "report
 	return "idle";
 }
 
-test("pi exposes every stop reason with an explicit follow-up action", async () => {
+test("native agent exposes every stop reason with an explicit follow-up action", async () => {
 	const observed = new Map<StopReason, ReturnType<typeof nextAction>>();
 	for (const reason of stopReasons) {
-		const port = createTestPort({
+		const port = await createTestAgent({
 			responses: [{ text: reason, stopReason: reason, ...(reason === "error" ? { errorMessage: "scripted error" } : {}) }],
 		});
 		for await (const event of port.runTurn(reason)) {

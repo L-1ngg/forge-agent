@@ -1,14 +1,14 @@
 # 通用 Agent — 规划
 
-> 状态:后续路线(2026-09-21)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
+> 状态:后续路线(2026-09-27)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
 > 按[当前文档导航](README.md)读取合同与证据；历史路线仅在追溯时进入[归档索引](archive/README.md)。
-> 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md)。
+> 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [TanStack 基座](phases/tanstack-foundation.md)、[基座验收](phases/tanstack-foundation-acceptance.md)。
 
 ## 1. 当前行动项
 
-- [ ] 按 [ADR-024](decisions/024-incremental-tanstack-ai-adoption.md) 在凭据与预算可用后完成内置 TanStack 传输 AC-7 真实供应商验收；AC-2 至 AC-5 离线矩阵与 `pi-ai` 包依赖清零已通过。工具参数校验见[施工与证据](phases/tool-argument-validation.md)，OpenAI 见[试点施工图](phases/openai-tanstack-transport.md)，其余协议与未测边界见[传输施工图](phases/tanstack-provider-transport-migration.md)。
+- [ ] 在明确凭据、目标及请求数/时间/费用预算后，按[原生 Adapter 合同](phases/model-adapter.md)完成真实供应商 AC-7：普通回答、工具续轮、摘要、恢复和取消。当前架构与本次离线软件证据见 [ADR-025](decisions/025-tanstack-agent-foundation.md)及[基座验收](phases/tanstack-foundation-acceptance.md)。
 - [ ] 在具备真实账号、模型预算及平台环境后，按 [MCP 验收记录](phases/mcp-client-acceptance.md)验证仍未实测的边界；[Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 代码交付与任务关闭不将未测项改写为通过。
-- [ ] 对照[迁移验收的未测边界](phases/pi-core-migration-acceptance.md#回退与交付边界)安排剩余真实任务验证；WSL 验收不扩展为真实供应商多轮工具/session/取消矩阵或长期使用覆盖。
+- [ ] 对照[基座验收的外部边界](phases/tanstack-foundation-acceptance.md#外部边界)安排真实任务与跨平台验证；Linux 离线结果不扩展为真实供应商或长期使用证据。
 - [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。
 
 ## 2. 后续路线
@@ -39,7 +39,7 @@
 ## 3. 暂缓事项与边界
 
 - `onPayload/onResponse` 现阶段不做；`onResponse` 指 HTTP status/headers 观测，不是模型答案回调。不启动 Forge 统一传输观测或更换 Vercel AI SDK；有实际需求和可证明的适配器覆盖后再议。
-- 保留 `AgentTurn.result`、输入归属/`processed` 回执及配置 `accepted/applied` 时序；不暴露整个 `RuntimeOptions`，不恢复 `portFactory`，不升级 Pi。`transformContext` 异常注释已澄清，不重复修改。
+- 保留 `AgentTurn.result`、输入归属/`processed` 回执及配置 `accepted/applied` 区别；扩展通过原生 adapter、tools、storage 和具体策略接口，不恢复完整执行 factory 或第二套循环。
 - Phase 0/1 与 Phase 2 M1-M6 的历史施工见 [Phase 1](archive/phases/phase-1.md)、[Phase 2](archive/phases/phase-2.md);pixel parity 中止记录见 [Phase 2.1](archive/phases/phase-2.1.md)。
 - [Phase 2.2](archive/phases/phase-2.2.md) 已由 operator 关闭,不因重新定位重开;旧验收不代表通用 agent 或对外 SDK 已验收。
 - TUI 体验优化见 [主界面工作流设计](phases/tui-main-workflow.md);5 天 dogfooding、真实 provider 多轮工具/session/取消验证和 AC-14 继续按后续要求安排,未测项不改写成通过。

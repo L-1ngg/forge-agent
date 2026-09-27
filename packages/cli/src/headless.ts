@@ -36,8 +36,6 @@ export function headlessRequestDecision<K extends RequestKind>(request: RequestE
 	}
 }
 
-export const headlessResponseFor = headlessRequestDecision;
-
 export interface RunHeadlessOptions {
 	requestBus?: RequestBus;
 }

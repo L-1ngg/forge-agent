@@ -1,8 +1,7 @@
-import type { StreamFn } from "../session-port.ts";
-import { toSessionMessage } from "../event-projection.ts";
+import type { SessionMessage } from "@forge-agent/protocol";
+import type { HarnessTool } from "@forge-agent/tools";
 import { estimateContextTokens } from "../usage.ts";
-
-type Context = Parameters<StreamFn>[1];
+interface Context { systemPrompt?: string; messages: SessionMessage[]; tools?: Array<Pick<HarnessTool<object, unknown>, "name" | "description" | "parameters">>; }
 
 export interface RequestBudget {
 	readonly contextWindow: number;
@@ -30,7 +29,7 @@ export function isolateRequest(context: Context): Context {
 }
 
 export function checkRequestBudget(context: Context, budget: RequestBudget, revision: number): number {
-	const input = estimateContextTokens(context.messages.map(message => toSessionMessage(message)!)) + Math.ceil(requestFixedText(context).length / 4);
+	const input = estimateContextTokens(context.messages) + Math.ceil(requestFixedText(context).length / 4);
 	if (!Number.isFinite(input) || input > budget.maxInputTokens) throw new Error(`request-budget (general): input=${input}, output=${budget.effectiveOutputTokens}, margin=${REQUEST_MARGIN}, window=${budget.contextWindow}, revision=${revision}`);
 	return input;
 }

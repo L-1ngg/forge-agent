@@ -27,7 +27,7 @@ if (!["openai-completions", "openai-responses"].includes(model.api)) throw new E
 const apiKey = await resolveSecret(config.apiKey);
 const safe = (value: string) => apiKey ? value.replaceAll(apiKey, "[redacted]") : value;
 const source = await new Response(Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe" }).stdout).text();
-const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
+const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-assembly.ts"];
 const implementationHash = createHash("sha256");
 for (const path of implementationFiles) implementationHash.update(path).update(await Bun.file(path).text());
 

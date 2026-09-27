@@ -9,6 +9,8 @@ created: 2026-09-21
 
 ## 实现落点
 
+以下为 2026-09-21 的历史接线与当时验证。2026-09-27 已用 TanStack `chat()`、原生 adapter 和统一工具批次替代 Pi payload seam；本次重构的重跑结果单独记录在 [TanStack 基座验收](tanstack-foundation-acceptance.md)，不将下列历史证据算作本轮通过。
+
 - `packages/core/src/mcp/`：每 Agent 的连接与不可变工具定义、官方传输/分页/schema/OAuth 接线、资源/模板/Prompt、逻辑订阅、凭据和附件 adapter。stdio 直接 PID 退出纳入清理；业务结果不明不重放。
 - `AgentSession` 与 `session-storage.ts`：配置接受/应用屏障，Prompt 单 user 封套、输入归属、模型/预算/压缩的一致投影；保存失败沿用实例 faulted 语义。
 - `session-tools.ts`：最终参数精确校验与既有权限、在 Pi provider payload seam 保留完整 MCP schema。资源模板参数改写后重新展开，授权与执行采用相同 URI。

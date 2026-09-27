@@ -1,4 +1,4 @@
-import { createTestPort } from "../support/test-port.ts";
+import { createTestAgent } from "../support/test-agent.ts";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { initialAbortState, runAbortMachine, stepAbortMachine, type AbortInput } from "./abort-machine.ts";
@@ -39,8 +39,8 @@ test("reference model self-check (not production coverage): terminal abort ignor
 	expect(initialAbortState().status).toBe("idle");
 });
 
-test("pi port terminates a streamed turn with aborted then agent_end", async () => {
-	const port = createTestPort({
+test("native agent terminates a streamed turn with aborted then agent_end", async () => {
+	const port = await createTestAgent({
 		responses: [{ text: "abcdefghijklmnopqrstuvwxyz" }],
 		tokensPerSecond: 20,
 	});

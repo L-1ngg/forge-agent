@@ -14,11 +14,11 @@ test("dependency check rejects the replaced execution engine even inside the mod
 		const manifest = JSON.stringify({ dependencies: { "@earendil-works/pi-agent-core": "0.84.4" } });
 		await writeFile(join(rootPath, "package.json"), manifest);
 		await writeFile(join(rootPath, "packages", "core", "package.json"), manifest);
-		await writeFile(join(rootPath, "packages", "core", "src", "session-port.ts"), 'import "@earendil-works/pi-agent-core";\nexport * from "@earendil-works/pi-agent-core/agent-loop";\n');
+		await writeFile(join(rootPath, "packages", "core", "src", "session-assembly.ts"), 'import "@earendil-works/pi-agent-core";\nexport * from "@earendil-works/pi-agent-core/agent-loop";\n');
 		const violations = await findViolations(new URL(`file://${rootPath}/`));
 		expect(violations).toContain("package.json must not depend on pi-agent-core");
 		expect(violations).toContain("packages/core/package.json must not depend on pi-agent-core");
-		expect(violations.filter((violation) => violation === "packages/core/src/session-port.ts must not import pi-agent-core")).toHaveLength(2);
+		expect(violations.filter((violation) => violation === "packages/core/src/session-assembly.ts must not import pi-agent-core")).toHaveLength(2);
 	} finally {
 		await rm(rootPath, { recursive: true, force: true });
 	}

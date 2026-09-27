@@ -1,5 +1,5 @@
-import type { AgentPort } from "../../packages/core/src/agent-port.ts";
-import { createTestPort } from "../support/test-port.ts";
+import type { Agent } from "../../packages/core/src/sdk.ts";
+import { createTestAgent } from "../support/test-agent.ts";
 import { createAgent } from "../../packages/core/src/sdk.ts";
 import { fauxModel } from "../support/model.ts";
 import { expect, test } from "bun:test";
@@ -21,7 +21,7 @@ function tool(execute: HarnessTool<object, unknown>["execute"]): HarnessTool<obj
 	};
 }
 
-async function collect(port: Pick<AgentPort, "runTurn">, input = "start"): Promise<SessionEvent[]> {
+async function collect(port: Pick<Agent, "runTurn">, input = "start"): Promise<SessionEvent[]> {
 	const events: SessionEvent[] = [];
 	for await (const event of port.runTurn(input)) events.push(event);
 	return events;
@@ -36,7 +36,7 @@ function userTexts(events: SessionEvent[]): string[] {
 test("owned core preserves a length-limited response without preparing or executing its tool calls", async () => {
 	let executions = 0;
 	let rewrites = 0;
-	const port = createTestPort({
+	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		toolInputRewrites: { capture: (input) => { rewrites++; return input; } },
@@ -70,7 +70,7 @@ test("owned core settles unserializable results and waits for sibling tools befo
 	let markFinished!: () => void;
 	const finished = new Promise<void>((resolve) => { markFinished = resolve; });
 	let slowDone = false;
-	const port = createTestPort({
+	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
@@ -113,7 +113,7 @@ test("owned core settles unserializable results and waits for sibling tools befo
 
 test.each([false, true])("owned core preserves batch termination semantics with mixed permissions: %s", async (mixed) => {
 	const executed: string[] = [];
-	const port = createTestPort({
+	const port = await createTestAgent({
 		tools: [tool(async (input) => { executed.push((input as { value: string }).value); return { content: [{ type: "text", text: "ok" }], details: "ok" }; })],
 		permission: { rules: [
 			{ tool: "capture", argsPattern: '{"value":"deny"}', effect: "deny", reason: "test deny" },
@@ -131,7 +131,8 @@ test.each([false, true])("owned core preserves batch termination semantics with 
 });
 
 test.each(["steer", "followUp"] as const)("owned core drains %s after an entirely denied batch without leaking it into the next invocation", async (queue) => {
-	const port = createTestPort({
+	const port = await createTestAgent({
+		steeringMode: "one-at-a-time", followUpMode: "one-at-a-time",
 		tools: [tool(async () => { throw new Error("denied tool executed"); })],
 		permission: { rules: [{ tool: "capture", argsPattern: "*", effect: "deny", reason: "test deny" }] },
 		responses: [
@@ -143,12 +144,13 @@ test.each(["steer", "followUp"] as const)("owned core drains %s after an entirel
 	});
 	const events: SessionEvent[] = [];
 	let queued = false;
-	for await (const event of port.runTurn("initial")) {
+	const turn = port.runTurn("initial");
+	for await (const event of turn) {
 		events.push(event);
 		if (event.type === "message_delta" && !queued) {
 			queued = true;
-			port[queue]("queued-first");
-			port[queue]("queued-second");
+			expect(port[queue]("queued-first", turn.id).accepted).toBe(true);
+			expect(port[queue]("queued-second", turn.id).accepted).toBe(true);
 		}
 	}
 	expect(queued).toBe(true);
@@ -159,7 +161,7 @@ test.each(["steer", "followUp"] as const)("owned core drains %s after an entirel
 
 test("owned core rejects unknown tools and invalid arguments without executing them", async () => {
 	let executions = 0;
-	const port = createTestPort({
+	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
 		responses: [
@@ -181,7 +183,7 @@ test("owned core rejects unknown tools and invalid arguments without executing t
 
 test("owned core settles thrown tool failures before the next assistant message", async () => {
 	const completed: string[] = [];
-	const port = createTestPort({
+	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (input) => {
 			const value = (input as { value: string }).value;
@@ -210,7 +212,7 @@ test("owned core settles thrown tool failures before the next assistant message"
 
 test("owned core preserves one result per call across generated tool failures", async () => {
 	await fc.assert(fc.asyncProperty(fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }), async (failures) => {
-		const port = createTestPort({
+		const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 			tools: [tool(async (input) => {
 				if ((input as { value: string }).value === "fail") throw new Error("generated failure");
@@ -233,17 +235,18 @@ test("owned core preserves one result per call across generated tool failures", 
 });
 
 test("owned core drains steering before follow-ups and preserves FIFO in both queues", async () => {
-	const port = createTestPort({ responses: Array.from({ length: 6 }, () => ({ echoLastUser: true })), tokensPerSecond: 500 });
+	const port = await createTestAgent({ responses: Array.from({ length: 6 }, () => ({ echoLastUser: true })), tokensPerSecond: 500 });
 	const events: SessionEvent[] = [];
 	let queued = false;
-	for await (const event of port.runTurn("initial")) {
+	const turn = port.runTurn("initial");
+	for await (const event of turn) {
 		events.push(event);
 		if (event.type === "message_delta" && !queued) {
 			queued = true;
-			port.followUp("follow-first");
-			port.steer("steer-first");
-			port.followUp("follow-second");
-			port.steer("steer-second");
+			expect(port.followUp("follow-first", turn.id).accepted).toBe(true);
+			expect(port.steer("steer-first", turn.id).accepted).toBe(true);
+			expect(port.followUp("follow-second", turn.id).accepted).toBe(true);
+			expect(port.steer("steer-second", turn.id).accepted).toBe(true);
 		}
 	}
 	expect(queued).toBe(true);
@@ -254,7 +257,7 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 	let cleaned = false;
 	let markStarted!: () => void;
 	const started = new Promise<void>((resolve) => { markStarted = resolve; });
-	const port = createTestPort({
+	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async (_input, context) => {
 			markStarted();
@@ -268,11 +271,12 @@ test("closing a tool turn aborts its signal, waits for cleanup, and discards que
 		})],
 		responses: [{ toolCalls: [{ id: "wait", name: "capture", arguments: { value: "wait" } }], stopReason: "tool_use" }, { echoLastUser: true }],
 	});
-	for await (const event of port.runTurn("discard")) {
+	const turn = port.runTurn("discard");
+	for await (const event of turn) {
 		if (event.type === "tool_execution_start") {
 			await started;
-			port.steer("discard-steer");
-			port.followUp("discard-follow");
+			expect(port.steer("discard-steer", turn.id).accepted).toBe(true);
+			expect(port.followUp("discard-follow", turn.id).accepted).toBe(true);
 			break;
 		}
 	}

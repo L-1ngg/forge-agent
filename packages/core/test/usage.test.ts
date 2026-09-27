@@ -1,4 +1,4 @@
-import { createTestPort } from "../../../tests/support/test-port.ts";
+import { createTestAgent } from "../../../tests/support/test-agent.ts";
 import { expect, test } from "bun:test";
 import { UsageTracker, calculateContextUsage, estimateContextTokens } from "../src/index.ts";
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
@@ -79,8 +79,8 @@ test("valid task usage includes trailing estimates and invalidates changed reque
 	expect(tracker.snapshot().contextEstimated).toBe(true);
 });
 
-test("session port refreshes context usage after the assembled transcript changes", async () => {
-	const port = createTestPort({ responses: [{ text: "first" }, { text: "second" }] });
+test("SDK refreshes context usage after the assembled transcript changes", async () => {
+	const port = await createTestAgent({ responses: [{ text: "first" }, { text: "second" }] });
 	for await (const _event of port.runTurn("short")) {}
 	const first = port.getUsage?.();
 	for await (const _event of port.runTurn("a substantially longer second prompt")) {}

@@ -5,7 +5,7 @@ created: 2026-09-08
 
 # ADR-015: 移植并本地维护 Pi Agent Core
 
-> 状态:已批准(2026-09-08)，其中保留 pi-ai 的历史原则由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订。operator 已确认规格及配置时序并授权按 #15–#26 实施；正式需求见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)，源码基线及接入证据见[迁移验收](../phases/pi-core-migration-acceptance.md)。
+> 状态:生产内核选择被 [ADR-025](025-tanstack-agent-foundation.md) 取代(2026-09-27)。以下保留历史决定；其中保留 pi-ai 的原则此前已由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订。operator 已确认规格及配置时序并授权按 #15–#26 实施；正式需求见 [Spec #14](https://github.com/L-1ngg/forge-agent/issues/14)，源码基线及接入证据见[迁移验收](../archive/phases/pi-core-migration-acceptance.md)。
 > 参与者:operator、Codex。
 
 ## 背景
@@ -49,7 +49,7 @@ operator 在 2026-09-08 调研后明确：
 | 整体复制 Pi coding-agent | 会连带替换会话/资源/应用层，超出保留 Forge CLI/TUI 的 Core 迁移范围 |
 | 先移植核心，接入改动独立记录 | 可验证上游等价及本地差异；本项目承担后续源码同步责任 |
 
-施工设计见 [Pi Core 源码迁移](../phases/pi-core-migration.md)，正式规格及子任务见 [GitHub #14](https://github.com/L-1ngg/forge-agent/issues/14)。规格发布时尚未修改运行代码；当前实现与验证见[迁移验收](../phases/pi-core-migration-acceptance.md)。
+施工设计见 [Pi Core 源码迁移](../archive/phases/pi-core-migration.md)，正式规格及子任务见 [GitHub #14](https://github.com/L-1ngg/forge-agent/issues/14)。规格发布时尚未修改运行代码；当时实现与验证见[迁移验收](../archive/phases/pi-core-migration-acceptance.md)。
 
 ## 会话能力范围确认
 

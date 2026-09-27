@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import { adjustMaxTokensForThinking, calculateCost, getSupportedThinkingLevels, isContextOverflow, isRetryableAssistantError } from "../src/model-policy.ts";
-import type { AssistantMessage, Usage } from "../src/model-types.ts";
+import type { Usage } from "../src/model-types.ts";
+import type { SessionMessage } from "@forge-agent/protocol";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 const usage = (): Usage => ({ input: 300000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 300100, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } });
-const answer = (stopReason: AssistantMessage["stopReason"], errorMessage?: string): AssistantMessage => ({ role: "assistant", content: [], api: model.api, provider: model.provider, model: model.id, usage: usage(), stopReason, ...(errorMessage ? { errorMessage } : {}), timestamp: 0 });
+const answer = (stopReason: NonNullable<SessionMessage["stopReason"]>, errorMessage?: string): SessionMessage => ({ role: "assistant", content: [], provider: model.provider, model: model.id, usage: usage(), stopReason, ...(errorMessage ? { errorMessage } : {}), timestamp: 0 });
 
 test("catalog pricing chooses the highest request tier and accounts for cache writes", () => {
 	const current = usage();
@@ -28,5 +29,6 @@ test("overflow and retry classification separates quota from transient errors", 
 	expect(isContextOverflow(answer("error", "429 rate limit: too many tokens"), 200000)).toBe(false);
 	expect(isRetryableAssistantError(answer("error", "503 service unavailable"))).toBe(true);
 	expect(isRetryableAssistantError(answer("error", "429 insufficient_quota"))).toBe(false);
-	expect(isContextOverflow({ role: "toolResult", content: [], toolCallId: "call", toolName: "work", isError: false, timestamp: 0 } as unknown as AssistantMessage, 200000)).toBe(false);
+	const result: SessionMessage = { role: "toolResult", content: [], toolCallId: "call", toolName: "work", isError: false, timestamp: 0 };
+	expect(isContextOverflow(result, 200000)).toBe(false);
 });

@@ -6,9 +6,9 @@ import { EventStreamCodec } from "@smithy/core/event-streams";
 import { getCatalogModel, listCatalogModels, listCatalogProviders } from "../src/model-catalog.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
-import { assertBuiltinTransport, builtinTanstackStream } from "../src/provider-stream.ts";
+import { assertBuiltinTransport } from "../src/model-adapter.ts";
+import { collectResponse, nativeRequest } from "./helpers/native-request.ts";
 import { modelResponse } from "./helpers/model-response.ts";
-import { streamTanstack } from "../src/tanstack-stream.ts";
 import { EventType } from "@tanstack/ai";
 
 const frame = (event: unknown) => `data: ${JSON.stringify(event)}\n\n`;
@@ -60,12 +60,11 @@ test("every retained catalog model selects a TanStack transport", () => {
 test("a late adapter success cannot override a canceled request", async () => {
 	const controller = new AbortController();
 	const model = getCatalogModel("deepseek", "deepseek-v4-flash")!;
-	const stream = streamTanstack(model, { messages: [] }, { signal: controller.signal }, async function* () {
+	const response = await collectResponse(model, (async function* () {
 		controller.abort();
 		yield { type: EventType.RUN_FINISHED, threadId: "thread", runId: "run", timestamp: Date.now(), finishReason: "stop" };
-	});
-	for await (const _event of stream) {}
-	expect((await stream.result()).stopReason).toBe("aborted");
+	})(), controller.signal);
+	expect(response.stopReason).toBe("aborted");
 });
 
 test("OpenAI-compatible Chat Completions sends the catalog model and system prompt", async () => {
@@ -208,11 +207,10 @@ test("Azure request settings select endpoint, deployment and API version", async
 	} });
 	try {
 		const model = getCatalogModel("azure-openai-responses", "gpt-4")!;
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { AZURE_OPENAI_API_KEY: "azure-fixture-key", AZURE_OPENAI_BASE_URL: server.url.toString(), AZURE_OPENAI_DEPLOYMENT_NAME_MAP: "gpt-4=deployment-fixture", AZURE_OPENAI_API_VERSION: "2024-10-21" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("stop");
+		expect(response.stopReason).toBe("stop");
 		expect(url).toContain("/openai/v1/responses?api-version=2024-10-21");
 		expect(body).toMatchObject({ model: "deployment-fixture" });
 		expect(apiKey).toBe("azure-fixture-key");
@@ -233,11 +231,10 @@ test("Cloudflare Anthropic gateway uses its URL template and gateway authenticat
 	try {
 		const model = getCatalogModel("cloudflare-ai-gateway", "claude-fable-5")!;
 		model.baseUrl = `${server.url}v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic`;
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { CLOUDFLARE_API_KEY: "gateway-fixture", CLOUDFLARE_ACCOUNT_ID: "account-fixture", CLOUDFLARE_GATEWAY_ID: "gateway-fixture" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("stop");
+		expect(response.stopReason).toBe("stop");
 		expect(url).toContain("/v1/account-fixture/gateway-fixture/anthropic/");
 		expect(gatewayAuth).toBe("Bearer gateway-fixture");
 		expect(anthropicKey).toBeNull();
@@ -259,9 +256,8 @@ for (const scenario of [
 	try {
 		const model = getCatalogModel(scenario.provider, scenario.model)!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, { env: scenario.env });
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("stop");
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], { env: scenario.env });
+		expect(response.stopReason).toBe("stop");
 		expect(authorization).toBe(`Bearer ${scenario.token}`);
 		expect(apiKey).toBeNull();
 	} finally { server.stop(true); }
@@ -294,11 +290,10 @@ test("Vertex ADC file supplied to this request authenticates the model call", as
 		await writeFile(credentials, JSON.stringify({ type: "external_account", audience: "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/fixture/providers/local", subject_token_type: "urn:ietf:params:oauth:token-type:jwt", token_url: new URL("/token", server.url).toString(), credential_source: { file: subjectToken } }));
 		const model = getCatalogModel("google-vertex", "gemini-2.5-flash")!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { GOOGLE_CLOUD_PROJECT: "fixture-project", GOOGLE_CLOUD_LOCATION: "us-central1", GOOGLE_APPLICATION_CREDENTIALS: credentials },
 		});
-		for await (const _event of stream) {}
-		expect(await stream.result()).toMatchObject({ stopReason: "stop" });
+		expect(response).toMatchObject({ stopReason: "stop" });
 		expect(tokenCalls).toBe(1);
 		expect(authorization).toBe("Bearer adc-fixture-token");
 	} finally { server.stop(true); await rm(directory, { recursive: true, force: true }); }
@@ -414,11 +409,10 @@ test("Bedrock signs with credentials supplied to this request", async () => {
 	try {
 		const model = getCatalogModel("amazon-bedrock", "amazon.nova-2-lite-v1:0")!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { AWS_ACCESS_KEY_ID: "AKIDFIXTURE", AWS_SECRET_ACCESS_KEY: "fixture-secret", AWS_REGION: "us-east-1" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("error");
+		expect(response.stopReason).toBe("error");
 		expect(authorization).toContain("Credential=AKIDFIXTURE/");
 	} finally { server.stop(true); }
 });
@@ -435,11 +429,10 @@ test("Bedrock resolves the request's AWS profile from its credentials file", asy
 		await writeFile(credentials, "[fixture]\naws_access_key_id = PROFILEFIXTURE\naws_secret_access_key = profile-secret\n");
 		const model = getCatalogModel("amazon-bedrock", "amazon.nova-2-lite-v1:0")!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { AWS_PROFILE: "fixture", AWS_SHARED_CREDENTIALS_FILE: credentials, AWS_REGION: "us-east-1" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("error");
+		expect(response.stopReason).toBe("error");
 		expect(authorization).toContain("Credential=PROFILEFIXTURE/");
 	} finally { server.stop(true); await rm(directory, { recursive: true, force: true }); }
 });
@@ -458,11 +451,10 @@ test("Bedrock resolves container credentials supplied to this request", async ()
 	try {
 		const model = getCatalogModel("amazon-bedrock", "amazon.nova-2-lite-v1:0")!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { AWS_CONTAINER_CREDENTIALS_FULL_URI: new URL("/credentials", server.url).toString(), AWS_REGION: "us-east-1" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("error");
+		expect(response.stopReason).toBe("error");
 		expect(credentialCalls).toBe(1);
 		expect(authorization).toContain("Credential=CONTAINERFIXTURE/");
 	} finally { server.stop(true); }
@@ -486,11 +478,10 @@ test("Bedrock assumes a web identity role supplied to this request", async () =>
 		await writeFile(tokenFile, "fixture-identity-token");
 		const model = getCatalogModel("amazon-bedrock", "amazon.nova-2-lite-v1:0")!;
 		model.baseUrl = server.url.toString();
-		const stream = await builtinTanstackStream()(model, { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
+		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
 			env: { AWS_WEB_IDENTITY_TOKEN_FILE: tokenFile, AWS_ROLE_ARN: "arn:aws:iam::123456789012:role/fixture", AWS_ENDPOINT_URL_STS: new URL("/sts", server.url).toString(), AWS_REGION: "us-east-1" },
 		});
-		for await (const _event of stream) {}
-		expect((await stream.result()).stopReason).toBe("error");
+		expect(response.stopReason).toBe("error");
 		expect(stsCalls).toBe(1);
 		expect(authorization).toContain("Credential=ROLEFIXTURE/");
 	} finally { server.stop(true); await rm(directory, { recursive: true, force: true }); }

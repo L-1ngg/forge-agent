@@ -6,6 +6,7 @@ created: 2026-09-19
 # 架构职责收敛施工记录
 
 > 状态:五批实现与本地 Linux 自动化验收完成(2026-09-19)；未执行 macOS 或人工验收。需求与验收唯一来源为 [Issue #34](https://github.com/L-1ngg/forge-agent/issues/34)，本文件记录内部组织、批次证据与回退。
+> 2026-09-27 更新:本记录的 B2 装配/工具桥和执行内核组织已由 [TanStack 基座](tanstack-foundation.md) 替代；权威 result、InputFlow、证据协调器及 Scenario 行为继续保留。下文数字仅是当时证据。
 
 ## Entry 与边界
 

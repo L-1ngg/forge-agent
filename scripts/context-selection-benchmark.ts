@@ -26,7 +26,7 @@ if (fixture.version !== 2 || fixture.cases.length !== 16 || new Set(fixture.case
 const cases = fixture.cases.filter(item => item.split === split && (!argv.includes("--case") || item.id === option("--case", "")));
 if (!cases.length) throw new Error("No matching cases");
 const sdk = await import(pathToFileURL(resolve(sdkRoot, "packages/core/src/sdk.ts")).href) as typeof import("../packages/core/src/sdk.ts");
-const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
+const implementationFiles = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-assembly.ts"];
 const implementationHash = createHash("sha256");
 for (const path of implementationFiles) implementationHash.update(path).update(await Bun.file(resolve(sdkRoot, path)).text());
 const metadata = {

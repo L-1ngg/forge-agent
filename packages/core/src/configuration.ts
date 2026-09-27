@@ -1,19 +1,26 @@
 import type { SkillsSnapshot } from "./skills/types.ts";
-import type { SessionPortOptions, ModelPortOptions, ToolHooks } from "./session-port.ts";
-import type { AgentTool } from "./runtime/types.ts";
+import type { CreateAgentOptions } from "./agent.ts";
+import type { Model } from "./model-types.ts";
+import type { ModelAdapter } from "./model-adapter.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import type { SummaryDriver } from "./context/compaction.ts";
+import type { McpManager, McpAssembly } from "./mcp/manager.ts";
 
-export type ConfigurationPatch = { mcp?: import("./mcp/types.ts").McpConfiguration | false } & Partial<Pick<SessionPortOptions, "provider" | "model" | "streamFn" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "skills">>;
+export type ConfigurationPatch = { mcp?: import("./mcp/types.ts").McpConfiguration | false; } & Partial<Pick<CreateAgentOptions, "provider" | "model" | "adapter" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "skills">>;
 export interface ConfigurationReceipt {
 	accepted: true;
 	revision: number;
-	applied: Promise<{ status: "applied" | "canceled"; revision: number }>;
+	applied: Promise<{ status: "applied" | "canceled"; revision: number; }>;
 }
-export interface SessionToolset extends ToolHooks { tools: AgentTool[]; clear(): void; }
+export interface SessionConfiguration extends Omit<CreateAgentOptions, "model" | "adapter" | "thinkingLevel" | "storage"> {
+	model: Model<string>;
+	adapter?: ModelAdapter;
+	thinkingLevel: NonNullable<CreateAgentOptions["thinkingLevel"]>;
+	mcpManager?: McpManager;
+}
 export interface SessionAssembly {
-	mcp?: import("./mcp/manager.ts").McpAssembly;
+	mcp?: McpAssembly;
 	skills?: SkillsSnapshot;
-	options: ModelPortOptions;
-	driver: SummaryDriver & { isOverflow(message: SessionMessage): boolean };
+	options: SessionConfiguration;
+	driver: SummaryDriver & { isOverflow(message: SessionMessage): boolean; };
 }

@@ -1,4 +1,4 @@
-import { createAgent, type AgentOptions } from "../packages/core/src/sdk.ts";
+import { createAgent, type CreateAgentOptions } from "../packages/core/src/sdk.ts";
 import type { HarnessTool } from "../packages/tools/src/index.ts";
 
 const markerTool: HarnessTool<object, { marker: string }> = {
@@ -12,7 +12,7 @@ const markerTool: HarnessTool<object, { marker: string }> = {
 	},
 };
 
-export async function runEmbeddedAgent(options: Pick<AgentOptions, "provider" | "model" | "apiKey" | "baseUrl">): Promise<void> {
+export async function runEmbeddedAgent(options: Pick<CreateAgentOptions, "provider" | "model" | "apiKey" | "baseUrl">): Promise<void> {
 	const agent = await createAgent({
 		...options,
 		cwd: process.cwd(),

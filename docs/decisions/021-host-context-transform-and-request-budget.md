@@ -6,6 +6,7 @@ created: 2026-09-21
 # ADR-021: 宿主上下文变换与分层请求预算
 
 > 状态:核心预算决定仍生效；pi-ai 内置输出缩减预检已由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 的传输迁移取代(2026-09-26)，尚未发布。
+> 当前接线: [ADR-025](025-tanstack-agent-foundation.md) 将请求准备集中到 native chat middleware；SessionMessage → ModelMessage 单次转换取代 convertToLlm/StreamFn。以下历史动机不要求保留旧内部接口；当前可执行合同见[上下文变换](../phases/context-transform.md)。
 > 参与者:operator、Codex。施工与验收见[宿主上下文变换](../phases/context-transform.md)。
 
 ## 背景

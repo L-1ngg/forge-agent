@@ -34,7 +34,7 @@ const settings = {
 	systemPrompt: "Complete the user's task. Read evidence sequentially, obey tool cursors, and preserve the target database and batch-size constraints.",
 	thinkingLevel: "off" as const, maxTokens: 1024, contextWindow: 6000,
 	context: { reserveTokens: 1024, keepRecentTokens: 2000 }, retry: { enabled: false },
-	storage: store.asStorage(), tools: [evidence],
+	storage: store, tools: [evidence],
 	permission: { rules: [{ tool: "next_evidence", argsPattern: "*", effect: "allow" as const }] },
 };
 const observe = (event: SessionEvent) => {
@@ -51,7 +51,7 @@ try {
 	const saved = await store.load();
 	const checkpoints = saved.entries.filter((entry) => entry.type === "compaction");
 	if (toolCalls !== 4 || !checkpoints.length) throw new Error("Live workflow did not reach four tools and automatic compaction");
-	agent = await createAgent({ ...settings, storage: (await SessionStore.open(store.path, directory)).asStorage() });
+	agent = await createAgent({ ...settings, storage: await SessionStore.open(store.path, directory) });
 	let answer = "";
 	for await (const event of agent.runTurn("Without using tools, state the target database and maximum batch size from our completed evidence review.")) {
 		observe(event);

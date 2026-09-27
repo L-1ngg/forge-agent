@@ -1,10 +1,10 @@
 # Pi Skills 来源与本地差异
 
-> 状态：#35 本地接入。来源固定在 `upstream.json`；runtime 自身的上游版本不变。
+> 状态：#35 本地接入后，按 ADR-025 删除重复的 frontmatter/text helpers。保留的扫描与格式化算法来源固定在 `upstream.json`。
 
-迁入来源为 Pi `36b60d2e8985899743c4cf5bd5f8929832a3f05d`，MIT 许可随本目录保留。`upstream.json` 记录三个源码文件、原始测试及 16 个 fixture 的迁入前 SHA-256。生产依赖仅新增 `yaml@2.9.0` 和 `ignore@7.0.5`；未引入 Pi coding-agent 包。
+迁入来源为 Pi `36b60d2e8985899743c4cf5bd5f8929832a3f05d`，MIT 许可随本目录保留。`upstream.json` 保留最初三个源码文件、原始测试及 16 个 fixture 的迁入前 SHA-256，作为历史来源记录；当前仅 `upstream/skills.ts` 仍使用迁入源码。Skills 生产依赖为 `yaml@2.9.0` 和 `ignore@7.0.5`；未引入 Pi coding-agent 包。
 
-- `upstream/text.ts` 保留上游原文；`upstream/frontmatter.ts` 仍是唯一 YAML parser，但闭合分隔符改为完整行匹配，避免合法 `---extension` 键吞掉后续 explicit-only 元数据。Forge 只把有界的 header 交给它，加载结果的 body 用原始 UTF-8 字节独立保存，避免上游 trim/newline normalization 改写正文。
+- `files.ts` 按字节完成唯一一次 frontmatter 分隔符定位，再直接调用 `yaml.parse` 解析有界 YAML；删除重复拆分分隔符的 `upstream/frontmatter.ts` 和仅被它使用的 `upstream/text.ts`。闭合分隔符按完整行匹配，避免合法 `---extension` 键吞掉后续 explicit-only 元数据。仅 YAML 规范化换行；加载结果的 body 用原始 UTF-8 字节独立保存。BOM、LF/CRLF/CR、EOF 闭合、完整分隔符与正文保真断言已迁到真实文件读取入口。
 - `upstream/skills.ts` 从同名上游模块派生。保留 name/description 验证、ignore pattern 处理、目录遇 `SKILL.md` 终止以及 XML formatter 算法，按 Forge 公共合同改造扫描接口。扫描改为异步、有取消检查、层内排序、visited 环路阻断；来源/分组枚举错误抛出，坏候选及 ignore 文件错误单列诊断。
 - 原有宿主依赖 `config.ts`、`paths.ts`、`diagnostics.ts`、`source-info.ts` 不整文件迁入：目录/home 决策归 CLI，路径使用 Node `resolve`/`realpath`，所需来源与诊断字段归 `types.ts`，三层排序和碰撞处理归 `catalog.ts`。这些是明确替换的宿主依赖闭包，不是上游原样实现。
 - 发现只接受 `SKILL.md`，不再扫描普通顶层 Markdown。显式根缺失失败、optional 根缺失为空。来源外 ignore 文件不继承；每个子树复制父 matcher，避免兄弟规则泄漏。`.git` 与 `node_modules` 始终排除，其余隐藏目录可作为显式来源下的分组。

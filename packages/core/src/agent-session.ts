@@ -1,76 +1,91 @@
+import { chat, toolDefinition, type ChatMiddleware, type TextOptions, type JSONSchema } from "@tanstack/ai";
+import type { HarnessTool } from "@forge-agent/tools";
+import type { SessionEvent, SessionMessage, ResponseEnvelope, TurnResult } from "@forge-agent/protocol";
+import { randomUUID } from "node:crypto";
+import type { Agent, AgentTurn, InputAcceptance } from "./agent.ts";
+import type { ConfigurationPatch, ConfigurationReceipt, SessionAssembly, SessionConfiguration } from "./configuration.ts";
+import { snapshotConfiguration } from "./session-configuration.ts";
+import { RequestBus } from "./request-bus.ts";
+import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
+import { toModelMessages } from "./model-response.ts";
+import { observeModelResponse, linkedController } from "./model-call.ts";
 import { transformMessages } from "./context/transform.ts";
 import { checkRequestBudget, isolateRequest, REQUEST_MARGIN, type RequestBudget } from "./context/request-budget.ts";
 import { TurnPolicy } from "./turn-policy.ts";
 import { loadSkill } from "./skills/load.ts";
-import { calculateContextUsage } from "./usage.ts";
+import { calculateContextUsage, UsageTracker } from "./usage.ts";
 import { skillLoader, validateSkillArguments } from "./skills/tools.ts";
-import { emptySkills, SkillError, type SkillsSnapshot, type AgentInput, type SkillInvocation } from "./skills/types.ts";
+import { emptySkills, SkillError, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
 import { CompactionCoordinator } from "./context/coordinator.ts";
-import type { ConfigurationPatch, ConfigurationReceipt, SessionAssembly, SessionToolset } from "./configuration.ts";
-import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
-import type { AgentMessage } from "./runtime/types.ts";
-import { Agent as RuntimeAgent } from "./runtime/agent.ts";
-import { fromSessionMessage, createEventProjection, toSessionMessage } from "./event-projection.ts";
-import type { AgentPort, InputAcceptance } from "./agent-port.ts";
-import type { ModelPortOptions } from "./session-port.ts";
-import { prepareSessionTools, validateSessionTools, checkPermission, preserveToolSchemas } from "./session-tools.ts";
-import { snapshotConfiguration } from "./session-configuration.ts";
+import { decorateToolEvent, type CommandPresentation } from "./event-projection.ts";
+import type { BlockEnvelope } from "@forge-agent/protocol";
+import { executeToolBatch, validateSessionTools, checkPermission, type ToolBatch } from "./session-tools.ts";
 import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
-import { MemorySessionStorage, messageEntry, projectMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
-import { randomUUID } from "node:crypto";
-import { resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionResult, type ContextSettings } from "./context/compaction.ts";
+import { messageEntry, projectMessages, selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
+import { buildContext, resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionResult, type ContextSettings } from "./context/compaction.ts";
 import { compactionInputBudget } from "./context/compact.ts";
-import { UsageTracker } from "./usage.ts";
 import { MemoryTools } from "./memory/tools.ts";
-import { selectedBranch } from "./session-storage.ts";
 import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts";
 
-/** Owns durable history and run settlement; the runtime alone owns request messages. */
-export class AgentSession implements AgentPort {
+interface ActiveTurn {
+	id: symbol; begun: boolean; canceled: boolean; iterator: AsyncIterator<SessionEvent>;
+	settled: Promise<void>; finish(status?: TurnResult["status"]): void; outcome?: TurnResult;
+}
+interface ResponseSnapshot {
+	options: SessionConfiguration; revision: number; settings: ModelRequestSettings;
+	batch?: ToolBatch; completed: boolean;
+}
+
+/** The sole owner of input, durable history, configuration and invocation settlement. */
+export class AgentSession implements Agent {
+	readonly requests;
 	private skills: SkillsSnapshot;
-	private readonly runtime: RuntimeAgent;
 	private readonly compaction: CompactionCoordinator;
-	private readonly projectEvent = createEventProjection();
-	private options: ModelPortOptions;
-	private toolset: SessionToolset;
+	private options: SessionConfiguration;
+	private tools: Array<HarnessTool<object, unknown>>;
 	private driver: SessionAssembly["driver"];
 	private preparationFailed = false;
-	private requestProjection: { messages: SessionMessage[]; tokens?: number; contextWindow: number } | undefined;
+	private requestProjection: { messages: SessionMessage[]; tokens?: number; contextWindow: number; } | undefined;
 	private publishedMemory: string | undefined;
 	private responseDriver: SessionAssembly["driver"] | undefined;
+	private lastResponse: SessionMessage | undefined;
 	private disposed = false;
+	private disposing: Promise<void> | undefined;
 	private executing = false;
 	private revision = 0;
 	private appliedRevision = 0;
 	private turnPolicy: TurnPolicy | undefined;
-	private taskUsage: ((usage?: SessionMessage["usage"]) => void) | undefined;
-	private responseConfiguration: { model: ModelPortOptions["model"]; configurationRevision: number } | undefined;
 	private readonly configurationController = new AbortController();
 	private configurationQueue: Promise<void> = Promise.resolve();
-	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void }> = [];
-	private storage: SessionStorage;
-	private state: SessionState = { entries: [], leafId: null };
-	private initialized = false;
+	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void; }> = [];
+	private state: SessionState;
 	private settings: ContextSettings;
 	private compactController: AbortController | undefined;
+	private compacting: Promise<CompactionResult> | undefined;
 	private runController: AbortController | undefined;
 	private recoveryUsed = false;
 	private taskFailures = 0;
 	private accepting = false;
-	private readonly preparedSkills = new WeakSet<AgentMessage>();
-	private readonly stagedMcp = new Map<AgentMessage, string[]>();
-	private skillInputs = new Map<AgentMessage, { invocation: Exclude<AgentInput, string>; inputId: string }>();
-	private receipts = new Map<AgentMessage, (processed: boolean) => void>();
+	private readonly preparedSkills = new WeakSet<SessionMessage>();
+	private readonly stagedMcp = new Map<SessionMessage, string[]>();
+	private skillInputs = new Map<SessionMessage, { invocation: Exclude<AgentInput, string>; inputId: string; }>();
+	private receipts = new Map<SessionMessage, (processed: boolean) => void>();
+	private readonly steering: SessionMessage[] = [];
+	private readonly followups: SessionMessage[] = [];
 	private failure: unknown;
 	private readonly usage: UsageTracker;
+	private active: ActiveTurn | undefined;
 	private running: Promise<void> | undefined;
 	private emit: (event: SessionEvent) => void = () => { };
 	private readonly memoryTools: MemoryTools | undefined;
 	private readonly assembler: ContextAssembler;
 	private memoryWriteMode: boolean | undefined;
 
-	constructor(assembly: SessionAssembly, private readonly prepareConfiguration: (patch: ConfigurationPatch, refresh?: boolean, signal?: AbortSignal) => Promise<SessionAssembly>) {
+	constructor(assembly: SessionAssembly, private readonly storage: SessionStorage, private readonly bus: RequestBus, state: SessionState,
+		private readonly prepareConfiguration: (patch: ConfigurationPatch, refresh?: boolean, signal?: AbortSignal) => Promise<SessionAssembly>) {
+		this.requests = bus.requests();
+		this.state = structuredClone(state); selectedBranch(this.state);
 		this.skills = assembly.skills ?? emptySkills();
 		this.options = assembly.options; this.driver = assembly.driver;
 		const options = this.options;
@@ -79,159 +94,115 @@ export class AgentSession implements AgentPort {
 			const entry = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
 			return { kind: "session", timestamp: entry?.timestamp ?? new Date().toISOString(), ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(entry ? { entryId: entry.id } : {}) };
 		}, () => this.getMemoryBudget());
-
 		this.settings = { ...DEFAULT_CONTEXT, ...options.context };
-		this.configureContext(options.context ?? {});
-		this.toolset = this.prepareTools();
-		const toolset = this.toolset;
-		this.storage = new MemorySessionStorage(options.history);
+		this.tools = this.prepareTools();
 		this.usage = new UsageTracker({ contextWindow: options.contextWindow ?? options.model.contextWindow });
-		this.runtime = new RuntimeAgent({
-			prepareInputMessage: (message, signal) => this.prepareInputMessage(message, signal),
-			...(options.steeringMode ? { steeringMode: options.steeringMode } : {}),
-			...(options.followUpMode ? { followUpMode: options.followUpMode } : {}),
-			initialState: { model: options.model, systemPrompt: options.systemPrompt, thinkingLevel: options.thinkingLevel, tools: toolset?.tools ?? [] },
-			beforeToolCall: (context, signal) => this.toolset.beforeToolCall?.(context, signal) ?? Promise.resolve(undefined),
-			afterToolCall: (context, signal) => this.toolset.afterToolCall?.(context, signal) ?? Promise.resolve(undefined),
-			...(toolset.toolExecution ? { toolExecution: toolset.toolExecution } : {}),
-			...(options.sessionId ? { sessionId: options.sessionId } : {}),
-			shouldStopAfterTurn: ({ message, toolResults }, signal) => {
-				if (!this.turnPolicy) return false;
-				return this.turnPolicy.evaluate({
-					message: toSessionMessage(message)!, toolResults: toolResults.map(result => toSessionMessage(result)!),
-					...this.responseConfiguration!,
-				}, signal!);
-			},
-			shouldStopAfterResponse: ({ message }) => message.stopReason === "length" || message.stopReason === "deferred",
-			prepareNextTurnWithContext: () => {
-				this.applyConfigurations();
-				if (this.memoryTools && this.memoryWriteMode !== (this.memoryTools.options.autoUpdate !== false)) {
-					this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
-					this.usage.invalidate();
-				}
-				return { context: { systemPrompt: this.runtime.state.systemPrompt, tools: this.runtime.state.tools, messages: this.runtime.state.messages.slice() }, model: this.options.model, thinkingLevel: this.options.thinkingLevel };
-			},
-			transformContext: (_messages, signal) => this.prepareRequestContext(signal ?? this.runController!.signal),
-			convertToLlm: messages => {
-				try { return projectMessages(messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model)); }
-				catch (error) { this.preparationFailed = true; throw error; }
-			},
-			streamFn: (model, context, settings) => {
-				settings?.signal?.throwIfAborted();
-				try {
-					context = isolateRequest(context);
-					const tokens = checkRequestBudget(context, this.requestBudget(), this.appliedRevision);
-					if (this.requestProjection) this.requestProjection.tokens = tokens;
-				} catch (error) { this.preparationFailed = true; throw error; }
-				settings?.signal?.throwIfAborted();
-				this.responseDriver = this.driver;
-				if (this.turnPolicy) {
-					this.responseConfiguration = { model: structuredClone(model), configurationRevision: this.appliedRevision };
-					this.taskUsage = this.turnPolicy.beginRequest();
-				}
-				return this.options.streamFn(model, context, { ...settings, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), maxRetries: 0, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.builtinStream && model.provider === "openai" ? {} : { onPayload: async (payload, model) => preserveToolSchemas(await settings?.onPayload?.(payload, model) ?? payload, this.options.tools) }) });
-			},
-		});
 		this.compaction = new CompactionCoordinator({
-			runtime: this.runtime, usage: this.usage, assembler: this.assembler,
+			messages: () => this.messages(), tools: () => this.tools, usage: this.usage, assembler: this.assembler,
 			configuration: () => ({ options: this.options, driver: this.summaryDriver(), settings: this.settings }),
 			history: () => this.state, persist: entry => this.persistEntry(entry), isFaulted: () => this.failure !== undefined,
 		});
-		this.runtime.subscribe(async event => {
-			// Agent reduces state before awaited listeners, and reports listener failures as
-			// run failures. A failed store must never be re-entered by that error reporting.
-			if (this.failure !== undefined) throw this.failure;
-			if (event.type === "message_start" && event.message.role === "user") {
-				this.runController?.signal.throwIfAborted();
-				if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
-			}
-			if (event.type === "message_end") {
-				this.requestProjection = undefined;
-				if (event.message.role === "user") this.recoveryUsed = false;
-				const message = toSessionMessage(event.message);
-				if (message?.role === "assistant") { this.taskUsage?.(message.usage); this.taskUsage = undefined; }
-				if (message?.role === "assistant" && !["error", "aborted", "length"].includes(message.stopReason ?? "")) { this.taskFailures = 0; this.recoveryUsed = false; }
-				if (message && this.settings.enabled && this.recoverableLength(message)) { message.contextExcluded = true; Object.assign(event.message, { contextExcluded: true }); }
-				if (message) {
-					const entry = messageEntry(message, this.state.leafId);
-					if (!this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); }
-					// Append now owns any artifact references, including an uncertain storage outcome.
-					this.stagedMcp.delete(event.message);
-					await this.persistEntry(entry);
-					if (this.preparedSkills.has(event.message)) { this.receipts.get(event.message)?.(true); this.receipts.delete(event.message); this.preparedSkills.delete(event.message); }
-					this.compaction.syncUsage();
-					if (message.usage) this.usage.recordUsage(message.usage, !this.options.transformContext);
-				}
-			}
-			if (event.type === "turn_end") this.applyConfigurations();
-			const projected = this.projectEvent(event);
-			if (event.type === "agent_start" || event.type === "agent_end") return;
-			if (projected) this.emit(projected);
-		});
+		this.configureContext(options.context ?? {});
 	}
-	async setStorage(storage: SessionStorage): Promise<void> {
+	private messages(): SessionMessage[] { return buildContext(this.state); }
+	runTurn(input: AgentInput): AgentTurn { return this.startTurn(input); }
+	continue(): AgentTurn { return this.startTurn(); }
+	waitForIdle(): Promise<void> { return this.compacting?.then(() => { }) ?? this.active?.settled ?? Promise.resolve(); }
+	private startTurn(input?: AgentInput): AgentTurn {
 		this.assertHealthy();
-		if (this.running) throw new Error("Cannot replace storage during execution");
-		if (this.initialized && storage === this.storage) return;
-		const state = await storage.load();
-		this.state = structuredClone(state); this.storage = storage; this.initialized = true;
-		this.compaction.rebuild();
+		if (this.compacting) throw new Error("Agent is compacting");
+		const id = Symbol("invocation"), inputId = input !== undefined && typeof input !== "string" ? randomUUID() : undefined;
+		if (input !== undefined && typeof input !== "string") input = structuredClone(input);
+		let started = false;
+		let resolveResult!: (result: TurnResult) => void;
+		const result = new Promise<TurnResult>(resolve => { resolveResult = resolve; });
+		return {
+			id, result, ...(inputId ? { inputId } : {}), [Symbol.asyncIterator]: () => {
+				this.assertHealthy();
+				if (this.compacting) throw new Error("Agent is compacting");
+				if (started) throw new Error("A turn can only be consumed once");
+				if (this.active) throw new Error("Agent is already processing a turn");
+				started = true;
+				let resolveIdle!: () => void, closed = false;
+				const settled = new Promise<void>(resolve => { resolveIdle = resolve; });
+				const active: ActiveTurn = {
+					id, begun: false, canceled: false, settled, iterator: undefined!, finish: status => {
+						if (closed) return;
+						closed = true;
+						if (this.active === active) this.active = undefined;
+						resolveResult(status ? { status } : active.outcome ?? { status: "aborted" }); resolveIdle();
+					}
+				};
+				const iterator = this.events(active, input, inputId)[Symbol.asyncIterator](); active.iterator = iterator; this.active = active;
+				return {
+					next: async () => {
+						if (closed) return { done: true, value: undefined };
+						if ((active.canceled || this.disposed) && !active.begun) { active.finish("aborted"); return { done: true, value: undefined }; }
+						active.begun = true;
+						try { const next = await iterator.next(); if (next.done) active.finish(); return next; }
+						catch (error) { active.finish("error"); throw error; }
+					},
+					return: async () => {
+						if (closed) return { done: true, value: undefined };
+						active.canceled = true; this.abort();
+						try { return await iterator.return?.() ?? { done: true, value: undefined }; }
+						catch (error) { active.finish("error"); throw error; }
+						finally { active.finish(); }
+					},
+				};
+			}
+		};
 	}
-	runTurn(input: AgentInput, inputId?: string): AsyncIterable<SessionEvent> { return this.run(input, inputId); }
-	continue(): AsyncIterable<SessionEvent> { return this.run(); }
-	private async *run(input?: AgentInput, inputId?: string): AsyncIterable<SessionEvent> {
-		this.assertHealthy();
-		if (this.running) throw new Error("Agent is already processing a turn");
-		if (!this.initialized) await this.setStorage(this.storage);
-		const events: SessionEvent[] = [];
-		let wake: (() => void) | undefined;
-		let done = false;
-		let failure: unknown;
-		this.emit = event => { events.push(structuredClone(event)); wake?.(); };
+	private async *events(active: ActiveTurn, input?: AgentInput, inputId?: string): AsyncIterable<SessionEvent> {
+		const events: SessionEvent[] = [], commands = new Map<string, CommandPresentation>(), edits = new Map<string, BlockEnvelope<"edit">>();
+		let wake: (() => void) | undefined, done = false, failure: unknown;
+		this.emit = event => { events.push(structuredClone(decorateToolEvent(event, commands, edits))); wake?.(); };
 		this.usage.beginTurn(); this.accepting = true;
 		this.turnPolicy = this.options.shouldStopAfterTurn ? new TurnPolicy(this.options.shouldStopAfterTurn) : undefined;
-		this.taskUsage = undefined; this.responseConfiguration = undefined;
-		this.preparationFailed = false; this.requestProjection = undefined;
-		this.runController = new AbortController();
-		this.memoryTools?.reset();
-		const running = this.runSession(input, this.runController.signal, inputId)
-			.catch(error => { failure = error; })
-			.finally(() => { done = true; wake?.(); });
+		this.preparationFailed = false; this.requestProjection = undefined; this.lastResponse = undefined;
+		this.runController = new AbortController(); this.memoryTools?.reset();
+		const running = this.runSession(input, this.runController.signal, inputId).then(result => { active.outcome = result; }, error => { failure = error; active.outcome = { status: "error" }; }).finally(() => { done = true; wake?.(); });
 		this.running = running;
 		try {
 			while (!done || events.length) {
-				const event = events.shift();
-				if (event) yield event;
+				const event = events.shift(); if (event) yield event;
 				else await new Promise<void>(resolve => { wake = resolve; });
 			}
 		} finally {
 			if (!done) this.abort();
-			await running;
-			this.closeInput(); this.toolset?.clear();
-			this.emit = () => { };
-			this.running = undefined; this.runController = undefined;
-			this.turnPolicy = undefined; this.taskUsage = undefined; this.responseConfiguration = undefined;
-			this.requestProjection = undefined;
+			await running; this.closeInput();
+			this.emit = () => { }; this.running = undefined; this.runController = undefined; this.turnPolicy = undefined; this.requestProjection = undefined;
 			this.compaction.syncUsage(); this.usage.endTurn();
 			if (failure !== undefined) throw failure;
 		}
 	}
-	steer(input: AgentInput, inputId?: string): InputAcceptance { return this.enqueue(input, "steer", inputId); }
-	followUp(input: AgentInput, inputId?: string): InputAcceptance { return this.enqueue(input, "followUp", inputId); }
-	private enqueue(input: AgentInput, mode: "steer" | "followUp", inputId?: string): InputAcceptance {
+	steer(input: AgentInput, id: symbol): InputAcceptance { return this.enqueue(input, "steer", id); }
+	followUp(input: AgentInput, id: symbol): InputAcceptance { return this.enqueue(input, "followUp", id); }
+	private enqueue(input: AgentInput, mode: "steer" | "followUp", id: symbol): InputAcceptance {
 		this.assertHealthy();
-		if (!this.accepting) return { accepted: false };
-		const message = this.inputMessage(input, inputId);
+		if (!this.accepting || !this.active?.begun || this.active.canceled || this.active.id !== id) return { accepted: false };
+		const inputId = typeof input === "string" ? undefined : randomUUID(), message = this.inputMessage(input, inputId);
 		const processed = new Promise<boolean>(resolve => { this.receipts.set(message, resolve); });
-		this.runtime[mode](message);
+		(mode === "steer" ? this.steering : this.followups).push(message);
 		return { accepted: true, processed, ...(inputId ? { inputId } : {}) };
 	}
-	private inputMessage(input: AgentInput, inputId?: string): AgentMessage {
-		const message: AgentMessage = { role: "user", content: [{ type: "text", text: typeof input === "string" ? input : "" }], timestamp: Date.now() };
+	private drain(queue: SessionMessage[], mode = "all"): SessionMessage[] { return queue.splice(0, mode === "one-at-a-time" ? 1 : queue.length); }
+	private async consumeInput(message: SessionMessage, signal: AbortSignal): Promise<void> {
+		await this.prepareInputMessage(message, signal); signal.throwIfAborted();
+		this.emit({ type: "message_start", message: structuredClone(message), timestamp: Date.now() });
+		if (!this.preparedSkills.has(message)) { this.receipts.get(message)?.(true); this.receipts.delete(message); }
+		this.stagedMcp.delete(message);
+		await this.persistMessage(message);
+		if (this.preparedSkills.has(message)) { this.receipts.get(message)?.(true); this.receipts.delete(message); this.preparedSkills.delete(message); }
+		this.recoveryUsed = false;
+		this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
+	}
+	private inputMessage(input: AgentInput, inputId?: string): SessionMessage {
+		const message: SessionMessage = { role: "user", content: [{ type: "text", text: typeof input === "string" ? input : "" }], timestamp: Date.now() };
 		if (typeof input !== "string") this.skillInputs.set(message, { invocation: structuredClone(input), inputId: inputId ?? randomUUID() });
 		return message;
 	}
-	private async prepareInputMessage(message: AgentMessage, signal?: AbortSignal): Promise<void> {
+	private async prepareInputMessage(message: SessionMessage, signal?: AbortSignal): Promise<void> {
 		const selected = this.skillInputs.get(message);
 		try {
 			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
@@ -248,19 +219,19 @@ export class AgentSession implements AgentPort {
 					Object.assign(message, { inputContext: context });
 					message.content = [{ type: "text", text: `MCP ${context.serverId}/${context.name}\n${context.messages.map(item => `[${item.role}] ` + item.content.filter(block => block.type === "text").map(block => block.text).join("\n")).join("\n")}\nUser task:\n${invocation.task}` }];
 				} else {
-				if (typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
-				const args = { name: invocation.name }; validateSkillArguments(args);
-				const check = await checkPermission({ type: "tool_call", id: inputId, name: "load_skill", arguments: args }, { context: this.options.permission ?? {}, ...(this.options.requestBus ? { requestBus: this.options.requestBus } : {}) }, signal);
-				if (!check.allowed) throw new SkillError("permission-denied", check.reason);
-				const loaded = await loadSkill(this.skills, invocation.name, true, signal);
-				const { body, ...source } = loaded;
-				message.content = [{ type: "text", text: `Skill instructions (${JSON.stringify(source)}):\n${body}\n\nUser task:\n${invocation.task}` }];
+					if (typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
+					const args = { name: invocation.name }; validateSkillArguments(args);
+					const check = await checkPermission({ type: "tool_call", id: inputId, name: "load_skill", arguments: args }, { context: this.options.permission ?? {}, ...(this.options.requestBus ? { requestBus: this.options.requestBus } : {}) }, signal);
+					if (!check.allowed) throw new SkillError("permission-denied", check.reason);
+					const loaded = await loadSkill(this.skills, invocation.name, true, signal);
+					const { body, ...source } = loaded;
+					message.content = [{ type: "text", text: `Skill instructions (${JSON.stringify(source)}):\n${body}\n\nUser task:\n${invocation.task}` }];
 				}
 			}
 			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
 			if (this.skills.enabled || selected?.invocation.kind === "mcp_prompt" || selected?.invocation.kind === "mcp_resource") {
 				const budget = this.compaction.budget();
-				const size = calculateContextUsage({ fixedText: budget.fixedText, messages: projectMessages([toSessionMessage(message)!]) }).contextTokens ?? 0;
+				const size = calculateContextUsage({ fixedText: budget.fixedText, messages: projectMessages([message]) }).contextTokens ?? 0;
 				if (size > compactionInputBudget(budget, this.settings.reserveTokens)) throw new SkillError("too-large", "Skills and input exceed context budget; reduce Skill sources or split instructions into references.");
 			}
 			if (selected) this.preparedSkills.add(message);
@@ -273,33 +244,40 @@ export class AgentSession implements AgentPort {
 			throw error;
 		} finally { this.skillInputs.delete(message); }
 	}
+
 	private closeInput(): void {
-		this.accepting = false; this.runtime.clearAllQueues();
+		this.accepting = false; this.steering.length = 0; this.followups.length = 0;
 		for (const resolve of this.receipts.values()) resolve(false);
 		this.receipts.clear(); this.skillInputs.clear();
 	}
-	abort(): void { this.runController?.abort(); this.compactController?.abort(); this.closeInput(); this.runtime.abort(); this.options.requestBus?.abort(); }
+	abort(): void {
+		if (this.active) this.active.canceled = true;
+		this.runController?.abort(); this.compactController?.abort(); this.closeInput(); this.bus.abort();
+	}
 	getUsage() {
+		if (this.disposed) return undefined;
 		const snapshot = this.usage.snapshot(), request = this.requestProjection;
 		return request?.tokens === undefined ? snapshot : { ...snapshot, contextTokens: request.tokens, contextWindow: request.contextWindow, contextEstimated: true };
 	}
 	getMemoryBudget(): number {
 		if (this.options.memory?.injection === false) return 0;
-		return memoryInjectionBudget(this.requestProjection?.messages ?? projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
+		return memoryInjectionBudget(this.requestProjection?.messages ?? projectMessages(this.messages()), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
 	}
 
 	private requestBudget(): RequestBudget {
 		const budget = this.compaction.budget();
-		return { contextWindow: budget.window, inputBudget: compactionInputBudget(budget, this.settings.reserveTokens), maxInputTokens: budget.window - budget.output - REQUEST_MARGIN,
-			fixedTokens: Math.ceil(budget.fixedText.length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output };
+		return {
+			contextWindow: budget.window, inputBudget: compactionInputBudget(budget, this.settings.reserveTokens), maxInputTokens: budget.window - budget.output - REQUEST_MARGIN,
+			fixedTokens: Math.ceil(budget.fixedText.length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output
+		};
 	}
-	private async prepareRequestContext(signal: AbortSignal): Promise<AgentMessage[]> {
+	private async prepareRequestContext(signal: AbortSignal): Promise<SessionMessage[]> {
 		try {
 			signal.throwIfAborted(); this.requestProjection = undefined;
-			const history = () => projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!));
+			const history = () => projectMessages(this.messages());
 			await this.assembleMemory(history(), signal, false); this.compaction.syncUsage();
 			const budget = this.requestBudget();
-			if (this.settings.enabled && (this.getUsage().contextTokens ?? 0) > budget.inputBudget) {
+			if (this.settings.enabled && (this.getUsage()?.contextTokens ?? 0) > budget.inputBudget) {
 				const result = await this.compaction.run("threshold", signal, this.emit);
 				if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
 			}
@@ -313,7 +291,7 @@ export class AgentSession implements AgentPort {
 			this.requestProjection = { messages, contextWindow: budget.contextWindow };
 			await this.assembleMemory(messages, signal, true);
 			signal.throwIfAborted();
-			return [...this.assembler.projection.messages, ...messages].map(message => fromSessionMessage(message, this.options.model));
+			return [...this.assembler.projection.messages, ...messages];
 		} catch (error) {
 			this.requestProjection = undefined;
 			signal.throwIfAborted();
@@ -333,122 +311,231 @@ export class AgentSession implements AgentPort {
 			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
 		}
 	}
-	private prepareTools(): SessionToolset {
+
+	private prepareTools(): Array<HarnessTool<object, unknown>> {
 		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
 		validateSessionTools(this.options);
-		return prepareSessionTools({ ...this.options, tools: [...(this.options.tools ?? []), ...(this.skills.enabled ? [skillLoader(this.skills)] : []), contextReader(() => this.state), contextSearcher(() => this.state), ...(this.memoryTools?.tools() ?? [])] });
+		return [...this.options.tools ?? [], ...(this.skills.enabled ? [skillLoader(this.skills)] : []), contextReader(() => this.state), contextSearcher(() => this.state), ...this.memoryTools?.tools() ?? []];
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
+		this.assertHealthy();
 		if (this.running || this.compactController) throw new Error("Cannot configure context during execution");
 		const next = { ...this.settings, ...settings };
 		if ("strategy" in next || !Number.isInteger(next.reserveTokens) || next.reserveTokens < 1 || !Number.isInteger(next.keepRecentTokens) || next.keepRecentTokens < 1 || typeof next.enabled !== "boolean" || !["inherit", "off"].includes(next.summaryReasoning)) throw new Error("Invalid context settings");
-		if (this.options.tools?.some(tool => ["read_context", "search_context"].includes(tool.name))) throw new Error("read_context and search_context are reserved by context compaction");
-		this.settings = next;
-		if (this.runtime) {
-			this.toolset.clear(); this.toolset = this.prepareTools(); this.runtime.state.tools = this.toolset.tools;
-			this.compaction.rebuild();
-		}
+		validateSessionTools(this.options); this.settings = next; this.tools = this.prepareTools(); this.compaction.rebuild();
 	}
-
-	async compact(instructions?: string, emit: (event: SessionEvent) => void = () => { }, signal?: AbortSignal): Promise<CompactionResult> {
-		this.assertHealthy();
-		if (this.running || this.compactController) throw new Error("Wait for active execution before compaction");
-		if (!this.initialized) await this.setStorage(this.storage);
-		const controller = new AbortController();
-		const abort = () => controller.abort(signal?.reason);
-		signal?.addEventListener("abort", abort, { once: true });
-		if (signal?.aborted) abort();
-		this.compactController = controller;
-		try { return await this.compaction.run("manual", controller.signal, emit, instructions); }
-		finally { signal?.removeEventListener("abort", abort); this.compactController = undefined; this.applyConfigurations(); }
+	compact(instructions?: string, emit: (event: SessionEvent) => void = () => { }): Promise<CompactionResult> {
+		this.assertHealthy(); if (this.compacting) throw new Error("Agent is compacting");
+		const active = this.active; this.abort();
+		const controller = new AbortController(); this.compactController = controller;
+		const running = (async () => {
+			try {
+				await active?.iterator.return?.(); active?.finish();
+				if (this.disposed) throw new Error("Agent has been disposed");
+				return await this.compaction.run("manual", controller.signal, emit, instructions);
+			} catch (error) { active?.finish("error"); throw error; }
+			finally { this.compacting = undefined; this.compactController = undefined; this.applyConfigurations(); }
+		})();
+		this.compacting = running; return running;
 	}
-
 	private async persistEntry(entry: SessionEntry): Promise<void> {
 		try { await this.storage.append(structuredClone(entry)); }
 		catch (error) { this.failure = error; this.abort(); throw error; }
 		this.state.entries.push(entry); this.state.leafId = entry.id;
 	}
-
+	private async persistMessage(message: SessionMessage): Promise<void> {
+		await this.persistEntry(messageEntry(message, this.state.leafId));
+		this.requestProjection = undefined; this.compaction.syncUsage();
+		if (message.usage) this.usage.recordUsage(message.usage, !this.options.transformContext);
+	}
+	private async completeResponse(message: SessionMessage, current: ResponseSnapshot): Promise<void> {
+		this.lastResponse = message;
+		if (!["error", "aborted", "length"].includes(message.stopReason ?? "")) { this.taskFailures = 0; this.recoveryUsed = false; }
+		if (this.settings.enabled && this.recoverableLength(message)) message.contextExcluded = true;
+		await this.persistMessage(message);
+		this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
+		if (["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "") || !message.content.some(block => block.type === "tool_call")) await this.completeTurn(current);
+	}
+	private async completeTurn(current: ResponseSnapshot): Promise<void> {
+		if (current.completed) return;
+		current.completed = true;
+		const message = this.lastResponse!;
+		this.emit({ type: "turn_end", ...(message.stopReason ? { stopReason: message.stopReason } : {}), timestamp: Date.now() });
+		this.applyConfigurations();
+		if (this.turnPolicy && !["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "")) await this.turnPolicy.evaluate({ message, toolResults: current.batch?.messages ?? [], model: structuredClone(current.options.model), configurationRevision: current.revision }, current.settings.signal);
+	}
+	private async runChat(signal: AbortSignal): Promise<void> {
+		let current: ResponseSnapshot;
+		let engineFailure: unknown;
+		let firstRequest = true;
+		const routed: ModelAdapter = {
+			kind: "text", name: "forge", model: this.options.model.id, "~types": undefined!,
+			chatStream: (request: TextOptions) => {
+				const snapshot = current;
+				const self = this;
+				return (async function*() {
+					snapshot.settings.signal.throwIfAborted();
+					const adapter = snapshot.options.adapter ?? await resolveProviderAdapter(snapshot.options.model, snapshot.settings);
+					self.responseDriver = self.driver;
+					const settle = self.turnPolicy?.beginRequest();
+					try {
+						yield* observeModelResponse(adapter, { ...request, model: adapter.model }, snapshot.options, event => self.emit(event), async message => { settle?.(message.usage); await self.completeResponse(message, snapshot); });
+					} finally { settle?.(); }
+				})();
+			},
+			structuredOutput: async () => { throw new Error("Task execution does not use separate structured finalization"); },
+		};
+		const middleware: ChatMiddleware = {
+			name: "forge-session",
+			onConfig: async ctx => {
+				if (ctx.phase !== "beforeModel") return;
+				signal.throwIfAborted(); this.lastResponse = undefined;
+				// The first request's input was already prepared with a configuration
+				// snapshot by runSession. Later requests are native tool continuations.
+				if (!firstRequest) {
+					this.applyConfigurations();
+					for (const message of this.drain(this.steering, this.options.steeringMode)) await this.consumeInput(message, signal);
+				}
+				firstRequest = false;
+				if (this.memoryTools && this.memoryWriteMode !== (this.memoryTools.options.autoUpdate !== false)) { this.tools = this.prepareTools(); this.usage.invalidate(); }
+				current = {
+					options: { ...this.options, tools: this.tools }, revision: this.appliedRevision, completed: false,
+					settings: { signal, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(this.options.thinkingLevel !== "off" ? { reasoning: this.options.thinkingLevel } : {}) }
+				};
+				this.emit({ type: "turn_start", timestamp: Date.now() });
+				const projection = await this.prepareRequestContext(signal);
+				const request = isolateRequest({ messages: projectMessages(projection), systemPrompt: current.options.systemPrompt, tools: current.options.tools ?? [] });
+				try {
+					const tokens = checkRequestBudget(request, this.requestBudget(), current.revision);
+					if (this.requestProjection) this.requestProjection.tokens = tokens;
+				} catch (error) { this.preparationFailed = true; throw error; }
+				signal.throwIfAborted();
+				const snapshot = current;
+				// Harness schemas are validated JSON Schema objects; narrow their open
+				// property values only here at the native tool-definition boundary.
+				const tools = this.tools.map(tool => toolDefinition({ name: tool.name, description: tool.description, inputSchema: tool.parameters as JSONSchema, outputSchema: { type: "string" } }).server((_args, context) => {
+					const result = snapshot.batch?.results.get(context?.toolCallId ?? "");
+					return result?.content.filter(part => part.type === "text").map(part => part.text).join("\n") ?? "Tool was not executed";
+				}));
+				return { messages: toModelMessages(projectMessages(sessionMessages(this.state))), providerMessages: toModelMessages(request.messages), systemPrompts: [{ content: current.options.systemPrompt }], tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
+			},
+			onInterruptBoundary: async (ctx): Promise<undefined> => {
+				if (ctx.phase !== "beforeTools") return;
+				if (!this.lastResponse || signal.aborted || ["error", "aborted", "length", "deferred"].includes(this.lastResponse.stopReason ?? "")) return;
+				current.batch = await executeToolBatch(this.lastResponse, current.options, sessionMessages(this.state), signal, this.emit, message => this.persistMessage(message));
+				return undefined;
+			},
+			onToolPhaseComplete: async () => { if (current && this.lastResponse) await this.completeTurn(current); },
+			onShouldContinue: () => !signal.aborted && !current?.batch?.terminate && !this.turnPolicy?.stopped && !this.turnPolicy?.failed && !this.preparationFailed,
+			onError: (_ctx, info) => { engineFailure = info.error; },
+		};
+		const linked = linkedController(signal);
+		try {
+			// Session events carry failures; native console logging would corrupt JSON
+			// stdout and duplicate the same provider error outside the host contract.
+			for await (const _ of chat({ adapter: routed, messages: toModelMessages(projectMessages(this.messages())), ...(this.options.sessionId ? { threadId: this.options.sessionId } : {}), abortController: linked.controller, middleware: [middleware], agentLoopStrategy: () => true, debug: false })) { }
+		} catch (error) { engineFailure = error; }
+		finally { linked.dispose(); }
+		if (this.failure !== undefined) throw this.failure;
+		if (signal.aborted && this.lastResponse?.stopReason !== "aborted" && (!this.lastResponse || this.lastResponse.content.some(part => part.type === "tool_call"))) {
+			await this.recordFailure(signal.reason ?? new Error("Request aborted"), signal);
+			return;
+		}
+		if (engineFailure !== undefined && (!this.lastResponse || !["error", "aborted", "length", "deferred"].includes(this.lastResponse.stopReason ?? ""))) {
+			if (!this.lastResponse) this.preparationFailed = true;
+			await this.recordFailure(engineFailure, signal);
+		}
+	}
+	private async recordFailure(error: unknown, signal: AbortSignal): Promise<void> {
+		const message: SessionMessage = { role: "assistant", content: [], timestamp: Date.now(), provider: this.options.model.provider, model: this.options.model.id, api: this.options.model.api, stopReason: signal.aborted ? "aborted" : "error", errorMessage: error instanceof Error ? error.message : String(error) };
+		this.lastResponse = message;
+		this.emit({ type: "message_start", message, timestamp: Date.now() });
+		await this.persistMessage(message);
+		this.emit({ type: "message_end", message, timestamp: Date.now() });
+		this.emit({ type: "turn_end", stopReason: message.stopReason!, timestamp: Date.now() });
+	}
 	private summaryDriver(): SessionAssembly["driver"] {
 		const driver = this.driver, policy = this.turnPolicy;
 		if (!policy || !driver.summarize) return driver;
 		const summarize = driver.summarize.bind(driver);
-		return { ...driver, summarize: async (request, signal) => {
-			const settle = policy.beginRequest();
-			try { const response = await summarize(request, signal); settle(response.usage); return response; }
-			finally { settle(); }
-		} };
+		return {
+			...driver, summarize: async (request, signal) => {
+				const settle = policy.beginRequest();
+				try { const response = await summarize(request, signal); settle(response.usage); return response; }
+				finally { settle(); }
+			}
+		};
 	}
 
 	private recoverableLength(message: SessionMessage): boolean {
 		const driver = this.responseDriver ?? this.driver;
 		return message.stopReason === "length" && (driver.maxTokens ?? 0) > 0 && message.usage !== undefined && message.usage.output < driver.maxTokens!;
 	}
-	private async runSession(input: AgentInput | undefined, signal: AbortSignal, inputId?: string): Promise<void> {
-		this.executing = true;
-		this.emit({ type: "agent_start", timestamp: Date.now() });
+
+	private async runSession(input: AgentInput | undefined, signal: AbortSignal, inputId?: string): Promise<TurnResult> {
+		this.executing = true; this.emit({ type: "agent_start", timestamp: Date.now() });
 		const retry = resolveRetryPolicy(this.options.retry);
 		this.taskFailures = 0;
-		let retried = false;
-		let lastRetryAttempt = 0;
+		let retried = false, lastRetryAttempt = 0, outcome: TurnResult = { status: "error" };
 		try {
-			let first = true;
+			this.applyConfigurations();
+			if (input !== undefined) await this.consumeInput(this.inputMessage(input, inputId), signal);
+			else if (!projectMessages(this.messages()).length) throw new Error("Cannot continue: no messages in context");
 			while (!signal.aborted) {
-				this.applyConfigurations();
-				if (first && input !== undefined) await this.runtime.prompt(this.inputMessage(input, inputId));
-				else await this.runtime.continue();
-				first = false;
-				if (this.failure !== undefined) throw this.failure;
-				if (signal.aborted || this.preparationFailed || this.turnPolicy?.stopped || this.turnPolicy?.failed) return;
-				const last = this.runtime.state.messages.at(-1);
-				const message = last ? toSessionMessage(last) : undefined;
-				if (!message || signal.aborted) return;
+				await this.runChat(signal);
+				if (signal.aborted || this.preparationFailed || this.turnPolicy?.stopped || this.turnPolicy?.failed) break;
+				const message = this.lastResponse;
+				if (!message) break;
 				const responseDriver = this.responseDriver ?? this.driver;
-				const overflow = responseDriver.isOverflow(message);
-				const length = this.recoverableLength(message);
+				const overflow = responseDriver.isOverflow(message), length = this.recoverableLength(message);
 				if (this.settings.enabled && ((message.stopReason === "error" && overflow) || length)) {
-					if (this.recoveryUsed) return;
+					if (this.recoveryUsed) break;
 					this.recoveryUsed = true;
 					const reason = length ? "length" : "overflow";
 					this.emit({ type: "recovery", reason, operationId: randomUUID(), attempt: 1, timestamp: Date.now() });
 					const result = await this.compaction.run(reason, signal, this.emit);
-					if (result.status !== "complete" || signal.aborted) return;
-					this.runtime.state.messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model));
+					if (result.status !== "complete" || signal.aborted) break;
 					continue;
 				}
 				if (message.stopReason === "error" && !overflow && retry.enabled && responseDriver.isRetryable?.(message) && this.taskFailures < retry.maxRetries) {
 					const attempt = ++this.taskFailures; retried = true; lastRetryAttempt = attempt;
 					const delayMs = retry.baseDelayMs * 2 ** (attempt - 1);
 					this.emit({ type: "retry", phase: "scheduled", attempt, delayMs, ...(message.errorMessage ? { error: message.errorMessage } : {}), timestamp: Date.now() });
-					try { await (this.driver.wait ?? waitForRetry)(delayMs, signal); } catch (error) { if (signal.aborted) return; throw error; }
-					signal.throwIfAborted();
-					this.runtime.state.messages = projectMessages(this.runtime.state.messages.map(message => toSessionMessage(message)!)).map(message => fromSessionMessage(message, this.options.model));
+					await (this.driver.wait ?? waitForRetry)(delayMs, signal); signal.throwIfAborted();
 					this.usage.invalidate(); this.compaction.syncUsage();
 					this.emit({ type: "retry", phase: "attempt", attempt, timestamp: Date.now() });
+					this.applyConfigurations();
 					continue;
 				}
-				if (message.stopReason !== "error" && message.stopReason !== "length" && message.stopReason !== "aborted") this.recoveryUsed = false;
+				if (["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "")) break;
+				const steering = this.drain(this.steering, this.options.steeringMode);
+				const inputs = steering.length ? steering : this.drain(this.followups, this.options.followUpMode);
+				if (inputs.length) { this.applyConfigurations(); for (const next of inputs) await this.consumeInput(next, signal); continue; }
 				if (this.settings.enabled && message.stopReason === "stop" && overflow) await this.compaction.run("usage", signal, this.emit);
-				return;
+				break;
 			}
+		} catch (error) {
+			if (this.failure !== undefined) throw this.failure;
+			if (!signal.aborted) { this.preparationFailed = true; await this.recordFailure(error, signal); }
 		} finally {
 			this.closeInput();
 			for (const [message, ids] of this.stagedMcp) { this.stagedMcp.delete(message); await Promise.all(ids.map(id => this.options.mcpManager?.artifacts.delete?.(id))); }
 			this.executing = false; this.applyConfigurations();
-			const last = this.runtime.state.messages.at(-1);
-			const reason = last?.role === "assistant" ? last.stopReason : undefined;
-			const outcome = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : (this.preparationFailed || this.turnPolicy?.failed) ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
-			if (retried) this.emit({ type: "retry", phase: "end", attempt: lastRetryAttempt, outcome: outcome === "success" ? "success" : outcome === "aborted" ? "aborted" : "error", timestamp: Date.now() });
-			this.emit({ type: "agent_end", outcome, ...(outcome === "success" && this.turnPolicy?.stopped ? { terminationReason: "policy" as const } : {}), timestamp: Date.now() });
+			const reason = this.lastResponse?.stopReason;
+			const status = this.failure !== undefined ? "error" : signal.aborted ? "aborted" : (this.preparationFailed || this.turnPolicy?.failed) ? "error" : reason === "error" || reason === "aborted" || reason === "length" || reason === "deferred" ? reason : "success";
+			outcome = { status, ...(status === "success" && this.turnPolicy?.stopped ? { terminationReason: "policy" as const } : {}) };
+			if (retried) this.emit({ type: "retry", phase: "end", attempt: lastRetryAttempt, outcome: status === "success" ? "success" : status === "aborted" ? "aborted" : "error", timestamp: Date.now() });
+			this.emit({ type: "agent_end", outcome: status, ...(outcome.terminationReason ? { terminationReason: outcome.terminationReason } : {}), timestamp: Date.now() });
 		}
+		return outcome;
 	}
-
 	get mcp() { return this.options.mcpManager!; }
 	getSkills(): SkillsSnapshot { return structuredClone(this.skills); }
 	refreshSkills(): Promise<ConfigurationReceipt> { return this.updateConfiguration({}, true); }
 	updateConfiguration(patch: ConfigurationPatch, refresh = false): Promise<ConfigurationReceipt> {
 		this.assertHealthy();
 		if (patch.mcp && Object.keys(patch.mcp).some(key => !["enabled", "servers"].includes(key))) return Promise.reject(new TypeError("MCP stores and interaction are configured at creation"));
+		if ("streamFn" in patch) return Promise.reject(new TypeError("streamFn was removed; use adapter"));
 		if ("transformContext" in patch) return Promise.reject(new TypeError("transformContext is configured at creation"));
 		if ("shouldStopAfterTurn" in patch) return Promise.reject(new TypeError("shouldStopAfterTurn is configured at creation"));
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
@@ -468,20 +555,34 @@ export class AgentSession implements AgentPort {
 	}
 	private applyConfigurations(): void {
 		for (const pending of this.pendingConfigurations.splice(0)) {
-			if (this.disposed || this.failure !== undefined) { void pending.assembly.mcp?.discard().catch(() => {}); pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
-			this.toolset.clear();
+			if (this.disposed || this.failure !== undefined) { void pending.assembly.mcp?.discard().catch(() => { }); pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
+
 			pending.assembly.mcp?.commit(pending.revision);
 			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
 			this.requestProjection = undefined;
 			this.appliedRevision = pending.revision;
-			this.options = pending.assembly.options; this.toolset = this.prepareTools(); this.driver = pending.assembly.driver;
-			this.runtime.state.model = this.options.model; this.runtime.state.systemPrompt = this.options.systemPrompt;
-			this.runtime.state.thinkingLevel = this.options.thinkingLevel; this.runtime.state.tools = this.toolset.tools;
+			this.options = pending.assembly.options; this.tools = this.prepareTools(); this.driver = pending.assembly.driver;
 			this.usage.invalidate(); this.compaction.syncUsage();
 			pending.resolve({ status: "applied", revision: pending.revision });
 			this.emit({ type: "configuration", phase: "applied", revision: pending.revision, timestamp: Date.now() });
 		}
 	}
-	async dispose(): Promise<void> { this.disposed = true; this.configurationController.abort(); this.abort(); this.applyConfigurations(); await this.running; await this.configurationQueue; await this.options.mcpManager?.dispose(); }
+
+	respond(response: ResponseEnvelope): boolean { this.assertHealthy(); return this.bus.respond(response); }
+	dispose(): Promise<void> {
+		if (this.disposing) return this.disposing;
+		this.disposed = true; this.configurationController.abort(); this.abort(); this.bus.close(); this.applyConfigurations();
+		const active = this.active;
+		this.disposing = (async () => {
+			const outcomes = await Promise.allSettled([active?.iterator.return?.(), this.running, this.compacting, this.configurationQueue]);
+			try {
+				await this.options.mcpManager?.dispose();
+				const error = outcomes.find(outcome => outcome.status === "rejected");
+				if (error?.status === "rejected") throw error.reason;
+				active?.finish();
+			} catch (error) { active?.finish("error"); throw error; }
+		})();
+		return this.disposing;
+	}
 	private assertHealthy(): void { if (this.disposed) throw new Error("Agent has been disposed"); if (this.failure !== undefined) throw new Error("Agent is faulted; recreate it from storage", { cause: this.failure }); }
 }

@@ -4,23 +4,39 @@
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 
-## 自定义模型流（StreamFn）
+## 原生 TanStack 模型 adapter
 
-SDK 导出 Forge 自有的 `StreamFn` 和 `Model` 类型。宿主提供完整模型元数据及流函数，即可使用内置 catalog 之外的模型。可运行的离线示例：[custom-stream.ts](../examples/custom-stream.ts)，命令 `bun examples/custom-stream.ts`。
+SDK 接受 TanStack 原生 `AnyTextAdapter`，并导出等价的 `ModelAdapter` 类型。Forge 的 `Model` 只描述模型身份、协议、容量与定价；`adapter` 负责供应商请求和流。完整模型对象必须配套 adapter，catalog 字符串模型可省略 adapter 并使用内置认证和路由。
 
 ```ts
-import { createAgent, type Model, type StreamFn } from "@forge-agent/core/sdk";
+import { createAgent, type Model, type ModelAdapter } from "@forge-agent/core/sdk";
 
-async function openAgent(model: Model<string>, streamFn: StreamFn) {
-  return createAgent({ model, streamFn, cwd: process.cwd(), systemPrompt: "Help with the task." });
+async function openAgent(model: Model, adapter: ModelAdapter) {
+  return createAgent({ model, adapter, cwd: process.cwd(), systemPrompt: "Help with the task." });
 }
 ```
 
-`StreamFn(model, context, options)` 返回 `AssistantMessageEventStream` 或其 Promise，使用 Forge 自有模型事件类型。`context` 包含本次 systemPrompt、投影后的 messages 和 tools。完整模型对象必须配套 `streamFn`；宿主负责准确提供 provider、api、contextWindow、maxTokens 等元数据及认证。若同时传 `provider`，必须与 `model.provider` 一致；显式 `baseUrl` 覆盖模型的 baseUrl。
+宿主使用 TanStack 的 provider factory 创建 adapter，或实现 `chatStream(request): AsyncIterable<AdapterYieldChunk>`。`request` 使用 TanStack 的 `model`、`messages`、`systemPrompts`、`tools` 和 `modelOptions`；取消信号位于 `request.request.signal`。输出上限和推理设置由 `Model.api` 映射到供应商原生选项，例如 Responses 使用 `max_output_tokens` 与 `reasoning.effort`，Anthropic 使用 `max_tokens` 与 `thinking`。宿主应让 adapter 的模型、协议和声明的元数据一致；同时提供 `provider` 时必须与 `model.provider` 一致。
 
-原有 `provider: string, model: string` 仍查内置 catalog。它也可以配套 `streamFn`，此时跳过内置认证检查；省略函数则沿用内置传输及认证。自定义函数收到显式 `apiKey`（如有）、`signal`、`sessionId`、输出上限和推理设置。函数须响应取消，将请求失败/取消编码为流中的 error 事件及最终 error/aborted AssistantMessage；不要用 throw/rejected Promise 表达正常的请求失败。不得把函数只写成固定返回任务答案：压缩摘要也使用同一生效配置的流函数，但有不同的上下文、输出预算及 `cacheRetention: "none"`。`maxRetries: 0` 保留会话层统一重试控制，传输应遵守此设置。
+自定义 adapter 自行持有认证、endpoint 和 headers；Forge 将 `sessionId` 作为原生 `request.threadId` 传给任务与摘要请求。`apiKey` 与 `baseUrl` 不作为旧式 stream options 注入自定义 adapter。catalog 字符串模型也可提供 adapter，此时跳过内置认证检查。内置客户端关闭传输重试；自定义客户端也应关闭自己的重试，由 Forge 的有界会话重试统一管理请求计数和预算。
 
-`updateConfiguration({ model, streamFn })` 支持在现有完整工具批次或摘要结束后一起切换，继续区分 accepted 与 applied。模型元数据在异步创建/准备前快照。传 `streamFn: null` 恢复内置传输，此时必须使用字符串模型；若从对象模型切回，需同时提供 catalog 的 provider/model。配置失败保留原生效配置；流函数及其闭包由宿主管理，不序列化到会话历史。
+任务与压缩摘要使用同一个生效 adapter。摘要使用独立 system prompt、消息与输出预算，不包含任务工具；不要把 adapter 写成只能返回普通任务答案的函数。异步初始化可放在 `async *chatStream()` 中，并响应请求信号。正常结束需发出完整 `RUN_FINISHED`，`finishReason` 为 `stop`、`tool_calls` 或 `length`；请求失败发出 `RUN_ERROR`，取消使用 `code: "aborted"`。半截响应、未知 finish reason 和无效工具 JSON 都会失败，截断工具不执行。
+
+自定义供应商确有延迟终态时，使用 `RUN_FINISHED`、`finishReason: "stop"` 以及 `metadata: { forge: { stopReason: "deferred" } }`。这是 Forge 的显式扩展；普通 TanStack interrupt 不代表供应商延迟响应。`deferred` 结束当前 invocation，不启动后台轮询。原生 `TokenUsage.cost` 为自定义 adapter 的报告费用；缺失的 usage/费用保持未知，不从声明价格伪造报告值。内置目录传输沿用 Forge 的价格计算。
+
+`updateConfiguration({ model, adapter })` 在当前完整工具批次或摘要结束后一起切换，继续区分 accepted 与 applied。创建/更新会快照模型元数据，adapter 对象及其闭包由宿主管理。换模型时同时提供配置了相应模型的新 adapter。`adapter: null` 恢复内置传输，此时需使用 catalog 字符串模型；从对象模型切回时同时提供 provider/model。失败更新保留已生效配置，adapter 不写入会话历史。
+
+本次接口迁移删除 `StreamFn`、`AssistantMessageEventStream` 和 Pi 模型事件类型，没有兼容包装。将 `{ model, streamFn }` 改为 `{ model, adapter }`，响应改为 TanStack 原生 chunks；旧 `streamFn` 参数在 JavaScript 调用中也明确拒绝。已有 JSONL、Markdown 记忆和 MCP 附件无需因本次迁移转换格式。
+
+配置类型统一为 `CreateAgentOptions`，删除同义导出 `AgentOptions`。`SessionStore` 已实现 `SessionStorage`，将 `storage: store.asStorage()` 改为 `storage: store`。工具干预上下文使用 `SessionMessage`/`ToolCallBlock`；授权与执行共享最终参数值，宿主只能通过约定的参数和结果干预接口影响该批次。
+
+运行离线示例：`bun examples/custom-adapter.ts`、`bun examples/turn-policy.ts`、`bun examples/context-transform.ts`。它们使用 [scripted-adapter.ts](../examples/scripted-adapter.ts) 的原生 adapter，无需凭据；完整调用示例见 [custom-adapter.ts](../examples/custom-adapter.ts)。
+
+## 执行职责
+
+`createAgent → AgentSession → TanStack chat() → TextAdapter` 是 SDK、CLI 与 TUI 共用的执行路径。`chat()` 负责模型与工具续轮，Forge 不再维护 Pi Agent/agent-loop。Forge 会话保留输入归属、配置 revision、权威终态、逐条持久化和证据型压缩；`onConfig` middleware 在请求边界准备投影和最终预算。
+
+工具通过原生 `toolDefinition().server()` 接入；Forge 在工具阶段完成整批参数准备、严格校验、授权、并行/串行副作用及结果干预，TanStack 续轮读取已保存的结果。`SessionMessage` 继续承担历史与展示合同，在请求/响应边界转换一次。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。设计和当前验证状态见 [ADR-025](decisions/025-tanstack-agent-foundation.md) 与[重构验收记录](phases/tanstack-foundation-acceptance.md)。
 
 ## 每轮停止策略（shouldStopAfterTurn）
 
@@ -28,7 +44,7 @@ async function openAgent(model: Model<string>, streamFn: StreamFn) {
 
 ```ts
 const agent = await createAgent({
-  model, streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
+  model, adapter, cwd: process.cwd(), systemPrompt: "Find the requested record.",
   tools, permission,
   shouldStopAfterTurn: ({ toolResults, turnIndex, usage }) => {
     const found = toolResults.some(result => result.toolName === "lookup" && !result.isError);
@@ -73,7 +89,7 @@ const agent = await createAgent({
 
 返回完整的 `SessionMessage` 数组，允许同步/异步和原样返回。输入是压缩后的当前可用消息，不含内置记忆，也不承诺包含全部历史。返回值接收后拷贝并校验：合法 role/content、工具调用与结果配对、非空有效投影，末条为 user 或 toolResult。可以整组移除旧调用与结果，不能留下孤立结果/缺失配对。保留不透明 provider 签名；框架不验证精简后的任务语义质量。
 
-执行顺序是既有压缩准备 → 宿主变换 → 按剩余软预算装配最终记忆 → 内置 convertToLlm → 最终预算检查 → streamFn。宿主内容超过软线时仍可能发送，但内置记忆额度可降至 0；不会为过大的宿主结果反复压缩或再次调用回调。前置压缩失败也不会交给宿主救援。
+执行顺序是压缩准备 → 宿主变换 → 按剩余软预算装配最终记忆 → 最终预算检查 → TanStack ModelMessage 投影 → adapter。宿主内容超过软线时仍可能发送，但内置记忆额度可降至 0；不会为过大的宿主结果反复压缩或再次调用回调。前置压缩失败也不会交给宿主救援。
 
 变换仅影响请求投影，不写回历史，不修改输入归属或 `processed` 回执。实际模型响应和工具结果正常保存；临时资料不会自动保存，恢复后由宿主重新提供。失败不返还已 processed 的输入，不重放工具。每次任务重试重新调用回调，检索缓存与外部副作用幂等性由宿主管理。
 
@@ -88,9 +104,9 @@ hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
 最终输入估算 > hard maxInputTokens → 拒绝，不自动下调 maxTokens
 ```
 
-输入按最终 messages、system 与工具 schema 估算，历史 assistant usage 仅在发送副本中置零，历史及实际累计用量不变；工具 details 不计入模型输入。启用回调时不再用历史 provider usage 锚点估算新投影，`getUsage()` 在请求准备完成时显示最终估算（`contextEstimated: true`），消息或配置变化后回到历史准备视图。
+输入按最终 messages、system 与工具 schema 估算，历史 assistant usage 不进入模型消息，历史及实际累计用量不变；工具 details 不计入模型输入。启用回调时不再用历史 provider usage 锚点估算新投影，`getUsage()` 在请求准备完成时显示最终估算（`contextEstimated: true`），消息或配置变化后回到历史准备视图。
 
-受支持的内置 TanStack 传输统一使用 Forge 的一般硬线。自定义 streamFn 内部改写与限额由宿主负责。显式 `maxTokens > model.maxTokens` 在创建/配置更新时拒绝，失败更新保留旧配置。
+受支持的内置 TanStack 传输统一使用 Forge 的一般硬线。自定义 adapter 内部改写与限额由宿主负责。显式 `maxTokens > model.maxTokens` 在创建/配置更新时拒绝，失败更新保留旧配置。
 
 这些检查是启发式估算，1024 余量不是中文/图片误差上界，仍可能收到供应商 overflow。保留原有有界恢复，不承诺精确物理窗口、答案质量或费用节省。可运行离线示例见 [context-transform.ts](../examples/context-transform.ts)，设计和证据见[施工图](phases/context-transform.md)。
 
@@ -165,11 +181,11 @@ CLI 默认将记忆工具作为内建允许项，仍受前置 hooks/rules 约束
 
 ## 装配与定制边界
 
-`createAgent(options)` 始终装配生产会话，只接受一个 options 参数。定制模型使用 `model` + `streamFn`；定制数据库或会话持久化实现 `SessionStorage` 并通过 `storage` 传入；定制工具通过 `tools` 传入。SDK 和 CLI 均不提供替换整个执行实例的 factory。旧的第二参数在 TypeScript 中报错，在 JavaScript 中于任何装配和模型调用前抛出 `TypeError`。
+`createAgent(options)` 始终装配生产会话，只接受一个 options 参数。定制模型使用 `model` + `adapter`；定制数据库或会话持久化实现 `SessionStorage` 并通过 `storage` 传入；定制工具通过 `tools` 传入。SDK 和 CLI 均不提供替换整个执行实例的 factory。旧的第二参数在 TypeScript 中报错，在 JavaScript 中于任何装配和模型调用前抛出 `TypeError`。
 
-创建会等待存储接入完成，包括默认内存存储。`setStorage` 属于内部装配过程，不在已创建 Agent 的宿主接口中。存储接入失败时，中止并等待已创建会话释放；内部创建的 RequestBus 会关闭，外部传入的总线不会由失败装配关闭。清理成功时原样抛出创建错误；清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误。
+创建先调用一次 `storage.load()`，再把该状态交给唯一的 `AgentSession`，默认内存存储遵循同一流程；没有第二次装配加载或 `setStorage` 接口。加载失败时不请求模型、不写入存储，原样保留错误。后续装配失败会释放已创建的 MCP 资源；内部创建的 RequestBus 会关闭，外部总线不由失败装配关闭。清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误。
 
-SDK 集成测试用 `streamFn` 控制模型返回，存储故障和工具行为分别在 `storage`、`tools` 注入。局部 UI/headless 测试可以使用各自的小接口，底层单元测试可直接测试内部模块。设计及验证见[完整 Agent 装配契约](phases/agent-assembly.md)。
+SDK 集成测试用原生 TanStack adapter 控制模型返回，存储故障和工具行为分别在 `storage`、`tools` 注入。局部 UI/headless 测试可以使用各自的小接口，底层单元测试可直接测试内部模块。当前装配设计及验证见[基座施工图](phases/tanstack-foundation.md)和[验收记录](phases/tanstack-foundation-acceptance.md)。
 
 ## 创建实例
 
@@ -255,7 +271,7 @@ v4 `compaction` 记录使用可选、版本化的 `checkpoint` 载荷，SDK 导�
 
 每次任务请求前，当前上下文超过输入预算时先压缩；压缩失败阻止该次请求。overflow 和可恢复 length 在连续失败链中共享一次恢复机会；保留失败记录，不重放已执行工具，不因 usage 报超限重新生成成功答案。`enabled: false` 关闭自动压缩及超限恢复，仍可手动压缩和读取历史。
 
-摘要使用主任务模型与路由，隔离任务 system，不传工具定义或缓存保留。`summaryReasoning: "off"` 在模型支持时关闭推理，否则继承。临时重试与最多两次逻辑生成共享四次模型请求上限。Provider 错误在重试策略结束后直接停止，不触发检查点重建。
+摘要使用主任务模型与路由，隔离任务 system，不传任务工具定义；内置摘要请求不添加任务缓存提示。`summaryReasoning: "off"` 在模型支持时关闭推理，否则继承。临时重试与最多两次逻辑生成共享四次模型请求上限。Provider 错误在重试策略结束后直接停止，不触发检查点重建。
 
 普通到达输出上限的 `length` 正文保留给后续请求，截断工具调用不执行也不投影。被分类为上下文恢复失败尝试的 `length` 保存 `contextExcluded` 标记，重开后同样只保留原记录。headless 在成功恢复后返回成功退出码；未恢复的 error/length 返回 1，取消返回 130。
 
@@ -263,7 +279,7 @@ v4 `compaction` 记录使用可选、版本化的 `checkpoint` 载荷，SDK 导�
 
 `contextWindow` 可覆盖本地容量声明，默认采用模型元数据；降低该值可测试触发流程，不证明供应商物理窗口超限。`maxTokens` 是普通任务的宿主输出配置，与压缩 reserve 分开，省略时使用上方的显式输出预留。`getUsage()` 的 `contextEstimated` 区分有效 usage 与估算。模型、system、tools、分支或投影改变后失效，摘要 usage 不作为任务锚点。
 
-历史 user/toolResult 可携带 `{ type: "image", data: base64, mimeType }`，请求保留图片，启发式按每张 1024 tokens 估算，摘要仅序列化图片占位。`sessionId` 默认每实例生成，宿主可传稳定 ID，CLI 使用会话 header ID。内置 TanStack 传输重放完整历史；Responses 请求设置 `store: false`，不以 `sessionId` 续接服务端响应。`sessionId` 仍传给宿主自定义 `streamFn`。需要 `mistral-conversations` 或 `openai-codex-responses` 的模型不在内置目录中；宿主仍可为完整模型对象提供自定义 `streamFn`。
+历史 user/toolResult 可携带 `{ type: "image", data: base64, mimeType }`，请求保留图片，启发式按每张 1024 tokens 估算，摘要仅序列化图片占位。`sessionId` 默认每实例生成，宿主可传稳定 ID，CLI 使用会话 header ID。自定义 adapter 从任务与摘要的 `request.threadId` 读取同一标识；跨实例重开时由宿主再次传入稳定 `sessionId`。内置 TanStack 传输重放完整历史；Responses 请求设置 `store: false`，不以 `sessionId` 续接服务端响应。需要 `mistral-conversations` 或 `openai-codex-responses` 的模型不在内置目录中；宿主可为完整模型对象提供支持该协议的原生 adapter。
 
 `await agent.compact(instructions?, onEvent?)` 先取消当前执行并等待工具及保存收尾，再压缩一次，完成后保持空闲。返回 `{ status, operationId, beforeTokens, afterTokens?, error? }`；status 为 `complete`、`skipped` 或 `error`。存储故障仍抛错并停用实例。取消可以中止摘要与退避；已开始的写入仍需等待。instructions 只进入历史摘要的 Additional focus。
 
@@ -289,7 +305,7 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 跨 invocation 队列属于宿主。TUI 在等待期间持续接受输入,显示 FIFO,空输入框 Up 取回队尾编辑;Esc 停止续发并恢复草稿,Ctrl+Enter 仅在旧任务成功收尾后发送指定输入,其余待发原文恢复草稿。提交失败暂停队列,检查存储并重建实例后由宿主明确恢复。`agent_end` 仅表示执行终止,整个异步迭代正常完成才表示会话提交完成。
 
-提前 `break` 或关闭 iterator 会取消并等待清理。后台执行由宿主持续消费事件,界面可独立订阅宿主转发的内容。`abort()` 只停止当前调用,包括已获取但尚未 next 的 iterator,此时随后消费不会启动模型或提交;清理结束后实例可复用。`dispose()` 幂等,取消并等待清理或已开始的提交结算,之后不可复用;持有未完成 iterator 时也应 await dispose。
+执行仍在进行时，提前 `break` 或关闭 iterator 会取消并等待清理。执行已结算后再关闭或 `dispose()`，保留实际结果及 policy 结束原因，不把成功或失败改写成取消；宿主在 `agent_end` 处抛出的展示错误也不改变执行结果。后台执行由宿主持续消费事件,界面可独立订阅宿主转发的内容。`abort()` 只停止当前调用,包括已获取但尚未 next 的 iterator,此时随后消费不会启动模型或提交;清理结束后实例可复用。`dispose()` 幂等,取消并等待清理或已开始的提交结算,之后不可复用;持有未完成 iterator 时也应 await dispose。
 
 任意自定义工具必须配合 AbortSignal,不合作的工具可能让取消或 dispose 长期等待;SDK 不提供强制进程终止。
 
@@ -301,11 +317,11 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 ## 验证边界
 
-自动化验证使用本地 HTTP provider、模型流替身、工具与存储故障注入、受控交错及 PTY 交互，不代表公共 API 稳定承诺、完整真实供应商覆盖、长任务可靠性或文件系统崩溃一致性。当前证据见[内核迁移验收](phases/pi-core-migration-acceptance.md)、[StreamFn 合同](phases/stream-fn.md)和[逐轮停止策略](phases/turn-policy.md)。
+自动化验证使用本地 HTTP provider、原生 adapter 夹具、工具与存储故障注入、受控交错及 PTY 交互，不代表公共 API 稳定承诺、完整真实供应商覆盖、长任务可靠性或文件系统崩溃一致性。本次重构的实际 Ran / Not run / Why / Risk 见[验收记录](phases/tanstack-foundation-acceptance.md)；旧实现的历史验收不自动成为新执行链的验收结论。
 
-## 本地执行内核接口升级
+## 执行结果与配置
 
-包名与 `createAgent` 不变。生产循环来自本地维护的固定 Agent 源码，Forge 会话层继续负责存储、权限、上下文与 usage。内部 `ExecutionCore`、`AgentRunner` 和旧权限适配工厂不再导出；宿主从 SDK 创建实例。
+包名与 `createAgent` 不变。`AgentSession` 直接实现 SDK，TanStack `chat()` 执行模型与工具循环；原 `HostedAgent`、`AgentPort`、`session-port` 和本地 Pi runtime 已删除。宿主继续使用 SDK 的输入、工具、存储和配置接口。
 
 ```ts
 const turn = agent.runTurn("完成任务");
@@ -320,7 +336,7 @@ const continuation = agent.continue(); // 使用已有上下文，不添加 user
 for await (const event of continuation) { /* 展示事件 */ }
 ```
 
-`turn.result` 在消费与必要保存结算后完成；`waitForIdle()` 等待当前已获取 iterator 或手动压缩清理，不表示模型成功。`agent_end.outcome` 标明会话级最终结果；重试中间的 error 不是整个任务失败。`deferred` 为终态，没有后台轮询。惰性流需消费或获取 iterator 后关闭，未消费的流不会启动工作。
+`turn.result` 在消费与必要保存结算后完成；`waitForIdle()` 等待当前已获取 iterator 及手动压缩清理，不表示模型成功。手动压缩替换当前执行时，等待范围包含整个压缩操作，不在旧 iterator 关闭时提前结束。`agent_end.outcome` 标明会话级最终结果；重试中间的 error 不是整个任务失败。`deferred` 为终态，没有后台轮询。惰性流需消费或获取 iterator 后关闭，未消费的流不会启动工作。
 
 自定义工具改用一套结构化返回值，旧 `{ ok, value, error }` 不再是工具 execute 协议：
 
@@ -341,7 +357,7 @@ const lookup: HarnessTool<{ key: string }, { source: string }> = {
 };
 ```
 
-`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段，不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行，其返回对象也必须符合 schema。执行前按调用顺序完成初检、改写、before hook、最终校验和授权，然后默认并行执行；`executionMode: "sequential"` 可指定单工具串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`，授权请使用 SDK 权限配置。
+`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段，不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行，其返回对象也必须符合 schema。默认并行批次在副作用开始前按调用顺序完成初检、改写、before hook、最终校验和授权；任一工具配置 `executionMode: "sequential"` 会使整批串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。hooks 的 assistantMessage/context.messages 使用 `SessionMessage`，toolCall 使用 `ToolCallBlock`（`type: "tool_call"`）。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`，授权请使用 SDK 权限配置。
 
 普通任务和摘要共用 `retry` 配置，但计数独立。任务仅对临时故障重试，默认三次、2/4/8 秒；原错误响应保存在历史并从重试请求排除。已消费输入和完成工具结果复用，不重复用户输入、不重放工具。overflow 使用独立的一次上下文恢复，不能套入普通 retry。`retry` 事件提供 scheduled/attempt/end，取消会中止等待。
 
@@ -356,9 +372,9 @@ const application = await receipt.applied;
 // application.status: applied | canceled，revision 与 receipt 一致。
 ```
 
-可更新 provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应或工具执行中接受更新后，整批沿用原配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
+可更新 provider/model/adapter/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow/skills/mcp。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应或工具执行中接受更新后，整批沿用原配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
 
-源码基线、必要定制、验证与版本回退说明见[迁移验收](phases/pi-core-migration-acceptance.md)。
+职责替代、完整迁移与版本回退说明见[基座施工图](phases/tanstack-foundation.md)，实际验证见[验收记录](phases/tanstack-foundation-acceptance.md)。
 
 ## MCP
 

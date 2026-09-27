@@ -5,12 +5,12 @@ created: 2026-09-04
 
 # ADR-006: TUI 视觉出口升级为锁定环境内逐 cell 零差异
 
-> 状态:已批准(2026-09-04)。reference 获取路径被 [ADR-007](./007-no-compile-grok-reference.md) 修订:不再编译 grok-build;cell 回归改为 in-repo golden。决策 2/3(自有 compositor、PNG 非硬门禁)仍有效。
+> 状态:已批准(2026-09-04)。reference 获取路径被 [ADR-007](007-no-compile-grok-reference.md) 修订:不再编译 grok-build;cell 回归改为 in-repo golden。决策 2/3(自有 compositor、PNG 非硬门禁)仍有效。
 > 参与者:operator(发起与拍板)、Grok(起草)
 
 ## 背景
 
-[ADR-005](./005-tui-own-compositor.md) 决策 1 选了 1A:借 grok 信息架构与交互,不以 cell/PNG 零差异为出口。operator 同日追加指示,原话:
+[ADR-005](005-tui-own-compositor.md) 决策 1 选了 1A:借 grok 信息架构与交互,不以 cell/PNG 零差异为出口。operator 同日追加指示,原话:
 
 > 具体UI表现我也要求和grokbuild一模一样
 
@@ -51,7 +51,7 @@ created: 2026-09-04
 
 - [phase-2.2.md](../archive/phases/phase-2.2.md):出口条件、新增 B6 与 AC-48/49/50、退役清单调整
 - [plan.md](../plan.md) 决策 2、状态行、§3 下一步
-- [ADR-005](./005-tui-own-compositor.md) 状态行:决策 1 被本 ADR 修订
+- [ADR-005](005-tui-own-compositor.md) 状态行:决策 1 被本 ADR 修订
 - [grok-build-tui-gap.md](../archive/research/grok-build-tui-gap.md) 状态行:pixel parity 以 cell 口径回归
 - [phase-2.1.md](../archive/phases/phase-2.1.md) 状态行:AC-38 语义去向标注
 

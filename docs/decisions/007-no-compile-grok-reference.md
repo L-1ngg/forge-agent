@@ -6,7 +6,7 @@ created: 2026-09-04
 # ADR-007: 视觉回归不再编译 grok-build 取 reference
 
 > 状态:已批准(2026-09-04,operator 指示「编译成本太高,换一个方案」)。2026-09-06 核对:当前工作区不保留旧对照截图,不改变 cell 回归与 PNG 非硬门禁的验收口径。
-> 修订:[ADR-006](./006-tui-cell-parity.md) 的 reference 获取路径与 AC-49 口径;cell 层验收与 PNG 辅证条款仍有效。
+> 修订:[ADR-006](006-tui-cell-parity.md) 的 reference 获取路径与 AC-49 口径;cell 层验收与 PNG 辅证条款仍有效。
 
 ## 背景
 

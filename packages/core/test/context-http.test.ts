@@ -153,19 +153,19 @@ for (const thinking of ["off", "medium"] as const) test(`TanStack request uses t
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
-test("switching custom and builtin streams commits the preflight policy atomically", async () => {
+test("switching custom and builtin adapters commits the preflight policy atomically", async () => {
 	const { withScenario } = await import("../../../tests/support/scenario.ts");
 	const { fauxModel } = await import("../../../tests/support/model.ts");
 	await withScenario("transport-switch", async s => {
 		const body = await (await import("./helpers/model-response.ts")).modelResponse().text();
 		const fixture = s.httpFixture("builtin-request", [{ id: "builtin", method: "POST", path: "/v1/messages", match() {}, response: { chunks: [body] } }]); let customCalls = 0;
 		const custom = fauxModel({ responses: [{ text: "custom one" }, { text: "custom two" }] });
-		const streamFn: import("../src/sdk.ts").StreamFn = (model, context, options) => { customCalls++; return custom.streamFn(custom.model, context, options); };
-		const agent = await s.agent({ ...base, thinkingLevel: "off", maxTokens: 1024, baseUrl: fixture.url, streamFn, context: { enabled: false } });
+		const adapter: import("../src/sdk.ts").ModelAdapter = { kind: "text", name: custom.adapter.name, model: custom.adapter.model, "~types": custom.adapter["~types"], chatStream: request => { customCalls++; return custom.adapter.chatStream(request); }, structuredOutput: () => custom.adapter.structuredOutput() };
+		const agent = await s.agent({ ...base, thinkingLevel: "off", maxTokens: 1024, baseUrl: fixture.url, adapter, context: { enabled: false } });
 		const first = agent.runTurn("custom"); await s.collect(first); expect((await first.result).status).toBe("success");
-		await (await agent.updateConfiguration({ streamFn: null })).applied;
+		await (await agent.updateConfiguration({ adapter: null })).applied;
 		const second = agent.runTurn("builtin"); await s.collect(second); expect((await second.result).status).toBe("success"); expect(fixture.count).toBe(1);
-		await (await agent.updateConfiguration({ streamFn })).applied;
+		await (await agent.updateConfiguration({ adapter })).applied;
 		const third = agent.runTurn("custom again"); await s.collect(third); expect((await third.result).status).toBe("success"); expect(customCalls).toBe(2);
 	});
 });

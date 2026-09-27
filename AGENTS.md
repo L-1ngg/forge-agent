@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-通用单 Agent 项目(TypeScript + Bun)，围绕 `runtime/Agent` 构建输入归属、执行终态、会话持久化与上下文管理的执行链路。`runtime/Agent` 以固定 Pi Agent 源码为基线，由本仓库维护并扩展生命周期接缝；当前内置模型流使用 TanStack AI，模型目录、认证、类型与辅助函数由 Forge 维护，不依赖 `pi-ai` 包。无等价传输的 Mistral Conversations、Codex Responses 模型已从内置目录移除。仓库内 Bun SDK 为 `@forge-agent/core/sdk`,CLI/TUI 复用同一执行路径;Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md),包职责与依赖边界见 [README](README.md#architecture)。
+通用单 Agent 项目(TypeScript + Bun)。TanStack AI `chat()` 是唯一的模型/工具续轮循环；Forge `AgentSession` 统一输入归属、配置快照、会话持久化、上下文策略与权威终态。原生 provider adapters 负责协议，Forge 保留目录/认证、严格工具授权与并发策略、证据压缩、Markdown 记忆、Skills 和官方 MCP SDK v2 接入。SDK 为 `@forge-agent/core/sdk`，模型接缝是 TanStack 原生 `adapter`；CLI/TUI 共用同一执行路径。Pi runtime 与 StreamFn 已删除，来源记录留在归档；保留的 Skills scanner 与目录来源分别见其本地来源声明。Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md)，执行架构见 [ADR-025](docs/decisions/025-tanstack-agent-foundation.md)，包边界见 [README](README.md#architecture)。
 
 ## 真相源层级
 
@@ -16,10 +16,10 @@
 |---|---|
 | 项目路线、优先级与当前阶段入口 | [docs/plan.md](docs/plan.md)(只放当前行动项与链接) |
 | Issue 规格、任务验收与任务状态 | GitHub Issues;与施工图的分工见 [issue-tracker.md](docs/agents/issue-tracker.md) |
-| 当前内核与 SDK 怎么施工、如何验收 | [内核接入](docs/phases/pi-core-migration.md)、[验收证据](docs/phases/pi-core-migration-acceptance.md);后续能力按[当前文档导航](docs/README.md)进入 |
+| 当前内核与 SDK 怎么施工、如何验收 | [TanStack 基座](docs/phases/tanstack-foundation.md)、[验收证据](docs/phases/tanstack-foundation-acceptance.md);后续能力按[当前文档导航](docs/README.md)进入 |
 | 宿主如何接入、干预与释放实例 | [SDK 接入](docs/sdk.md);输入归属与提交边界见 [ADR-010](docs/decisions/010-input-ownership-and-interruption.md) |
-| 为什么这样设计 | [架构决策](docs/decisions/);早期论证仅在历史追溯时按[归档索引](docs/archive/README.md)读取 |
-| 已定的架构决策 | [docs/decisions/](docs/decisions/)(ADR) |
+| 为什么这样设计 | [架构决策](docs/decisions);早期论证仅在历史追溯时按[归档索引](docs/archive/README.md)读取 |
+| 已定的架构决策 | [docs/decisions/](docs/decisions)(ADR) |
 | 踩过的坑 | [docs/lessons.md](docs/lessons.md) |
 | 怎么协作、怎么写文档 | [docs/SOP.md](docs/SOP.md)、[docs/README.md](docs/README.md) |
 

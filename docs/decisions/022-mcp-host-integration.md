@@ -5,7 +5,7 @@ created: 2026-09-21
 
 # ADR-022: 官方 MCP client 与 Forge 宿主接入
 
-> 状态:已批准(2026-09-21)，其中不替换 pi-ai 的施工期范围由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订。需求范围见 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36)，具体接口及验收映射见[完整施工设计](../phases/mcp-client.md)。operator 于 2026-09-21 在实施启动指令中明确确认本设计；批准不表示产品已实现。
+> 状态:已批准(2026-09-21)；pi-ai 传输范围由 [ADR-024](024-incremental-tanstack-ai-adoption.md) 修订，执行与装配接线由 [ADR-025](025-tanstack-agent-foundation.md) 替代(2026-09-27)，本决策的 MCP 宿主语义继续有效。需求范围见 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36)，具体接口及验收映射见[完整施工设计](../phases/mcp-client.md)。operator 于 2026-09-21 在实施启动指令中明确确认本设计；批准不表示产品已实现。
 > 参与者:operator 提出完整交付和优先复用要求；Codex 完成调研、探针与设计。
 
 ## 背景
@@ -19,7 +19,7 @@ Forge 已有公开 SDK、统一工具权限、配置提交、输入归属和会�
 ### 官方协议实现，Forge 持有宿主语义
 
 - 使用 `@modelcontextprotocol/client@2.0.0`，以发布产物和 Bun 探针为依据；协议、transport、版本协商、分页、输出校验、OAuth 协议及 MCP 交互轮次全部复用 SDK。
-- MCP 模块放在 Core 宿主装配侧，工具仍经 `HarnessTool` 和现有权限执行；不替换 Pi runtime/pi-ai，不引入第二套 Agent loop。
+- MCP 模块放在 Core 宿主装配侧，工具经 `HarnessTool` 和统一权限执行；MCP 不拥有执行循环，复用 `AgentSession` 与 TanStack `chat()` 的唯一执行链。
 - 公开接入为 `createAgent({ mcp })` 和返回实例的 `agent.mcp`。CLI/TUI 复用同一控制接口。CLI 无模型配置的 MCP 管理命令可以直接装配同一个内部管理模块，但不建立另一条业务执行路径。
 - 每个 Agent 拥有自己的连接、目录快照、交互和释放职责；不会跨 Agent 或跨会话隐式共享活动连接。持久凭据可以由宿主显式共享，但不因此共享授权决定、取消信号或模型上下文。
 - 服务目录快照与活动连接状态分开。配置准备不能关闭旧连接；当前模型响应及整批工具完成后，才提交新的有效工具集合和释放不再引用的旧连接。

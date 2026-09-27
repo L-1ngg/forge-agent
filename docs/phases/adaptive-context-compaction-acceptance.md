@@ -42,7 +42,7 @@ Ran：`bun run check`：561 pass / 0 fail，11690 次断言，75 个测试文件
 
 任务使用构造的已保存历史和 JSON 配置产物；副作用工具只计数，不操作真实部署。策略顺序确定性交替并记录在 metadata，非随机抽样；不同场景曾使用 3 个并发 worker，延迟包含当时 provider/网络负载，不能视为严格隔离的性能基准。
 
-原始逐次记录见 [`context-compaction/`](../research/context-compaction/)。汇总器独立重算字段评分，检查重复/缺失样本、运行配置与真实返回模型。所有失败样本计入结果，没有择优重跑。最后 task-switch 初次因 recorder 自读脚本时 URL 字符串路径错误在模型调用前退出；改为 URL 对象后首次执行该场景，不属于失败模型样本重跑。
+原始逐次记录见 [`context-compaction/`](../research/context-compaction)。汇总器独立重算字段评分，检查重复/缺失样本、运行配置与真实返回模型。所有失败样本计入结果，没有择优重跑。最后 task-switch 初次因 recorder 自读脚本时 URL 字符串路径错误在模型调用前退出；改为 URL 对象后首次执行该场景，不属于失败模型样本重跑。
 
 完整 36 条保留集通过预定质量 gate。独立汇总见 [`holdout-report.json`](../research/context-compaction/holdout-report.json)，原始逐条记录在 `holdout/`。所有正式保留集模型调用均有 usage，未用估算值代替总 Token。
 

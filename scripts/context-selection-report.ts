@@ -50,7 +50,7 @@ for (const file of files) {
 	assert(meta.recordingVersion === 2 && meta.fixtureSha256 === fixtureHash && meta.runnerSha256 === runnerHash, "Unknown recorder or changed fixture/runner");
 	assert(meta.provider === baseline.metadata.provider && meta.model === baseline.metadata.model && same(meta.returnedModels, baseline.metadata.returnedModels) && same(meta.pricing, baseline.metadata.pricing) && same(meta.settings, baseline.metadata.settings), "Mixed model, pricing or configuration");
 	assert(meta.returnedModels.length === 1, "Mixed actual returned models");
-	const paths = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-port.ts"];
+	const paths = ["packages/core/src/context/compact.ts", "packages/core/src/context/checkpoint.ts", "packages/core/src/context/compaction.ts", "packages/core/src/context/read-context.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-storage.ts", "packages/core/src/session-assembly.ts"];
 	const digest = createHash("sha256");
 	for (const path of paths) digest.update(path).update(await Bun.file(resolve(meta.sdkRoot, path)).text());
 	assert(digest.digest("hex") === meta.implementationSha256, `Source changed after ${meta.implementation} run`);

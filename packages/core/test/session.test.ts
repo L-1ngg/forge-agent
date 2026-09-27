@@ -177,7 +177,7 @@ test("memory session storage isolates initial, committed, and loaded message obj
 test("JSONL storage adapter restores the active branch and commits through the minimal interface", async () => {
 	const cwd = await temporaryDirectory();
 	const store = await SessionStore.open(join(cwd, "adapter.jsonl"), cwd);
-	const storage: SessionStorage = store.asStorage();
+	const storage: SessionStorage = store;
 	const message: SessionMessage = { role: "user", timestamp: 1, content: [{ type: "text", text: "stored" }] };
 	const entry = messageEntry(message, null);
 	expect(await storage.append(entry)).toBeUndefined();

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createSessionPort } from "../src/session-port.ts";
+import { createAgent } from "../src/sdk.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
 for (const terminal of ["completed", "incomplete", "failed", "missing"] as const) {
@@ -32,9 +32,10 @@ for (const terminal of ["completed", "incomplete", "failed", "missing"] as const
 			},
 		});
 		let timer: ReturnType<typeof setTimeout> | undefined;
+		let port: Awaited<ReturnType<typeof createAgent>> | undefined;
 		try {
-			const port = await createSessionPort({ provider: "xai", model: "grok-4.6", apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: process.cwd(), systemPrompt: "test", thinkingLevel: "off" });
-			timer = setTimeout(() => port.abort(), 1000);
+			port = await createAgent({ provider: "xai", model: "grok-4.6", apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: process.cwd(), systemPrompt: "test", thinkingLevel: "off" });
+			timer = setTimeout(() => port?.abort(), 1000);
 			let reply: SessionMessage | undefined;
 			for await (const event of port.runTurn("hello")) {
 				if (event.type === "message_end" && event.message.role === "assistant") reply = event.message;
@@ -48,6 +49,7 @@ for (const terminal of ["completed", "incomplete", "failed", "missing"] as const
 			}
 		} finally {
 			clearTimeout(timer);
+			await port?.dispose();
 			server.stop(true);
 		}
 	});

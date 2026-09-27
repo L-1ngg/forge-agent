@@ -5,9 +5,9 @@ created: 2026-09-08
 
 # Pi 内核高保真对齐：调研与待确认方案
 
-> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../../phases/pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
+> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../phases/pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
 
-> 历史状态:历史调研记录(2026-09-09)。operator 后续明确采用源码移植并允许接口调整；当前方向见 [ADR-015](../../decisions/015-pi-core-source-migration.md)，接入设计见[迁移施工](../../phases/pi-core-migration.md)。下文差异、路线比较与验收候选保留为研究依据，不覆盖后续范围收敛。
+> 历史状态:历史调研记录(2026-09-09)。operator 后续明确采用源码移植并允许接口调整；当前方向见 [ADR-015](../../decisions/015-pi-core-source-migration.md)，接入设计见[迁移施工](../phases/pi-core-migration.md)。下文差异、路线比较与验收候选保留为研究依据，不覆盖后续范围收敛。
 
 ## 当前结论与设计入口
 
@@ -15,7 +15,7 @@ created: 2026-09-08
 
 operator 已在调研后的对话中选择：先复制 Pi Agent Core 源码、建立本地拥有的复现基线，后续再定制；本项目 CLI/TUI 保留，SDK/协议等接口允许随迁移改变。详细原话及方向只维护在 [ADR-015](../../decisions/015-pi-core-source-migration.md)，不再把“是否直接依赖 npm Agent”或“是否严格兼容旧 SDK”作为待重复询问的问题。
 
-当前建议基准仍为标准 Pi `Agent + agent-loop` 的 `9767ba2`，会话接合参考 AgentSession。当前接入范围与接口设计见[迁移施工](../../phases/pi-core-migration.md)。旧循环仅作为行为参考和回退依据；不是继续逐项改造的主体。工具接口迁移与完整工具功能复制分开，原研究中建议对齐的 edit/write/bash 功能不自动成为此次必做项。
+当前建议基准仍为标准 Pi `Agent + agent-loop` 的 `9767ba2`，会话接合参考 AgentSession。当前接入范围与接口设计见[迁移施工](../phases/pi-core-migration.md)。旧循环仅作为行为参考和回退依据；不是继续逐项改造的主体。工具接口迁移与完整工具功能复制分开，原研究中建议对齐的 edit/write/bash 功能不自动成为此次必做项。
 
 ## 原始需求与研究边界
 
@@ -186,4 +186,4 @@ bun test tests/loop-contract/owned-core.test.ts \
 
 ## 恢复工作
 
-2026-09-08 更新：本阶段临时交接稿在实现与验收完成后按 operator 要求清理。后续维护入口见[迁移验收记录](../../phases/pi-core-migration-acceptance.md)及 [ADR-015](../../decisions/015-pi-core-source-migration.md)。
+2026-09-08 更新：本阶段临时交接稿在实现与验收完成后按 operator 要求清理。后续维护入口见[迁移验收记录](../phases/pi-core-migration-acceptance.md)及 [ADR-015](../../decisions/015-pi-core-source-migration.md)。

@@ -1,25 +1,13 @@
 # 完整 Agent 装配契约
 
-> 状态：单一装配入口已实现并通过本地离线验证（2026-09-20）。本合同取代原先允许外部 factory 的装配约定；模型流接入与验收见 [StreamFn](stream-fn.md)。
+> 状态:原生 TanStack 装配已实现，本轮离线软件验收已通过，外部验收单列(2026-09-27)。设计见 [ADR-025](../decisions/025-tanstack-agent-foundation.md)，验证见[基座验收](tanstack-foundation-acceptance.md)。
 
-## 设计
+`createAgent(options)` 创建唯一的生产 `AgentSession`，直接实现公开 `Agent`。SDK、CLI 和 TUI 共用此路径；`session-assembly.ts` 只准备模型、Skills 和 MCP 资源，不持有第二份运行状态。`HostedAgent`、`AgentPort`、`session-port`、Pi runtime 已删除。
 
-`createAgent(options)` 始终创建生产 `AgentSession`，SDK、CLI `main` 和 `SessionHost.create` 不接受外部执行 factory。模型使用 `model` + `streamFn`，数据库或会话存储使用 `storage`，工具使用 `tools`。`createAgent` 的 JavaScript 多余实参也在任何存储读取、装配或模型请求之前被拒绝，避免旧调用静默启动内置传输。
+宿主注入模型使用原生 `adapter`，会话数据使用 `storage`，工具使用 `tools`，上下文与停止策略使用对应回调。模型、工具和存储的扩展不需要替换整个执行实例。JavaScript 多余创建实参、旧 `streamFn` 也在存储读取或请求前拒绝。
 
-`AgentPort` 只是 SDK 与内部生产会话之间的完整契约，不是宿主替换执行实例的扩展点。因此删除 factory 能力探测和仅检查缺失方法的测试；底层执行构造器及其类型不再从包入口导出，测试专用执行构造器移到测试目录。用于模拟模型的 SDK/宿主测试使用只返回模型元数据与 `streamFn` 的 fixture。
+创建先复制配置、读取 `SessionStorage.load()` 一次并等待完成，再准备资源和实例。历史只以 `SessionState` 为恢复真相源，MCP/Skills 的装配不会再次加载或重写用户数据。创建失败释放本次创建的 MCP 资源，关闭内部 `RequestBus`；宿主提供的外部总线保持可用。清理失败时保留原错误与清理错误。
 
-创建必须等待真实存储接入完成，默认内存也不例外。`setStorage` 只用于内部装配，不开放运行中替换存储。接入失败时关闭内部 RequestBus，尝试 `abort`，再等待 `dispose`，即使 abort 失败也继续释放；外部总线不由失败装配关闭。清理成功时原样抛出原始错误，清理也失败时以 `AggregateError` 保留 `cause` 和首项原始错误。
+运行中的配置经串行准备返回 accepted revision，在完整响应和工具批次结束后 applied。输入准备、任务请求、工具批次及正在执行的摘要使用一致快照；accepted 不等于提前替换当前材料。销毁取消未应用配置，等待正在进行的存储、工具和资源释放，并结算同一个权威 result。
 
-保留真实会话的存储失败、增量保存、取消、恢复、压缩、工具副作用与输入归属覆盖。局部 `AppPort`/headless 小接口仅用于相应模块测试；内部循环单元测试仍可直接测试内部会话。宿主消费完事件后读取 `AgentTurn.result` 确定终态。
-
-## 验收与验证
-
-当前验收及验证记录统一见 [StreamFn 单一装配入口](stream-fn.md#单一装配入口2026-09-20operator-已授权实施)。
-
-- 旧第二参数同时被类型系统和运行时拒绝，拒绝前不调用模型、factory 或存储。
-- 创建等待存储接入，成功后真实执行并保存；首次读取和接入阶段故障保留原错误，外部总线继续可用。
-- SDK、CLI/PTY 和持久化测试走生产装配，完整离线检查通过。
-
-## 发布与回退
-
-本次为本地源码变更，operator 已于 2026-09-20 授权提交；不推送。旧 factory 调用必须迁移到对应的 `streamFn`、`storage` 或 `tools` 选项；这是明确授权的破坏性 API 收紧，不提供兼容别名。不改变存储格式。回退时将本次接口、测试和文档一并回退，不撤销其他工作区改动。
+验收覆盖公开 SDK、真实会话存储与本地 HTTP：创建读取屏障/故障、参数快照、完整批次、配置切换、取消、存储失败停用、idle/dispose、CLI/PTY。历史装配实施记录见[2026-09-20 归档](../archive/phases/agent-assembly-2026-09-20.md)，该版本内部 API 不再是当前接入方式。数据格式未变；本地回退需同时恢复实现、公开接口、调用方和文档，不自动改写真实数据。

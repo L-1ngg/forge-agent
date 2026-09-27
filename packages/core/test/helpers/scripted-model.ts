@@ -1,41 +1,34 @@
-import { EventStream } from "../../src/model-stream.ts";
-import type { AssistantMessage, AssistantMessageEvent } from "../../src/model-types.ts";
-import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
-import type { StreamFn } from "../../src/sdk.ts";
-import { fromSessionMessage, toSessionMessage } from "../../src/event-projection.ts";
+import type { SessionMessage } from "@forge-agent/protocol";
 import { SUMMARY_SYSTEM, type SummaryDriver } from "../../src/context/compaction.ts";
+import { nativeAdapter, requestMessages, responseChunks } from "./native-adapter.ts";
 
 export interface ScriptedModel extends Pick<SummaryDriver, "maxTokens" | "summarize"> {
 	contextWindow: number;
-	stream(messages: readonly SessionMessage[], signal: AbortSignal, emit: (event: SessionEvent) => void): Promise<SessionMessage>;
+	stream(messages: readonly SessionMessage[], signal: AbortSignal): Promise<SessionMessage>;
 }
-/** Converts controlled model responses into Pi events; owns no session, tools or storage. */
+
+/** Controlled model responses use native adapter chunks; no session or tool state. */
 export function scriptedModel(driver: ScriptedModel) {
 	const model = { id: "script", name: "script", api: "faux", provider: "faux", baseUrl: "", reasoning: false, input: ["text" as const], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: driver.contextWindow, maxTokens: driver.maxTokens ?? 1000 };
-	const streamFn: StreamFn = (selected, request, options) => {
-		const stream = new EventStream<AssistantMessageEvent, AssistantMessage>(event => event.type === "done" || event.type === "error", event => { if (event.type === "done") return event.message; if (event.type === "error") return event.error; throw new Error("Unexpected result"); });
-		const signal = options?.signal ?? new AbortController().signal;
-		const partial = fromSessionMessage({ role: "assistant", content: [], timestamp: 0, stopReason: "stop" }, selected) as AssistantMessage;
-		void (async () => {
-			try {
-				signal.throwIfAborted(); stream.push({ type: "start", partial });
-				const messages = request.messages.map(message => toSessionMessage(message)!);
-				const result = request.systemPrompt === SUMMARY_SYSTEM && driver.summarize
-					? await driver.summarize({ prompt: messages.flatMap(message => message.content.flatMap(block => block.type === "text" ? [block.text] : [])).join("\n"), maxTokens: options?.maxTokens ?? model.maxTokens, reasoning: options?.reasoning ? "inherit" : "off" }, signal)
-					: await driver.stream(messages, signal, event => {
-						if (event.type === "message_delta") stream.push({ type: event.contentType === "text" ? "text_delta" : event.contentType === "thinking" ? "thinking_delta" : "toolcall_delta", contentIndex: event.contentIndex, delta: event.delta, partial });
-					});
-				const message = fromSessionMessage({ ...result, ...(signal.aborted ? { stopReason: "aborted" } : {}) }, selected) as AssistantMessage;
-				if (message.stopReason === "pending") throw new Error("Expected a terminal scripted response");
-				if (message.stopReason === "error" || message.stopReason === "aborted") stream.push({ type: "error", reason: message.stopReason, error: message });
-				else stream.push({ type: "done", reason: message.stopReason, message });
-				stream.end(message);
-			} catch (error) {
-				const message: AssistantMessage = { ...partial, stopReason: signal.aborted ? "aborted" : "error", errorMessage: String(error) };
-				stream.push({ type: "error", reason: signal.aborted ? "aborted" : "error", error: message }); stream.end(message);
-			}
-		})();
-		return stream;
-	};
-	return { model, streamFn };
+	const adapter = nativeAdapter(model, async function* (request) {
+		const signal = request.request?.signal ?? request.abortController?.signal ?? new AbortController().signal;
+		try {
+			signal.throwIfAborted();
+			const messages = requestMessages(request.messages);
+			const system = request.systemPrompts?.map(prompt => typeof prompt === "string" ? prompt : prompt.content).join("\n");
+			const modelOptions = request.modelOptions;
+			const reasoning = modelOptions?.reasoning;
+			const result = system === SUMMARY_SYSTEM && driver.summarize
+				? await driver.summarize({
+					prompt: messages.flatMap(message => message.content.flatMap(block => block.type === "text" ? [block.text] : [])).join("\n"),
+					maxTokens: typeof modelOptions?.max_output_tokens === "number" ? modelOptions.max_output_tokens : model.maxTokens,
+					reasoning: reasoning && typeof reasoning === "object" && "effort" in reasoning ? "inherit" : "off",
+				}, signal)
+				: await driver.stream(messages, signal);
+			yield* responseChunks({ ...result, ...(signal.aborted ? { stopReason: "aborted" as const } : {}) });
+		} catch (error) {
+			yield* responseChunks({ role: "assistant", content: [], timestamp: Date.now(), stopReason: signal.aborted ? "aborted" : "error", errorMessage: String(error) });
+		}
+	});
+	return { model, adapter };
 }

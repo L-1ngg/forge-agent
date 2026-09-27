@@ -14,7 +14,7 @@
 | [Phase 2](phases/phase-2.md) | [TUI 工作流](../phases/tui-main-workflow.md)；E1–E3 豁免不作通过 |
 | [Phase 2.1](phases/phase-2.1.md) | [ADR-005](../decisions/005-tui-own-compositor.md)；旧 pixel parity 路线中止 |
 | [Phase 2.2](phases/phase-2.2.md) | [TUI 工作流](../phases/tui-main-workflow.md)、[验收边界](../README.md#验收边界)；关闭不表示全部人工验证完成 |
-| [自研内核施工](phases/owned-core.md) | [Pi 内核接入](../phases/pi-core-migration.md)及[迁移验收](../phases/pi-core-migration-acceptance.md) |
+| [自研内核施工](phases/owned-core.md) | [Pi 内核接入](phases/pi-core-migration.md)及[迁移验收](phases/pi-core-migration-acceptance.md) |
 | [旧 SDK 施工](phases/sdk.md) | [SDK 接入](../sdk.md)；旧接口和旧批次只作历史证据 |
 | [旧上下文管理施工](phases/context-management.md) | [默认压缩决策](../decisions/018-adaptive-default.md)、[当前投影与搜索](../phases/context-notes-search.md) |
 | [旧上下文管理验收](phases/context-management-acceptance.md) | [当前压缩基线证据](../phases/adaptive-context-compaction-acceptance.md)；旧双策略复现需用历史版本 |
@@ -25,9 +25,10 @@
 | 历史文档 | 当前入口或用途 |
 |---|---|
 | [早期设计论证](design-rationale.md) | [项目定位](../decisions/008-general-agent-positioning.md)、[内核迁移决策](../decisions/015-pi-core-source-migration.md) |
-| [Pi 初始调研](research/pi.md) | [Pi 内核接入](../phases/pi-core-migration.md)；旧包版本和自研 ExecutionCore 描述按历史解释 |
-| [Pi 内核对齐方案](research/pi-core-alignment-plan.md) | [Pi 内核接入](../phases/pi-core-migration.md)；保留选型时的候选与差异 |
-| [Pi 上游执行语义](research/pi-core-upstream-semantics.md) | [迁移验收](../phases/pi-core-migration-acceptance.md)；需要追溯固定源码语义时读取 |
+| [Pi 初始调研](research/pi.md) | [Pi 内核接入](phases/pi-core-migration.md)；旧包版本和自研 ExecutionCore 描述按历史解释 |
+| [Pi 内核对齐方案](research/pi-core-alignment-plan.md) | [Pi 内核接入](phases/pi-core-migration.md)；保留选型时的候选与差异 |
+| [Pi 上游执行语义](research/pi-core-upstream-semantics.md) | [迁移验收](phases/pi-core-migration-acceptance.md)；需要追溯固定源码语义时读取 |
+| [Pi 内核来源与许可](research/pi-runtime-provenance/README.md) | [TanStack 基座](../phases/tanstack-foundation.md)；已撤下内核的固定源码 SHA、MIT 许可及历史接入差异 |
 | [Pi 工具与宿主接入面](research/pi-core-integration-surface.md) | [会话装配](../phases/agent-assembly.md)、[SDK](../sdk.md) |
 | [Pi 上下文调研](research/pi-context-management.md) | [当前投影与搜索](../phases/context-notes-search.md)；保留固定快照 |
 | [Pi 会话补充核对](research/pi-context-session-final.md) | [会话管理](../phases/session-management.md)、[首次写入](../phases/session-first-write.md) |
@@ -57,3 +58,17 @@ rg --no-ignore '关键词' docs/archive/research
 ```
 
 直接打开明确路径也可读取；`.ignore` 是默认搜索约定，不是访问控制。跨 session 的本地 `review-notes/` 不属于本目录，不能用本地交接替代项目共享合同与证据。
+
+## TanStack 基座替代的执行合同（2026-09-27）
+
+当前入口为 [TanStack 基座](../phases/tanstack-foundation.md)与[验收](../phases/tanstack-foundation-acceptance.md)。以下只用于追溯，真实供应商、人工与跨平台未测项继续保留：
+
+- [pi-core-migration](phases/pi-core-migration.md)
+- [pi-core-migration-acceptance](phases/pi-core-migration-acceptance.md)
+- [stream-fn](phases/stream-fn.md)
+- [openai-tanstack-transport](phases/openai-tanstack-transport.md)
+- [tanstack-provider-transport-migration](phases/tanstack-provider-transport-migration.md)
+- [context-transform-2026-09-21](phases/context-transform-2026-09-21.md)
+- [turn-policy-2026-09-20](phases/turn-policy-2026-09-20.md)
+- [tool-argument-validation-2026-09-26](phases/tool-argument-validation-2026-09-26.md)
+- [agent-assembly-2026-09-20](phases/agent-assembly-2026-09-20.md)

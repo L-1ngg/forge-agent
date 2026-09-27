@@ -49,7 +49,7 @@ flowchart LR
 | 位置 | 职责与修改原因 |
 |---|---|
 | `packages/core/src/mcp/` | `manager.ts` 隐藏连接/目录/状态；`config.ts` 校验与身份；`tools.ts` 工具映射；`content.ts` 内容映射；`oauth.ts` provider；`credentials.ts`/`artifacts.ts` 可变存储 adapter；`types.ts` 公开类型 |
-| `packages/core/src/agent.ts`、`sdk.ts`、`agent-port.ts`、`session-port.ts` | 显式 MCP 选项、控制接口、创建/失败/释放接线；不导出整个官方 Client |
+| `packages/core/src/agent.ts`、`sdk.ts`、`agent-session.ts`、`session-assembly.ts` | 显式 MCP 选项、控制接口、创建/失败/释放接线；不导出整个官方 Client |
 | `packages/core/src/agent-session.ts`、`configuration.ts`、`session-configuration.ts` | 目录快照提交、连接世代持有、结构化输入准备与一次持久化 |
 | `packages/core/src/session-tools.ts`、`packages/tools/src/types.ts` | schema 类型扩大、授权参数一致、MCP 调用仍走同一工具路径 |
 | `packages/protocol/src/input.ts`、`events.ts`、`requests.ts` | MCP 输入封套、来源/附件描述、状态及 Elicitation 请求响应；保持无 SDK/native 依赖 |
@@ -150,7 +150,7 @@ flowchart LR
 2. 对未变化的连接复用其世代；对 endpoint/command/env/认证身份/transport 变化的 server 创建候选世代。新配置 schema/参数无效时拒绝更新，旧有效配置不变；合法但服务不可达可提交为 failed，明确撤下该 server 工具，不伪称 ready。
 3. 完成候选目录与工具映射后返回 `accepted`，候选拥有明确释放责任。取消/准备失败立即释放候选；disposed 时 receipt 结算 canceled。
 4. 当前模型响应及其整批工具持有当前不可变目录快照和连接引用。仅在现有 `prepareNextTurnWithContext`/空闲提交点替换派生 tools、资源/模板目录及 instructions，并失效 usage。
-5. 旧世代进入 retiring 时立即停止它的目录自动订阅和资源订阅，通知回调按 generation 忽略旧事件；只有已开始的业务调用可以继续持有旧连接。用户的逻辑订阅仅在同一 server 身份/资源仍有效时转接新世代，否则报告 terminated，不能把旧订阅永久留作引用。业务调用归零后关闭旧连接；新快照不再引用它。通知发起 refresh 时只标记 dirty 并入同一队列，不从 SDK callback 直接改 runtime tools。
+5. 旧世代进入 retiring 时立即停止它的目录自动订阅和资源订阅，通知回调按 generation 忽略旧事件；只有已开始的业务调用可以继续持有旧连接。用户的逻辑订阅仅在同一 server 身份/资源仍有效时转接新世代，否则报告 terminated，不能把旧订阅永久留作引用。业务调用归零后关闭旧连接；新快照不再引用它。通知发起 refresh 时只标记 dirty 并入同一队列，不从 SDK callback 直接改当前工具批次。
 6. 同一连接目录变更不意味着必须重启进程。工具 adapter 捕获原始 Tool 定义，`client.callTool(params,{toolDefinition: capturedTool,...})` 使参数/header/output validator 与当前批次快照一致；官方此路径也不会自动 refresh+重试 HeaderMismatch。远端自身删除旧工具时明确报错，不能保证远端继续提供旧实现。
 7. 标准连接重建与目录更新可以排队；logout 是取消该授权上下文的新请求并等待/取消当前调用后清凭据，再提交撤下工具。不能把用户显式撤销延迟成无限可继续调用。关闭某 server 对正在执行调用的行为通过 operation 结果说明：普通 setEnabled 排队生效，明确 reconnect/退出才取消旧连接上在途请求。
 
@@ -162,7 +162,7 @@ flowchart LR
 
 模型工具名采用 `mcp_` + 归一化 server 前缀 + 工具前缀 + `sha256(serverId + NUL + originalName)` 前 12 hex，总长不超过 64，字符为 `[A-Za-z0-9_-]`。检测最终名称与全部宿主/内置工具碰撞；碰撞诊断拒绝冲突条目，不静默覆盖。原 server/工具名保存在显示 label 与调用映射。
 
-扩展 `HarnessTool.parameters` 为可表达根对象约束的 JSON Schema 文档（可选 properties/required/additionalProperties、`$defs/$ref` 与组合关键字），保留现有 `ObjectSchema` 作为兼容别名。业务参数仍是 object。官方 Ajv validator 校验 schema/输入，现有 Pi 校验路径必须通过代表性 schema 探针；不支持的 provider/schema 明确诊断，禁止偷偷删除关键字。
+扩展 `HarnessTool.parameters` 为可表达根对象约束的 JSON Schema 文档（可选 properties/required/additionalProperties、`$defs/$ref` 与组合关键字），保留现有 `ObjectSchema` 作为兼容别名。业务参数仍是 object。官方 Ajv validator 校验 schema/输入，当前 TanStack 定义及 Forge 最终校验路径必须通过代表性 schema 探针；不支持的 provider/schema 明确诊断，禁止偷偷删除关键字。
 
 引用只解析 schema 文档内已有定义，不为外部 `$ref` 自动发起网络请求；无法解析的引用拒绝该工具并显示具体原因。缓存 validator 按不可变 schema 身份/内容 revision 建立，不把同名工具的新定义覆写到旧执行快照中。
 
@@ -199,9 +199,9 @@ SDK outputSchema 验证使用执行快照 Tool，不重复手写输出 validator
 
 这一条消息通过原 append 提交，成功后 `processed=true`；准备失败/取消 `processed=false`、原输入仍归宿主，模型请求次数为零。存储开始后的取消按既有提交合同处理；失败使实例 faulted，不把半个 Prompt 发给模型。
 
-`projectMessages` 增加幂等的封套展开步骤：远端 user/assistant 消息按原顺序进入请求投影，最后追加非空用户 task，携带可辨认的来源；展开产物不再含 inputContext，避免重复展开。模板 assistant 消息只允许普通内容，不承载工具调用、usage 或 stopReason=error；以零 usage 的上下文消息投影，不能触发 TurnPolicy 完成判断或新增历史记录。pi-ai 不支持的 assistant 图片/音频按附件规则标明，不静默过滤。
+`projectMessages` 增加幂等的封套展开步骤：远端 user/assistant 消息按原顺序进入请求投影，最后追加非空用户 task，携带可辨认的来源；展开产物不再含 inputContext，避免重复展开。模板 assistant 消息只允许普通内容，不承载工具调用、usage 或 stopReason=error；以零 usage 的上下文消息投影，不能触发 TurnPolicy 完成判断或新增历史记录。`SessionMessage` 与原生模型投影无法表示的 assistant 图片/音频按附件规则标明，不静默过滤。
 
-预算、搜索、压缩摘要都能访问完整原封套或一致的展开视图；自定义 transformContext 接收展开后的请求消息，仍不改变历史。`toSessionMessage/fromSessionMessage` 必须保留原封套元数据供 runtime 原始消息往返，不把投影的虚拟消息 append 回历史。TUI/会话预览以用户 task 和模板来源作标题，不把模板中的 assistant 文本显示成现场模型输出。
+预算、搜索、压缩摘要都能访问完整原封套或一致的展开视图；自定义 transformContext 接收展开后的请求消息，仍不改变历史。原封套直接保存在 `SessionMessage`；`projectMessages` 只为 native 请求展开快照，`toModelMessages` 统一转换，不把投影的虚拟消息 append 回历史。TUI/会话预览以用户 task 和模板来源作标题，不把模板中的 assistant 文本显示成现场模型输出。
 
 无需引入新的多记录事务或 session 格式版本：v4 message 可携带 optional 字段；但必须验证字段 schema，未知/损坏封套不能静默按新格式执行。旧版本只读降级 content，不具备等价的角色语义；设计不承诺跨版本无损继续执行。
 
@@ -257,7 +257,7 @@ TUI 使用现有 request-card/focus/park 机制，一次编辑一字段、Tab �
 
 管理命令无需 provider/model：`main.ts` 在模型认证前装配内部 McpManager，使用同一个配置/凭据/权限模块并在 finally 释放。`use-*` 需要 Agent/model；`--json --mcp` 输出结构化结果。headless 的登录/elicitation 无交互 adapter 时沿现有保守策略退出（OAuth 24；新增 elicitation 25），业务管理失败为 1，参数错误为 2；不自行等待 stdin 或调用全局 prompt。
 
-新用户界面显示 connecting/auth-required/refresh pending，后台管理操作期间 composer 仍可编辑。只有输入归属流程决定提交，管理回调不能直接向 runtime messages 插入数据。退出取消所有管理任务并等待同一 manager 释放，不为 TUI 另维护 server 存活状态。
+新用户界面显示 connecting/auth-required/refresh pending，后台管理操作期间 composer 仍可编辑。只有输入归属流程决定提交，管理回调不能直接向会话历史插入数据。退出取消所有管理任务并等待同一 manager 释放，不为 TUI 另维护 server 存活状态。
 
 ## Test plan 与证据映射
 
@@ -270,7 +270,7 @@ TUI 使用现有 request-card/focus/park 机制，一次编辑一字段、Tab �
 | AC-03 | 多服务部分失败、状态、管理操作；CLI/TUI 对应功能可执行 |
 | AC-04 | 官方聚合两页、循环 cursor 上限、空/缺 capability；显式 cursor 不冒充完整目录 |
 | AC-05 | 归一化后碰撞/保留名/64 字符、稳定路由到正确 server |
-| AC-06 | 对象、可选/开放属性、嵌套、oneOf/allOf/本地 ref；完整 Pi→授权→server 参数一致；不可表达 schema 清楚失败 |
+| AC-06 | 对象、可选/开放属性、嵌套、oneOf/allOf/本地 ref；完整 TanStack→Forge校验/授权→server 参数一致；不可表达 schema 清楚失败 |
 | AC-07 | callTool 正常/业务错误/协议错误、进度、原定义 outputSchema 校验、通知变化不改变在途 validator |
 | AC-08 | text/image/JSON 标量及 null/链接/嵌入/音频 bytes；截断标识、附件读回与限额拒绝 |
 | AC-09 | 资源/模板发现→官方 UriTemplate→complete→read→模型实际上下文；来源正确 |

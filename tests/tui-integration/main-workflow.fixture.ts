@@ -14,7 +14,7 @@ for (let file = 0; file < 10; file++) {
 const bus = new RequestBus({ timeoutMs: null });
 const permission: PermissionContext = { rules: builtinTools.map((tool) => ({ tool: tool.name, argsPattern: "*", effect: "allow" })) };
 const store = await SessionStore.open(join(directory, "session.jsonl"), directory);
-const agent = await createAgent({ systemPrompt: "TUI workflow fixture", thinkingLevel: "off", storage: store.asStorage(), cwd: directory, tools: builtinTools, permission, requestBus: bus, ...fauxModel({ responses: [
+const agent = await createAgent({ systemPrompt: "TUI workflow fixture", thinkingLevel: "off", storage: store, cwd: directory, tools: builtinTools, permission, requestBus: bus, ...fauxModel({ responses: [
 		{ text: "I will inspect the project files before making the change.", toolCalls: Array.from({ length: 10 }, (_, index) => ({ id: `read-${index}`, name: "read", arguments: { path: index === 9 ? "missing.ts" : `sample-${index}.ts`, offset: 11, limit: 70 } })) },
 		{ text: "The sample files are ready. One optional file was not found." },
 		{ text: "I will update the sample, check the command output, and write the result.", toolCalls: [

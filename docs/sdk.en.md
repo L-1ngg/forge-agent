@@ -4,23 +4,39 @@
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
-## Custom Model Streams (StreamFn)
+## Native TanStack Model Adapters
 
-The SDK exports Forge's `StreamFn` and `Model` types. Supply complete model metadata and a stream function to use a model outside the built-in catalog. Run the offline [custom-stream.ts example](../examples/custom-stream.ts) with `bun examples/custom-stream.ts`.
+The SDK accepts TanStack's native `AnyTextAdapter` and exports the equivalent `ModelAdapter` type. Forge's `Model` describes identity, protocol, capacity, and pricing; the adapter owns provider requests and streaming. A complete model object requires an adapter. Catalog string models can omit it and use built-in authentication and routing.
 
 ```ts
-import { createAgent, type Model, type StreamFn } from "@forge-agent/core/sdk";
+import { createAgent, type Model, type ModelAdapter } from "@forge-agent/core/sdk";
 
-async function openAgent(model: Model<string>, streamFn: StreamFn) {
-  return createAgent({ model, streamFn, cwd: process.cwd(), systemPrompt: "Help with the task." });
+async function openAgent(model: Model, adapter: ModelAdapter) {
+  return createAgent({ model, adapter, cwd: process.cwd(), systemPrompt: "Help with the task." });
 }
 ```
 
-`StreamFn(model, context, options)` returns an `AssistantMessageEventStream` or a Promise of one, using Forge's model event types. `context` contains the request's systemPrompt, projected messages and tools. A model object requires `streamFn`; the host owns authentication and accurate metadata including provider, api, contextWindow and maxTokens. An explicitly supplied `provider` must match `model.provider`; an explicit `baseUrl` overrides the model's baseUrl.
+Create an adapter with a TanStack provider factory, or implement `chatStream(request): AsyncIterable<AdapterYieldChunk>`. Requests use TanStack's `model`, `messages`, `systemPrompts`, `tools`, and `modelOptions`; the cancellation signal is `request.request.signal`. Forge maps output limits and reasoning from `Model.api` to provider-native options: Responses uses `max_output_tokens` and `reasoning.effort`, while Anthropic uses `max_tokens` and `thinking`. Keep the adapter's model and protocol aligned with its metadata. An explicitly supplied `provider` must match `model.provider`.
 
-Existing `provider: string, model: string` configuration still resolves the built-in catalog. It can also supply `streamFn`, bypassing built-in authentication checks; omitting the function preserves built-in transport and authentication. Custom functions receive the explicit `apiKey`, if supplied, along with `signal`, `sessionId`, output limits and reasoning settings. Honor cancellation and encode request failures/cancellation as stream error events and a final error/aborted AssistantMessage, rather than throwing or rejecting for normal request failures. Compaction summaries use the same applied stream function with a different context, output budget and `cacheRetention: "none"`; do not assume every call is an ordinary task response. Honor `maxRetries: 0` so the session retains retry control.
+Custom adapters own credentials, endpoints, and headers. Forge supplies `sessionId` as the native `request.threadId` for both task and summary requests; it does not inject `apiKey` or `baseUrl` through the removed stream-options object. Catalog string models may also supply an adapter, bypassing built-in authentication checks. Built-in clients disable transport retries; custom clients should also disable their own retries so Forge's bounded session retry controls request counts and budgets.
 
-`updateConfiguration({ model, streamFn })` switches both after the current complete tool batch or summary, preserving accepted/applied receipts. Model metadata is snapshotted before asynchronous creation/preparation. Set `streamFn: null` to restore built-in transport with a string model; when switching from a model object, also supply the catalog provider/model. Failed updates preserve the applied configuration. The host owns the function and its closures; they are not serialized into session history.
+Task requests and compaction summaries share the same applied adapter. Summaries have a separate system prompt, messages, and output budget, without task tools. Do not implement an adapter that can only return ordinary task answers. Asynchronous initialization can happen inside `async *chatStream()` and must honor the request signal. Finish complete responses with `RUN_FINISHED` and a `finishReason` of `stop`, `tool_calls`, or `length`. Emit `RUN_ERROR` for failures and `code: "aborted"` for cancellation. Incomplete streams, unknown finish reasons, and invalid tool JSON fail; truncated tools never execute.
+
+For a provider that supports a deferred terminal response, emit `RUN_FINISHED` with `finishReason: "stop"` and `metadata: { forge: { stopReason: "deferred" } }`. This is an explicit Forge extension; ordinary TanStack interrupts do not imply provider deferral. The current invocation ends without background polling. Native `TokenUsage.cost` supplies reported cost for custom adapters; missing usage or cost remains unknown. Built-in catalog transports retain Forge's catalog pricing calculation.
+
+`updateConfiguration({ model, adapter })` changes both after the current complete tool batch or summary, preserving accepted/applied receipts. Model metadata is snapshotted before asynchronous preparation; the host owns adapter objects and their closures. When changing models, also supply an adapter configured for the new model. Set `adapter: null` to restore the catalog adapter, using a string model; when switching from a model object, also supply provider/model. Failed updates preserve the applied configuration. Adapters are not persisted in session history.
+
+This migration removes `StreamFn`, `AssistantMessageEventStream`, and Pi model event types without compatibility wrappers. Replace `{ model, streamFn }` with `{ model, adapter }` and emit native TanStack chunks. JavaScript callers also receive an explicit error for the removed `streamFn` option. Existing JSONL sessions, Markdown memory, and MCP attachments require no format conversion for this migration.
+
+Use `CreateAgentOptions` for configuration; the synonymous `AgentOptions` export is removed. `SessionStore` implements `SessionStorage` directly, so replace `storage: store.asStorage()` with `storage: store`. Tool hook contexts use `SessionMessage`/`ToolCallBlock`. Authorization and execution share the final argument values; hosts influence the batch through the documented argument and result hooks.
+
+Run the offline examples with `bun examples/custom-adapter.ts`, `bun examples/turn-policy.ts`, and `bun examples/context-transform.ts`. They use the native adapter in [scripted-adapter.ts](../examples/scripted-adapter.ts) without credentials. See [custom-adapter.ts](../examples/custom-adapter.ts) for a complete SDK call.
+
+## Execution Responsibilities
+
+SDK, CLI, and TUI share `createAgent → AgentSession → TanStack chat() → TextAdapter`. TanStack `chat()` owns model and tool continuation; the local Pi Agent and agent-loop are removed. Forge retains input ownership, configuration revisions, authoritative settlement, incremental persistence, and evidence-based compaction. Request-boundary `onConfig` middleware prepares the projection and final budget.
+
+Tools enter through native `toolDefinition().server()`. During the tool phase, Forge prepares and validates the complete batch, checks permissions, runs parallel or sequential effects, applies result hooks, and persists results before TanStack continues. `SessionMessage` remains the history and display contract, converted once at the request/response boundary. TanStack working messages and middleware metadata are not a second recoverable session store. See [ADR-025](decisions/025-tanstack-agent-foundation.md) and the [current verification record](phases/tanstack-foundation-acceptance.md).
 
 ## Stop After a Completed Round (shouldStopAfterTurn)
 
@@ -28,7 +44,7 @@ Set `shouldStopAfterTurn(context, signal)` at creation to stop gracefully after 
 
 ```ts
 const agent = await createAgent({
-  model, streamFn, cwd: process.cwd(), systemPrompt: "Find the requested record.",
+  model, adapter, cwd: process.cwd(), systemPrompt: "Find the requested record.",
   tools, permission,
   shouldStopAfterTurn: ({ toolResults, turnIndex, usage }) => {
     const found = toolResults.some(result => result.toolName === "lookup" && !result.isError);
@@ -73,7 +89,7 @@ The input is an isolated, deeply readonly snapshot: `messages`, the applied `mod
 
 Return the complete `SessionMessage` array, synchronously or asynchronously; returning the input is valid. Input messages are the current context after compaction, without built-in memory, and may not contain the complete original history. Returned data is copied and validated: supported roles/content, paired tool calls/results, a nonempty effective projection, and a final user or toolResult message. Removing complete historical tool exchanges is allowed; orphan results and missing pairs fail. Preserve opaque provider signatures. Forge does not verify that shortened content retains all task meaning.
 
-The order is built-in compaction preparation → host transform → final memory assembly within the remaining soft allowance → built-in convertToLlm → final budget check → streamFn. Host content can exceed the soft limit while leaving no allowance for built-in memory. An oversized host result does not trigger another compaction/callback cycle; earlier compaction failure does not invoke the host as a rescue path.
+The order is compaction preparation → host transform → final memory assembly within the remaining soft allowance → final budget check → TanStack ModelMessage projection → adapter. Host content can exceed the soft limit while leaving no allowance for built-in memory. An oversized host result does not trigger another compaction/callback cycle; earlier compaction failure does not invoke the host as a rescue path.
 
 The result changes only this request projection, not durable history, input ownership, or processed receipts. Actual responses and tool results are still saved. Temporary material is not automatically persisted; the host supplies it again after reopening. Failure does not return processed input or replay tools. Every task retry invokes the callback again; caching and external side-effect idempotency belong to the host.
 
@@ -88,9 +104,9 @@ hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
 estimated final input > hard maxInputTokens → reject; do not reduce maxTokens
 ```
 
-Input is estimated from the final messages, system prompt, and tool schemas. Historical assistant usage is zeroed only in the request copy; stored history and actual usage totals are unchanged. Tool details are not counted as model input. With a host callback, historical provider usage anchors are not reused for transformed projections. Once preparation finishes, `getUsage()` reports the final estimate with `contextEstimated: true`; message/configuration changes invalidate it and restore the history preparation view.
+Input is estimated from the final messages, system prompt, and tool schemas. Historical assistant usage is omitted from model messages; stored history and actual usage totals are unchanged. Tool details are not counted as model input. With a host callback, historical provider usage anchors are not reused for transformed projections. Once preparation finishes, `getUsage()` reports the final estimate with `contextEstimated: true`; message/configuration changes invalidate it and restore the history preparation view.
 
-Supported built-in TanStack transports use Forge's general hard limit. Internal rewrites and limits in a custom streamFn remain the host's responsibility. Explicit `maxTokens > model.maxTokens` is rejected at creation/configuration validation; a failed update retains the applied configuration.
+Supported built-in TanStack transports use Forge's general hard limit. Internal rewrites and limits in a custom adapter remain the host's responsibility. Explicit `maxTokens > model.maxTokens` is rejected at creation/configuration validation; a failed update retains the applied configuration.
 
 These are heuristic checks. The 1024-token margin is not an upper bound on Chinese text or image estimation errors, and provider overflow can still occur. Existing bounded recovery remains; no exact physical-window, answer-quality, or cost-saving guarantee is made. Run the offline [context-transform.ts example](../examples/context-transform.ts); design and evidence are in the [implementation plan](phases/context-transform.md).
 
@@ -165,11 +181,11 @@ Every request boundary checks the pin list and disk revisions of indexes, pinned
 
 ## Assembly and Customization Boundaries
 
-`createAgent(options)` always assembles the production session and accepts exactly one options argument. Customize models through `model` + `streamFn`, databases or session persistence through `storage` implementing `SessionStorage`, and tools through `tools`. Neither the SDK nor the CLI offers a factory for replacing the execution instance. The former second argument is rejected by TypeScript and throws a `TypeError` in JavaScript before any assembly or model invocation.
+`createAgent(options)` always assembles the production session and accepts exactly one options argument. Customize models through `model` + `adapter`, databases or session persistence through `storage` implementing `SessionStorage`, and tools through `tools`. Neither the SDK nor the CLI offers a factory for replacing the execution instance. The former second argument is rejected by TypeScript and throws a `TypeError` in JavaScript before any assembly or model invocation.
 
-Creation awaits storage attachment, including default memory storage. `setStorage` is internal to assembly and is not part of the returned Agent's host interface. If attachment fails, creation aborts and awaits disposal of the created session. An internally created RequestBus is closed; an externally supplied bus is not closed by failed assembly. Successful cleanup preserves the original error. If cleanup also fails, an `AggregateError` retains the original error in `cause` and `errors[0]`.
+Creation calls `storage.load()` once and passes that state into the single `AgentSession`, including for default memory storage. There is no second assembly load or `setStorage` interface. A load failure prevents model requests and writes, preserving the original error. Later assembly failure disposes allocated MCP resources. An internally created RequestBus is closed; an externally supplied bus is not closed by failed assembly. If cleanup also fails, an `AggregateError` retains the original error in `cause` and `errors[0]`.
 
-SDK integration tests control model responses through `streamFn`, with storage failures and tool behavior injected through `storage` and `tools`. Local UI/headless tests may keep their smaller interfaces, and unit tests may exercise internal modules directly. See the [assembly design and verification](phases/agent-assembly.md) (Chinese).
+SDK integration tests control model responses through native TanStack adapters, with storage failures and tool behavior injected through `storage` and `tools`. Local UI/headless tests may keep their smaller interfaces, and unit tests may exercise internal modules directly. See the [foundation design](phases/tanstack-foundation.md) and [verification record](phases/tanstack-foundation-acceptance.md) (Chinese).
 
 ## Create an Instance
 
@@ -266,7 +282,7 @@ See the [follow-up validation record](phases/context-notes-search.md) for the cu
 
 Before each task request, context exceeding the input budget triggers compaction; failure blocks that request. Overflow and eligible length responses share one recovery per continuous failure chain. Failed records remain saved, completed tools are never replayed, and successful answers are never regenerated just because usage reports overflow. `enabled: false` disables automatic compaction and recovery while preserving manual compaction and history lookup.
 
-Summaries use the task model and routing with an isolated system prompt, no tool definitions, and no cache retention. `summaryReasoning: "off"` disables reasoning where supported, otherwise it inherits. Transient retries and at most two logical generations share a four-request cap. Provider errors stop after the retry policy settles and do not trigger checkpoint rebuilds.
+Summaries use the task model and routing with an isolated system prompt and no task tool definitions; built-in summary requests do not add task cache hints. `summaryReasoning: "off"` disables reasoning where supported, otherwise it inherits. Transient retries and at most two logical generations share a four-request cap. Provider errors stop after the retry policy settles and do not trigger checkpoint rebuilds.
 
 Ordinary output-limit `length` text remains in subsequent requests; truncated tool calls are neither executed nor projected. A `length` attempt classified for context recovery stores `contextExcluded`, retaining its raw record while excluding it after reopening. Headless returns success after successful recovery, 1 for unrecovered error/length, and 130 for cancellation.
 
@@ -274,7 +290,7 @@ Ordinary output-limit `length` text remains in subsequent requests; truncated to
 
 `contextWindow` optionally overrides the local capacity declaration, defaulting to model metadata. Lowering it tests triggering, not physical provider overflow. `maxTokens` controls ordinary task output independently of compaction reserve; when omitted, it uses the explicit output reservation above. `getUsage().contextEstimated` distinguishes measured usage from estimation. Model, system, tool, branch and projection changes invalidate prior anchors; summary usage never anchors task context.
 
-Historical user/toolResult content may include `{ type: "image", data: base64, mimeType }`. Requests retain the image, estimation counts 1024 tokens per image, and summaries serialize a placeholder. `sessionId` is generated per instance by default, may be supplied by the host, and comes from the session header in the CLI. Built-in TanStack transports replay full history; Responses requests set `store: false` and do not use `sessionId` for server-side continuation. Host-supplied custom `streamFn` still receives `sessionId`. Models requiring `mistral-conversations` or `openai-codex-responses` are absent from the built-in catalog; a host can still supply a custom `streamFn` with a complete model object.
+Historical user/toolResult content may include `{ type: "image", data: base64, mimeType }`. Requests retain the image, estimation counts 1024 tokens per image, and summaries serialize a placeholder. `sessionId` is generated per instance by default, may be supplied by the host, and comes from the session header in the CLI. Custom adapters read the same identity from `request.threadId` for tasks and summaries; hosts supply the stable `sessionId` again when reopening an instance. Built-in TanStack transports replay full history; Responses requests set `store: false` and do not use `sessionId` for server-side continuation. Models requiring `mistral-conversations` or `openai-codex-responses` are absent from the built-in catalog; hosts can supply a complete model object with a native adapter supporting the required protocol.
 
 `await agent.compact(instructions?, onEvent?)` aborts active work, waits for tool and persistence cleanup, then compacts once without resuming the task. It returns `{ status, operationId, beforeTokens, afterTokens?, error? }`, with status `complete`, `skipped` or `error`. Storage faults still throw and disable the instance. Abort interrupts summaries and retry waits but waits for started writes. Instructions only focus the history summary.
 
@@ -302,7 +318,7 @@ An accepted input returns `{ accepted: true, processed: Promise<boolean> }`. `tr
 
 Cross-invocation queuing belongs to the host. The TUI displays a FIFO queue; Up on an empty composer recalls its tail, Esc stops automatic continuation and restores drafts, and Ctrl+Enter replaces the active task after cleanup. Commit failures pause queued input. `agent_end` only signals execution termination: the async iterable must finish normally before the host can treat persistence as complete.
 
-Breaking out of the loop or closing the iterator cancels and awaits cleanup. `abort()` also handles an acquired iterator that has not started: later consumption cannot launch a model request, tool, or commit. After cleanup, the instance can be reused. Background execution still needs a host continuously consuming the event stream; UI subscribers can observe forwarded events.
+Breaking out of the loop or closing the iterator while execution is active cancels and awaits cleanup. Once execution has settled, closing or disposing preserves its actual outcome and policy termination reason; a host rendering error thrown at `agent_end` also does not change the execution result. `abort()` handles an acquired iterator that has not started: later consumption cannot launch a model request, tool, or commit. After cleanup, the instance can be reused. Background execution still needs a host continuously consuming the event stream; UI subscribers can observe forwarded events.
 
 `dispose()` is idempotent, refuses new work, and awaits cancellation cleanup or an already-started commit. Always await it, including when holding an unfinished iterator. Custom tools must cooperate with `AbortSignal`; an uncooperative tool can delay cancellation or disposal indefinitely. The SDK cannot forcibly terminate code in its own process.
 
@@ -325,11 +341,11 @@ The host should stop its request-consumer task when disposal closes the stream a
 
 ## Validation Boundaries
 
-Automated tests use local HTTP providers, model stream fixtures, tool and storage fault injection, controlled interleavings, and PTY interaction. They do not establish a stable public API, full real-provider coverage, long-task reliability, or filesystem crash consistency. Current internal acceptance evidence is in the [Pi core migration record](phases/pi-core-migration-acceptance.md), [StreamFn contract](phases/stream-fn.md), and [turn policy record](phases/turn-policy.md) (Chinese).
+Automated tests use local HTTP providers, native adapter fixtures, tool and storage fault injection, controlled interleavings, and PTY interaction. They do not establish a stable public API, full real-provider coverage, long-task reliability, or filesystem crash consistency. The current migration's Ran / Not run / Why / Risk evidence is in the [verification record](phases/tanstack-foundation-acceptance.md) (Chinese). Historical acceptance of the previous implementation does not establish acceptance of this execution path.
 
-## Source-owned Runtime Interface Update
+## Execution Results and Configuration
 
-The package name and `createAgent` remain unchanged. The local runtime derives from a fixed Agent source revision; Forge owns persistence, permissions, context policies and usage. Internal `ExecutionCore`, `AgentRunner` and the old permission adapter factory are removed. Hosts create instances through the SDK.
+The package name and `createAgent` remain unchanged. `AgentSession` implements the SDK directly, while TanStack `chat()` runs model and tool continuation. `HostedAgent`, `AgentPort`, `session-port`, and the local Pi runtime are removed. Hosts continue to use SDK input, tool, storage, and configuration interfaces.
 
 ```ts
 const turn = agent.runTurn("Complete the task");
@@ -344,7 +360,7 @@ const continuation = agent.continue(); // Existing context, no additional user m
 for await (const event of continuation) { /* Display events */ }
 ```
 
-`turn.result` settles after consumption and required persistence. `waitForIdle()` waits for the currently acquired iterator or manual compaction to settle; it does not indicate model success. `agent_end.outcome` reports the final session outcome; an intermediate error during retry is not the final failure. `deferred` is terminal, with no background polling. Consume the lazy stream, or acquire and close its iterator; an unconsumed stream starts no work.
+`turn.result` settles after consumption and required persistence. `waitForIdle()` waits for the currently acquired iterator and manual compaction to settle; it does not indicate model success. When manual compaction replaces active execution, the wait covers the complete compaction operation rather than ending as soon as the old iterator closes. `agent_end.outcome` reports the final session outcome; an intermediate error during retry is not the final failure. `deferred` is terminal, with no background polling. Consume the lazy stream, or acquire and close its iterator; an unconsumed stream starts no work.
 
 Custom tools now return one structured result shape. The previous `{ ok, value, error }` shape is no longer the execute protocol:
 
@@ -365,7 +381,7 @@ const lookup: HarnessTool<{ key: string }, { source: string }> = {
 };
 ```
 
-`content` contains model-visible text/images. `details` is independently persisted for host display and must support JSON persistence and snapshotting. Return `isError: true` or throw for failures; `terminate: true` hints that execution should stop. Progress uses the same result shape; updates after settlement are ignored. `prepareArguments` may synchronously normalize model input; `toolInputRewrites` may rewrite asynchronously. The `parameters` JSON Schema strictly checks types, required fields and extra fields; a numeric string is not converted to a number. Host `validateArguments` runs after the initial JSON Schema check, and its output must also match the schema. Initial validation, rewriting, before hooks, final validation and authorization finish serially in call order before parallel effects start. `executionMode: "sequential"` selects per-tool execution; `toolHooks.toolExecution` selects a batch policy. `beforeToolCall` returns block/reason/terminate; `afterToolCall` may override content/details/isError/terminate. Authorization, execution and after hooks observe the same final arguments. Failed preparation skips that effect; results persist in model call order. The former `wrapTool` helper has been removed; use `toolInputRewrites` for input changes and SDK permissions for authorization.
+`content` contains model-visible text/images. `details` is independently persisted for host display and must support JSON persistence and snapshotting. Return `isError: true` or throw for failures; `terminate: true` hints that execution should stop. Progress uses the same result shape; updates after settlement are ignored. `prepareArguments` may synchronously normalize model input; `toolInputRewrites` may rewrite asynchronously. The `parameters` JSON Schema strictly checks types, required fields and extra fields; a numeric string is not converted to a number. Host `validateArguments` runs after the initial JSON Schema check, and its output must also match the schema. For parallel batches, initial validation, rewriting, before hooks, final validation and authorization finish in call order before effects start. Any tool with `executionMode: "sequential"` makes the entire batch sequential; `toolHooks.toolExecution` selects a batch policy. `beforeToolCall` returns block/reason/terminate; `afterToolCall` may override content/details/isError/terminate. Hooks use `SessionMessage` for assistantMessage/context.messages and `ToolCallBlock` (`type: "tool_call"`) for toolCall. Authorization, execution and after hooks observe the same final arguments. Failed preparation skips that effect; results persist in model call order. The former `wrapTool` helper has been removed; use `toolInputRewrites` for input changes and SDK permissions for authorization.
 
 Task and summary retries share `retry` settings but have independent counters. Transient task failures retry three times by default, after 2/4/8 seconds. Original errors remain in history and are excluded from retry requests. Consumed input and completed tool results are reused without duplicate user messages or tool replay. Overflow uses the separate single context recovery allowance, not ordinary retry. `retry` events report scheduled/attempt/end; cancellation interrupts the wait.
 
@@ -380,9 +396,9 @@ const application = await receipt.applied;
 // application.status: applied | canceled; revision matches the receipt.
 ```
 
-Updates support provider/model/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow. Asynchronous validation failure rejects the update and preserves the previous configuration. Idle updates apply immediately. During execution, the current response and its complete tool batch retain their original configuration; the update applies before the next request. Manual summaries finish before updates apply. No extra model request is made solely to apply a configuration. Disposal or storage faults cancel pending updates. Await `applied` outside the event consumption loop. Tool schemas are snapshotted before acceptance; callback closures remain host-owned. Applying an update invalidates the current usage anchor while preserving historical last-call counters.
+Updates support provider/model/adapter/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow/skills/mcp. Asynchronous validation failure rejects the update and preserves the previous configuration. Idle updates apply immediately. During execution, the current response and its complete tool batch retain their original configuration; the update applies before the next request. Manual summaries finish before updates apply. No extra model request is made solely to apply a configuration. Disposal or storage faults cancel pending updates. Await `applied` outside the event consumption loop. Tool schemas are snapshotted before acceptance; callback closures remain host-owned. Applying an update invalidates the current usage anchor while preserving historical last-call counters.
 
-See the [migration evidence](phases/pi-core-migration-acceptance.md) (Chinese) for provenance, local changes, verification and version rollback.
+See the [foundation design](phases/tanstack-foundation.md) for responsibility changes, migration and rollback, and the [verification record](phases/tanstack-foundation-acceptance.md) for actual results (Chinese).
 
 ## MCP
 

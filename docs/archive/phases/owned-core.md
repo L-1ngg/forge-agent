@@ -1,8 +1,8 @@
 # 自研执行内核施工图
 
-> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../../phases/pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
+> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
 
-> 历史状态:历史批次记录(2026-09-09)。截至 2026-09-06，代码已提交、自动化回归通过，完整内核验收待完成；内核替换为 `d2519aa`，SDK 与 ADR-010 修复为 `04db82b`。本批落实 [ADR-009](../../decisions/009-self-owned-agent-core.md)，不重开 Phase 2.2。当前执行路径与验收由[源码内核接入](../../phases/pi-core-migration.md)及[迁移验收](../../phases/pi-core-migration-acceptance.md)承接，下文保留原批次的设计与证据。
+> 历史状态:历史批次记录(2026-09-09)。截至 2026-09-06，代码已提交、自动化回归通过，完整内核验收待完成；内核替换为 `d2519aa`，SDK 与 ADR-010 修复为 `04db82b`。本批落实 [ADR-009](../../decisions/009-self-owned-agent-core.md)，不重开 Phase 2.2。当前执行路径与验收由[源码内核接入](pi-core-migration.md)及[迁移验收](pi-core-migration-acceptance.md)承接，下文保留原批次的设计与证据。
 
 > 契约替代(2026-09-07):下文保留原批次历史。取消回滚、`length` 伪工具结果和 `AgentRunner` 整次提交已由 [上下文规格 #2](https://github.com/L-1ngg/forge-agent/issues/2) 的逐记录保存及有限上下文恢复取代；当前验收见 [上下文实现证据](context-management-acceptance.md)。
 

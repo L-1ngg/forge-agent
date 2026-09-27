@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-21)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
+> 状态:生效(2026-09-27)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
 > 原则:文档领路，代码跟随；证据说话，不是信心说话。
 
 ## 当前导航
@@ -19,13 +19,13 @@
 
 | 文档 | 职责 |
 |---|---|
-| [内核接入](phases/pi-core-migration.md)、[迁移验收](phases/pi-core-migration-acceptance.md) | 固定 Pi 内核来源、定制范围、SDK 接线与未测边界 |
+| [TanStack 基座](phases/tanstack-foundation.md)、[本次验收](phases/tanstack-foundation-acceptance.md) | chat 唯一循环、职责处置、接口迁移与未测边界 |
 | [职责收敛](phases/architecture-responsibilities.md)、[会话装配](phases/agent-assembly.md) | AgentTurn.result、输入归属、压缩协调和统一装配 |
-| [StreamFn](phases/stream-fn.md)、[逐轮停止策略](phases/turn-policy.md) | 模型流注入、双调用路径、shouldStopAfterTurn 与调用用量 |
+| [原生 Adapter](phases/model-adapter.md)、[逐轮停止策略](phases/turn-policy.md) | 模型接入、任务/摘要共享接缝、shouldStopAfterTurn 与调用用量 |
 | [Skills 设计](phases/skills.md)、[Skills 验收](phases/skills-acceptance.md) | 本地分层发现、按需加载、显式输入及配置提交边界 |
 | [MCP 完整施工设计](phases/mcp-client.md)、[ADR-022](decisions/022-mcp-host-integration.md) | Issue #36 的完整实现与统一验收：官方 SDK、连接所有权、OAuth、Tools/Resources/Prompts、Elicitation；当前证据见[验收记录](phases/mcp-client-acceptance.md) |
-| [TanStack 渐进迁移](decisions/024-incremental-tanstack-ai-adoption.md)、[工具参数校验](phases/tool-argument-validation.md)、[OpenAI 传输试点](phases/openai-tanstack-transport.md)、[其余模型传输](phases/tanstack-provider-transport-migration.md) | 逐步移除 pi-ai 的方向、严格校验、OpenAI 与其余 provider 的传输施工 |
-| [架构决策](decisions/) | ADR 及替代关系；先读状态行，再沿当前决策指针读取 |
+| [基座决策](decisions/025-tanstack-agent-foundation.md)、[工具批次与校验](phases/tool-argument-validation.md) | 第三方选型、严格参数、授权、并发、干预与提交屏障 |
+| [架构决策](decisions) | ADR 及替代关系；先读状态行，再沿当前决策指针读取 |
 
 ### 上下文、记忆与会话
 
@@ -56,7 +56,7 @@
 | [Issue tracker](agents/issue-tracker.md) | GitHub Issues 与施工图的职责分工 |
 | [Domain docs](agents/domain.md)、[CONTEXT.md](../CONTEXT.md) | single-context 读取规则与领域术语 |
 | [Triage labels](agents/triage-labels.md) | triage 角色到标签的映射 |
-| [lessons.md](lessons.md)、[templates/](templates/) | 教训库与 ADR / feature / review 模板 |
+| [lessons.md](lessons.md)、[templates/](templates) | 教训库与 ADR / feature / review 模板 |
 
 ## 归档与读取规则
 
@@ -73,7 +73,7 @@
 
 ## 验收边界
 
-验收记录只证明对应版本、环境和实际执行范围。当前内核证据从[迁移验收](phases/pi-core-migration-acceptance.md)及各功能记录进入，后续文档整理不产生新的测试结果。
+验收记录只证明对应版本、环境和实际执行范围。当前内核证据从[基座验收](phases/tanstack-foundation-acceptance.md)及各功能记录进入，后续文档整理不产生新的测试结果。
 
 - Phase 1 人工验收与 Phase 2 E1–E3 按 operator 2026-09-01 指示暂缓实测并按豁免处理，不能声明人工验收通过。
 - 历史 Phase 2.2 关闭不等于通用 Agent 或对外 SDK 全部验收；AC-14、5 天 dogfooding、真实 provider 多轮工具/session/取消矩阵不由旧离线测试证明。后续安排见 [plan.md](plan.md)。

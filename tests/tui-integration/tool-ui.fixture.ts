@@ -8,7 +8,7 @@ const directory = process.env.FORGE_AGENT_PTY_DIRECTORY!;
 const bus = new RequestBus({ timeoutMs: null });
 const permission: PermissionContext = { rules: [{ tool: "read", argsPattern: "*", effect: "allow" }] };
 const store = await SessionStore.open(`${directory}/session.jsonl`, directory);
-const agent = await createAgent({ systemPrompt: "Tool UI fixture", thinkingLevel: "off", storage: store.asStorage(), cwd: directory, tools: [readTool], permission, requestBus: bus, ...fauxModel({ responses: [
+const agent = await createAgent({ systemPrompt: "Tool UI fixture", thinkingLevel: "off", storage: store, cwd: directory, tools: [readTool], permission, requestBus: bus, ...fauxModel({ responses: [
 		{ toolCalls: [{ id: "short", name: "read", arguments: { path: "short.txt", offset: 2, limit: 2 } }, { id: "long", name: "read", arguments: { path: "long.txt" } }] },
 		{ text: "READS_COMPLETE" },
 	] }) });

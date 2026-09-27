@@ -4,17 +4,18 @@ import { createAgent } from "../src/sdk.ts";
 import { RequestBus } from "../src/request-bus.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
 import { fauxModel } from "../../../tests/support/model.ts";
+import { nativeAdapter } from "./helpers/native-adapter.ts";
 import { gate } from "./helpers/model-response.ts";
 
 const options = { systemPrompt: "", cwd: process.cwd() };
 
 test("SDK rejects the removed execution factory before loading storage or calling a model", async () => {
 	expect("createSessionPort" in core).toBe(false);
-	expect("createTestPort" in core).toBe(false);
+	expect("createTestAgent" in core).toBe(false);
 	let loads = 0, calls = 0, factories = 0;
 	const model = fauxModel({ responses: [{ text: "must not run" }] });
-	const configuration = { ...options, ...model, streamFn: (...args: Parameters<typeof model.streamFn>) => { calls++; return model.streamFn(...args); }, storage: { load: async () => { loads++; return { entries: [], leafId: null }; }, append: async () => {} } };
-	// @ts-expect-error Public creation accepts only options, including streamFn/storage/tools.
+	const configuration = { ...options, ...model, adapter: nativeAdapter(model.model, request => { calls++; return model.adapter.chatStream(request); }), storage: { load: async () => { loads++; return { entries: [], leafId: null }; }, append: async () => {} } };
+	// @ts-expect-error Public creation accepts only options, including adapter/storage/tools.
 	await expect(createAgent(configuration, () => { factories++; })).rejects.toThrow("one options argument");
 	expect([loads, calls, factories]).toEqual([0, 0, 0]);
 });
@@ -24,30 +25,30 @@ test("SDK waits for storage attachment before returning and persists through tha
 	let loads = 0, calls = 0, returned = false;
 	const model = fauxModel({ responses: [{ text: "saved answer" }] });
 	const creating = createAgent({ ...options, ...model,
-		streamFn: (...args) => { calls++; return model.streamFn(...args); },
-		storage: { async load() { if (++loads === 2) { entered.resolve(); await release.promise; } return memory.load(); }, append: entry => memory.append(entry) },
+		adapter: nativeAdapter(model.model, request => { calls++; return model.adapter.chatStream(request); }),
+		storage: { async load() { loads++; entered.resolve(); await release.promise; return memory.load(); }, append: entry => memory.append(entry) },
 	}).then(agent => { returned = true; return agent; });
 	try {
 		await entered.promise;
-		expect(returned).toBe(false); expect(calls).toBe(0); expect((await memory.load()).entries).toHaveLength(0);
+		expect(returned).toBe(false); expect(loads).toBe(1); expect(calls).toBe(0); expect((await memory.load()).entries).toHaveLength(0);
 	} finally { release.resolve(); }
 	const agent = await creating;
 	try {
 		for await (const _ of agent.runTurn("hello")) {}
-		expect(calls).toBe(1); expect((await memory.load()).entries).toHaveLength(2);
+		expect(calls).toBe(1); expect(loads).toBe(1); expect((await memory.load()).entries).toHaveLength(2);
 	} finally { await agent.dispose(); }
 });
 
-for (const failureAt of [1, 2]) test(`SDK storage load failure preserves the error and external request bus; load=${failureAt}`, async () => {
+test("SDK storage load failure preserves the error and external request bus", async () => {
 	const failure = new Error("storage unavailable"); const bus = new RequestBus();
 	let loads = 0, calls = 0, writes = 0;
 	const model = fauxModel({ responses: [{ text: "must not run" }] });
 	try {
 		await expect(createAgent({ ...options, ...model, requestBus: bus,
-			streamFn: (...args) => { calls++; return model.streamFn(...args); },
-			storage: { async load() { if (++loads === failureAt) throw failure; return { entries: [], leafId: null }; }, async append() { writes++; } },
+			adapter: nativeAdapter(model.model, request => { calls++; return model.adapter.chatStream(request); }),
+			storage: { async load() { loads++; throw failure; }, async append() { writes++; } },
 		})).rejects.toBe(failure);
-		expect([calls, writes]).toEqual([0, 0]);
+		expect([loads, calls, writes]).toEqual([1, 0, 0]);
 		const pending = bus.ask("cancel_confirm", { action: "cancel" }, { timeoutMs: null });
 		expect(bus.pendingCount).toBe(1); bus.abort();
 		expect(await pending).toMatchObject({ status: "cancelled", reason: "aborted" });

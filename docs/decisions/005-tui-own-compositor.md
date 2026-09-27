@@ -5,7 +5,7 @@ created: 2026-09-04
 
 # ADR-005: TUI 自有 TerminalFrame compositor,移除 pi-tui
 
-> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](./006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](./007-no-compile-grok-reference.md) 修订;自有 compositor 仍有效;Markdown 自写及依赖边界由 [ADR-016](016-markdown-rendering.md) 定向修订。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
+> 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](007-no-compile-grok-reference.md) 修订;自有 compositor 仍有效;Markdown 自写及依赖边界由 [ADR-016](016-markdown-rendering.md) 定向修订。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
 > 参与者:operator(发起,选择 1A/2A/3A)、Grok(起草)
 
 ## 背景
@@ -30,7 +30,7 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 
 1. **唯一 paint 模型**是 `TerminalFrame`(二维 cell:grapheme / width / fg / bg / attributes / cursor)。高层产出 view state 与 layout plan,最终只写入 frame,再由 host 差分刷到终端。不再存在 `Component.render(): string[]` 这条路径。
 2. **产品目标**是 grok-build 的信息架构与交互契约,不是 pixel parity。Phase 2.1 的 AC-38 / AC-39 / AC-40 / AC-42 不继承。历史截图不作为当前仓库资产或验收依据。
-3. **依赖铁律修正**([ADR-004](./004-single-process-protocol-isolation.md) 第 2 条):`tui` 只 import `@myh/protocol` 与 `node:` 内置。禁止再引入任何 TUI 框架(ink / blessed / ratatui-wasm / yoga 等)。Unicode 宽度、按键解码、markdown、editor 全部自写。
+3. **依赖铁律修正**([ADR-004](004-single-process-protocol-isolation.md) 第 2 条):`tui` 只 import `@myh/protocol` 与 `node:` 内置。禁止再引入任何 TUI 框架(ink / blessed / ratatui-wasm / yoga 等)。Unicode 宽度、按键解码、markdown、editor 全部自写。
 4. **CLI 契约冻结**,清空时不得顺手改 `packages/cli` 的接线形状:
    - 导出 `App`、`scanFiles`
    - `new App({ port, host, requestBus, completionSource, getStatus, cwd, homeDir, showWelcome })`
@@ -67,7 +67,7 @@ operator 原话(2026-09-04):当前 TUI「是基于 pi-tui 的包上进行改造�
 **需要同步的文档:**
 
 - [plan.md](../plan.md) 决策 2、架构图、Phase 0 Plan B、下一步
-- [ADR-004](./004-single-process-protocol-isolation.md) 依赖条款
+- [ADR-004](004-single-process-protocol-isolation.md) 依赖条款
 - [phase-2.1.md](../archive/phases/phase-2.1.md) 中止,改由 phase-2.2 接手
 - [phase-2.md](../archive/phases/phase-2.md) 人工 UX 入口改指 2.2;AC-13 退役
 - [design-rationale.md](../archive/design-rationale.md) C.2 标为历史论证

@@ -5,7 +5,7 @@ created: 2026-09-01
 
 # earendil-works/pi 深度调研
 
-> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../../phases/pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
+> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../phases/pi-core-migration.md)。历史未测、豁免及中止结论保持原意。
 
 > 历史状态:已调研(2026-09-01)
 > 快照:[`earendil-works/pi@853a80d`](https://github.com/earendil-works/pi/tree/853a80d26c90a14c1886f0ebb8ffaae133ca2185),本文涉及的 package 均为 `0.84.4`。调研时本项目 exact 安装 `@earendil-works/pi-ai@0.84.4`、`@earendil-works/pi-agent-core@0.84.4`、`@earendil-works/pi-tui@0.84.4`。

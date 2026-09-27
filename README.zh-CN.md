@@ -5,7 +5,7 @@
 
 **通用单 Agent 项目,目前处于个人开发中。**
 
-Forge Agent 围绕 Agent runtime 设计统一的执行与会话链路，处理输入归属、执行终态、逐步持久化和上下文管理，并提供可嵌入的 Bun SDK 与终端应用。可以直接用 CLI 完成 coding 任务,通过 SDK 装配工具与提示词,或 fork 后构建专用 Agent。
+Forge Agent 基于 TanStack AI 构建通用单 Agent 基座，处理输入归属、执行终态、逐步持久化和上下文管理，并提供可嵌入的 Bun SDK 与终端应用。可以直接用 CLI 完成 coding 任务,通过 SDK 装配工具与提示词,或 fork 后构建专用 Agent。
 
 [English](README.md) · [SDK 接入](docs/sdk.md) · [贡献说明](CONTRIBUTING.md)
 
@@ -13,11 +13,11 @@ Forge Agent 围绕 Agent runtime 设计统一的执行与会话链路，处理�
 
 - **执行与会话控制:**围绕模型流与工具执行处理输入归属、执行终态、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
 - **长任务:**自动或手动上下文压缩、有限超限恢复；提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
-- **可嵌入 SDK:**实例独立,工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
+- **可嵌入 SDK:**实例独立,接受 TanStack 原生 adapter，工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
 - **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
 - **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。
 
-当前内置模型流使用 [TanStack AI](https://tanstack.com/ai)；模型目录、认证、类型与费用辅助函数由 Forge 维护，不再依赖 `pi-ai` 包。缺少等价传输的 Mistral Conversations 和 Codex Responses 模型已从内置目录移除。执行 runtime 的来源与本地定制见下方架构说明；资料调研与报告是后续扩展方向,尚未交付。
+[TanStack AI](https://tanstack.com/ai) 提供 `chat()` 模型/工具循环、middleware、工具定义和原生供应商 adapter；Forge 维护会话行为、权限、内置模型目录、认证与费用辅助函数。本地 Pi runtime 与 `pi-ai` 依赖已删除。缺少内置等价传输的 Mistral Conversations 和 Codex Responses 模型不在内置目录中。资料调研与报告是后续扩展方向。
 
 ## 快速开始
 
@@ -172,6 +172,16 @@ bun examples/embedded-agent.ts
 
 示例宿主读取 `FORGE_AGENT_PROVIDER`、`FORGE_AGENT_MODEL` 及可选的 `FORGE_AGENT_API_KEY` / `FORGE_AGENT_BASE_URL`。长期宿主接入前先读 [存储、权限与生命周期](docs/sdk.md)。
 
+无需凭据或模型请求即可运行原生 adapter 示例：
+
+```bash
+bun examples/custom-adapter.ts
+bun examples/turn-policy.ts
+bun examples/context-transform.ts
+```
+
+[adapter 示例](examples/custom-adapter.ts) 使用生产执行链。任务和摘要共用自定义 adapter，取消、配置及旧接口迁移见 [adapter 合同](docs/sdk.md#原生-tanstack-模型-adapter)。
+
 assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮。窄表格回退为带列名的记录,长代码行折行并显示续行标记。Forge 的复制操作保留 Markdown 原文,LaTeX 保持原文。可运行 `bun scripts/markdown-preview.ts` 查看固定样例,不调用模型或保存会话。
 
 ## 架构
@@ -179,20 +189,32 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 | 包 | 职责 |
 |---|---|
 | `@forge-agent/protocol` | 事件、请求、响应与展示数据 |
-| `@forge-agent/core` | 本地 Agent runtime、模型适配、权限、会话与 SDK |
+| `@forge-agent/core` | 会话生命周期、TanStack chat 接入、模型适配、权限、上下文与 SDK |
 | `@forge-agent/tools` | 工具契约与内置 coding 工具 |
 | `@forge-agent/tui` | cell compositor 与终端交互;依赖 protocol、Node 内置模块及纯 Markdown/高亮库 |
 | `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
 
 依赖门禁禁止 core 引入 UI，并拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
 
-Forge 设计会话执行层，负责输入归属、持久化、上下文策略与执行结算，并在底层循环扩展输入准备、响应后停止和工具参数校验接缝。底层循环以固定 Pi Agent 源码为基线，由本仓库维护；来源与本地改动见 [runtime 说明](packages/core/src/runtime/README.md)及[接入差异](packages/core/src/runtime/local-changes.md)。SDK、CLI/TUI 由 Forge 实现并复用同一执行路径。SDK 提供 `continue()`、执行结果、可等待空闲与释放、原生文本/图片工具结果、普通任务重试和受控配置更新，使用方式见 [SDK 指南](docs/sdk.md)。
+SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和持久历史。TanStack `chat()` 负责模型/工具续轮，请求 middleware 完成上下文投影和最终预算检查。工具通过原生 `toolDefinition().server()` 进入 Forge 批次策略，完成参数校验、权限、执行、结果干预及按序保存。
+
+```mermaid
+flowchart LR
+  H[SDK / CLI / TUI] --> S[AgentSession]
+  S --> C[TanStack chat]
+  C --> A[Native TextAdapter]
+  C --> T[Forge 工具批次]
+  S --> D[SessionStorage]
+  T --> D
+```
+
+`SessionMessage` 原文与证据检查点是唯一可恢复状态；它们只在请求/响应边界与 TanStack 消息转换一次，不再维护第二份 runtime 历史或兼容循环。SDK 通过 `adapter` 接受原生 adapter，旧 `StreamFn` 接口已移除；已有 JSONL、Markdown 记忆和 MCP 附件格式保持。迁移见 [SDK 指南](docs/sdk.md#原生-tanstack-模型-adapter)，职责决定见 [ADR-025](docs/decisions/025-tanstack-agent-foundation.md)，当前结果见[验收记录](docs/phases/tanstack-foundation-acceptance.md)。
 
 ## Roadmap
 
 | 阶段 | 方向 |
 |---|---|
-| **Now** | 内核与 SDK 真实任务验收,补齐剩余验收项 |
+| **Now** | 完成 TanStack 基座验证与剩余真实任务验收 |
 | **Next** | 后续工具扩展,来源可追溯的资料调研与报告 |
 | **Later** | 长任务可靠性、恢复边界与上下文质量/成本的持续验证,之后是服务 API 与分发 |
 

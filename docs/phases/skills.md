@@ -38,7 +38,7 @@ created: 2026-09-19
 
 | 文件职责 | 施工内容 |
 |---|---|
-| `upstream/`、`upstream.json`、`LICENSE`、`LOCAL_CHANGES.md` | 迁入 Pi scanner、frontmatter/text 与必要路径/来源/诊断类型；记录原始校验值及每类适配 |
+| `upstream/`、`upstream.json`、`LICENSE`、`LOCAL_CHANGES.md` | 保留 Pi scanner、必要路径/来源/诊断类型及合法来源记录；frontmatter/text 拆分已移除，`files.ts` 在字节边界定位后直接使用 `yaml.parse`，正文保持原样 |
 | `catalog.ts` | 三层发现、严格校验、稳定排序、冲突/真实路径处理；返回不含正文的不可变 catalog |
 | `load.ts` | 按有效名称查找、有界读取、修订检查、共享自动/显式加载结果 |
 | `tools.ts` | `load_skill` schema、工具包装、成功/错误模型可见内容 |
@@ -49,7 +49,7 @@ Pi 固定提交为 `36b60d2e8985899743c4cf5bd5f8929832a3f05d`。本次只读核�
 - `packages/coding-agent/src/core/skills.ts`：`055dbfde974fd1951267dd6f9204b5d713ff0004e0991eb870fce9158c6e359a`。
 - `packages/coding-agent/src/utils/frontmatter.ts`：`99142d78b94e658e0be65cf05046be8069b3700168a683e0af64219ad903bcd6`。
 
-迁入时补全依赖闭包、上游测试与 fixtures 的来源清单；运行依赖限所需的 `yaml@2.9.0` 与 `ignore@7.0.5`，不引入完整 coding-agent。不改变现有 runtime 的上游 SHA。
+迁入时补全依赖闭包、上游测试与 fixtures 的来源清单；运行依赖限所需的 `yaml@2.9.0` 与 `ignore@7.0.5`，不引入完整 coding-agent。Skills scanner 的来源与执行循环独立，固定 SHA 不因 TanStack 基座迁移而改变。
 
 标准依据固定为 Agent Skills `69ef37e9424c0a7ea9dd2293b559e43ec8176379` 的 `docs/specification.mdx`。Forge 严格适配拒绝缺失或无效 `name`/`description`，核对实际根目录名，并校验 `license`、`compatibility`、`metadata`、`allowed-tools` 的标准类型/限制。未知扩展保留但不执行其语义；`disable-model-invocation` 必须为 boolean。Pi 的目录名回退、仅警告继续启用、顶层普通 Markdown 发现等行为不沿用，差异逐项记录并更新对应测试期望。
 
@@ -65,7 +65,7 @@ Pi 固定提交为 `36b60d2e8985899743c4cf5bd5f8929832a3f05d`。本次只读核�
 
 ## SDK 接口设计
 
-下列接口经 `packages/core/src/sdk.ts` 导出，内部通过 `AgentPort` 到 session；旧的字符串输入调用保持兼容。
+下列接口经 `packages/core/src/sdk.ts` 导出，由 `AgentSession` 直接实现；输入支持普通字符串与显式 Skill 调用。当前执行接线见 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。
 
 ```ts
 type SkillLayer = "workspace" | "user" | "builtin";
@@ -114,7 +114,7 @@ SDK 不提供 `skills` 时完全禁用；显式 `enabled: false` 不扫描。`ro
 
 ### 原子配置
 
-`createSessionPort` 保留基础 `systemPrompt` 与宿主原始 tools；准备出的 `SessionAssembly` 同时持有 catalog snapshot、组合后的 prompt 和装配工具。每次从基础 prompt 组合，不能把上一次组合结果当基础。模型切换或基础 prompt 更新复用当前 desired catalog，只有来源变化、启停或明确刷新才重新扫描。
+`session-assembly.ts` 保留基础 `systemPrompt` 与宿主原始 tools；准备出的 `SessionAssembly` 同时持有 catalog snapshot、组合后的 prompt 和装配工具。每次从基础 prompt 组合，不能把上一次组合结果当基础。模型切换或基础 prompt 更新复用当前 desired catalog，只有来源变化、启停或明确刷新才重新扫描。
 
 刷新与普通 patch 共用 `AgentSession.configurationQueue`，失败不更新 desired/applied。`applyConfigurations` 一次切换 options、catalog、prompt、tools 和计量依据。当前响应及工具批次继续持有旧 snapshot；下一模型请求前才使用新状态。`dispose` 取消未应用 receipt，并等待扫描/准备收尾，禁止释放后继续发布状态。
 
@@ -129,7 +129,7 @@ CLI 将 `/skill <name> [task]` 解析为 `SkillInvocation`；SDK 使用同一输
 3. 将有来源与修订标识的正文及原始 task 形成一条 user message，保存成功后按既有路径请求模型。显式选择允许 `explicit-only`；自动工具通道没有这个标志或旁路参数。
 4. 成功进入输入处理后才确认 `processed`；读取/权限失败、取消、旧 turn 拒收将未处理原始输入返还宿主。失败零模型提交，不把未经展开的 slash 文本当成功输入。
 
-优先复用现有 session 输入队列与 runtime 接缝。现有 runtime 会在 user `message_start`/`message_end` 附近更新状态，因此需要一个窄的异步输入准备接缝：对初始、steering、follow-up 输入均在写入 runtime context/历史和确认 receipt **之前**调用 session 提供的准备逻辑；普通字符串原样通过。准备失败通过明确的输入错误结果结束/返还该输入，不作为存储故障永久停用实例，不产生半条 user 历史。这个接缝不新增执行循环或独立排队系统；若涉及 runtime 本地修改，记录到其既有本地差异说明，并保留普通输入、one-at-a-time 与取消回归。
+输入由 `AgentSession` 的唯一队列和异步准备路径消费。初始、steering、follow-up 输入均在保存原文和确认 processed **之前**完成显式 Skill/MCP 准备；普通字符串原样通过。准备失败不产生半条 user 历史，也不作为存储故障永久停用实例。准备期间接受的配置在当前请求结束后应用，不能使 Skill 正文与 system/catalog 分属不同 revision。TanStack 只收到准备后的请求投影，不拥有第二份输入队列。
 
 自动加载仍完整经过 `prepareSessionTools`，包括 `ToolHooks` 与参数重写。显式调用复用纯参数校验、`PermissionContext`/`RequestBus` 权限预检及加载服务，以 `load_skill` 和所选 name 判断同一权限规则，但作为 host input 提交，不伪造 assistant tool_call/tool_result。现有 `ToolHooks` 上下文要求真实 `assistantMessage`，因此只用于自动工具调度，显式输入不调用它或模型专用 `toolInputRewrites`；显式通道的权限 hooks 仍来自 `PermissionContext`。显式选择本身不绕过 deny 规则；`allowed-tools` 不生成授权。CLI 对 `load_skill` 按现有只读工具策略装配 built-in allow，优先级仍低于 hooks/deny rules；SDK 不自动注入该 allow。若需额外 `read`/`bash` 而宿主没提供，加载指引如实说明，不能自行注册。
 

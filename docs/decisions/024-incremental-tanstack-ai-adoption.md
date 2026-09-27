@@ -5,7 +5,7 @@ created: 2026-09-26
 
 # ADR-024: 逐步引入 TanStack AI 并移除 pi-ai 依赖
 
-> 状态:已批准(2026-09-26)。operator 确认逐步迁移方向，并选择工具参数统一严格校验；首项施工见[工具参数校验](../phases/tool-argument-validation.md)。
+> 状态:循环与模型接缝决定被 [ADR-025](025-tanstack-agent-foundation.md) 取代(2026-09-27)；严格校验与移除 pi-ai 的决定继续有效。历史批准记录(2026-09-26)：operator 确认逐步迁移方向，并选择工具参数统一严格校验；首项施工见[工具参数校验](../phases/tool-argument-validation.md)。
 > 参与者:operator 确定目标与类型校验策略；Codex 调研当前边界并提出迁移顺序。
 
 ## 背景
@@ -35,4 +35,4 @@ Forge 自己维护单 Agent 执行循环和会话策略，但工具校验、模�
 
 ## 实施状态
 
-2026-09-26：工具参数严格校验、内置 TanStack 传输及 Forge 自有目录、认证、公共类型、费用和错误辅助已接入。根包与 core 的 `pi-ai` 依赖及补丁已移除，依赖门禁拒绝重新引入。无等价传输的 Mistral Conversations 与 Codex Responses 模型已从当前目录移除；内部装配层改名为 `session-port`。完整离线门禁及逐协议 AC-2 至 AC-5 的离线矩阵已通过；真实供应商 AC-7 因无凭据保持未测，证据见[传输施工图](../phases/tanstack-provider-transport-migration.md)。
+2026-09-26：工具参数严格校验、内置 TanStack 传输及 Forge 自有目录、认证、公共类型、费用和错误辅助已接入。根包与 core 的 `pi-ai` 依赖及补丁已移除，依赖门禁拒绝重新引入。无等价传输的 Mistral Conversations 与 Codex Responses 模型已从当前目录移除；内部装配层改名为 `session-port`。完整离线门禁及逐协议 AC-2 至 AC-5 的离线矩阵已通过；真实供应商 AC-7 因无凭据保持未测，证据见[传输施工图](../archive/phases/tanstack-provider-transport-migration.md)。

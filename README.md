@@ -5,7 +5,7 @@
 
 **A general-purpose single-agent framework, currently under personal development.**
 
-Forge Agent builds a unified execution and session layer around an Agent runtime, defining input ownership, turn outcomes, incremental persistence, and context management. It provides an embeddable Bun SDK and a terminal application. Use the CLI for coding tasks, assemble tools and prompts through the SDK, or fork the project to build a specialized agent.
+Forge Agent builds a single-agent foundation on TanStack AI, with explicit input ownership, turn outcomes, incremental persistence, and context management. It provides an embeddable Bun SDK and a terminal application. Use the CLI for coding tasks, assemble tools and prompts through the SDK, or fork the project to build a specialized agent.
 
 [简体中文](README.zh-CN.md) · [SDK guide](docs/sdk.en.md) · [Contributing](CONTRIBUTING.md)
 
@@ -13,11 +13,11 @@ Forge Agent builds a unified execution and session layer around an Agent runtime
 
 - **Execution and session control:** input ownership, turn outcomes, permissions, invocation-scoped steering and follow-ups, cancellation, and incremental v4 session persistence around model streaming and tool execution.
 - **Long tasks:** automatic or manual context compaction and bounded overflow recovery; provides sourced task notes, branch history search, and original-text retrieval. Read/Bash provide bounded previews and temporary command logs.
-- **Embeddable SDK:** independent instances with host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
+- **Embeddable SDK:** independent instances with native TanStack adapters and host-provided tools, prompts, permissions, and storage. CLI and SDK share the same execution path.
 - **Coding CLI:** read, write, edit, and shell tools; interactive TUI or JSON event output for scripts.
 - **Terminal interface:** streaming transcript, tool and diff views, permission cards, queued input, and a cell-based renderer.
 
-Built-in model streams use [TanStack AI](https://tanstack.com/ai). Forge owns the model catalog, authentication, types, and cost helpers; the `pi-ai` package is no longer a dependency. Models requiring Mistral Conversations or Codex Responses are absent from the built-in catalog because this release has no equivalent transport. The runtime's source and local changes are described under Architecture. Research and report generation are planned extensions, not completed features.
+[TanStack AI](https://tanstack.com/ai) provides the `chat()` model/tool loop, middleware, tool definitions, and native provider adapters. Forge owns session behavior, permissions, the built-in model catalog, authentication, and cost helpers. The local Pi runtime and `pi-ai` dependency have been removed. Models requiring Mistral Conversations or Codex Responses are absent from the built-in catalog because there is no equivalent built-in transport. Research and report generation are planned extensions.
 
 ## Quick Start
 
@@ -172,6 +172,16 @@ bun examples/embedded-agent.ts
 
 This example reads `FORGE_AGENT_PROVIDER`, `FORGE_AGENT_MODEL`, and optional `FORGE_AGENT_API_KEY` / `FORGE_AGENT_BASE_URL`. See [storage, permission handling, and lifecycle](docs/sdk.en.md) before embedding it in a long-lived application.
 
+To try the SDK without credentials or model traffic, run the native adapter examples:
+
+```bash
+bun examples/custom-adapter.ts
+bun examples/turn-policy.ts
+bun examples/context-transform.ts
+```
+
+The [adapter example](examples/custom-adapter.ts) exercises the production execution path. Custom adapters are shared by task and summary requests; see the [adapter contract](docs/sdk.en.md#native-tanstack-model-adapters) for cancellation, configuration, and migration.
+
 Assistant replies render Markdown in both the transcript and detail view, including tables and code highlighting. Narrow tables switch to labelled records; long code lines wrap with a continuation marker. Forge copy actions preserve Markdown source. LaTeX remains literal. To try a fixed sample without a model or saved session, run `bun scripts/markdown-preview.ts`.
 
 ## Architecture
@@ -179,20 +189,32 @@ Assistant replies render Markdown in both the transcript and detail view, includ
 | Package | Responsibility |
 |---|---|
 | `@forge-agent/protocol` | Events, requests, responses, and presentation data |
-| `@forge-agent/core` | Source-owned Agent runtime, model adapter, permissions, sessions, and SDK |
+| `@forge-agent/core` | Session lifecycle, TanStack chat integration, model adapters, permissions, context, and SDK |
 | `@forge-agent/tools` | Tool contracts and built-in coding tools |
 | `@forge-agent/tui` | Cell compositor and terminal interaction; protocol, Node built-ins, and pure Markdown/highlighting dependencies |
 | `@forge-agent/cli` | Configuration, credentials, tool/storage assembly, and TUI/headless entrypoints |
 
 The dependency gate keeps UI dependencies out of the core and rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
 
-Forge designs the session execution layer for input ownership, persistence, context policy, and turn settlement, and extends the underlying loop with input preparation, post-response stopping, and tool-argument validation hooks. The loop starts from a fixed Pi Agent source baseline and is maintained here; see [runtime provenance](packages/core/src/runtime/README.md) and [local changes](packages/core/src/runtime/local-changes.md). Forge builds the SDK, CLI, and TUI on the same execution path. The SDK supports `continue()`, invocation results, awaited idle/disposal, native text/image tool results, transient task retries, and controlled configuration updates; see the [SDK guide](docs/sdk.en.md).
+SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and durable history. TanStack `chat()` owns model/tool continuation; request middleware applies context projection and the final budget. Native `toolDefinition().server()` tools enter Forge's batch policy for argument validation, permission, execution, result hooks, and ordered persistence.
+
+```mermaid
+flowchart LR
+  H[SDK / CLI / TUI] --> S[AgentSession]
+  S --> C[TanStack chat]
+  C --> A[Native TextAdapter]
+  C --> T[Forge tool batch]
+  S --> D[SessionStorage]
+  T --> D
+```
+
+Original `SessionMessage` history and evidence checkpoints remain the recoverable state. A single request/response projection connects them to TanStack messages; there is no second runtime history or compatibility loop. The SDK accepts native adapters through `adapter`; the former `StreamFn` interface is removed. Existing JSONL, Markdown memory, and MCP attachments retain their formats. See the [SDK migration guide](docs/sdk.en.md#native-tanstack-model-adapters), [ADR-025](docs/decisions/025-tanstack-agent-foundation.md), and [current verification record](docs/phases/tanstack-foundation-acceptance.md).
 
 ## Roadmap
 
 | Horizon | Direction |
 |---|---|
-| **Now** | Validate the core and SDK in real tasks and resolve remaining acceptance gaps |
+| **Now** | Complete TanStack foundation verification and remaining real-task acceptance |
 | **Next** | Further tool extensions; source-traceable research and reports |
 | **Later** | Further validation of long-task reliability, recovery, and context quality/cost; then service APIs and distribution |
 

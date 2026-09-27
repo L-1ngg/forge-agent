@@ -6,7 +6,7 @@ import { editTool } from "../../packages/tools/src/index.ts";
 const directory = process.env.FORGE_AGENT_PTY_DIRECTORY!;
 const bus = new RequestBus({ timeoutMs: null });
 const store = await SessionStore.open(`${directory}/session.jsonl`, directory);
-const agent = await createAgent({ systemPrompt: "PTY fixture", thinkingLevel: "off", storage: store.asStorage(), cwd: directory, tools: [editTool], permission: {}, requestBus: bus, ...fauxModel({ responses: [
+const agent = await createAgent({ systemPrompt: "PTY fixture", thinkingLevel: "off", storage: store, cwd: directory, tools: [editTool], permission: {}, requestBus: bus, ...fauxModel({ responses: [
 		{ toolCalls: [{ id: "edit", name: "edit", arguments: { path: "file.txt", old_text: "before", new_text: "after" } }] },
 		{ text: "EDIT_COMPLETE" },
 		{ text: "SLOW_RESPONSE_".repeat(50) },

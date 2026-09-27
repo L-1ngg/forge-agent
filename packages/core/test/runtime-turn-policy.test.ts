@@ -1,37 +1,20 @@
+import type { TextOptions } from "@tanstack/ai";
+import { replyAdapter, systemText, type NativeReply } from "./helpers/native-reply.ts";
 import { expect, test } from "bun:test";
-import { EventStream } from "../src/model-stream.ts";
-import type { AssistantMessage, AssistantMessageEvent } from "../src/model-types.ts";
-import { createAgent, MemorySessionStorage, type AgentTurn, type CreateAgentOptions, type Model, type ShouldStopAfterTurnContext, type StreamFn } from "@forge-agent/core/sdk";
+import { createAgent, MemorySessionStorage, type AgentTurn, type CreateAgentOptions, type Model, type ShouldStopAfterTurnContext } from "@forge-agent/core/sdk";
 import type { SessionEvent } from "@forge-agent/protocol";
 import { sessionMessages } from "../src/session-storage.ts";
 import { SUMMARY_SYSTEM } from "../src/context/compaction.ts";
 import { gate } from "./helpers/model-response.ts";
 
 const model: Model<string> = {
-	id: "policy-model", name: "Policy model", api: "host-stream", provider: "host", baseUrl: "https://unused.invalid",
+	id: "policy-model", name: "Policy model", api: "faux", provider: "host", baseUrl: "https://unused.invalid",
 	reasoning: false, input: ["text"], contextWindow: 100_000, maxTokens: 8192,
 	cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 },
 };
 const defaults = { model, cwd: process.cwd(), systemPrompt: "policy test", context: { enabled: false, keepRecentTokens: 1 }, retry: { baseDelayMs: 0 } };
-function answer(patch: Partial<AssistantMessage> = {}): AssistantMessage {
-	return {
-		role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
-		content: [{ type: "text", text: "answer" }], stopReason: "stop",
-		usage: { input: 10, output: 5, cacheRead: 2, cacheWrite: 3, totalTokens: 20, cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 } }, ...patch,
-	};
-}
-function stream(message: AssistantMessage) {
-	if (message.stopReason === "pending") throw new Error("Expected terminal response");
-	const result = new EventStream<AssistantMessageEvent, AssistantMessage>(
-		event => event.type === "done" || event.type === "error",
-		event => { if (event.type === "done") return event.message; if (event.type === "error") return event.error; throw new Error("Expected terminal event"); },
-	);
-	if (message.stopReason === "error" || message.stopReason === "aborted") result.push({ type: "error", reason: message.stopReason, error: message });
-	else result.push({ type: "done", reason: message.stopReason, message });
-	result.end(message);
-	return result;
-}
-function toolsResponse(ids = ["target"]) { return answer({ stopReason: "toolUse", content: ids.map(id => ({ type: "toolCall", id, name: "lookup", arguments: {} })) }); }
+function answer(patch: Partial<NativeReply> = {}): NativeReply { return { text: "answer", usage: { promptTokens: 15, completionTokens: 5, totalTokens: 20, promptTokensDetails: { cachedTokens: 2, cacheWriteTokens: 3 }, cost: 0.02 }, ...patch }; }
+function toolsResponse(ids = ["target"]) { return answer({ toolCalls: ids.map(id => ({ id, name: "lookup", arguments: {} })) }); }
 const tool: NonNullable<CreateAgentOptions["tools"]>[number] = {
 	name: "lookup", label: "Lookup", description: "Lookup", parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 	async execute() { return { content: [{ type: "text", text: "target found" }], details: { found: true } }; },
@@ -46,13 +29,14 @@ async function consume(turn: AgentTurn) {
 test("policy waits for the entire persisted batch, returns pending input, and retains the completed configuration snapshot", async () => {
 	const saving = gate(), releaseSave = gate(), deciding = gate(), releasePolicy = gate();
 	const storage = new MemorySessionStorage(); const effects: string[] = []; const snapshots: ShouldStopAfterTurnContext[] = [];
-	const requests: Parameters<StreamFn>[1][] = []; let callbacks = 0;
+	const requests: TextOptions[] = []; let callbacks = 0;
+	const respond = (context: TextOptions) => { requests.push({ ...context, messages: structuredClone(context.messages) }); return requests.length === 1 ? toolsResponse(["first", "second"]) : answer(); };
 	const agent = await createAgent({ ...defaults, permission, tools: [{ ...tool, async execute(_args, context) { effects.push(context.toolCallId!); return tool.execute(_args, context); } }],
 		storage: { load: () => storage.load(), async append(entry) {
 			if (entry.type === "message" && entry.message.toolCallId === "second") { saving.resolve(); await releaseSave.promise; }
 			await storage.append(entry);
 		} },
-		streamFn: (_model, context) => { requests.push({ ...context, messages: structuredClone(context.messages) }); return stream(requests.length === 1 ? toolsResponse(["first", "second"]) : answer()); },
+		adapter: replyAdapter(model, respond),
 		shouldStopAfterTurn: async context => {
 			callbacks++; snapshots.push(context);
 			expect(Object.isFrozen(context)).toBe(true); expect(Object.isFrozen(context.message.content)).toBe(true);
@@ -69,7 +53,7 @@ test("policy waits for the entire persisted batch, returns pending input, and re
 		await saving.promise; expect(callbacks).toBe(0);
 		const steering = agent.steer("pending steering", turn.id), followUp = agent.followUp("pending follow-up", turn.id);
 		if (!steering.accepted || !followUp.accepted) throw new Error("Expected accepted inputs");
-		const receipt = await agent.updateConfiguration({ model: { ...model, id: "next-model" }, systemPrompt: "new instructions" });
+		const receipt = await agent.updateConfiguration({ model: { ...model, id: "next-model" }, adapter: replyAdapter("next-model", respond), systemPrompt: "new instructions" });
 		releaseSave.resolve(); await deciding.promise;
 		expect(await receipt.applied).toEqual({ status: "applied", revision: receipt.revision });
 		expect(snapshots[0]).toMatchObject({ model: { id: model.id }, configurationRevision: 0, turnIndex: 1, usage: { requests: 1, tokens: { totalTokens: 20 }, costUsd: 0.02 } });
@@ -88,7 +72,7 @@ test("policy waits for the entire persisted batch, returns pending input, and re
 test("round limits count completed tool batches across retries and reset for each invocation", async () => {
 	let calls = 0, effects = 0; const snapshots: ShouldStopAfterTurnContext[] = [];
 	const agent = await createAgent({ ...defaults, permission, tools: [{ ...tool, async execute(args, context) { effects++; return tool.execute(args, context); } }],
-		streamFn: () => stream(++calls === 2 ? answer({ stopReason: "error", errorMessage: "429 rate limit" }) : toolsResponse([`call-${calls}`])),
+		adapter: replyAdapter(model, () => ++calls === 2 ? answer({ error: { message: "429 rate limit" } }) : toolsResponse([`call-${calls}`])),
 		shouldStopAfterTurn: context => { snapshots.push(context); return context.turnIndex >= 2; },
 	});
 	try {
@@ -104,7 +88,7 @@ test("round limits count completed tool batches across retries and reset for eac
 for (const mode of ["throw", "reject", "invalid"] as const) test(`policy ${mode} settles error without retry, redoing tools, or consuming pending input`, async () => {
 	const entered = gate(), release = gate(); const storage = new MemorySessionStorage(); let calls = 0, effects = 0, callbacks = 0;
 	const agent = await createAgent({ ...defaults, storage, permission, tools: [{ ...tool, async execute(args, context) { effects++; entered.resolve(); await release.promise; return tool.execute(args, context); } }],
-		streamFn: () => { calls++; return stream(calls === 1 ? toolsResponse() : answer()); },
+		adapter: replyAdapter(model, () => { calls++; return calls === 1 ? toolsResponse() : answer(); }),
 		// @ts-expect-error Deliberately return a non-boolean to verify JavaScript callers fail safely.
 		shouldStopAfterTurn: () => {
 			if (++callbacks > 1) return false;
@@ -130,7 +114,7 @@ for (const mode of ["throw", "reject", "invalid"] as const) test(`policy ${mode}
 
 for (const late of ["stop", "reject"] as const) test(`cancel does not wait for an uncooperative policy; late ${late} cannot affect reuse`, async () => {
 	const entered = gate(), release = gate(); let calls = 0, callbacks = 0; let policySignal: AbortSignal | undefined;
-	const agent = await createAgent({ ...defaults, streamFn: () => { calls++; return stream(answer()); }, shouldStopAfterTurn: async (_context, signal) => {
+	const agent = await createAgent({ ...defaults, adapter: replyAdapter(model, () => { calls++; return answer(); }), shouldStopAfterTurn: async (_context, signal) => {
 		if (++callbacks > 1) return false;
 		policySignal = signal; entered.resolve(); await release.promise;
 		if (late === "reject") throw new Error("late failure");
@@ -149,7 +133,7 @@ for (const late of ["stop", "reject"] as const) test(`cancel does not wait for a
 test("storage failure prevents the policy and fails final settlement", async () => {
 	let callbacks = 0, calls = 0;
 	const storage = new MemorySessionStorage();
-	const agent = await createAgent({ ...defaults, streamFn: () => { calls++; return stream(toolsResponse()); }, tools: [tool], permission,
+	const agent = await createAgent({ ...defaults, adapter: replyAdapter(model, () => { calls++; return toolsResponse(); }), tools: [tool], permission,
 		storage: { load: () => storage.load(), async append(entry) { if (entry.type === "message" && entry.message.role === "toolResult") throw new Error("disk full"); await storage.append(entry); } },
 		shouldStopAfterTurn: () => { callbacks++; return true; },
 	});
@@ -162,22 +146,22 @@ test("storage failure prevents the policy and fails final settlement", async () 
 
 for (const stopReason of ["error", "aborted", "length", "deferred"] as const) test(`${stopReason} responses bypass completed-round policy`, async () => {
 	let callbacks = 0;
-	const agent = await createAgent({ ...defaults, retry: { enabled: false }, streamFn: () => stream(answer({ stopReason })), shouldStopAfterTurn: () => { callbacks++; return true; } });
+	const agent = await createAgent({ ...defaults, retry: { enabled: false }, adapter: replyAdapter(model, () => answer(stopReason === "length" ? { finishReason: "length" } : stopReason === "deferred" ? { metadata: { forge: { stopReason: "deferred" } } } : { error: { message: stopReason, code: stopReason } })), shouldStopAfterTurn: () => { callbacks++; return true; } });
 	try { expect((await consume(agent.runTurn("task"))).result).toEqual({ status: stopReason }); expect(callbacks).toBe(0); }
 	finally { await agent.dispose(); }
 });
 
 for (const missing of ["usage", "zero", "cost"] as const) test(`missing ${missing} remains unknown across a later known response`, async () => {
 	let calls = 0; const snapshots: ShouldStopAfterTurnContext[] = [];
-	const agent = await createAgent({ ...defaults, streamFn: () => {
-		const response = answer(++calls === 1 ? { stopReason: "error", errorMessage: "429 rate limit" } : {});
+	const agent = await createAgent({ ...defaults, adapter: replyAdapter(model, () => {
+		const response = answer(++calls === 1 ? { error: { message: "429 rate limit" } } : {});
 		if (calls === 1) {
 			if (missing === "usage") Reflect.deleteProperty(response, "usage");
-			else if (missing === "cost") Reflect.deleteProperty(response.usage, "cost");
-			else Object.assign(response.usage, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 });
+			else if (missing === "cost") Reflect.deleteProperty(response.usage!, "cost");
+			else response.usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 		}
-		return stream(response);
-	}, shouldStopAfterTurn: context => { snapshots.push(context); return true; } });
+		return response;
+	}), shouldStopAfterTurn: context => { snapshots.push(context); return true; } });
 	try {
 		expect((await consume(agent.runTurn("task"))).result).toEqual({ status: "success", terminationReason: "policy" });
 		expect(snapshots[0]?.usage).toMatchObject({ requests: 2, costUsd: null, missingUsageRequests: missing === "cost" ? 0 : 1, missingCostRequests: 1 });
@@ -196,12 +180,12 @@ function history() {
 test.each([false, true])("automatic summary retries count toward policy cost; missing summary usage=%s", async missing => {
 	const calls: string[] = []; const snapshots: ShouldStopAfterTurnContext[] = [];
 	const agent = await createAgent({ ...defaults, storage: history(), context: { enabled: true, reserveTokens: 98_000, keepRecentTokens: 1 }, maxTokens: 100,
-		streamFn: (_model, context) => {
-			const summary = context.systemPrompt === SUMMARY_SYSTEM; calls.push(summary ? "summary" : "task");
-			const response = answer(summary ? calls.length === 1 ? { stopReason: "error", errorMessage: "429 rate limit" } : { content: [{ type: "text", text: JSON.stringify({ states: [], claims: [], taskChanged: false }) }] } : {});
+		adapter: replyAdapter(model, (context) => {
+			const summary = systemText(context) === SUMMARY_SYSTEM; calls.push(summary ? "summary" : "task");
+			const response = answer(summary ? calls.length === 1 ? { error: { message: "429 rate limit" } } : { text: JSON.stringify({ states: [], claims: [], taskChanged: false }) } : {});
 			if (missing && calls.length === 1) Reflect.deleteProperty(response, "usage");
-			return stream(response);
-		}, shouldStopAfterTurn: context => { snapshots.push(context); return context.usage.costUsd === null || context.usage.costUsd >= 0.05; },
+			return response;
+		}), shouldStopAfterTurn: context => { snapshots.push(context); return context.usage.costUsd === null || context.usage.costUsd >= 0.05; },
 	});
 	try {
 		expect((await consume(agent.runTurn("new task"))).result).toEqual({ status: "success", terminationReason: "policy" });
@@ -213,10 +197,10 @@ test.each([false, true])("automatic summary retries count toward policy cost; mi
 test.each([false, true])("policy stop=%s blocks the otherwise required post-response summary", async stop => {
 	const calls: string[] = []; const storage = history();
 	const agent = await createAgent({ ...defaults, storage, context: { enabled: true, keepRecentTokens: 1 },
-		streamFn: (_model, context) => {
-			const summary = context.systemPrompt === SUMMARY_SYSTEM; calls.push(summary ? "summary" : "task");
-			return stream(answer(summary ? { content: [{ type: "text", text: JSON.stringify({ states: [], claims: [], taskChanged: false }) }] } : { usage: { ...answer().usage, input: 110_000, totalTokens: 110_010 } }));
-		}, shouldStopAfterTurn: () => stop,
+		adapter: replyAdapter(model, (context) => {
+			const summary = systemText(context) === SUMMARY_SYSTEM; calls.push(summary ? "summary" : "task");
+			return answer(summary ? { text: JSON.stringify({ states: [], claims: [], taskChanged: false }) } : { usage: { ...answer().usage!, promptTokens: 110_005, totalTokens: 110_010 } });
+		}), shouldStopAfterTurn: () => stop,
 	});
 	try {
 		const { result } = await consume(agent.runTurn("task"));
@@ -228,9 +212,9 @@ test.each([false, true])("policy stop=%s blocks the otherwise required post-resp
 
 test("manual summaries and persisted history are excluded from the next invocation's totals", async () => {
 	const snapshots: ShouldStopAfterTurnContext[] = []; let calls = 0;
-	const agent = await createAgent({ ...defaults, storage: history(), streamFn: (_model, context) => {
-		calls++; return stream(answer(context.systemPrompt === SUMMARY_SYSTEM ? { content: [{ type: "text", text: JSON.stringify({ states: [], claims: [], taskChanged: false }) }] } : {}));
-	}, shouldStopAfterTurn: context => { snapshots.push(context); return true; } });
+	const agent = await createAgent({ ...defaults, storage: history(), adapter: replyAdapter(model, (context) => {
+		calls++; return answer(systemText(context) === SUMMARY_SYSTEM ? { text: JSON.stringify({ states: [], claims: [], taskChanged: false }) } : {});
+	}), shouldStopAfterTurn: context => { snapshots.push(context); return true; } });
 	try {
 		expect((await agent.compact()).status).toBe("complete");
 		await consume(agent.runTurn("task")); expect(calls).toBe(2);
@@ -239,12 +223,12 @@ test("manual summaries and persisted history are excluded from the next invocati
 });
 
 test("processed steering stays processed when policy stops before a pending follow-up", async () => {
-	const entered = gate(), release = gate(); const contexts: Parameters<StreamFn>[1][] = []; let rounds = 0;
-	const agent = await createAgent({ ...defaults, streamFn: async (_model, context) => {
+	const entered = gate(), release = gate(); const contexts: TextOptions[] = []; let rounds = 0;
+	const agent = await createAgent({ ...defaults, adapter: replyAdapter(model, async (context) => {
 		contexts.push(context);
 		if (contexts.length === 1) { entered.resolve(); await release.promise; }
-		return stream(answer());
-	}, shouldStopAfterTurn: context => { rounds = context.turnIndex; return rounds === 2; } });
+		return answer();
+	}), shouldStopAfterTurn: context => { rounds = context.turnIndex; return rounds === 2; } });
 	const turn = agent.runTurn("initial"); const running = consume(turn);
 	try {
 		await entered.promise;
@@ -259,7 +243,7 @@ test("processed steering stays processed when policy stops before a pending foll
 
 test("explicit zero cost with positive usage stays known, and the creation-only policy cannot be patched", async () => {
 	let snapshot: ShouldStopAfterTurnContext | undefined;
-	const agent = await createAgent({ ...defaults, streamFn: () => { const response = answer(); response.usage.cost.total = 0; return stream(response); }, shouldStopAfterTurn: context => { snapshot = context; return true; } });
+	const agent = await createAgent({ ...defaults, adapter: replyAdapter(model, () => { const response = answer(); response.usage!.cost = 0; return response; }), shouldStopAfterTurn: context => { snapshot = context; return true; } });
 	try {
 		// @ts-expect-error Policies are configured only at creation, including for JavaScript callers.
 		await expect(agent.updateConfiguration({ shouldStopAfterTurn: () => false })).rejects.toThrow("configured at creation");

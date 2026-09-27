@@ -1,17 +1,15 @@
 import { createAgent, MemorySessionStorage } from "../packages/core/src/sdk.ts";
-import { scriptedResponses } from "./scripted-stream.ts";
+import { scriptedResponses } from "./scripted-adapter.ts";
 
 // bun examples/context-transform.ts — no credentials or network required.
-const fixture = scriptedResponses([[{ type: "text", text: "The retrieved guide recommends Bun." }]]);
 const storage = new MemorySessionStorage();
 let requests = 0;
-const streamFn: typeof fixture.streamFn = (model, context, options) => {
+const fixture = scriptedResponses([{ text: "The retrieved guide recommends Bun." }], request => {
 	requests++;
-	if (!JSON.stringify(context.messages).includes("TEMPORARY_REFERENCE")) throw new Error("Missing host reference");
-	return fixture.streamFn(model, context, options);
-};
+	if (!JSON.stringify(request.messages).includes("TEMPORARY_REFERENCE")) throw new Error("Missing host reference");
+});
 const agent = await createAgent({
-	model: fixture.model, streamFn, storage, cwd: process.cwd(), systemPrompt: "Answer using the supplied references.",
+	...fixture, storage, cwd: process.cwd(), systemPrompt: "Answer using the supplied references.",
 	maxTokens: 1024,
 	transformContext: ({ messages, configurationRevision, budget }, signal) => {
 		signal.throwIfAborted();
