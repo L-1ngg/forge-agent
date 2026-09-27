@@ -21,15 +21,14 @@ test("a real worktree inherits project Markdown once and then diverges independe
 	await git(main, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial");
 	await git(main, "worktree", "add", "-b", "topic", branch);
 	const first = await createMemoryHost(main, dataHome);
-	await first.memory.write({ scope: "project", path: "MEMORY.md", content: "[背景](notes/background.md)", expectedVersion: null, operationId: "index" }, { kind: "management", timestamp: "now" });
-	await first.memory.write({ scope: "project", path: "notes/background.md", content: "old background", expectedVersion: null, operationId: "background" }, { kind: "management", timestamp: "now" });
+	await first.memory.write({ scope: "project", path: "MEMORY.md", content: "[背景](notes/background.md)" }, { kind: "management", timestamp: "now" });
+	await first.memory.write({ scope: "project", path: "notes/background.md", content: "old background" }, { kind: "management", timestamp: "now" });
 	const copy = await createMemoryHost(branch, dataHome);
 	expect(copy.memory.roots.project).not.toBe(first.memory.roots.project);
 	expect(copy.memory.roots.user).toBe(first.memory.roots.user);
 	expect((await copy.memory.read("project", "notes/background.md")).text).toContain("old background");
 	await writeFile(join(copy.memory.roots.project!, "notes/background.md"), "branch correction");
-	const mainNote = await first.memory.read("project", "notes/background.md");
-	await first.memory.delete("project", "notes/background.md", mainNote.version, "main-delete");
+	await first.memory.delete("project", "notes/background.md");
 	await git(branch, "switch", "-c", "renamed-topic");
 	const reopened = await createMemoryHost(branch, dataHome);
 	expect((await reopened.memory.read("project", "notes/background.md")).text).toBe("branch correction");

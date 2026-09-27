@@ -5,7 +5,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./define-builtin": "./src/define-builtin.ts"
   },
   "dependencies": {
     "@forge-agent/protocol": "workspace:*",

@@ -5,12 +5,13 @@ import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
 import { z } from "zod";
 
-export interface EditInput {
-	path: string;
-	old_text: string;
-	new_text: string;
-	replace_all?: boolean | undefined;
-}
+const editSchema = z.strictObject({
+	path: z.string().min(1).regex(/\S/).meta({ description: "Absolute path or path relative to the working directory." }),
+	old_text: z.string().min(1).meta({ description: "Exact text currently present in the file." }),
+	new_text: z.string().meta({ description: "Exact replacement text." }),
+	replace_all: z.boolean().optional().meta({ description: "Replace every exact match instead of requiring one unique match." }),
+});
+export type EditInput = z.infer<typeof editSchema>;
 
 export interface EditOutput {
 	path: string;
@@ -21,17 +22,8 @@ export const editTool: HarnessTool<EditInput, EditOutput> = defineBuiltinTool({
 	name: "edit",
 	label: "Edit file",
 	description: "Replace an exact UTF-8 text fragment. A non-unique match is rejected unless replace_all is true.",
-	inputSchema: z.strictObject({
-		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
-		old_text: z.string().min(1).meta({ description: "Exact text currently present in the file." }),
-		new_text: z.string().meta({ description: "Exact replacement text." }),
-		replace_all: z.boolean().optional().meta({ description: "Replace every exact match instead of requiring one unique match." }),
-	}),
+	inputSchema: editSchema,
 	async execute(input, context) {
-		if (!input.path?.trim()) return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/index.ts");
-		if (!input.old_text) return toolError("INVALID_ARGUMENT", "old_text must be non-empty", "old_text", "exact text to replace", "const oldName = true;");
-		if (typeof input.new_text !== "string") return toolError("INVALID_ARGUMENT", "new_text must be a string", "new_text", "replacement text", "const newName = true;");
-
 		const path = resolve(context.cwd, input.path);
 		try {
 			const content = await readFile(path, "utf8");

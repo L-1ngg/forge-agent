@@ -73,11 +73,11 @@ CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skill
 /skill code-review 请审查当前补丁。
 ```
 
-`/skills` 查看有效、遮蔽、重复与无效项；`/skill` 提供名称补全，按 Enter 接受候选后输入任务。正文准备成功后只提交一次用户输入，任务文本保留原文，失败输入返还编辑草稿。headless 支持 `--json -p '/skills'`、`--json -p '/skills reload'` 和 `--json -p '/skill code-review 请审查当前补丁。'`。管理命令不请求模型、不创建对话历史；启动仍需配置 provider/model 凭据。
+`/skills` 查看有效与遮蔽项；`/skill` 提供名称补全，按 Enter 接受候选后输入任务。正文准备成功后只提交一次用户输入，任务文本保留原文，失败输入返还编辑草稿。headless 支持 `--json -p '/skills'`、`--json -p '/skills reload'` 和 `--json -p '/skill code-review 请审查当前补丁。'`。管理命令不请求模型、不创建对话历史；启动仍需配置 provider/model 凭据。
 
-模型初始只看到名称和用途，通过 `load_skill` 按需读取正文。`disable-model-invocation: true` 禁止自动选用，但允许显式选择。加载不执行脚本、不安装依赖、不读取 references，`allowed-tools` 不产生授权。相对引用按返回的 `baseDirectory` 定位，需要宿主已有读取工具。CLI 的 `load_skill` 沿用现有只读权限策略，含 `deny-all` 下的 built-in allow；前置权限 hooks 和 deny rules 仍优先。
+模型通过 TanStack AI `withSkills` 初始只看到名称和用途，再以其 `load_skill` 按需读取正文。`disable-model-invocation: true` 禁止自动选用，但允许显式 `/skill`。官方 `read_skill_resource` 读取 `references/` 或 `assets/` 下的资料。加载不执行脚本、不安装依赖，`allowed-tools` 不产生授权。Skills 工具作为 internal 工具进入普通批次和 hooks，不触发交互授权，`deny-all` 下也是如此；脚本命令仍走普通工具权限。
 
-每项必须显式声明与真实目录一致的有效 `name` 及 `description`，坏项显示诊断。文件自发现后发生变化须刷新；超过 50 KiB UTF-8 的正文明确失败，不截断。运行中刷新先 accepted，当前响应和整批工具结束后才 applied。目录或输入超预算会提示缩小来源或拆分资料。
+目录发现和元数据校验由 TanStack `skillDirectory` 负责，坏项按其规则跳过。项目来源先于个人来源，官方 first-wins 组合器处理同名项。`/skills reload` 刷新来源。Skills 变更在当前 `chat()` 结束后 applied；上下文压缩后的新运行仍可重新加载指引。最终请求上限包含注入的目录和工具。
 
 `--no-skills` 可关闭；也可在 `.forge-agent/config.json` 覆盖来源（相对路径以启动 cwd 解析）：
 
@@ -90,13 +90,13 @@ CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skill
 }
 ```
 
-默认根缺失为空；显式覆盖缺失报错。设 `enabled: false` 后不扫描、不注入目录、不注册加载工具。SDK 默认关闭并要求宿主提供 roots，见 [Skills 接入](docs/sdk.md#skills)。源码归属见 [Skills 本地差异](packages/core/src/skills/LOCAL_CHANGES.md)。
+默认根缺失为空；显式覆盖缺失报错。设 `enabled: false` 后不扫描、不注入目录、不注册加载工具。SDK 默认关闭并要求宿主提供 roots，见 [Skills 接入](docs/sdk.md#skills)及 [ADR-026](docs/decisions/026-native-skills-and-markdown-memory.md)。
 
 ## 持久记忆
 
-持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。模型可在任务过程中保存有用偏好和经验，详情按需读取。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。发布证据与默认启用门槛见[施工记录](docs/phases/persistent-memory.md)。
+持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。TanStack `memoryMiddleware` 在运行开始召回索引，在成功结束后 deferred 调用现有模型整理本轮内容，再将有价值的变化写入本机 Markdown。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。当前实现与验收证据见 [Issue #37 施工记录](docs/phases/tool-ecosystem-issue-37.md)。
 
-CLI 默认启用记忆注入与会话内自动更新，可分别关闭；`permissionMode: "deny-all"` 会拒绝模型写入和删除，显式管理仍可使用。
+CLI 默认启用记忆注入与 deferred 更新，可分别关闭。记忆管理工具是 internal 工具，`permissionMode: "deny-all"` 下也不触发交互授权；普通文件和 shell 工具仍受权限策略约束。
 
 `/memory` 显示帮助和目录位置，例如：
 
@@ -111,11 +111,11 @@ CLI 默认启用记忆注入与会话内自动更新，可分别关闭；`permis
 /memory delete project workflow.md
 ```
 
-`edit` 和 `delete` 使用你上次读取的版本，期间有修改则拒绝旧操作；也可直接用编辑器管理普通 Markdown。`search <scope> <words>` 覆盖未入索引的笔记；`read <scope> <path> <offset>` 用返回的 `nextOffset` 继续分页。`unpin` 取消固定。`import <session-path>` 显式、限量读取当前项目的单个会话，由模型整理；启动不会为记忆扫描全部历史。
+`save`、`edit`、`delete` 直接操作 Markdown 文件，没有先读版本协议；也可直接用编辑器管理。`search <scope> <words>` 覆盖未入索引的笔记；`read <scope> <path> <offset>` 用返回的 `nextOffset` 继续分页。`unpin` 取消固定。`import <session-path>` 显式、限量读取当前项目的单个会话，由模型整理；启动不会为记忆扫描全部历史。
 
 目录为 `$XDG_DATA_HOME/forge-agent/memory`，缺省 `~/.local/share/forge-agent/memory`，位于 Git 工作区外。用户通用偏好与项目笔记分开。新 worktree 首次使用时复制主 worktree 的项目 Markdown，随后独立维护；后续修改、删除与 Git 合并不自动同步副本。删除记忆不删除会话历史。
 
-配置中的 `memory.autoUpdate` 和 `memory.injection` 分别控制模型更新和自动注入；`/memory auto off`、`/memory inject off` 只改变当前进程。两者关闭时仍可显式管理记忆。`--memory 'read project workflow.md'` 无需模型；分次调用可通过 `edit ... --version VERSION CONTENT` 或 `delete ... --version VERSION` 使用读取返回的版本。索引可能已保存，但下次只能注入预算内片段；固定内容放不下会明确报告。主题与索引分开提交。
+配置中的 `memory.autoUpdate` 和 `memory.injection` 分别控制 deferred 整理与运行开始的召回；`/memory auto off`、`/memory inject off` 只改变当前进程，当前 Agent 在本次运行结束后应用。两者关闭时仍可显式管理记忆。`--memory 'read project workflow.md'` 无需模型。`memory` 保存事件报告 skipped、saved 或 failed，并在模型提供时带上整理 usage；整理失败不改写主任务结果。下次运行重新召回，主题与索引分别写入。
 
 SDK 只有在宿主提供 `memory: { store: new LongTermMemory({ project: absoluteDirectory }) }` 时才启用，见 [SDK 指南](docs/sdk.md#持久记忆)。
 

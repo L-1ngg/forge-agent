@@ -21,11 +21,14 @@ const cases = (JSON.parse(fixtureText) as { cases: Case[] }).cases.filter(item =
 if (!cases.length) throw new Error("No quality cases selected");
 const config = await loadConfig({ cwd: process.cwd() });
 if (!config.provider || !config.model) throw new Error("Configure provider/model before this explicit experiment");
-const model = getCatalogModel(config.provider, config.model);
-if (!model || model.cost.input <= 0 || model.cost.output <= 0) throw new Error("Known positive model prices required");
+const model = (() => {
+	const selected = getCatalogModel(config.provider!, config.model!);
+	if (!selected || selected.cost.input <= 0 || selected.cost.output <= 0) throw new Error("Known positive model prices required");
+	return selected;
+})();
 const apiKey = await resolveSecret(config.apiKey);
 const root = await mkdtemp(join(tmpdir(), "forge-memory-quality-"));
-const implementation = ["packages/core/src/agent.ts", "packages/core/src/model-call.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-assembly.ts", "packages/core/src/context/assembler.ts", "packages/core/src/memory/store.ts", "packages/core/src/memory/files.ts", "packages/core/src/memory/copy.ts", "packages/core/src/memory/tools.ts", "packages/cli/src/memory-host.ts"];
+const implementation = ["packages/core/src/agent.ts", "packages/core/src/model-call.ts", "packages/core/src/agent-session.ts", "packages/core/src/session-assembly.ts", "packages/core/src/memory/adapter.ts", "packages/core/src/memory/store.ts", "packages/core/src/memory/files.ts", "packages/core/src/memory/copy.ts", "packages/core/src/memory/tools.ts", "packages/core/src/skills/source.ts", "packages/cli/src/memory-host.ts"];
 const hash = createHash("sha256"); for (const path of implementation) hash.update(path).update(await Bun.file(path).text());
 const fixtureHash = createHash("sha256").update(fixtureText).digest("hex");
 const harnessHash = createHash("sha256").update(await Bun.file(import.meta.path).text()).digest("hex");
@@ -50,6 +53,7 @@ const checkTool: HarnessTool<object, unknown> = { name: "check_fixture", label: 
 async function run(input: string, memory?: LongTermMemory, verify = false, autoUpdate = true) {
 	turnRequests = 0;
 	const started = Date.now(); let answer = "", costUsd = 0, inputTokens = 0, outputTokens = 0, usageReports = 0;
+	let organizerCalls = 0, organizerCostUsd = 0, organizerInputTokens = 0, organizerOutputTokens = 0;
 	const operations: unknown[] = [], errors: string[] = [];
 	let agent: Agent | undefined;
 	try {
@@ -59,6 +63,17 @@ async function run(input: string, memory?: LongTermMemory, verify = false, autoU
 			const turn = agent.runTurn(input);
 			for await (const event of turn) {
 				if (event.type === "tool_execution_end" || event.type === "memory") operations.push(event);
+				if (event.type === "memory" && event.phase === "save") {
+					organizerCalls += event.calls;
+					if (event.usage) {
+						const cached = event.usage.promptTokensDetails?.cachedTokens ?? 0;
+						const cacheWrite = event.usage.promptTokensDetails?.cacheWriteTokens ?? 0;
+						const input = model.api === "anthropic-messages" ? event.usage.promptTokens ?? 0 : Math.max(0, (event.usage.promptTokens ?? 0) - cached - cacheWrite);
+						organizerCostUsd += event.usage.cost ?? (input * model.cost.input + cached * model.cost.cacheRead + cacheWrite * model.cost.cacheWrite + (event.usage.completionTokens ?? 0) * model.cost.output) / 1e6;
+					}
+					organizerInputTokens += event.usage?.promptTokens ?? 0;
+					organizerOutputTokens += event.usage?.completionTokens ?? 0;
+				}
 				if (event.type === "message_end" && event.message.role === "assistant") {
 					if (event.message.stopReason === "stop") answer = event.message.content.flatMap(block => block.type === "text" ? [block.text] : []).join("");
 					if (event.message.errorMessage) errors.push(event.message.errorMessage);
@@ -67,7 +82,7 @@ async function run(input: string, memory?: LongTermMemory, verify = false, autoU
 				}
 			}
 			const result = await turn.result;
-			return { answer, result, errors, operations, requests: turnRequests, usageReports, inputTokens, outputTokens, costUsd, elapsedMs: Date.now() - started };
+			return { answer, result, errors, operations, requests: turnRequests, usageReports, inputTokens, outputTokens, costUsd, organizerCalls, organizerInputTokens, organizerOutputTokens, organizerCostUsd, elapsedMs: Date.now() - started };
 		} finally { clearTimeout(timer); }
 	} finally { await agent?.dispose(); }
 }
@@ -105,7 +120,7 @@ try {
 		const mainAfter = mainMemory ? await Bun.file(join(mainMemory.roots.project!, "background.md")).text() : undefined;
 		rows.push({ ...item, baselineLearn, baselineRecall, learning, recall, notes, ...(mainAfter ? { mainAfter } : {}) });
 		await record();
-		console.log(`Finished ${item.id}: calls=${learning.requests + recall.requests}, cost=$${(learning.costUsd + recall.costUsd).toFixed(5)}, files=${Object.keys(notes).length}`);
+		console.log(`Finished ${item.id}: requests=${learning.requests + recall.requests}, organizerCalls=${learning.organizerCalls}, cost=$${(learning.costUsd + learning.organizerCostUsd + recall.costUsd).toFixed(5)}, files=${Object.keys(notes).length}`);
 	}
 } catch (error) {
 	rows.push({ failure: apiKey ? String(error).replaceAll(apiKey, "[redacted]") : String(error) }); await record(); throw error;

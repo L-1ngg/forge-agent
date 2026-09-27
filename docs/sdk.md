@@ -89,7 +89,7 @@ const agent = await createAgent({
 
 返回完整的 `SessionMessage` 数组，允许同步/异步和原样返回。输入是压缩后的当前可用消息，不含内置记忆，也不承诺包含全部历史。返回值接收后拷贝并校验：合法 role/content、工具调用与结果配对、非空有效投影，末条为 user 或 toolResult。可以整组移除旧调用与结果，不能留下孤立结果/缺失配对。保留不透明 provider 签名；框架不验证精简后的任务语义质量。
 
-执行顺序是压缩准备 → 宿主变换 → 按剩余软预算装配最终记忆 → 最终预算检查 → TanStack ModelMessage 投影 → adapter。宿主内容超过软线时仍可能发送，但内置记忆额度可降至 0；不会为过大的宿主结果反复压缩或再次调用回调。前置压缩失败也不会交给宿主救援。
+每次 `chat()` 运行开始时先召回记忆。每个模型请求把压缩准备和宿主变换得到的上下文，与原生 Memory/Skills 提示词及工具合并后，依次进行最终预算检查、TanStack ModelMessage 投影和 adapter 调用。最终检查包含所有注入的提示词和工具；不会为过大的宿主结果反复压缩或再次调用回调。前置压缩失败也不会交给宿主救援。
 
 变换仅影响请求投影，不写回历史，不修改输入归属或 `processed` 回执。实际模型响应和工具结果正常保存；临时资料不会自动保存，恢复后由宿主重新提供。失败不返还已 processed 的输入，不重放工具。每次任务重试重新调用回调，检索缓存与外部副作用幂等性由宿主管理。
 
@@ -122,7 +122,6 @@ const agent = await createAgent({
     workspace: { path: "./skills" },
     user: { path: "/data/alice/skills", optional: true },
   } },
-  permission: { rules: [{ tool: "load_skill", argsPattern: "*", effect: "allow" }] },
 });
 const snapshot = agent.getSkills();
 const turn = agent.runTurn({ kind: "skill", name: "code-review", task: "Review this patch.\nKeep the API stable." });
@@ -134,15 +133,15 @@ const receipt = await agent.refreshSkills();
 await receipt.applied;
 ```
 
-`SkillsOptions.roots` 只包含 workspace/user/builtin 三层。缺层为空；缺失根仅在 `optional: true` 时为空。目录名按真实入口核对；根命中 `SKILL.md` 后停止递归；分组目录使用来源范围内的 ignore 规则并阻断 symlink 环路。`getSkills()` 返回 applied 状态的可修改副本，包含 enabled、revision、entries、diagnostics；每项包括来源/入口、状态、胜出入口、内容修订、自动调用标志，不含正文。
+`SkillsOptions.roots` 使用 workspace/user/builtin 顺序；CLI 对应项目、个人全局和当前为空的随附目录。缺层为空，缺失根仅在 `optional: true` 时为空。官方 `skillDirectory` 扫描和校验目录，`aggregate`/`dedupe` 以先到先得处理同名项。`getSkills()` 返回 applied 状态的副本，列出可用及遮蔽项、来源和显式调用标志，不含正文。`disable-model-invocation: true` 从自动目录隐藏，但仍可用 `/skill` 显式调用。
 
-`load_skill` 只接受 `{ name }`，遵循 ToolHooks、参数重写、权限、取消及持久化；同名宿主工具在启用时被拒绝。返回完整 Markdown body、标准/扩展 metadata、name、layer、entry、baseDirectory、`sha256:` 修订。正文精确保留 UTF-8 文字与换行，最多 50 × 1024 字节；header 上限 64 KiB。变更、替换、删除或改换 symlink 目标要求刷新，不使用旧目录悄悄加载新正文。references 由已有宿主工具读取；SDK 不隐式增加 read/bash 或 allow。
+`withSkills` 在每次 `chat()` 建立官方目录快照、`load_skill` 和加载去重。`createResourceTool` 注册 `read_skill_resource`，只读取官方 Source 允许的 `references/` 或 `assets/` 路径。两者进入 Forge 公共工具批次、hooks、AbortSignal 和会话记录，以注册来源标记 internal/trusted，不弹交互授权；同名宿主工具在装配时拒绝。官方工具不执行脚本，脚本仍需普通 bash 工具及其权限。
 
-`runTurn`、`steer`、`followUp` 均接受 `AgentInput = string | SkillInvocation`，原有 string 不变。显式调用允许 explicit-only，但仍经 PermissionContext/RequestBus；不运行需要 assistantMessage 的 ToolHooks 或模型参数重写。选择和原始 task 在消费点展开成一条 user message，不伪造模型工具调用。`AgentTurn.inputId` 和 accepted 回执的 `inputId` 关联拒绝事件；`skill_input` 包含 phase=`rejected`、name、code、message。失败先发事件、再以 processed=false 返还未处理输入；初始 turn 结果为 error，实例可复用。宿主保留原始输入用于恢复，不从错误文字反解析。取消/释放仍以既有 result/processed 结算为准。
+`runTurn`、`steer`、`followUp` 均接受 `AgentInput = string | SkillInvocation`。显式选择经同一 Source 的 `load`，在消费点将技能正文和原始 task 展开成一条 user message，不伪造模型工具调用、不弹权限确认。`AgentTurn.inputId` 和 accepted 回执的 `inputId` 关联拒绝事件；`skill_input` 包含 phase=`rejected`、name、code、message。失败输入 processed=false，初始 turn 结果为 error，实例可复用。宿主应保留原始输入用于恢复草稿。
 
-错误 code 包含 `skills-disabled`、`unknown-skill`、`explicit-only`、`permission-denied`、`missing`、`changed`、`too-large`、`invalid-skill`、`read-failed`、`canceled`。权限规则及预算同样约束显式输入；关闭压缩也不允许超预算直发。
+显式输入错误 code 包含 `skills-disabled`、`unknown-skill`、`too-large`、`invalid-skill`、`read-failed`、`canceled`。最终请求预算同时计算完整输入、官方目录提示词和工具定义；关闭压缩也不允许超预算直发。
 
-`refreshSkills()` 与 `updateConfiguration({ skills })` 共用串行提交：当前响应和整批工具保持旧快照，下一请求原子应用 prompt/catalog/tools，accepted 不等于 applied。`updateConfiguration({ skills: false })` 关闭功能；失败保留旧状态，dispose 取消未应用 receipt 并等待准备结束。仅模型或基础 prompt 更新复用目录，无隐式重扫。恢复时重新发现当前来源，历史中已经保存的正文/修订保持原样；上下文压缩只改变请求投影，仍可按需重读。目录与权限状态按实例隔离。
+`refreshSkills()` 与 `updateConfiguration({ skills })` 共用串行提交：当前 `chat()` 结束后才整体应用新来源，accepted 不等于 applied。`updateConfiguration({ skills: false })` 关闭功能；准备失败保留旧状态，dispose 取消未应用 receipt。新运行可在上下文压缩后重新加载技能；历史记录不因刷新被改写。
 
 ## 持久记忆
 
@@ -155,29 +154,25 @@ const memory = {
   store: new LongTermMemory({ user: "/data/alice/memory", project: "/data/alice/project-a" }),
   autoUpdate: true,
   injection: true,
-  maxOperations: 12,
-  maxWrites: 4,
 };
 // 将 memory 放进现有 createAgent({ provider, model, cwd, systemPrompt, ... }) 选项。
 ```
 
 目录必须为宿主明确授权的规范化绝对路径；模型只可选择已提供的 user/project 别名和相对 `.md` 路径，文件 frontmatter 不决定身份。SDK 不解析 Git；宿主需要副本时可调用 `initializeMemoryCopy(target, source?)`，仅复制 Markdown，最后记录初始化成功，失败重试保留已有文件。`MemoryFileSystem` 是可注入文件操作边界，正常使用无需提供。
 
-`store.read(scope, path, offset?, limit?)` 返回正文页、版本、修改时间、来源和警告；offset 按零基 Unicode 字符，单页最多 4096 字符。`search(scope, query, limit?)` 使用不区分大小写的普通词项匹配（全部命中），最多 10 个 256 字符片段，覆盖未入索引文件。文件资源上限 256 KiB，扫描最多 1000 个目录项/8 MiB。缺少 frontmatter 不影响使用，损坏元数据不覆盖原文；来源只是未核验入口，可能无法读取其历史。
+`store.read(scope, path, offset?, limit?)` 返回正文页、修改时间、来源和警告；offset 按零基 Unicode 字符，单页最多 4096 字符。`search(scope, query, limit?)` 使用不区分大小写的普通词项匹配（全部命中），最多 10 个 256 字符片段，覆盖未入索引文件。文件资源上限 256 KiB，扫描最多 1000 个目录项/8 MiB。缺少 frontmatter 不影响使用，损坏元数据不覆盖原文；来源只是未核验入口，可能无法读取其历史。
 
-`store.write({ scope, path, content, expectedVersion, operationId }, source, signal?)` 使用读取的版本；`expectedVersion: null` 仅新建。`source` 为宿主实际掌握的 `{ kind: "management" | "session", timestamp, sessionId?, entryId?, location? }`，程序追加真实 scope/root 和操作身份。`delete(scope, path, expectedVersion, operationId, signal?)` 删除当前笔记；`pin(scope, path, enabled)` 与 `pinned(scope)` 管理固定入口。相同操作身份与同一正文的重试返回原提交结果，不重复提交；修改或删除后旧版本失效。收到 `replayed: true` 只确认原操作已提交，不保证文件随后未被人工修改。
+`store.write({ scope, path, content }, source)` 写入普通 Markdown；`source` 为宿主实际掌握的 `{ kind: "management" | "session", timestamp, sessionId?, entryId?, location? }`，程序追加真实 scope/root。`delete(scope, path)` 删除笔记；`pin(scope, path, enabled)` 与 `pinned(scope)` 管理固定入口。写入完成后才返回 `saved: true`，没有版本、操作 ID 或幂等回执协议。
 
-单文件原子替换与本机 scope 锁保护受管理写入；没有跨文件事务、断电级持久性或任意外部编辑器竞态合并保证。正文与索引分别返回实际结果；正文成功不等于索引已维护。取消等待已开始的文件操作，发布前发现取消不替换正文。记忆工具失败作为工具错误反馈；JSONL 存储失败仍停用实例。笔记删除不删除 JSONL，也不能抹去仍在当前上下文中的原话。
+正文与索引分别直接写入，不提供跨文件事务、文件锁、并发编辑合并或崩溃恢复协议。记忆工具失败作为工具错误反馈；JSONL 存储失败仍停用实例。笔记删除不删除 JSONL，也不能抹去仍在当前上下文中的原话。
 
-死亡进程的完整锁记录可自动回收；若回收过程本身中断或锁记录不完整，会明确失败，需宿主检查后处理。`getMemoryBudget?.()` 提供当前共享注入预算；显式管理写入可将其作为 `indexBudgetTokens`（0–2000）传给 store。未知预算会提示无法确认自动装载范围，保存成功不代表整篇索引都会注入。
+`memoryMiddleware` 在运行开始调用 Markdown adapter 的 `recall`，按预算注入标明 scope/路径的短索引和固定笔记；主题可通过工具按需读取。成功运行结束后官方 deferred `save` 使用当前模型配置额外调用一次结构化整理模型，读取索引指向的有界主题，按计划写入主题和必要索引。无价值内容不写盘；整理失败通过 `memory` 事件报告，不改写主任务成功结果。`calls` 和 provider 返回的 `usage` 由保存事件报告，不把本地文件存储说成全链路离线。
 
-模型的 `read_memory/search_memory/write_memory/delete_memory` 沿用权限、hooks、取消及工具事件。SDK 没有隐式授权；由宿主照常提供 permission rules。`autoUpdate: false` 拒绝模型写工具，宿主显式 store 管理独立可用；`injection: false` 停止注入，但保留按需读取。两个布尔值可由宿主修改，下一个请求边界使用新注入/工具描述，实际写入同时检查开关。
+模型的 `read_memory/search_memory/write_memory/delete_memory` 使用 Zod schema、公共工具批次、hooks、取消与工具事件，作为 internal/trusted 工具不弹交互授权。`autoUpdate: false` 仅关闭 deferred 整理，显式管理工具和宿主 store 仍可用；`injection: false` 仅关闭运行开始的召回。宿主通过 `updateConfiguration({ memory })` 修改配置；已开始的 `chat()` 完成后 applied。
 
-CLI 默认将记忆工具作为内建允许项，仍受前置 hooks/rules 约束；`permissionMode: "deny-all"` 不添加记忆写入/删除允许项，保留既有只读策略。显式 `/memory` 管理不依赖模型授权。
+CLI 的 `/memory` 直接管理 Markdown，不依赖模型授权；`permissionMode: "deny-all"` 不改变内部记忆工具的静默执行，但普通文件和 shell 工具仍受策略约束。
 
-`ContextAssembler` 将 scope/path/version 标记的记忆作为参考消息装配，未持久化为用户消息，不成为 system 指令。索引及固定笔记总注入不超过 `min(2000 tokens, 输入预算 5%, 当前剩余预算)`，沿用当前字符估算与上下文压缩窗口余量；详情工具结果、system、schema、当前消息仍计入统一 usage。新输入/steering 和受管理写入后刷新投影。固定正文放不下会明确报告，不静默截断。`memory` projection 事件返回 selected、tokens、truncated、warnings；工具结果与现有模型 usage 提供写入、调用和费用证据。首版没有额外整理模型、后台计时器或退出扫描。
-
-每次请求边界检查固定清单、索引、固定文件及链接目标的磁盘 revision，变化后重读投影；同一轮中的外部编辑和删除也会刷新下一次请求。已发送的请求和当前历史原文不会被追溯修改。
+召回材料是参考内容，不成为用户指令或授权。完整 system、消息及工具定义在 middleware 注入后接受最终请求上限检查。一次运行内的显式写入由工具结果提供最新信息；下次运行重新从磁盘召回。
 
 ## 装配与定制边界
 

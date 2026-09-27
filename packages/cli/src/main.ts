@@ -138,10 +138,13 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 			memory,
 			tools: builtinTools,
 			requestTimeoutMs: args.json ? 30_000 : null,
-			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }, ...["load_skill", "read_memory", "search_memory", ...(config.permissionMode === "deny-all" ? [] : ["write_memory", "delete_memory"])].map(tool => ({ tool, argsPattern: "*", effect: "allow" as const }))] },
+			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }] },
 		});
 		try {
-			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), () => sessions.current.port.getMemoryBudget?.());
+			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), async options => {
+				const receipt = await sessions.current.port.updateConfiguration({ memory: options });
+				if ((await receipt.applied).status !== "applied") throw new Error("Memory configuration was not applied");
+			});
 			if (prompt && isSkillsCommand(prompt)) {
 				await skillsCommand(sessions.current.port, prompt, value => console.log(args.json ? JSON.stringify(value) : skillsText(value))); return 0;
 			}

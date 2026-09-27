@@ -1,17 +1,19 @@
 import type { HarnessTool } from "@forge-agent/tools";
+import { defineLocalTool } from "@forge-agent/tools/define-builtin";
+import { z } from "zod";
 import { selectedBranch, type SessionState } from "../session-storage.ts";
 import { evidenceText } from "./checkpoint.ts";
 
 /** Local literal search. Offsets address original text, never the case-folded text. */
 export function contextSearcher(state: () => SessionState): HarnessTool<object, unknown> {
-	return {
+	return defineLocalTool({
 		name: "search_context", label: "Search saved context",
 		description: "Find saved messages in this branch by literal query words (all must match, case-insensitive). Newest first. Optional role and limit (default 5, max 10). Returns entryId and bounded preview with Unicode offset for read_context. Not semantic search.",
-		parameters: { type: "object", properties: { query: { type: "string", minLength: 1, maxLength: 200 }, role: { type: "string", enum: ["user", "assistant", "toolResult"] }, limit: { type: "integer", minimum: 1, maximum: 10 } }, required: ["query"], additionalProperties: false },
+		inputSchema: z.strictObject({ query: z.string().min(1).refine(value => [...value].length <= 200).describe("At most 200 Unicode code points"), role: z.enum(["user", "assistant", "toolResult"]).optional(), limit: z.number().int().min(1).max(10).optional() }),
 		async execute(input, context) {
 			context.signal?.throwIfAborted();
-			const { query, role, limit = 5 } = input as { query: string; role?: string; limit?: number };
-			if (typeof query !== "string" || !query.trim() || [...query].length > 200 || !Number.isSafeInteger(limit) || limit < 1 || limit > 10 || (role !== undefined && !["user", "assistant", "toolResult"].includes(role))) throw new Error("Invalid context search query, role or limit");
+			const { query, role, limit = 5 } = input;
+			if (!query.trim()) throw new Error("Context search query must contain a word");
 			const words = [...new Set(query.trim().split(/\s+/u))];
 			if (words.length > 8) throw new Error("Context search allows at most 8 literal words");
 			const patterns = words.map(word => new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "iu"));
@@ -32,5 +34,5 @@ export function contextSearcher(state: () => SessionState): HarnessTool<object, 
 			const result = { matches, hasMore };
 			return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
 		},
-	};
+	});
 }

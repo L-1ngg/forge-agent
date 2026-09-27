@@ -5,12 +5,12 @@ created: 2026-09-19
 
 # Pi Skills 首轮接入施工图
 
-> 状态:已完成首轮实现与软件验收，交付提交 `7a8fbff`(2026-09-19；2026-09-21 校正文档状态)。现行接入见 [SDK](../sdk.md)，交付证据与未测边界见 [Skills 验收](skills-acceptance.md)。
+> 状态:已归档(2026-09-28；历史状态:首轮施工于 2026-09-19 交付 `7a8fbff`)。Pi scanner/loader 已由 [Issue #37 施工图](../../phases/tool-ecosystem-issue-37.md) 的官方 TanStack Skills 接入取代。旧验收见 [Skills 验收](skills-acceptance.md)，不证明新实现。
 > 需求与任务级验收唯一来源：[Issue #35](https://github.com/L-1ngg/forge-agent/issues/35)。本文定义施工接口、提交时序与验证批次，不复制 Issue 的 AC。
 
 ## Why 与施工前基线
 
-在现有单 Agent 执行路径接入本地 Instruction Skills，提供分层发现、按需加载、显式调用和刷新。路线入口为 [plan.md](../plan.md)，本轮不含安装器、MCP、脚本执行或第二套 Agent loop。
+在现有单 Agent 执行路径接入本地 Instruction Skills，提供分层发现、按需加载、显式调用和刷新。路线入口为 [plan.md](../../plan.md)，本轮不含安装器、MCP、脚本执行或第二套 Agent loop。
 
 以下基线与初始工作区描述记录施工开始时的状态，不代表当前缺少 Skills。核查基线为 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`：
 
@@ -19,7 +19,7 @@ created: 2026-09-19
 - `prepareSessionTools` 已统一参数重写、schema 校验、hooks、权限及结果复制；持久记忆与上下文读取工具从 session 侧装配。
 - `HostedAgent` 的 `AgentTurn.id`、`InputAcceptance.processed` 与 TUI `generation` 管理输入归属。Skills 的异步读取不能绕开这些边界。
 - `config.ts` 拒绝未知顶层配置；CLI 默认目录、slash 分发和 headless 需要同时接线，不能只注册补全。
-- 初始用户改动：`docs/plan.md` 一处未暂存修改；两份未跟踪文件 `docs/research/skills-integration-options.md`、`docs/research/skills-community-options.md`（现已迁入[归档索引](../archive/README.md)）；暂存区为空。这些是上下文，不属于本任务提交。
+- 初始用户改动：`docs/plan.md` 一处未暂存修改；两份未跟踪文件 `docs/research/skills-integration-options.md`、`docs/research/skills-community-options.md`（现已迁入[归档索引](../README.md)）；暂存区为空。这些是上下文，不属于本任务提交。
 
 ## Entry Criteria
 
@@ -65,7 +65,7 @@ Pi 固定提交为 `36b60d2e8985899743c4cf5bd5f8929832a3f05d`。本次只读核�
 
 ## SDK 接口设计
 
-下列接口经 `packages/core/src/sdk.ts` 导出，由 `AgentSession` 直接实现；输入支持普通字符串与显式 Skill 调用。当前执行接线见 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。
+下列接口经 `packages/core/src/sdk.ts` 导出，由 `AgentSession` 直接实现；输入支持普通字符串与显式 Skill 调用。当前执行接线见 [ADR-025](../../decisions/025-tanstack-agent-foundation.md)。
 
 ```ts
 type SkillLayer = "workspace" | "user" | "builtin";
@@ -153,7 +153,7 @@ CLI 将 `/skill <name> [task]` 解析为 `SkillInvocation`；SDK 使用同一输
 
 以下是已执行首轮施工的批次与验证设计，实际结果见[验收记录](skills-acceptance.md)。
 
-测试直接沿用 #35 的 Testing Decisions：主边界为真实公开 SDK、生产装配、受控 HTTP/SSE provider、临时目录和真实存储；CLI/headless/PTY 只补宿主接线。沿用 [现有测试施工](testing-system-implementation.md) 的 Linux OS 断网与 macOS fixture 兼容性边界。真实模型选用效果单列，不作为确定性软件出口。
+测试直接沿用 #35 的 Testing Decisions：主边界为真实公开 SDK、生产装配、受控 HTTP/SSE provider、临时目录和真实存储；CLI/headless/PTY 只补宿主接线。沿用 [现有测试施工](../../phases/testing-system-implementation.md) 的 Linux OS 断网与 macOS fixture 兼容性边界。真实模型选用效果单列，不作为确定性软件出口。
 
 每批纵向按 TDD 推进，一条可观察失败测试 → 最小实现 → 类型检查/目标测试，不先铺满内部 helper 单测。
 

@@ -33,5 +33,5 @@ export function skillsText(value: object): string {
 	if ("phase" in value) return `Skills ${value.phase}${"revision" in value ? ` #${value.revision}` : ""}`;
 	const snapshot = value as SkillsSnapshot;
 	if (!snapshot.enabled) return "Skills disabled";
-	return ["Skills", ...snapshot.entries.map(entry => `${entry.name ?? "(invalid)"} [${entry.layer}/${entry.status}${entry.disableModelInvocation ? "/explicit-only" : ""}] ${entry.description ?? ""}\n${entry.entry}${entry.reason ? ` — ${entry.reason}` : ""}`), ...snapshot.diagnostics.map(diagnostic => `${diagnostic.entry}: ${diagnostic.message}`), ...(!snapshot.entries.length ? ["No skills found"] : [])].join("\n");
+	return ["Skills", ...snapshot.entries.map(entry => `${entry.name} [${entry.layer}/${entry.status}${entry.disableModelInvocation ? "/explicit-only" : ""}] ${entry.description}\n${entry.entry}`), ...snapshot.diagnostics.map(diagnostic => `${diagnostic.entry}: ${diagnostic.message}`), ...(!snapshot.entries.length ? ["No skills found"] : [])].join("\n");
 }

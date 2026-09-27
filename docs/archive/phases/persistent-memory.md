@@ -1,10 +1,10 @@
 # 持久记忆施工与验收
 
-> 状态:本地软件与真实模型门槛通过，CLI 默认启用(2026-09-17)。需求与任务级验收唯一来源：[Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)。起点 `fc5fe07784081fedf554745e10b46a060c61bb94`，staged/unstaged/untracked 均为空；远端状态以交付提交对应的 CI 为准。
+> 状态:已归档(2026-09-28；历史状态:Issue #32 于 2026-09-17 完成施工及验收记录)。会话内调度、锁和版本协议已由 [Issue #37 施工图](../../phases/tool-ecosystem-issue-37.md) 取代。下述旧质量数字不能证明新 deferred 整理。原需求见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)。
 
 ## Entry 与设计
 
-用户已要求实现、验收后 commit/push；沿用 Issue 已定的 Markdown、会话内更新、worktree 独立副本及默认发布方向。实现细节由本施工图固定，不重新选型。架构取舍见 [ADR-019](../decisions/019-persistent-memory.md)。
+用户已要求实现、验收后 commit/push；沿用 Issue 已定的 Markdown、会话内更新、worktree 独立副本及默认发布方向。实现细节由本施工图固定，不重新选型。架构取舍见 [ADR-019](../../decisions/019-persistent-memory.md)。
 
 - `LongTermMemory` 为 SDK 显式提供的能力，绑定宿主给定的 `user`/`project` 绝对目录；工具只接受这些别名与相对 Markdown 路径。拒绝路径穿越和目录内符号链接。普通 Markdown 无需登记。读写、删除、搜索、固定均经过该入口。
 - CLI 数据根为 `$XDG_DATA_HOME/forge-agent/memory`，缺省 `~/.local/share/forge-agent/memory`。用户笔记在 `user/`；项目在 `projects/<sha256(canonical repository identity)>/<sha256(canonical worktree root)>/`。Git common dir 标识仓库，主 worktree 由 `git worktree list --porcelain` 确定；非 Git 使用规范化启动目录。
@@ -46,7 +46,7 @@
 
 反向验证包括旧 CAS 覆盖、同轮删固定笔记、损坏来源导致 6001 条警告、`deny-all` 意外写入等测试先红后绿；不是仅检查实现形状。双轴复审修复锁回收竞态、缓存刷新、初始化 marker、动态预算与损坏来源显示限额，并同步文档。
 
-AC-15/16 的[完整质量/成本记录](../research/persistent-memory/acceptance.md)及原始回答/笔记已归档。v1 因把记忆文件误报为权威文档更新而拒绝发布；修复后新的 v2 独立 10 场景完成语义验收（其中 1 个上游 502 场景保持实现/样本不变补跑，错误保留）。严重错误 0，显式召回 3/3，新增有价值信息自动保存 3/3，限定保留 7/7，无价值场景 3/3 无文件增长；增量请求中位数 0.5、usage 估算增量 US$0.085972。初始“每场景 8 请求”的口径与脚本按 turn 限制的差异在该报告中明示并核对实际数，没有把四次执行总数说成 ≤8。
+AC-15/16 的[完整质量/成本记录](../../research/persistent-memory/acceptance.md)及原始回答/笔记已归档。v1 因把记忆文件误报为权威文档更新而拒绝发布；修复后新的 v2 独立 10 场景完成语义验收（其中 1 个上游 502 场景保持实现/样本不变补跑，错误保留）。严重错误 0，显式召回 3/3，新增有价值信息自动保存 3/3，限定保留 7/7，无价值场景 3/3 无文件增长；增量请求中位数 0.5、usage 估算增量 US$0.085972。初始“每场景 8 请求”的口径与脚本按 turn 限制的差异在该报告中明示并核对实际数，没有把四次执行总数说成 ≤8。
 
 CLI 的 `autoUpdate` 与 `injection` 缺省均为 `true`，不要求首次 opt-in。真实 CLI 回归在未配置 memory 开关时确认既有索引进入 HTTP 请求、默认写入实际落盘，`deny-all` 拒绝模型写入而保留原索引。SDK 仍显式绑定。远端 Ubuntu/macOS 检查随提交推送执行，实时结果看该提交的 [CI](https://github.com/L-1ngg/forge-agent/actions/workflows/ci.yml)。
 

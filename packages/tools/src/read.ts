@@ -5,11 +5,12 @@ import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
 import { z } from "zod";
 
-export interface ReadInput {
-	path: string;
-	offset?: number | undefined;
-	limit?: number | undefined;
-}
+const readSchema = z.strictObject({
+	path: z.string().min(1).regex(/\S/).meta({ description: "Absolute path or path relative to the working directory." }),
+	offset: z.number().int().min(1).optional().meta({ description: "First one-based line to return." }),
+	limit: z.number().int().min(1).optional().meta({ description: "Maximum number of lines to return." }),
+});
+export type ReadInput = z.infer<typeof readSchema>;
 
 export interface ReadOutput {
 	path: string;
@@ -24,23 +25,8 @@ export const readTool: HarnessTool<ReadInput, ReadOutput> = defineBuiltinTool({
 	name: "read",
 	label: "Read file",
 	description: "Read a UTF-8 text file, optionally selecting an one-based offset and line count, with a 2000-line / 50 KiB head preview.",
-	inputSchema: z.strictObject({
-		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
-		offset: z.number().int().min(1).optional().meta({ description: "First one-based line to return." }),
-		limit: z.number().int().min(1).optional().meta({ description: "Maximum number of lines to return." }),
-	}),
+	inputSchema: readSchema,
 	async execute(input, context) {
-		if (!input.path?.trim()) {
-			return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/index.ts");
-		}
-		if (input.offset !== undefined && (!Number.isInteger(input.offset) || input.offset < 1)) {
-			return toolError("INVALID_ARGUMENT", "offset must be a positive integer", "offset", "integer >= 1", "1");
-		}
-		if (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1)) {
-			return toolError("INVALID_ARGUMENT", "limit must be a positive integer", "limit", "integer >= 1", "20");
-		}
-
-
 		const path = resolve(context.cwd, input.path);
 		try {
 			const info = await stat(path);

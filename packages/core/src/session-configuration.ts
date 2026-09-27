@@ -1,4 +1,3 @@
-import { formatSkillsForPrompt } from "./skills/upstream/skills.ts";
 import { emptySkills, type SkillsSnapshot } from "./skills/types.ts";
 import { getSupportedThinkingLevels, isRetryableAssistantError, isContextOverflow } from "./model-policy.ts";
 import type { CreateAgentOptions } from "./agent.ts";
@@ -23,7 +22,6 @@ export async function prepareSessionConfiguration(options: CreateAgentOptions, s
 	if (typeof configuration.systemPrompt !== "string" || !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(configuration.thinkingLevel)) throw new Error("Invalid model configuration");
 	validateSessionTools(configuration);
 	if (skills.enabled && configuration.tools?.some(tool => tool.name === "load_skill")) throw new Error("load_skill is reserved when Skills are enabled");
-	configuration.systemPrompt += formatSkillsForPrompt(skills.entries.filter(entry => entry.status === "available"));
 	const resolved = await resolveModelOptions(configuration);
 	return { options: resolved, driver: createSummaryDriver(resolved), skills };
 }
@@ -80,7 +78,7 @@ export function createSummaryDriver(options: SessionConfiguration): SummaryDrive
 }
 
 export function snapshotConfiguration<T extends Partial<CreateAgentOptions>>(options: T): T {
-	return { ...options, ...(options.mcp ? { mcp: { ...options.mcp, servers: structuredClone(options.mcp.servers) } } : {}), ...(typeof options.model === "object" ? { model: structuredClone(options.model) } : {}), ...(options.skills ? { skills: structuredClone(options.skills) } : {}), ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
+	return { ...options, ...(options.mcp ? { mcp: { ...options.mcp, servers: structuredClone(options.mcp.servers) } } : {}), ...(typeof options.model === "object" ? { model: structuredClone(options.model) } : {}), ...(options.skills ? { skills: structuredClone(options.skills) } : {}), ...(options.memory ? { memory: { ...options.memory } } : {}), ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 }
 
 function validateOutputLimit(requested: number | undefined, maximum: number): void {

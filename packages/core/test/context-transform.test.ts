@@ -164,20 +164,20 @@ test("failed callback after consumed steering returns only unconsumed follow-up"
 	expect((await consume(agent.runTurn("reuse after preparation error"))).result.status).toBe("success"); expect(callbacks).toBe(3);
 }));
 
-test("compaction precedes host, summary bypasses it, final memory uses host projection budget", () => withScenario("memory-order", async s => {
+test("compaction precedes host while native memory recall reaches the final request", () => withScenario("memory-order", async s => {
 	await writeFile(join(s.cwd, "MEMORY.md"), "MEMORY_REFERENCE");
 	const memory = new LongTermMemory({ project: s.cwd }); const order: string[] = []; let callbacks = 0;
 	const storage = new MemorySessionStorage([user("old"), { role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "old history ".repeat(2000) }] }, user("recent")]);
-	const agent = await s.agent({ ...defaults, storage, context: { enabled: true, reserveTokens: 20000, keepRecentTokens: 1 }, memory: { store: memory },
+	const agent = await s.agent({ ...defaults, storage, context: { enabled: true, reserveTokens: 20000, keepRecentTokens: 1 }, memory: { store: memory, autoUpdate: false },
 		transformContext: context => { order.push("host"); callbacks++; expect(JSON.stringify(context.messages)).not.toContain("MEMORY_REFERENCE"); return callbacks === 1 ? [user("x".repeat((context.budget.inputBudget + 100 - context.budget.fixedTokens) * 4))] : context.messages; },
 		adapter: replyAdapter(model, (context) => {
 			if (systemText(context) === SUMMARY_SYSTEM) { order.push("summary"); return answer({ text: JSON.stringify({ states: [], claims: [], taskChanged: false }) }); }
-			order.push("task"); if (callbacks === 1) { expect(JSON.stringify(context)).not.toContain("MEMORY_REFERENCE"); expect(agent.getMemoryBudget?.()).toBe(0); } else expect(JSON.stringify(context)).toContain("MEMORY_REFERENCE");
+			order.push("task"); expect(JSON.stringify(context)).toContain("MEMORY_REFERENCE");
 			return answer();
 		}),
 	});
 	const first = await consume(agent.runTurn("new")); expect(first.result.status).toBe("success"); expect(order.slice(0, 3)).toEqual(["summary", "host", "task"]);
-	expect(first.events.filter(e => e.type === "memory" && e.phase === "projection").every(e => e.type === "memory" && e.tokens === 0)).toBe(true);
+	expect(first.events).toContainEqual(expect.objectContaining({ type: "memory", phase: "recall" }));
 	expect((await consume(agent.runTurn("short new task"))).result.status).toBe("success"); expect(callbacks).toBe(2);
 	const before = callbacks; await agent.compact(); expect(callbacks).toBe(before);
 }));

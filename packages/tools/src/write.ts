@@ -5,11 +5,12 @@ import { fileError, toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
 import { z } from "zod";
 
-export interface WriteInput {
-	path: string;
-	content: string;
-	mode?: "overwrite" | "create" | undefined;
-}
+const writeSchema = z.strictObject({
+	path: z.string().min(1).regex(/\S/).meta({ description: "Absolute path or path relative to the working directory." }),
+	content: z.string().meta({ description: "Complete UTF-8 file content." }),
+	mode: z.enum(["overwrite", "create"]).optional().meta({ description: "overwrite replaces a file; create fails if it exists." }),
+});
+export type WriteInput = z.infer<typeof writeSchema>;
 
 export interface WriteOutput {
 	path: string;
@@ -20,18 +21,8 @@ export const writeTool: HarnessTool<WriteInput, WriteOutput> = defineBuiltinTool
 	name: "write",
 	label: "Write file",
 	description: "Write UTF-8 content to a file. Parent directories must already exist.",
-	inputSchema: z.strictObject({
-		path: z.string().min(1).meta({ description: "Absolute path or path relative to the working directory." }),
-		content: z.string().meta({ description: "Complete UTF-8 file content." }),
-		mode: z.enum(["overwrite", "create"]).optional().meta({ description: "overwrite replaces a file; create fails if it exists." }),
-	}),
+	inputSchema: writeSchema,
 	async execute(input, context) {
-		if (!input.path?.trim()) return toolError("INVALID_ARGUMENT", "path must be a non-empty string", "path", "non-empty file path", "src/new.ts");
-		if (typeof input.content !== "string") return toolError("INVALID_ARGUMENT", "content must be a string", "content", "UTF-8 string", "export {};\n");
-		if (input.mode !== undefined && input.mode !== "overwrite" && input.mode !== "create") {
-			return toolError("INVALID_ARGUMENT", "mode is not supported", "mode", "overwrite or create", "create");
-		}
-
 		const path = resolve(context.cwd, input.path);
 		try {
 			try {

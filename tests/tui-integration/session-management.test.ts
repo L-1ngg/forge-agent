@@ -15,7 +15,7 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		return modelResponse();
 	} });
 	await mkdir(join(cwd, ".forge-agent"));
-	await writeFile(join(cwd, ".forge-agent", "config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), thinkingLevel: "off" }));
+	await writeFile(join(cwd, ".forge-agent", "config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), thinkingLevel: "off", memory: { autoUpdate: false, injection: false } }));
 	const files = async () => (await readdir(join(cwd, ".forge-agent", "sessions")).catch(() => [])).filter(name => name.endsWith(".jsonl"));
 	const saved = async (text: string) => {
 		for (const name of await files()) if ((await readFile(join(cwd, ".forge-agent", "sessions", name), "utf8")).includes(text)) return true;

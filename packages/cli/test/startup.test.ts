@@ -82,7 +82,7 @@ for (const credentialSource of ["apiKey", "XAI_API_KEY"] as const) {
 		});
 		try {
 			const result = await runCli({
-				provider: "xai", model: "grok-4.6", baseUrl: new URL("v1", server.url).toString(), thinkingLevel: "off",
+				provider: "xai", model: "grok-4.6", baseUrl: new URL("v1", server.url).toString(), thinkingLevel: "off", memory: { autoUpdate: false, injection: false },
 				...(credentialSource === "apiKey" ? { apiKey: "test-local-key" } : {}),
 			}, credentialSource === "XAI_API_KEY" ? { XAI_API_KEY: "test-local-key" } : {});
 			expect(result.exitCode).toBe(0);

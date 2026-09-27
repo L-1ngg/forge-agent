@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # ADR-025: 以 TanStack chat 组织单 Agent 执行基座
 
-> 状态:已批准(2026-09-27，依据 operator 本次自主执行授权，由 Codex 设计并自审；非人工验收)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。数据、输入、权限与证据保证延续。
+> 状态:已批准(2026-09-27；内核设计仍适用，ai-skills/ai-memory 选型于 2026-09-28 被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
 
 ## 决策
 

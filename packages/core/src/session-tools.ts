@@ -79,6 +79,7 @@ function snapshot<T>(value: T): T { JSON.stringify(value); return structuredClon
 export async function executeToolBatch(
 	message: SessionMessage, options: SessionConfiguration, messages: SessionMessage[], signal: AbortSignal,
 	emit: (event: SessionEvent) => void, persist: (message: SessionMessage) => Promise<void>,
+	internalTools: ReadonlySet<HarnessTool<object, unknown>> = new Set(),
 ): Promise<ToolBatch> {
 	const calls = message.content.filter((part): part is ToolCallBlock => part.type === "tool_call");
 	const tools = options.tools ?? [];
@@ -102,7 +103,7 @@ export async function executeToolBatch(
 			if (decision?.block) return errorResult(decision.reason ?? "Tool execution was blocked", decision.terminate);
 			signal.throwIfAborted();
 			args = snapshot(validateToolArguments(tool, args));
-			const check = await checkPermission(makeToolCall(call.id, call.name, args), { context: options.permission ?? {}, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
+			const check = internalTools.has(tool) ? { allowed: true as const } : await checkPermission(makeToolCall(call.id, call.name, args), { context: options.permission ?? {}, ...(options.requestBus ? { requestBus: options.requestBus } : {}) }, signal);
 			if (!check.allowed) return errorResult(call.name === "load_skill" ? JSON.stringify({ code: "permission-denied", message: check.reason }) : check.reason, true);
 			signal.throwIfAborted();
 			return { call, tool, args };

@@ -7,11 +7,12 @@ import { toolError } from "./errors.ts";
 import type { HarnessTool } from "./types.ts";
 import { z } from "zod";
 
-export interface BashInput {
-	command: string;
-	description?: string | undefined;
-	timeout_ms?: number | undefined;
-}
+const bashSchema = z.strictObject({
+	command: z.string().min(1).regex(/\S/).meta({ description: "Shell command to execute." }),
+	description: z.string().optional().meta({ description: "Short human-readable purpose shown in the tool call title." }),
+	timeout_ms: z.number().int().min(1).max(600000).optional().meta({ description: "Kill the command after this many milliseconds." }),
+});
+export type BashInput = z.infer<typeof bashSchema>;
 
 export interface BashOutput {
 	command: string;
@@ -43,21 +44,13 @@ async function openOutputLog(path: string): Promise<OutputLog> {
 }
 
 export function createBashTool(openLog: (path: string) => Promise<OutputLog> = openOutputLog): HarnessTool<BashInput, BashOutput> {
-return defineBuiltinTool<BashInput, BashOutput>({
+	return defineBuiltinTool<BashInput, BashOutput>({
 	name: "bash",
 	label: "Run command",
 	description: "Run a shell command. Return a combined 2000-line / 50 KiB tail preview; large output is saved to a system temporary log readable with Read.",
-	inputSchema: z.strictObject({
-		command: z.string().min(1).meta({ description: "Shell command to execute." }),
-		description: z.string().optional().meta({ description: "Short human-readable purpose shown in the tool call title." }),
-		timeout_ms: z.number().int().min(1).max(600000).optional().meta({ description: "Kill the command after this many milliseconds." }),
-	}),
+	inputSchema: bashSchema,
 	async execute(input, context) {
-		if (!input.command?.trim()) return toolError("INVALID_ARGUMENT", "command must be a non-empty string", "command", "non-empty shell command", "bun test");
 		const timeout = input.timeout_ms ?? 120_000;
-		if (!Number.isInteger(timeout) || timeout < 1 || timeout > 600_000) {
-			return toolError("INVALID_ARGUMENT", "timeout_ms is outside the supported range", "timeout_ms", "integer from 1 to 600000", "30000");
-		}
 		if (context.signal?.aborted) return toolError("ABORTED", "Command was aborted before it started", "command", "command with a live abort signal", "bun test", true);
 
 		const env = { ...process.env, ...context.env };

@@ -4,6 +4,8 @@ import { InsufficientScopeError, Client, StreamableHTTPClientTransport, SSEClien
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import type { HarnessTool } from "@forge-agent/tools";
+import { defineLocalTool } from "@forge-agent/tools/define-builtin";
+import { z } from "zod";
 import type { McpInputContext } from "@forge-agent/protocol";
 import type { ConfigurationPatch, ConfigurationReceipt } from "../configuration.ts";
 import type { PermissionContext } from "../permission/index.ts";
@@ -219,51 +221,48 @@ export class McpManager implements McpController {
 		};
 	}
 	private bridgeTools(): HarnessTool<object, unknown>[] {
-        const resourceSchema = { type: "object" as const, properties: { serverId: { type: "string" }, uri: { type: "string" }, template: { type: "string" }, arguments: { type: "object", additionalProperties: { type: "string" } } }, required: ["serverId"], oneOf: [{ required: ["uri"] }, { required: ["template", "arguments"] }], additionalProperties: false };
-        const validateResource = new AjvJsonSchemaValidator().getValidator<{ serverId: string; uri?: string; template?: string; arguments?: Record<string, string> }>(resourceSchema);
-        const normalizeResource = (args: unknown) => {
-            const result = validateResource(args);
-            if (!result.valid) throw new McpError("invalid-arguments", result.errorMessage);
-            const input = result.data;
-            if (input.template) {
-                const connection = this.ready(input.serverId);
-                if (!connection.snapshot.templates.some(template => template.uriTemplate === input.template)) throw new McpError("unknown-template", "Unknown resource template");
-                return { serverId: input.serverId, uri: new UriTemplate(input.template).expand(input.arguments ?? {}) };
-            }
-            return input;
-        };
-        return [
-            {
-                name: "mcp_list_resources", label: "MCP resources", description: "List MCP resources and URI templates",
-                parameters: { type: "object", properties: { serverId: { type: "string" }, kind: { enum: ["resources", "templates", "all"] } }, required: ["serverId"], additionalProperties: false },
-                execute: async (args, context) => {
-                    const { serverId, kind = "all" } = args as { serverId: string; kind?: string };
+		const resourceSchema = z.xor([
+			z.strictObject({ serverId: z.string().min(1), uri: z.string().min(1) }),
+			z.strictObject({ serverId: z.string().min(1), template: z.string().min(1), arguments: z.record(z.string(), z.string()) }),
+		]);
+		const normalizeResource = (input: z.infer<typeof resourceSchema>) => {
+			if ("template" in input) {
+				const connection = this.ready(input.serverId);
+				if (!connection.snapshot.templates.some(template => template.uriTemplate === input.template)) throw new McpError("unknown-template", "Unknown resource template");
+				return { serverId: input.serverId, uri: new UriTemplate(input.template).expand(input.arguments ?? {}) };
+			}
+			return input;
+		};
+		return [
+			defineLocalTool({
+				name: "mcp_list_resources", label: "MCP resources", description: "List MCP resources and URI templates",
+				inputSchema: z.strictObject({ serverId: z.string().min(1), kind: z.enum(["resources", "templates", "all"]).optional() }),
+				execute: async (args, context) => {
+					const { serverId, kind = "all" } = args;
                     const connection = this.ready(serverId);
                     const value = { resources: kind === "templates" ? [] : connection.snapshot.resources, templates: kind === "resources" ? [] : connection.snapshot.templates };
                     const snapshot = await normalizeMcpContent({ serverId, remoteName: "resources", catalogRevision: this.revision, content: [{ type: "text", text: JSON.stringify(value) }] }, this.artifacts, context.signal);
                     return { content: snapshot.content, details: snapshot };
                 },
-            },
-            {
-                name: "mcp_read_resource", label: "Read MCP resource", description: "Read a URI or expand a discovered URI template",
-                parameters: resourceSchema, validateArguments: normalizeResource,
-                execute: async (args, context) => {
-                    const input = args as { serverId: string; uri: string };
-                    const result = await this.read(input.serverId, input.uri, context.signal);
-                    return { content: result.content, details: result };
-                },
-            },
-            {
-                name: "mcp_read_artifact", label: "Read MCP attachment", description: "Read saved original attachment bytes; offset/limit are byte offsets (maximum 64 KiB)",
-                parameters: { type: "object", properties: { id: { type: "string" }, offset: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 65536 } }, required: ["id"], additionalProperties: false },
-                execute: async (args, context) => {
-                    this.assertEnabled();
-                    const input = args as { id: string; offset?: number; limit?: number };
-                    const result = await this.artifacts.read(input.id, context.signal);
-                    const bytes = result.bytes.slice(input.offset ?? 0, (input.offset ?? 0) + (input.limit ?? 16384));
-                    return { content: [{ type: "text", text: result.metadata.mimeType.startsWith("text/") ? Buffer.from(bytes).toString("utf8") : Buffer.from(bytes).toString("base64") }], details: result.metadata };
-                },
-            },
+			}),
+			defineLocalTool({
+				name: "mcp_read_resource", label: "Read MCP resource", description: "Read a URI or expand a discovered URI template with arguments",
+				inputSchema: resourceSchema, normalizeInput: normalizeResource,
+				execute: async (args, context) => {
+					const result = await this.read(args.serverId, (args as { uri: string }).uri, context.signal);
+					return { content: result.content, details: result };
+				},
+			}),
+			defineLocalTool({
+				name: "mcp_read_artifact", label: "Read MCP attachment", description: "Read saved original attachment bytes; offset/limit are byte offsets (maximum 64 KiB)",
+				inputSchema: z.strictObject({ id: z.string().min(1), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(65536).optional() }),
+				execute: async (args, context) => {
+					this.assertEnabled();
+					const result = await this.artifacts.read(args.id, context.signal);
+					const bytes = result.bytes.slice(args.offset ?? 0, (args.offset ?? 0) + (args.limit ?? 16384));
+					return { content: [{ type: "text", text: result.metadata.mimeType.startsWith("text/") ? Buffer.from(bytes).toString("utf8") : Buffer.from(bytes).toString("base64") }], details: result.metadata };
+				},
+			}),
         ];
     }
 	async refresh(id?: string) { this.assertEnabled(); if (id) this.get(id); for (const key of id ? [id] : this.current.keys()) this.dirty.add(key); return this.submit({}); }

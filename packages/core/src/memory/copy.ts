@@ -1,15 +1,15 @@
 import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import { LongTermMemory } from "./store.ts";
-import { memoryFiles, memoryLock, missing, type MemoryFileSystem } from "./files.ts";
-import { randomUUID } from "node:crypto";
+import { memoryFiles, missing, type MemoryFileSystem } from "./files.ts";
 
 /** Explicit host operation: copy only Markdown, finish once, preserve existing files on retry. */
 export async function initializeMemoryCopy(target: string, source?: string, files: MemoryFileSystem = memoryFiles): Promise<void> {
 	new LongTermMemory({ project: target }, files); // Validate host binding before any filesystem mutation.
 	try { if ((await files.lstat(target)).isSymbolicLink()) throw new Error("Memory copy root is a symlink"); }
 	catch (error) { if (!missing(error)) throw error; }
-	await memoryLock(target, async () => {
+	await files.mkdir(target, { recursive: true });
+	{
 		const marker = join(target, ".initialized");
 		try {
 			if ((await files.lstat(marker)).isSymbolicLink()) throw new Error("Memory initialization marker is a symlink");
@@ -34,8 +34,6 @@ export async function initializeMemoryCopy(target: string, source?: string, file
 				catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
 			}
 		}
-		const temporary = join(target, `.initialize-${randomUUID()}.tmp`);
-		try { await files.writeFile(temporary, "complete\n", { flag: "wx", mode: 0o600 }); await files.rename(temporary, marker); }
-		finally { await files.unlink(temporary).catch(error => { if (!missing(error)) throw error; }); }
-	}, undefined, files);
+		await files.writeFile(marker, "complete\n", { mode: 0o600 });
+	}
 }

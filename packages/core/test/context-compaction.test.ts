@@ -331,6 +331,20 @@ test("search finds the latest Chinese correction and returns a Unicode read offs
 	} finally { await agent.dispose(); server.stop(true); }
 });
 
+test("search accepts a query within 200 Unicode code points", async () => {
+	const query = "😀".repeat(150);
+	const storage = new MemorySessionStorage([msg("user", query)]);
+	let calls = 0;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++calls === 1 ? modelResponse([{ id: "unicode-search", name: "search_context", arguments: { query } }]) : modelResponse(); } });
+	const agent = await createAgent({ ...options, storage, baseUrl: server.url.toString(), permission: { rules: [{ tool: "search_context", argsPattern: "*", effect: "allow" }] } });
+	try {
+		const results: SessionMessage[] = [];
+		for await (const event of agent.runTurn("Find the emoji record")) if (event.type === "message_end" && event.message.role === "toolResult") results.push(event.message);
+		expect(results[0]?.isError).toBe(false);
+		expect(JSON.stringify(results[0]?.content)).toContain((await storage.load()).entries[0]!.id);
+	} finally { await agent.dispose(); server.stop(true); }
+});
+
 test.each(["foreign", "denied", "no-match"] as const)("search preserves %s boundaries", async mode => {
 	const initialStorage = new MemorySessionStorage([msg("user", "PRIVATE-SAVED-NEEDLE")]);
 	const initial = await initialStorage.load(); if (mode === "foreign") initial.leafId = null;

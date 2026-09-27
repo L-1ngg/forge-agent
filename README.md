@@ -73,11 +73,11 @@ The CLI discovers `SKILL.md` directories under `<project>/.forge/skills`, `~/.fo
 /skill code-review Review this patch.
 ```
 
-Use `/skills` to inspect active, shadowed, duplicate and invalid entries. `/skill` supports name completion; press Enter to accept a suggestion, then type the task. It preserves the task text and loads instructions before submitting a single user input. Rejected inputs return to the editable draft. `--json -p '/skills'`, `--json -p '/skills reload'`, and `--json -p '/skill code-review Review this patch.'` use the same behavior in headless mode. Management commands do not call a model or create conversation history; startup still requires configured provider/model credentials.
+Use `/skills` to inspect available and shadowed entries. `/skill` supports name completion; press Enter to accept a suggestion, then type the task. It preserves the task text and loads instructions before submitting a single user input. Rejected inputs return to the editable draft. `--json -p '/skills'`, `--json -p '/skills reload'`, and `--json -p '/skill code-review Review this patch.'` use the same behavior in headless mode. Management commands do not call a model or create conversation history; startup still requires configured provider/model credentials.
 
-The model initially sees only names and descriptions, then uses `load_skill` to read a selected body. `disable-model-invocation: true` hides a skill from automatic selection while allowing explicit invocation. Loading does not execute scripts, install dependencies, read references, or grant permissions through `allowed-tools`. Relative references use the returned `baseDirectory` and require existing host tools. The CLI uses its existing read-only permission policy for `load_skill`, including built-in allow under `deny-all`; earlier permission hooks and deny rules still win.
+The model initially sees only names and descriptions through TanStack AI `withSkills`, then uses its `load_skill` tool to read a selected body. `disable-model-invocation: true` hides a skill from automatic selection while allowing explicit `/skill` invocation. The official `read_skill_resource` tool reads bundled files under `references/` or `assets/`. Loading never executes scripts, installs dependencies, or grants permissions through `allowed-tools`. Skills tools are internal: they use the ordinary tool batch and hooks without interactive approval, including under `deny-all`. Script commands still use ordinary tools and permissions.
 
-Each skill must explicitly declare a valid `name` matching its real directory and a `description`. Malformed entries have diagnostics. Files changed since discovery require `/skills reload`; bodies above 50 KiB of UTF-8 fail without truncation. A refresh accepted during execution applies after the current response and tool batch. Oversized catalogs or inputs fail with guidance to reduce sources or split instructions.
+TanStack `skillDirectory` handles discovery and metadata validation; malformed entries are skipped under its rules. The project source precedes the personal source, and the official first-wins combiner resolves names. `/skills reload` refreshes the sources. An accepted Skills change applies after the current `chat()` run; later runs can reload instructions after context compaction. Final request limits include the injected catalog and tools.
 
 Disable with `--no-skills` or configure overrides in `.forge-agent/config.json` (relative paths resolve from startup cwd):
 
@@ -90,13 +90,13 @@ Disable with `--no-skills` or configure overrides in `.forge-agent/config.json` 
 }
 ```
 
-Missing defaults are empty; a missing explicit override is an error. Set `enabled` to `false` to stop discovery and remove the catalog and loading tool. The SDK is disabled by default and accepts explicit roots; see [Skills](docs/sdk.en.md#skills). Source provenance is in [the Skills module](packages/core/src/skills/LOCAL_CHANGES.md).
+Missing defaults are empty; a missing explicit override is an error. Set `enabled` to `false` to stop discovery and remove the catalog and loading tool. The SDK is disabled by default and accepts explicit roots; see [Skills](docs/sdk.en.md#skills) and [ADR-026](docs/decisions/026-native-skills-and-markdown-memory.md).
 
 ## Persistent Memory
 
-Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. The model can save useful preferences and lessons during a task, and reads details on demand. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Release evidence and the default-enable gate are tracked in the [implementation record](docs/phases/persistent-memory.md).
+Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. TanStack `memoryMiddleware` recalls the index at run start and defers an additional model call to organize a completed turn; useful changes are then written to local Markdown. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Current implementation and acceptance evidence are tracked in the [Issue #37 record](docs/phases/tool-ecosystem-issue-37.md).
 
-The CLI enables memory injection and automatic updates by default. You can disable them independently; `permissionMode: "deny-all"` blocks model writes and deletions while explicit management remains available.
+The CLI enables memory injection and deferred updates by default. You can disable them independently. Memory management tools are internal and do not prompt for permission, including under `permissionMode: "deny-all"`; ordinary file and shell tools still follow their permission policy.
 
 Use `/memory` for help and directory locations. Examples:
 
@@ -111,11 +111,11 @@ Use `/memory` for help and directory locations. Examples:
 /memory delete project workflow.md
 ```
 
-`edit` and `delete` use your last read version and reject intervening edits. Plain Markdown can also be edited in your editor. `search <scope> <words>` searches unindexed notes; `read <scope> <path> <offset>` continues a page using its `nextOffset`. `unpin` removes a pin. `import <session-path>` explicitly imports a bounded excerpt from one current-project conversation for model-assisted organization; startup never scans history for memory.
+`save`, `edit`, and `delete` operate directly on Markdown files, without a read-version protocol. Plain Markdown can also be edited in your editor. `search <scope> <words>` searches unindexed notes; `read <scope> <path> <offset>` continues a page using its `nextOffset`. `unpin` removes a pin. `import <session-path>` explicitly imports a bounded excerpt from one current-project conversation for model-assisted organization; startup never scans history for memory.
 
 Files live under `$XDG_DATA_HOME/forge-agent/memory` (default `~/.local/share/forge-agent/memory`), outside the Git checkout. User preferences are separate from project notes. A new worktree copies the main worktree's project Markdown once, then evolves independently. Later edits, deletions and Git merges do not synchronize copies. Deleting a note does not delete session history.
 
-`memory.autoUpdate` and `memory.injection` in configuration independently control model writes and automatic injection. `/memory auto off` and `/memory inject off` change those settings for the current process. Explicit `/memory` management remains available with both off. `--memory 'read project workflow.md'` works without a model; separate invocations can pass the returned version with `edit ... --version VERSION CONTENT` or `delete ... --version VERSION`. An oversized index can be saved successfully while only a bounded fragment is injected; pinned content that does not fit is reported. Topic and index commits are independent.
+`memory.autoUpdate` and `memory.injection` independently control deferred organization and run-start recall. `/memory auto off` and `/memory inject off` change those settings for the current process and apply to the current Agent after its active run. Explicit `/memory` management remains available with both off. `--memory 'read project workflow.md'` works without a model. The `memory` save event reports skipped, saved, or failed status and organizer usage when available; a failed organizer does not change the task result. Recall refreshes on the next run. Topic and index writes are independent.
 
 The SDK only uses memory when its host supplies `memory: { store: new LongTermMemory({ project: absoluteDirectory }) }`; see the [SDK guide](docs/sdk.en.md#persistent-memory).
 

@@ -1,6 +1,6 @@
 # 通用 Agent — 规划
 
-> 状态:后续路线(2026-09-27)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
+> 状态:后续路线(2026-09-28)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
 > 按[当前文档导航](README.md)读取合同与证据；历史路线仅在追溯时进入[归档索引](archive/README.md)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [TanStack 基座](phases/tanstack-foundation.md)、[基座验收](phases/tanstack-foundation-acceptance.md)。
 
@@ -9,7 +9,7 @@
 - [ ] 在明确凭据、目标及请求数/时间/费用预算后，按[原生 Adapter 合同](phases/model-adapter.md)完成真实供应商 AC-7：普通回答、工具续轮、摘要、恢复和取消。当前架构与本次离线软件证据见 [ADR-025](decisions/025-tanstack-agent-foundation.md)及[基座验收](phases/tanstack-foundation-acceptance.md)。
 - [ ] 在具备真实账号、模型预算及平台环境后，按 [MCP 验收记录](phases/mcp-client-acceptance.md)验证仍未实测的边界；[Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 代码交付与任务关闭不将未测项改写为通过。
 - [ ] 对照[基座验收的外部边界](phases/tanstack-foundation-acceptance.md#外部边界)安排真实任务与跨平台验证；Linux 离线结果不扩展为真实供应商或长期使用证据。
-- [ ] 从现有 [Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)继续明确第三批的调研场景及增量扩展范围，不重新安排首轮接入。
+- [ ] 从 [Issue #37 的官方 Skills 接入](phases/tool-ecosystem-issue-37.md)继续明确第三批的调研场景及增量扩展范围；旧 [Skills 验收](archive/phases/skills-acceptance.md)只对应首轮实现。
 
 ## 2. 后续路线
 
@@ -28,7 +28,7 @@
 - 当前默认上下文压缩见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；上下文压缩的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
-- 持久记忆规格见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，当前实现、默认行为与发布证据见[施工图](phases/persistent-memory.md)；知识库和额外检索基础设施仍按场景另行接入。
+- 当前持久记忆按 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 使用官方 deferred 调度及 Markdown adapter，实施与验收见[施工图](phases/tool-ecosystem-issue-37.md)；[Issue #32 记录](archive/phases/persistent-memory.md)只证明旧会话内方案。知识库和额外检索基础设施仍按场景另行接入。
 
 ### 第五批 — 服务 API 与分发
 

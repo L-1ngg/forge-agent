@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-通用单 Agent 项目(TypeScript + Bun)。TanStack AI `chat()` 是唯一的模型/工具续轮循环；Forge `AgentSession` 统一输入归属、配置快照、会话持久化、上下文策略与权威终态。原生 provider adapters 负责协议，Forge 保留目录/认证、严格工具授权与并发策略、证据压缩、Markdown 记忆、Skills 和官方 MCP SDK v2 接入。SDK 为 `@forge-agent/core/sdk`，模型接缝是 TanStack 原生 `adapter`；CLI/TUI 共用同一执行路径。Pi runtime 与 StreamFn 已删除，来源记录留在归档；保留的 Skills scanner 与目录来源分别见其本地来源声明。Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md)，执行架构见 [ADR-025](docs/decisions/025-tanstack-agent-foundation.md)，包边界见 [README](README.md#architecture)。
+通用单 Agent 项目(TypeScript + Bun)。TanStack AI `chat()` 是唯一的模型/工具续轮循环；Forge `AgentSession` 统一输入归属、配置快照、会话持久化、上下文策略与权威终态。原生 provider adapters 负责协议，Forge 保留目录/认证、严格工具授权与并发策略、证据压缩、Markdown 记忆、Skills 和官方 MCP SDK v2 接入。SDK 为 `@forge-agent/core/sdk`，模型接缝是 TanStack 原生 `adapter`；CLI/TUI 共用同一执行路径。Pi runtime 与 StreamFn 已删除，来源记录留在归档；Skills 使用官方 `withSkills` 与目录 Source，记忆使用官方 `memoryMiddleware` 和 Markdown adapter。Team 编排归外部项目。定位见 [ADR-008](docs/decisions/008-general-agent-positioning.md)，执行架构见 [ADR-025](docs/decisions/025-tanstack-agent-foundation.md) 与 [ADR-026](docs/decisions/026-native-skills-and-markdown-memory.md)，包边界见 [README](README.md#architecture)。
 
 ## 真相源层级
 

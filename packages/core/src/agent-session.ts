@@ -1,4 +1,6 @@
-import { chat, toolDefinition, type ChatMiddleware, type TextOptions, type JSONSchema } from "@tanstack/ai";
+import { chat, toolDefinition, convertSchemaToJsonSchema, parseWithStandardSchema, type ChatMiddleware, type TextOptions, type JSONSchema, type AnyTool } from "@tanstack/ai";
+import { createResourceTool, filter, withSkills } from "@tanstack/ai-skills";
+import { memoryMiddleware } from "@tanstack/ai-memory";
 import type { HarnessTool } from "@forge-agent/tools";
 import type { SessionEvent, SessionMessage, ResponseEnvelope, TurnResult } from "@forge-agent/protocol";
 import { randomUUID } from "node:crypto";
@@ -10,11 +12,10 @@ import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type M
 import { toModelMessages } from "./model-response.ts";
 import { observeModelResponse, linkedController } from "./model-call.ts";
 import { transformMessages } from "./context/transform.ts";
-import { checkRequestBudget, isolateRequest, REQUEST_MARGIN, type RequestBudget } from "./context/request-budget.ts";
+import { checkRequestBudget, isolateRequest, requestFixedText, REQUEST_MARGIN, type RequestBudget } from "./context/request-budget.ts";
 import { TurnPolicy } from "./turn-policy.ts";
-import { loadSkill } from "./skills/load.ts";
+import { explicitSkillBody, type PreparedSkills } from "./skills/source.ts";
 import { calculateContextUsage, UsageTracker } from "./usage.ts";
-import { skillLoader, validateSkillArguments } from "./skills/tools.ts";
 import { emptySkills, SkillError, type SkillsSnapshot, type AgentInput } from "./skills/types.ts";
 import { CompactionCoordinator } from "./context/coordinator.ts";
 import { decorateToolEvent, type CommandPresentation } from "./event-projection.ts";
@@ -25,8 +26,8 @@ import { contextSearcher } from "./context/search-context.ts";
 import { messageEntry, projectMessages, selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { buildContext, resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionResult, type ContextSettings } from "./context/compaction.ts";
 import { compactionInputBudget } from "./context/compact.ts";
-import { MemoryTools } from "./memory/tools.ts";
-import { ContextAssembler, memoryInjectionBudget } from "./context/assembler.ts";
+import { createMemoryTools } from "./memory/tools.ts";
+import { MarkdownMemoryAdapter } from "./memory/adapter.ts";
 
 interface ActiveTurn {
 	id: symbol; begun: boolean; canceled: boolean; iterator: AsyncIterator<SessionEvent>;
@@ -34,6 +35,7 @@ interface ActiveTurn {
 }
 interface ResponseSnapshot {
 	options: SessionConfiguration; revision: number; settings: ModelRequestSettings;
+	internalTools: ReadonlySet<HarnessTool<object, unknown>>;
 	batch?: ToolBatch; completed: boolean;
 }
 
@@ -41,24 +43,25 @@ interface ResponseSnapshot {
 export class AgentSession implements Agent {
 	readonly requests;
 	private skills: SkillsSnapshot;
+	private skillSources: PreparedSkills;
 	private readonly compaction: CompactionCoordinator;
 	private options: SessionConfiguration;
 	private tools: Array<HarnessTool<object, unknown>>;
 	private driver: SessionAssembly["driver"];
 	private preparationFailed = false;
 	private requestProjection: { messages: SessionMessage[]; tokens?: number; contextWindow: number; } | undefined;
-	private publishedMemory: string | undefined;
 	private responseDriver: SessionAssembly["driver"] | undefined;
 	private lastResponse: SessionMessage | undefined;
 	private disposed = false;
 	private disposing: Promise<void> | undefined;
 	private executing = false;
+	private inChat = false;
 	private revision = 0;
 	private appliedRevision = 0;
 	private turnPolicy: TurnPolicy | undefined;
 	private readonly configurationController = new AbortController();
 	private configurationQueue: Promise<void> = Promise.resolve();
-	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void; }> = [];
+	private pendingConfigurations: Array<{ assembly: SessionAssembly; revision: number; runBound: boolean; resolve: (value: Awaited<ConfigurationReceipt["applied"]>) => void; }> = [];
 	private state: SessionState;
 	private settings: ContextSettings;
 	private compactController: AbortController | undefined;
@@ -68,6 +71,7 @@ export class AgentSession implements Agent {
 	private taskFailures = 0;
 	private accepting = false;
 	private readonly preparedSkills = new WeakSet<SessionMessage>();
+	private readonly explicitSkillNames = new Set<string>();
 	private readonly stagedMcp = new Map<SessionMessage, string[]>();
 	private skillInputs = new Map<SessionMessage, { invocation: Exclude<AgentInput, string>; inputId: string; }>();
 	private receipts = new Map<SessionMessage, (processed: boolean) => void>();
@@ -78,27 +82,20 @@ export class AgentSession implements Agent {
 	private active: ActiveTurn | undefined;
 	private running: Promise<void> | undefined;
 	private emit: (event: SessionEvent) => void = () => { };
-	private readonly memoryTools: MemoryTools | undefined;
-	private readonly assembler: ContextAssembler;
-	private memoryWriteMode: boolean | undefined;
 
 	constructor(assembly: SessionAssembly, private readonly storage: SessionStorage, private readonly bus: RequestBus, state: SessionState,
 		private readonly prepareConfiguration: (patch: ConfigurationPatch, refresh?: boolean, signal?: AbortSignal) => Promise<SessionAssembly>) {
 		this.requests = bus.requests();
 		this.state = structuredClone(state); selectedBranch(this.state);
 		this.skills = assembly.skills ?? emptySkills();
+		this.skillSources = assembly.skillSources ?? { snapshot: emptySkills() };
 		this.options = assembly.options; this.driver = assembly.driver;
 		const options = this.options;
-		this.assembler = new ContextAssembler(options.memory);
-		if (options.memory) this.memoryTools = new MemoryTools(options.memory, () => {
-			const entry = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
-			return { kind: "session", timestamp: entry?.timestamp ?? new Date().toISOString(), ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(entry ? { entryId: entry.id } : {}) };
-		}, () => this.getMemoryBudget());
 		this.settings = { ...DEFAULT_CONTEXT, ...options.context };
 		this.tools = this.prepareTools();
 		this.usage = new UsageTracker({ contextWindow: options.contextWindow ?? options.model.contextWindow });
 		this.compaction = new CompactionCoordinator({
-			messages: () => this.messages(), tools: () => this.tools, usage: this.usage, assembler: this.assembler,
+			messages: () => this.messages(), tools: () => this.tools, usage: this.usage,
 			configuration: () => ({ options: this.options, driver: this.summaryDriver(), settings: this.settings }),
 			history: () => this.state, persist: entry => this.persistEntry(entry), isFaulted: () => this.failure !== undefined,
 		});
@@ -160,7 +157,8 @@ export class AgentSession implements Agent {
 		this.usage.beginTurn(); this.accepting = true;
 		this.turnPolicy = this.options.shouldStopAfterTurn ? new TurnPolicy(this.options.shouldStopAfterTurn) : undefined;
 		this.preparationFailed = false; this.requestProjection = undefined; this.lastResponse = undefined;
-		this.runController = new AbortController(); this.memoryTools?.reset();
+		this.explicitSkillNames.clear();
+		this.runController = new AbortController();
 		const running = this.runSession(input, this.runController.signal, inputId).then(result => { active.outcome = result; }, error => { failure = error; active.outcome = { status: "error" }; }).finally(() => { done = true; wake?.(); });
 		this.running = running;
 		try {
@@ -220,12 +218,11 @@ export class AgentSession implements Agent {
 					message.content = [{ type: "text", text: `MCP ${context.serverId}/${context.name}\n${context.messages.map(item => `[${item.role}] ` + item.content.filter(block => block.type === "text").map(block => block.text).join("\n")).join("\n")}\nUser task:\n${invocation.task}` }];
 				} else {
 					if (typeof invocation.task !== "string") throw new SkillError("invalid-skill", "Invalid Skill invocation");
-					const args = { name: invocation.name }; validateSkillArguments(args);
-					const check = await checkPermission({ type: "tool_call", id: inputId, name: "load_skill", arguments: args }, { context: this.options.permission ?? {}, ...(this.options.requestBus ? { requestBus: this.options.requestBus } : {}) }, signal);
-					if (!check.allowed) throw new SkillError("permission-denied", check.reason);
-					const loaded = await loadSkill(this.skills, invocation.name, true, signal);
-					const { body, ...source } = loaded;
-					message.content = [{ type: "text", text: `Skill instructions (${JSON.stringify(source)}):\n${body}\n\nUser task:\n${invocation.task}` }];
+					if (!this.skillSources.all) throw new SkillError("skills-disabled", "Skills are disabled");
+					if (!this.skills.entries.some(entry => entry.status === "available" && entry.name === invocation.name)) throw new SkillError("unknown-skill", `Unknown skill: ${invocation.name}`);
+					const body = explicitSkillBody(await this.skillSources.all.load(invocation.name));
+					message.content = [{ type: "text", text: `Skill instructions (${invocation.name}):\n${body}\n\nUser task:\n${invocation.task}` }];
+					this.explicitSkillNames.add(invocation.name);
 				}
 			}
 			signal?.throwIfAborted(); this.runController?.signal.throwIfAborted();
@@ -259,24 +256,19 @@ export class AgentSession implements Agent {
 		const snapshot = this.usage.snapshot(), request = this.requestProjection;
 		return request?.tokens === undefined ? snapshot : { ...snapshot, contextTokens: request.tokens, contextWindow: request.contextWindow, contextEstimated: true };
 	}
-	getMemoryBudget(): number {
-		if (this.options.memory?.injection === false) return 0;
-		return memoryInjectionBudget(this.requestProjection?.messages ?? projectMessages(this.messages()), this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens));
-	}
-
-	private requestBudget(): RequestBudget {
+	private requestBudget(fixedText?: string): RequestBudget {
 		const budget = this.compaction.budget();
 		return {
 			contextWindow: budget.window, inputBudget: compactionInputBudget(budget, this.settings.reserveTokens), maxInputTokens: budget.window - budget.output - REQUEST_MARGIN,
-			fixedTokens: Math.ceil(budget.fixedText.length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output
+			fixedTokens: Math.ceil((fixedText ?? budget.fixedText).length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output
 		};
 	}
-	private async prepareRequestContext(signal: AbortSignal): Promise<SessionMessage[]> {
+	private async prepareRequestContext(signal: AbortSignal, fixedText: string): Promise<SessionMessage[]> {
 		try {
 			signal.throwIfAborted(); this.requestProjection = undefined;
 			const history = () => projectMessages(this.messages());
-			await this.assembleMemory(history(), signal, false); this.compaction.syncUsage();
-			const budget = this.requestBudget();
+			this.compaction.syncUsage();
+			const budget = this.requestBudget(fixedText);
 			if (this.settings.enabled && (this.getUsage()?.contextTokens ?? 0) > budget.inputBudget) {
 				const result = await this.compaction.run("threshold", signal, this.emit);
 				if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
@@ -289,9 +281,8 @@ export class AgentSession implements Agent {
 			}
 			signal.throwIfAborted();
 			this.requestProjection = { messages, contextWindow: budget.contextWindow };
-			await this.assembleMemory(messages, signal, true);
 			signal.throwIfAborted();
-			return [...this.assembler.projection.messages, ...messages];
+			return messages;
 		} catch (error) {
 			this.requestProjection = undefined;
 			signal.throwIfAborted();
@@ -299,23 +290,9 @@ export class AgentSession implements Agent {
 			throw error;
 		}
 	}
-	private async assembleMemory(messages: SessionMessage[], signal: AbortSignal, publish: boolean): Promise<void> {
-		this.publishedMemory ??= JSON.stringify(this.assembler.projection);
-		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
-		const before = JSON.stringify(this.assembler.projection);
-		const projection = await this.assembler.assemble(messages, this.compaction.budget().fixedText, compactionInputBudget(this.compaction.budget(), this.settings.reserveTokens), `${latest?.id}:${this.memoryTools?.revision}`, signal);
-		const serialized = JSON.stringify(projection);
-		if (serialized !== before) this.usage.invalidate();
-		if (publish && serialized !== this.publishedMemory) {
-			this.publishedMemory = serialized;
-			this.emit({ type: "memory", phase: "projection", tokens: projection.tokens, truncated: projection.truncated, selected: projection.selected, warnings: projection.warnings, timestamp: Date.now() });
-		}
-	}
-
 	private prepareTools(): Array<HarnessTool<object, unknown>> {
-		this.memoryWriteMode = this.memoryTools?.options.autoUpdate !== false;
 		validateSessionTools(this.options);
-		return [...this.options.tools ?? [], ...(this.skills.enabled ? [skillLoader(this.skills)] : []), contextReader(() => this.state), contextSearcher(() => this.state), ...this.memoryTools?.tools() ?? []];
+		return [...this.options.tools ?? [], contextReader(() => this.state), contextSearcher(() => this.state)];
 	}
 	configureContext(settings: Partial<ContextSettings>): void {
 		this.assertHealthy();
@@ -365,9 +342,22 @@ export class AgentSession implements Agent {
 		if (this.turnPolicy && !["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "")) await this.turnPolicy.evaluate({ message, toolResults: current.batch?.messages ?? [], model: structuredClone(current.options.model), configurationRevision: current.revision }, current.settings.signal);
 	}
 	private async runChat(signal: AbortSignal): Promise<void> {
+		this.inChat = true;
 		let current: ResponseSnapshot;
 		let engineFailure: unknown;
 		let firstRequest = true;
+		const source = this.skillSources.automatic;
+		const explicitOnly = new Set(this.skills.entries.filter(entry => entry.status === "available" && entry.disableModelInvocation).map(entry => entry.name));
+		const resource = this.skillSources.all ? createResourceTool(filter(this.skillSources.all, skill => !explicitOnly.has(skill.name) || this.explicitSkillNames.has(skill.name))) : undefined;
+		const memory = this.options.memory ? { ...this.options.memory } : undefined;
+		const latest = selectedBranch(this.state).reverse().find(entry => entry.type === "message" && entry.message.role === "user");
+		const provenance = () => ({ kind: "session" as const, timestamp: latest?.timestamp ?? new Date().toISOString(), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(latest ? { entryId: latest.id } : {}) });
+		const memoryAdapter = memory ? new MarkdownMemoryAdapter(memory, { ...this.options }, provenance, () => selectedBranch(this.state).filter((entry): entry is SessionEntry & { type: "message" } => entry.type === "message" && entry.message.role === "toolResult" && !entry.message.isError && (!latest || entry.timestamp >= latest.timestamp)).map(entry => JSON.stringify({ tool: entry.message.toolName, content: entry.message.content })).join("\n").slice(0, 4000)) : undefined;
+		const memoryTools = memory ? createMemoryTools(memory.store, provenance) : [];
+		const nativeTools = new Map<string, AnyTool>();
+		if (resource) nativeTools.set(resource.name, resource);
+		for (const tool of memoryTools) nativeTools.set(tool.name, tool);
+		let forgePrompt: string | undefined;
 		const routed: ModelAdapter = {
 			kind: "text", name: "forge", model: this.options.model.id, "~types": undefined!,
 			chatStream: (request: TextOptions) => {
@@ -387,7 +377,7 @@ export class AgentSession implements Agent {
 		};
 		const middleware: ChatMiddleware = {
 			name: "forge-session",
-			onConfig: async ctx => {
+			onConfig: async (ctx, config) => {
 				if (ctx.phase !== "beforeModel") return;
 				signal.throwIfAborted(); this.lastResponse = undefined;
 				// The first request's input was already prepared with a configuration
@@ -396,33 +386,70 @@ export class AgentSession implements Agent {
 					this.applyConfigurations();
 					for (const message of this.drain(this.steering, this.options.steeringMode)) await this.consumeInput(message, signal);
 				}
+				const initialRequest = firstRequest;
 				firstRequest = false;
-				if (this.memoryTools && this.memoryWriteMode !== (this.memoryTools.options.autoUpdate !== false)) { this.tools = this.prepareTools(); this.usage.invalidate(); }
+				const baseNames = new Set(this.tools.map(tool => tool.name));
+				for (const tool of config.tools) {
+					if (baseNames.has(tool.name) && !nativeTools.has(tool.name)) {
+						if (initialRequest) throw new Error(`Tool name collision: ${tool.name}`);
+						continue;
+					}
+					if (!nativeTools.has(tool.name)) nativeTools.set(tool.name, tool);
+				}
+				const internal = new Set<HarnessTool<object, unknown>>();
+				const native = [...nativeTools.values()].map(tool => {
+					const schema = convertSchemaToJsonSchema(tool.inputSchema) as JSONSchema;
+					if (schema.type !== "object") throw new Error(`Native tool ${tool.name} requires an object schema`);
+					const bridged: HarnessTool<object, unknown> = {
+						name: tool.name, label: tool.name, description: tool.description, parameters: schema as HarnessTool<object, unknown>["parameters"],
+						validateArguments: args => parseWithStandardSchema<object>(tool.inputSchema!, args),
+						async execute(args, context) {
+							const output = await tool.execute!(args, { ...(context.toolCallId ? { toolCallId: context.toolCallId } : {}), ...(context.signal ? { abortSignal: context.signal } : {}), emitCustomEvent: () => {} });
+							return { content: [{ type: "text", text: JSON.stringify(output) }], details: output };
+						},
+					};
+					internal.add(bridged);
+					return bridged;
+				});
+				const effectiveTools = [...this.tools, ...native];
+				if (new Set(effectiveTools.map(tool => tool.name)).size !== effectiveTools.length) throw new Error("Tool name collision with an internal tool");
 				current = {
-					options: { ...this.options, tools: this.tools }, revision: this.appliedRevision, completed: false,
+					options: { ...this.options, tools: effectiveTools }, internalTools: internal, revision: this.appliedRevision, completed: false,
 					settings: { signal, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(this.options.thinkingLevel !== "off" ? { reasoning: this.options.thinkingLevel } : {}) }
 				};
 				this.emit({ type: "turn_start", timestamp: Date.now() });
-				const projection = await this.prepareRequestContext(signal);
-				const request = isolateRequest({ messages: projectMessages(projection), systemPrompt: current.options.systemPrompt, tools: current.options.tools ?? [] });
+				const prompts = [...config.systemPrompts.filter(prompt => (typeof prompt === "string" ? prompt : prompt.content) !== forgePrompt), { content: current.options.systemPrompt }];
+				forgePrompt = current.options.systemPrompt;
+				const systemPrompt = prompts.map(prompt => typeof prompt === "string" ? prompt : prompt.content).join("\n\n");
+				const fixedText = requestFixedText({ systemPrompt, tools: effectiveTools });
+				const projection = await this.prepareRequestContext(signal, fixedText);
+				const request = isolateRequest({ messages: projectMessages(projection), systemPrompt, tools: effectiveTools });
 				try {
-					const tokens = checkRequestBudget(request, this.requestBudget(), current.revision);
+					const tokens = checkRequestBudget(request, this.requestBudget(fixedText), current.revision);
 					if (this.requestProjection) this.requestProjection.tokens = tokens;
 				} catch (error) { this.preparationFailed = true; throw error; }
 				signal.throwIfAborted();
 				const snapshot = current;
 				// Harness schemas are validated JSON Schema objects; narrow their open
 				// property values only here at the native tool-definition boundary.
-				const tools = this.tools.map(tool => toolDefinition({ name: tool.name, description: tool.description, inputSchema: tool.parameters as JSONSchema, outputSchema: { type: "string" } }).server((_args, context) => {
-					const result = snapshot.batch?.results.get(context?.toolCallId ?? "");
-					return result?.content.filter(part => part.type === "text").map(part => part.text).join("\n") ?? "Tool was not executed";
-				}));
-				return { messages: toModelMessages(projectMessages(sessionMessages(this.state))), providerMessages: toModelMessages(request.messages), systemPrompts: [{ content: current.options.systemPrompt }], tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
+				const tools = effectiveTools.map(tool => {
+					const original = nativeTools.get(tool.name);
+					if (original) return { ...original, execute: (_args: unknown, context?: { toolCallId?: string }) => {
+						const result = snapshot.batch?.results.get(context?.toolCallId ?? "");
+						if (!result || result.isError) throw new Error(result?.content.find(part => part.type === "text")?.text ?? "Tool was not executed");
+						return result.details;
+					} };
+					return toolDefinition({ name: tool.name, description: tool.description, inputSchema: tool.parameters as JSONSchema, outputSchema: { type: "string" } }).server((_args, context) => {
+						const result = snapshot.batch?.results.get(context?.toolCallId ?? "");
+						return result?.content.filter(part => part.type === "text").map(part => part.text).join("\n") ?? "Tool was not executed";
+					});
+				});
+				return { messages: toModelMessages(projectMessages(sessionMessages(this.state))), providerMessages: toModelMessages(request.messages), systemPrompts: prompts, tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
 			},
 			onInterruptBoundary: async (ctx): Promise<undefined> => {
 				if (ctx.phase !== "beforeTools") return;
 				if (!this.lastResponse || signal.aborted || ["error", "aborted", "length", "deferred"].includes(this.lastResponse.stopReason ?? "")) return;
-				current.batch = await executeToolBatch(this.lastResponse, current.options, sessionMessages(this.state), signal, this.emit, message => this.persistMessage(message));
+				current.batch = await executeToolBatch(this.lastResponse, current.options, sessionMessages(this.state), signal, this.emit, message => this.persistMessage(message), current.internalTools);
 				return undefined;
 			},
 			onToolPhaseComplete: async () => { if (current && this.lastResponse) await this.completeTurn(current); },
@@ -433,9 +460,15 @@ export class AgentSession implements Agent {
 		try {
 			// Session events carry failures; native console logging would corrupt JSON
 			// stdout and duplicate the same provider error outside the host contract.
-			for await (const _ of chat({ adapter: routed, messages: toModelMessages(projectMessages(this.messages())), ...(this.options.sessionId ? { threadId: this.options.sessionId } : {}), abortController: linked.controller, middleware: [middleware], agentLoopStrategy: () => true, debug: false })) { }
+			const nativeMiddleware = memoryAdapter ? memoryMiddleware({
+				adapter: memoryAdapter, scope: { threadId: this.options.sessionId ?? "session" }, role: memory?.injection === false ? "save-only" : "recall+save",
+				onRecall: ({ result }) => this.emit({ type: "memory", phase: "recall", selected: result.fragments?.map(fragment => fragment.source) ?? [], timestamp: Date.now() }),
+				onSave: ({ receipts }) => this.emit({ type: "memory", phase: "save", status: receipts.some(receipt => !receipt.ok) ? "failed" : receipts.length ? "saved" : "skipped", calls: memoryAdapter.organizerCalls, ...(memoryAdapter.organizerUsage ? { usage: memoryAdapter.organizerUsage } : {}), receipts: receipts.map(receipt => ({ ok: receipt.ok, ...(receipt.error ? { error: receipt.error } : {}), ...(receipt.raw ? { raw: receipt.raw } : {}) })), timestamp: Date.now() }),
+			}) : undefined;
+			const middlewareChain = [...(nativeMiddleware ? [nativeMiddleware] : []), ...(source ? [withSkills(source)] : []), middleware];
+			for await (const _ of chat({ adapter: routed, messages: toModelMessages(projectMessages(this.messages())), ...(this.options.sessionId ? { threadId: this.options.sessionId } : {}), abortController: linked.controller, tools: [...(resource ? [resource] : []), ...memoryTools], middleware: middlewareChain, agentLoopStrategy: () => true, debug: false })) { }
 		} catch (error) { engineFailure = error; }
-		finally { linked.dispose(); }
+		finally { linked.dispose(); this.inChat = false; this.applyConfigurations(); }
 		if (this.failure !== undefined) throw this.failure;
 		if (signal.aborted && this.lastResponse?.stopReason !== "aborted" && (!this.lastResponse || this.lastResponse.content.some(part => part.type === "tool_call"))) {
 			await this.recordFailure(signal.reason ?? new Error("Request aborted"), signal);
@@ -545,7 +578,7 @@ export class AgentSession implements Agent {
 			const assembly = await this.prepareConfiguration(captured, refresh, this.configurationController.signal);
 			try { this.assertHealthy(); } catch (error) { await assembly.mcp?.discard(); throw error; }
 			const revision = ++this.revision;
-			const applied = new Promise<Awaited<ConfigurationReceipt["applied"]>>(resolve => { this.pendingConfigurations.push({ assembly, revision, resolve }); });
+			const applied = new Promise<Awaited<ConfigurationReceipt["applied"]>>(resolve => { this.pendingConfigurations.push({ assembly, revision, runBound: refresh || "skills" in captured || "memory" in captured, resolve }); });
 			this.emit({ type: "configuration", phase: "accepted", revision, timestamp: Date.now() });
 			if (!this.executing && !this.compactController) this.applyConfigurations();
 			return { accepted: true as const, revision, applied };
@@ -554,11 +587,13 @@ export class AgentSession implements Agent {
 		return operation;
 	}
 	private applyConfigurations(): void {
-		for (const pending of this.pendingConfigurations.splice(0)) {
+		while (this.pendingConfigurations.length && !(this.inChat && this.pendingConfigurations[0]!.runBound)) {
+			const pending = this.pendingConfigurations.shift()!;
 			if (this.disposed || this.failure !== undefined) { void pending.assembly.mcp?.discard().catch(() => { }); pending.resolve({ status: "canceled", revision: pending.revision }); continue; }
 
 			pending.assembly.mcp?.commit(pending.revision);
 			this.skills = { ...(pending.assembly.skills ?? emptySkills()), revision: pending.revision };
+			this.skillSources = pending.assembly.skillSources ?? { snapshot: emptySkills() };
 			this.requestProjection = undefined;
 			this.appliedRevision = pending.revision;
 			this.options = pending.assembly.options; this.tools = this.prepareTools(); this.driver = pending.assembly.driver;

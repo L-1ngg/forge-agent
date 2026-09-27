@@ -95,7 +95,11 @@ test("MCP template expansion after rewrite authorizes the exact final URI and en
 	const server = serve(mcpFixture); let requests = 0; let authorized: unknown;
 	const model = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 		const body = await request.json();
-		if (++requests === 1) { expect(JSON.stringify(body)).toContain("oneOf"); return modelResponse([{ id: "template", name: "mcp_read_resource", arguments: { serverId: "fixture", template: "fixture://item/{id}", arguments: { id: "original" } } }]); }
+		if (++requests === 1) {
+			const resource = body.tools?.find((tool: { name: string }) => tool.name === "mcp_read_resource");
+			expect(resource?.input_schema?.oneOf).toHaveLength(2);
+			return modelResponse([{ id: "template", name: "mcp_read_resource", arguments: { serverId: "fixture", template: "fixture://item/{id}", arguments: { id: "original" } } }]);
+		}
 		expect(JSON.stringify(body)).toContain("rewritten"); return modelResponse();
 	} });
 	const agent = await createAgent({ ...base, baseUrl: `http://127.0.0.1:${model.port}`, permission: { hooks: [{ evaluate(call) { authorized = call.arguments; return { kind: "allow", source: "hook" }; } }] },

@@ -737,8 +737,7 @@ export class App {
 	private handleEvent(event: SessionEvent): void {
 		if (event.type === "skill_input") this.projector.addNotice(`Skill ${event.name}: ${event.code}: ${event.message}`);
 		if (event.type === "memory") {
-			if (event.truncated) this.projector.addNotice("记忆索引已截断，仍可按需读取／搜索");
-			for (const warning of event.warnings) this.projector.addNotice(warning);
+			if (event.phase === "save" && event.status === "failed") for (const receipt of event.receipts) if (!receipt.ok) this.projector.addNotice(`Memory save failed: ${receipt.error ?? "unknown error"}`);
 		}
 		if (event.type === "compaction") this.projector.addNotice(`Context ${event.phase}${event.error ? ": " + event.error : ""}`);
 		if (event.type === "retry") this.projector.addNotice(`Model retry ${event.phase} #${event.attempt}${event.delayMs !== undefined ? ` in ${event.delayMs}ms` : ""}${event.outcome ? `: ${event.outcome}` : ""}`);

@@ -1,6 +1,6 @@
 # 持久记忆真实模型验收
 
-> 状态:质量/估算成本门槛通过(2026-09-17)，包含一次未改实现与样本的传输补跑。需求见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，预先确定的发布门槛与软件证据见[施工图](../../phases/persistent-memory.md)。本页保存实验结果，不另定义验收标准。
+> 状态:质量/估算成本门槛通过(2026-09-17)，包含一次未改实现与样本的传输补跑。需求见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，预先确定的发布门槛与软件证据见[历史施工图](../../archive/phases/persistent-memory.md)。本页保存旧实现的实验结果，不另定义当前验收标准。
 
 ## 方法与复现
 

@@ -5,7 +5,7 @@ created: 2026-09-19
 
 # Skills 首轮接入证据
 
-> 状态：本地实现、软件合同验收、全量门禁与提交前双轴审查通过（2026-09-19）。任务规格与 AC 唯一来源为 [#35](https://github.com/L-1ngg/forge-agent/issues/35)。实现交付提交为 `7a8fbff`；2026-09-21 核对 Issue 已于 2026-09-19 关闭。下文保留实现当日的验证记录，未因本次文档整理重跑；模型质量未验收。
+> 状态:已归档(2026-09-28；历史状态:Issue #35 首轮实现于 2026-09-19 交付 `7a8fbff`)。Pi scanner/loader 与相关测试已被 [Issue #37](../../phases/tool-ecosystem-issue-37.md) 替换。下文保留旧版本证据，不证明新官方 Skills 接入；模型质量当时未验收。
 
 起点 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`。开始时暂存区为空，`docs/plan.md` 已修改，`docs/phases/skills.md` 与两份 Skills 研究文档未跟踪；这些初始内容不纳入本次实现提交。
 

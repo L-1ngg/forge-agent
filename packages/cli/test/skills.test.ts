@@ -17,7 +17,7 @@ test("formal CLI lists, reloads, selects and disables Skills with valid JSON and
 	try {
 		await mkdir(join(cwd, ".forge/skills/manual"), { recursive: true }); await mkdir(join(cwd, ".forge-agent"), { recursive: true });
 		await writeFile(join(cwd, ".forge/skills/manual/SKILL.md"), "---\nname: manual\ndescription: Manual workflow\ndisable-model-invocation: true\n---\nCLI_BODY");
-		const config = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: fixture.url, skills: { roots: { user: ".forge/skills", builtin: ".forge/skills" } } };
+		const config = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: fixture.url, skills: { roots: { user: ".forge/skills", builtin: ".forge/skills" } }, memory: { autoUpdate: false } };
 		const configPath = join(cwd, ".forge-agent/config.json"); await writeFile(configPath, JSON.stringify(config));
 		const run = async (prompt: string, extra: string[] = []) => {
 			const child = Bun.spawn([process.execPath, entry, "--json", "-p", prompt, ...extra], { cwd, env: { PATH: process.env.PATH, XDG_CONFIG_HOME: join(cwd, "config"), XDG_DATA_HOME: join(cwd, "data") }, stdout: "pipe", stderr: "pipe" });

@@ -4,7 +4,7 @@
 
 仅在追溯旧版本行为、设计来源或用户指定时读取。正文中的“当前”“待实现”“下一步”属于记录当时的语境，不产生新实施授权。归档不会将历史未测、豁免、中止或失败改为通过。原始实验数据及仍被现行合同依赖的验收记录保留在当前目录，见[证据导航](../research/README.md)。
 
-以下 26 份材料于 2026-09-21 归档；按适用性选择，不按年龄或任务是否完成批量归档。ADR 保持原编号与路径，按其状态和替代指针解释。维护规范见[归档与读取规则](../README.md#归档与读取规则)。
+2026-09-21 起按适用性归档，不按年龄或任务是否完成批量归档。ADR 保持原编号与路径，按其状态和替代指针解释。维护规范见[归档与读取规则](../README.md#归档与读取规则)。
 
 ## 旧阶段与交付
 
@@ -45,8 +45,15 @@
 | [grok-build TUI 差距](research/grok-build-tui-gap.md) | [ADR-007](../decisions/007-no-compile-grok-reference.md)、[TUI 工作流](../phases/tui-main-workflow.md)；不编译 grok-build |
 | [同行 Agent/Team TUI](research/peer-agent-team-tui.md) | [项目定位](../decisions/008-general-agent-positioning.md)；Team 编排归外部项目 |
 | [终端 Markdown 与公式研究](research/terminal-markdown-math.md) | [Markdown 渲染](../phases/markdown-rendering.md)；未采用公式路线不构成待实施任务 |
-| [Skills 接入选型](research/skills-integration-options.md) | [Skills 设计](../phases/skills.md)与[验收](../phases/skills-acceptance.md)；首轮接入不再待实现 |
-| [Skills 社区比较](research/skills-community-options.md) | [Skills 设计](../phases/skills.md)；需要重新评估选型时核对最新上游，不能直接沿用旧版本比较 |
+| [Skills 接入选型](research/skills-integration-options.md) | [首轮 Skills 设计](phases/skills.md)与[验收](phases/skills-acceptance.md)；当前接入见 [Issue #37](../phases/tool-ecosystem-issue-37.md) |
+| [Skills 社区比较](research/skills-community-options.md) | [首轮 Skills 设计](phases/skills.md)；需要重新评估选型时核对最新上游，不能直接沿用旧版本比较 |
+
+## Issue #37 替代的旧施工与验收（2026-09-28）
+
+| 历史文档 | 当前入口或适用边界 |
+|---|---|
+| [Skills 首轮施工](phases/skills.md)、[验收](phases/skills-acceptance.md) | [Issue #37 施工与验收](../phases/tool-ecosystem-issue-37.md)；旧 Pi scanner、loader 与首轮证据不证明官方接入 |
+| [Issue #32 记忆施工与验收](phases/persistent-memory.md) | [ADR-019](../decisions/019-persistent-memory.md) 保留 Markdown/worktree 决定；当前 deferred 调度和质量边界见 [Issue #37](../phases/tool-ecosystem-issue-37.md) |
 
 ## 显式查阅
 

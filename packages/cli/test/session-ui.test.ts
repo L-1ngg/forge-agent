@@ -274,7 +274,7 @@ test("preview cache is bounded to twenty excerpts and is released when the picke
 import { skillInput } from "../src/skills-command.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 
-test("TUI rejected Skill input restores its original draft and keeps it with its session", async () => {
+test("TUI unknown Skill input restores its original draft and keeps it with its session", async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "forge-skill-switch-"));
 	await mkdir(join(cwd, "skills/manual"), { recursive: true });
 	await writeFile(join(cwd, "skills/manual/SKILL.md"), "---\nname: manual\ndescription: Manual workflow\n---\nPRIVATE_SKILL_BODY");
@@ -287,14 +287,13 @@ test("TUI rejected Skill input restores its original draft and keeps it with its
 	try {
 		await app.start(); input.send("ORIGINAL_SESSION\r"); await until(() => requests.length === 1 && !screen().includes("working"));
 		const original = sessions.current.id;
-		input.send("/skill manual ORIGINAL_TASK\r"); await until(() => screen().includes("load_skill"));
-		input.send("3"); await until(() => screen().includes("permission-denied") && !screen().includes("working"));
-		expect(screen()).toContain("/skill manual ORIGINAL_TASK");
+		input.send("/skill missing ORIGINAL_TASK\r"); await until(() => screen().includes("unknown-skill") && !screen().includes("working"));
+		expect(screen()).toContain("/skill missing ORIGINAL_TASK");
 		input.send("\x1b[H\x1b[200~/new\n\x1b[201~\r"); await until(() => sessions.current.id !== original);
 		expect(requests).toHaveLength(1); expect(screen()).not.toContain("ORIGINAL_TASK");
 		input.send("/resume\r"); await until(() => screen().includes("选择会话")); input.send("\r");
 		await until(() => sessions.current.id === original);
-		expect(screen()).toContain("/skill manual ORIGINAL_TASK"); expect(requests).toHaveLength(1);
+		expect(screen()).toContain("/skill missing ORIGINAL_TASK"); expect(requests).toHaveLength(1);
 	} finally { await app.stop(); await sessions.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
 });
 

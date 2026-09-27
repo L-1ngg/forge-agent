@@ -6,19 +6,19 @@ import { modelResponse } from "../../core/test/helpers/model-response.ts";
 import { createMemoryHost } from "../src/memory-host.ts";
 
 for (const mode of ["default", "deny-all"] as const) {
-	test(`CLI ${mode} permission mode governs automatic memory writes`, async () => {
+	test(`CLI ${mode} runs internal memory tools without interactive permission`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), "forge-cli-memory-permission-"));
 		let requests = 0;
 		const bodies: string[] = [];
 		const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 			bodies.push(await request.text());
-			return ++requests === 1 ? modelResponse([{ id: "memory-write", name: "write_memory", arguments: { scope: "project", path: "note.md", content: "confirmed note", expectedVersion: null } }]) : modelResponse();
+			return ++requests === 1 ? modelResponse([{ id: "memory-write", name: "write_memory", arguments: { scope: "project", path: "note.md", content: "confirmed note" } }]) : modelResponse();
 		} });
 		try {
 			await mkdir(join(directory, ".forge-agent"));
 			const store = (await createMemoryHost(directory, join(directory, "data"))).memory;
 			await writeFile(join(store.roots.project!, "MEMORY.md"), "EXISTING_MEMORY_INDEX");
-			await writeFile(join(directory, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), permissionMode: mode }));
+			await writeFile(join(directory, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), permissionMode: mode, memory: { autoUpdate: false } }));
 			const child = Bun.spawn([process.execPath, join(import.meta.dir, "../src/main.ts"), "--json", "-p", "save confirmed note"], { cwd: directory, env: { ...process.env, XDG_CONFIG_HOME: join(directory, "config"), XDG_DATA_HOME: join(directory, "data"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
 			const timer = setTimeout(() => child.kill(), 5000);
 			let output: string;
@@ -26,10 +26,10 @@ for (const mode of ["default", "deny-all"] as const) {
 				const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
 				expect(code).toBe(0); expect(stderr).toBe(""); output = stdout;
 			} finally { clearTimeout(timer); }
-			if (mode === "deny-all") { expect(await store.list("project")).toEqual(["MEMORY.md"]); expect(output).toContain("deny-all"); }
-			else expect((await store.read("project", "note.md")).text).toContain("confirmed note");
+			expect((await store.read("project", "note.md")).text).toContain("confirmed note");
 			expect(bodies[0]).toContain("EXISTING_MEMORY_INDEX");
-			expect(requests).toBe(mode === "deny-all" ? 1 : 2);
+			expect(requests).toBe(2);
+			expect(output).not.toContain('"kind":"permission"');
 		} finally { server.stop(true); await rm(directory, { recursive: true, force: true }); }
 	});
 }
@@ -53,7 +53,7 @@ test("real CLI retries after a read effect and starts an independent session on 
 	};
 	try {
 		await mkdir(join(directory, ".forge-agent")); await writeFile(join(directory, "input.txt"), "READ_EFFECT");
-		await writeFile(join(directory, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), retry: { baseDelayMs: 0 } }));
+		await writeFile(join(directory, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), retry: { baseDelayMs: 0 }, memory: { autoUpdate: false } }));
 		const first = await run(); expect(first.code).toBe(0);
 		expect(first.events.filter(event => event.type === "tool_execution_start")).toHaveLength(1);
 		expect(first.events.filter(event => event.type === "retry" && event.phase === "scheduled")).toHaveLength(1);

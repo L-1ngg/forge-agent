@@ -11,7 +11,7 @@ test("formal CLI PTY lists/reloads, completes explicit-only skill, submits once,
 	const fixture = new HttpFixture("skills-pty", [{ id: "selected", method: "POST", path: "/v1/messages", match(body) { const text = JSON.stringify(body); expect(text).toContain("PTY_BODY"); expect(text).toContain("PTY_TASK"); }, response: { chunks: [await modelResponse([], "end_turn", "PTY_COMPLETED").text()] } }]);
 	await mkdir(join(cwd, ".forge/skills/manual"), { recursive: true }); await mkdir(join(cwd, ".forge-agent"), { recursive: true });
 	await writeFile(join(cwd, ".forge/skills/manual/SKILL.md"), "---\nname: manual\ndescription: Manual instructions\ndisable-model-invocation: true\n---\nPTY_BODY");
-	await writeFile(join(cwd, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: fixture.url, skills: { roots: { user: ".forge/skills", builtin: ".forge/skills" } } }));
+	await writeFile(join(cwd, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: fixture.url, memory: { autoUpdate: false, injection: false }, skills: { roots: { user: ".forge/skills", builtin: ".forge/skills" } } }));
 	const decoder = new TextDecoder();
 	const terminal = new Bun.Terminal({ cols: 180, rows: 48, data(_terminal, bytes) { output += decoder.decode(bytes, { stream: true }); } });
 	const child = Bun.spawn([process.execPath, resolve(import.meta.dir, "../../packages/cli/src/main.ts")], { cwd, terminal, env: { PATH: process.env.PATH, TERM: "xterm-256color", XDG_CONFIG_HOME: join(cwd, "config"), XDG_DATA_HOME: join(cwd, "data") } });

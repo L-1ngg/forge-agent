@@ -3,7 +3,6 @@ import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import type { SessionAssembly } from "../configuration.ts";
 import { projectMessages, type SessionEntry, type SessionState } from "../session-storage.ts";
 import { UsageTracker, estimateContextTokens } from "../usage.ts";
-import type { ContextAssembler } from "./assembler.ts";
 import { buildContext, type CompactionReason, type CompactionResult, type ContextSettings } from "./compaction.ts";
 import { compactContext, type CompactionMetrics } from "./compact.ts";
 
@@ -11,7 +10,6 @@ interface CompactionHost {
 	messages(): SessionMessage[];
 	tools(): NonNullable<SessionAssembly["options"]["tools"]>;
 	usage: UsageTracker;
-	assembler: ContextAssembler;
 	configuration(): SessionAssembly & { settings: ContextSettings };
 	history(): SessionState;
 	persist(entry: SessionEntry): Promise<void>;
@@ -31,8 +29,7 @@ export class CompactionCoordinator {
 	}
 	syncUsage(): void {
 		const { options } = this.host.configuration();
-		const memory = this.host.assembler.projection.messages;
-		this.host.usage.setContext({ messages: [...memory, ...projectMessages(this.host.messages())], contextWindow: options.contextWindow ?? options.model.contextWindow, identity: JSON.stringify([options.model, options.systemPrompt, options.thinkingLevel, options.tools, memory]), fixedText: this.budget().fixedText });
+		this.host.usage.setContext({ messages: projectMessages(this.host.messages()), contextWindow: options.contextWindow ?? options.model.contextWindow, identity: JSON.stringify([options.model, options.systemPrompt, options.thinkingLevel, options.tools]), fixedText: this.budget().fixedText });
 	}
 	rebuild(): void {
 		buildContext(this.host.history()); // Validate the committed branch before publishing usage.

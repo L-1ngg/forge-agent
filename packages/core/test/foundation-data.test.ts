@@ -135,7 +135,7 @@ test("existing Markdown and host-owned MCP binary attachments survive SDK restor
 	await storage.append(saved);
 	const originalHistory = await readFile(path, "utf8");
 	let reads = 0;
-	const requests: Array<Pick<TextOptions, "messages">> = [];
+	const requests: Array<{ messages: TextOptions["messages"]; systemPrompts: TextOptions["systemPrompts"] }> = [];
 	for (let instance = 0; instance < 2; instance++) {
 		const artifacts: McpArtifactStore = {
 			async put() { throw new Error("Restoring saved context must not refetch or republish an attachment"); },
@@ -147,7 +147,7 @@ test("existing Markdown and host-owned MCP binary attachments survive SDK restor
 		const reopened = await SessionStore.open(path, directory, { create: false });
 		const agent = await createAgent({
 			cwd: directory, model, systemPrompt: "Saved files test", skills: false, context: { enabled: false }, storage: reopened,
-			adapter: replyAdapter(model, request => { requests.push({ messages: structuredClone(request.messages) }); return { text: "FILES_RETAINED" }; }),
+			adapter: replyAdapter(model, request => { requests.push({ messages: structuredClone(request.messages), systemPrompts: structuredClone(request.systemPrompts) }); return { text: "FILES_RETAINED" }; }),
 			memory: { store: new LongTermMemory({ project: directory }), autoUpdate: false },
 			mcp: { servers: {}, artifacts }, permission: { rules: [{ tool: "mcp_read_artifact", argsPattern: "*", effect: "allow" }] },
 		});
@@ -161,7 +161,7 @@ test("existing Markdown and host-owned MCP binary attachments survive SDK restor
 	expect(reads).toBe(2);
 	expect(requests).toHaveLength(2);
 	for (const request of requests) {
-		expect(JSON.stringify(request.messages)).toContain("EXISTING_MEMORY_INDEX");
+		expect(JSON.stringify(request.systemPrompts)).toContain("EXISTING_MEMORY_INDEX");
 		expect(JSON.stringify(request.messages)).toContain("SAVED_BINARY_ATTACHMENT");
 		expect(JSON.stringify(request.messages)).not.toContain("EXISTING_MEMORY_DETAILS");
 	}

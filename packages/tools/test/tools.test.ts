@@ -4,6 +4,20 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bashTool, editTool, readTool, writeTool } from "../src/index.ts";
 import { createBashTool } from "../src/bash.ts";
+import { defineLocalTool } from "../src/define-builtin.ts";
+import { z } from "zod";
+
+test("local tool definitions derive strict provider and execution contracts from one schema", () => {
+	const tool = defineLocalTool({
+		name: "local_lookup", label: "Lookup", description: "Look up a key",
+		inputSchema: z.strictObject({ key: z.string().min(1), limit: z.number().int().min(1).optional() }),
+		async execute(input) { return { content: [{ type: "text", text: input.key }], details: input.limit ?? 1 }; },
+	});
+	expect(tool.parameters).toMatchObject({ type: "object", required: ["key"], additionalProperties: false });
+	expect(() => tool.validateArguments?.({ key: "ok", limit: 1.5 })).toThrow();
+	expect(() => tool.validateArguments?.({ key: "ok", extra: true })).toThrow();
+	expect(tool.validateArguments?.({ key: "ok", limit: 2 })).toEqual({ key: "ok", limit: 2 });
+});
 
 test("built-in schemas and validators share strict input contracts", () => {
 	expect(readTool.parameters).toMatchObject({
@@ -17,9 +31,12 @@ test("built-in schemas and validators share strict input contracts", () => {
 		properties: { timeout_ms: { type: "integer", minimum: 1, maximum: 600000 } },
 	});
 	expect(() => readTool.validateArguments?.({ path: "file", offset: "2" })).toThrow();
+	expect(() => readTool.validateArguments?.({ path: "file", limit: 0 })).toThrow();
 	expect(() => writeTool.validateArguments?.({ path: "file", content: "ok", extra: true })).toThrow();
+	expect(() => writeTool.validateArguments?.({ path: "", content: "ok" })).toThrow();
 	expect(() => editTool.validateArguments?.({ path: "file", old_text: "", new_text: "ok" })).toThrow();
 	expect(() => bashTool.validateArguments?.({ command: "ok", timeout_ms: "1000" })).toThrow();
+	expect(() => bashTool.validateArguments?.({ command: "" })).toThrow();
 	expect(readTool.validateArguments?.({ path: "file", offset: 2 })).toEqual({ path: "file", offset: 2 });
 });
 
@@ -65,7 +82,6 @@ describe("read", () => {
 	test.each([
 		[{ path: "missing.txt" }, "PATH_NOT_FOUND"],
 		[{ path: "." }, "PATH_IS_DIRECTORY"],
-		[{ path: "x", offset: 3, limit: 0 }, "INVALID_ARGUMENT"],
 	] as const)("returns structured error %#", async (input, code) => {
 		const cwd = await temporaryDirectory();
 		const result = await readTool.execute(input, { cwd });
@@ -90,7 +106,6 @@ describe("write", () => {
 
 	test.each([
 		[{ path: "missing/output.txt", content: "x" }, "PARENT_NOT_FOUND"],
-		[{ path: "", content: "x" }, "INVALID_ARGUMENT"],
 	] as const)("returns structured error %#", async (input, code) => {
 		const cwd = await temporaryDirectory();
 		const result = await writeTool.execute(input, { cwd });
@@ -129,11 +144,6 @@ describe("edit", () => {
 		expect(errorDetails(result)).toMatchObject({ error_code: "EDIT_AMBIGUOUS", retryable: false });
 	});
 
-	test("rejects an invalid old_text", async () => {
-		const cwd = await temporaryDirectory();
-		const result = await editTool.execute({ path: "edit.txt", old_text: "", new_text: "new" }, { cwd });
-		expect(errorDetails(result)).toMatchObject({ error_code: "INVALID_ARGUMENT", retryable: false });
-	});
 });
 
 describe("bash", () => {
@@ -174,7 +184,6 @@ describe("bash", () => {
 	});
 
 	test.each([
-		[{ command: "" }, "INVALID_ARGUMENT", false],
 		[{ command: "exit 7" }, "COMMAND_FAILED", true],
 		[{ command: "sleep 1", timeout_ms: 5 }, "COMMAND_TIMEOUT", true],
 	] as const)("returns structured error %#", async (input, code, retryable) => {

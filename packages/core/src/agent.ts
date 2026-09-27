@@ -67,7 +67,6 @@ export interface Agent {
 	getSkills(): SkillsSnapshot;
 	refreshSkills(): Promise<ConfigurationReceipt>;
 	getUsage(): UsageTruthPoint | undefined;
-	getMemoryBudget(): number;
 	configureContext(settings: Partial<ContextSettings>): void;
 	compact(instructions?: string, emit?: (event: SessionEvent) => void): Promise<CompactionResult>;
 	respond(response: ResponseEnvelope): boolean;
