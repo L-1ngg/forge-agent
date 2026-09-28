@@ -76,6 +76,35 @@ test("AC-29: tool execution updates in place; toolResult does not duplicate", ()
 	expect(projector.getEntryIds()).toEqual(["tool-call-1"]);
 });
 
+test("early tool progress joins the streamed assistant content in order without a duplicate result", () => {
+	const projector = new TranscriptProjector();
+	projector.apply({ type: "message_start", timestamp: 1, message: { role: "assistant", content: [], timestamp: 1 } });
+	projector.apply({ type: "message_delta", timestamp: 2, contentIndex: 0, contentType: "thinking", delta: "plan" });
+	projector.apply({ type: "message_delta", timestamp: 3, contentIndex: 1, contentType: "text", delta: "before" });
+	const thinkingId = projector.getEntryIds()[0]!;
+	const beforeId = projector.getEntryIds()[1]!;
+	projector.apply({ type: "tool_execution_start", timestamp: 4, toolCallId: "read-1", toolName: "read", args: { path: "file.txt" } });
+	projector.apply({ type: "tool_execution_update", timestamp: 5, toolCallId: "read-1", toolName: "read", content: "partial" });
+	expect(projector.getEntryIds()).toEqual([thinkingId, beforeId, "tool-read-1"]);
+	expect(projector.getEntries().at(-1)).toMatchObject({ id: "tool-read-1", kind: "tool", content: "partial" });
+	projector.apply({ type: "message_delta", timestamp: 6, contentIndex: 2, contentType: "tool_call", delta: "{}" });
+	const toolId = projector.getEntryIds()[2]!;
+	projector.apply({ type: "message_delta", timestamp: 7, contentIndex: 3, contentType: "text", delta: "after" });
+	const afterId = projector.getEntryIds()[3]!;
+	projector.apply({ type: "message_end", timestamp: 8, message: { role: "assistant", timestamp: 1, content: [
+		{ type: "thinking", thinking: "plan" },
+		{ type: "text", text: "before" },
+		{ type: "tool_call", id: "read-1", name: "read", arguments: { path: "file.txt" } },
+		{ type: "text", text: "after" },
+	] } });
+	expect(projector.getEntryIds()).toEqual([thinkingId, beforeId, toolId, afterId]);
+	expect(projector.getEntries().map((entry) => entry.kind)).toEqual(["thinking", "assistant", "tool", "assistant"]);
+	projector.apply({ type: "tool_execution_end", timestamp: 9, toolCallId: "read-1", toolName: "read", content: "file body", isError: false });
+	projector.apply({ type: "message_end", timestamp: 10, message: { role: "toolResult", toolCallId: "read-1", toolName: "read", timestamp: 10, content: [{ type: "text", text: "file body" }] } });
+	expect(projector.getEntryIds()).toEqual([thinkingId, beforeId, toolId, afterId]);
+	expect(projector.getEntry(toolId)).toMatchObject({ kind: "tool", content: "file body", lifecycle: "complete" });
+});
+
 test("generic tool output stays on its call through updates, failures and replay", () => {
 	const projector = new TranscriptProjector();
 	const call: SessionMessage = { role: "assistant", timestamp: 1, content: [{ type: "tool_call", id: "r", name: "read", arguments: { path: "file.txt" } }] };

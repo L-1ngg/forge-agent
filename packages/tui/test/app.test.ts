@@ -634,6 +634,24 @@ test("submit echoes the user and paints the assistant reply", async () => {
 	await app.stop();
 });
 
+test("/clear removes displayed history while later replies still appear", async () => {
+	const { app, input } = createApp({
+		history: [{ role: "assistant", timestamp: 1, content: [{ type: "text", text: "OLDER_SESSION_TEXT" }] }],
+		port: fakePort([{ type: "message_end", timestamp: 2, message: { role: "assistant", timestamp: 2, content: [{ type: "text", text: "NEW_REPLY" }] } }]),
+	});
+	await app.start();
+	try {
+		expect(frameToText(app.composeFrameForTest())).toContain("OLDER_SESSION_TEXT");
+		input.emit(Buffer.from("/clear\r"));
+		const cleared = frameToText(app.composeFrameForTest());
+		expect(cleared).not.toContain("OLDER_SESSION_TEXT");
+		expect(cleared).toContain("已清屏，上下文仍保留");
+		input.emit(Buffer.from("go\r"));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("NEW_REPLY"));
+		expect(frameToText(app.composeFrameForTest())).not.toContain("OLDER_SESSION_TEXT");
+	} finally { await app.stop(); }
+});
+
 test("selected execute expands with e while the removed ctrl+o binding is inert", async () => {
 	const executeBlock = block(
 		{ id: "call-1", kind: "execute", lifecycle: "complete", defaultDisplayMode: "truncated", currentDisplayMode: "truncated", manualOverride: false },

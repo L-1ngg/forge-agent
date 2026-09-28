@@ -11,41 +11,10 @@ import { messageEntryId, thinkingEntryId, toolEntryId } from "./identity.ts";
 
 export { contentIndexFromMessageEntryId, messageEntryId, thinkingEntryId, toolEntryId } from "./identity.ts";
 
-export interface StreamedContentBlock {
-	kind: "text" | "thinking" | "tool_call";
-	text: string;
-}
-
-export interface ProjectedContent {
-	readonly index: number;
-	readonly entry: TranscriptEntry;
-	readonly source?: SessionContentBlock;
-	readonly streamText: string;
-}
-
-export interface ProjectedMessage {
-	readonly seq: number;
-	readonly role: SessionMessage["role"];
-	readonly timestamp: number;
-	readonly complete: boolean;
-	readonly toolCallId?: string;
-	readonly content: readonly ProjectedContent[];
-}
-
-export interface ProjectedTool {
-	readonly toolCallId: string;
-	readonly toolName: string;
-	readonly args?: Record<string, unknown>;
-	readonly executed: boolean;
-	readonly block?: AnyBlockEnvelope;
-	readonly entryId?: string;
-}
-
 interface MutableContent {
 	index: number;
 	entryId: string;
 	source?: SessionContentBlock;
-	streamText: string;
 	durationMs?: number;
 }
 
@@ -71,7 +40,6 @@ interface ToolProjection {
 	toolCallId: string;
 	toolName: string;
 	args?: Record<string, unknown>;
-	executed: boolean;
 	block?: AnyBlockEnvelope;
 	content?: string;
 	lifecycle?: "streaming" | "complete" | "failed";
@@ -94,10 +62,8 @@ interface DisplayState {
 
 /** Canonical UI-local reducer for transcript identity, ordering and de-duplication. */
 export class TranscriptProjector {
-	private readonly events: SessionEvent[] = [];
 	private readonly messages: MessageProjection[] = [];
 	private readonly tools = new Map<string, ToolProjection>();
-	private readonly standaloneToolOrder: string[] = [];
 	private readonly notices: NoticeProjection[] = [];
 	private readonly rootTimeline: RootTimelineItem[] = [];
 	private readonly displayState = new Map<string, DisplayState>();
@@ -109,7 +75,6 @@ export class TranscriptProjector {
 	private lastCompletedFingerprint: MessageFingerprint | undefined;
 
 	apply(event: SessionEvent): void {
-		this.events.push(structuredClone(event));
 		switch (event.type) {
 			case "message_start":
 				this.startMessage(event.message);
@@ -149,10 +114,6 @@ export class TranscriptProjector {
 		this.notices.push({ id, text });
 		this.rootTimeline.push({ kind: "notice", id });
 		return id;
-	}
-
-	getEvents(): SessionEvent[] {
-		return structuredClone(this.events);
 	}
 
 	getEntries(): TranscriptEntry[] {
@@ -198,60 +159,6 @@ export class TranscriptProjector {
 		return this.getEntries().map((entry) => entry.id);
 	}
 
-	getMessages(): ProjectedMessage[] {
-		const visible = new Map(this.getEntries().map((entry) => [entry.id, entry]));
-		return this.messages.map((message) => ({
-			seq: message.seq,
-			role: message.role,
-			timestamp: message.timestamp,
-			complete: message.complete,
-			...(message.toolCallId === undefined ? {} : { toolCallId: message.toolCallId }),
-			content: [...message.content.values()]
-				.sort((left, right) => left.index - right.index)
-				.flatMap((content) => {
-					const entry = visible.get(content.entryId);
-					return entry === undefined ? [] : [{
-						index: content.index,
-						entry: structuredClone(entry),
-						...(content.source === undefined ? {} : { source: structuredClone(content.source) }),
-						streamText: content.streamText,
-					}];
-				}),
-		}));
-	}
-
-	getMessageForEntry(id: string): ProjectedMessage | undefined {
-		return this.getMessages().find((message) => message.content.some((content) => content.entry.id === id));
-	}
-
-	getTool(toolCallId: string): ProjectedTool | undefined {
-		const tool = this.tools.get(toolCallId);
-		if (!tool) return undefined;
-		return {
-			toolCallId,
-			toolName: tool.toolName,
-			...(tool.args === undefined ? {} : { args: structuredClone(tool.args) }),
-			executed: tool.executed,
-			...(tool.block === undefined ? {} : { block: this.blockWithDisplayState(toolCallId, tool.block) }),
-			entryId: this.anchorForTool(toolCallId) ?? toolEntryId(toolCallId),
-		};
-	}
-
-	getTools(): ProjectedTool[] {
-		return [...this.tools.keys()].map((id) => this.getTool(id) as ProjectedTool);
-	}
-
-	getOrderedBlocks(): StreamedContentBlock[] {
-		if (!this.active) return [];
-		return [...this.active.content.values()]
-			.sort((left, right) => left.index - right.index)
-			.filter((content) => content.source !== undefined && content.streamText.length > 0)
-			.map((content) => ({
-				kind: content.source?.type === "text" ? "text" : content.source?.type === "thinking" ? "thinking" : "tool_call",
-				text: content.streamText,
-			}));
-	}
-
 	setEntryDisplayState(id: string, currentDisplayMode: BlockDisplayMode, manualOverride: boolean): void {
 		this.displayState.set(id, { currentDisplayMode, manualOverride });
 		const toolCallId = this.toolCallIdForEntry(id);
@@ -259,10 +166,8 @@ export class TranscriptProjector {
 	}
 
 	clear(): void {
-		this.events.length = 0;
 		this.messages.length = 0;
 		this.tools.clear();
-		this.standaloneToolOrder.length = 0;
 		this.notices.length = 0;
 		this.rootTimeline.length = 0;
 		this.displayState.clear();
@@ -288,18 +193,16 @@ export class TranscriptProjector {
 	private applyDelta(event: Extract<SessionEvent, { type: "message_delta" }>): void {
 		const message = this.active ?? this.createImplicitAssistant(event.timestamp);
 		const previous = message.content.get(event.contentIndex);
-		const streamText = (previous?.streamText ?? "") + event.delta;
 		if (event.contentType === "thinking" && !message.thinkingStartedAt.has(event.contentIndex)) message.thinkingStartedAt.set(event.contentIndex, event.timestamp);
 		const source: SessionContentBlock = event.contentType === "text"
-			? { type: "text", text: streamText }
+			? { type: "text", text: (previous?.source?.type === "text" ? previous.source.text : "") + event.delta }
 			: event.contentType === "thinking"
-				? { type: "thinking", thinking: streamText }
+				? { type: "thinking", thinking: (previous?.source?.type === "thinking" ? previous.source.thinking : "") + event.delta }
 				: { type: "tool_call", id: `pending-${message.seq}-${event.contentIndex}`, name: "tool", arguments: {} };
 		message.content.set(event.contentIndex, {
 			index: event.contentIndex,
 			entryId: previous?.entryId ?? messageEntryId(message.seq, event.contentIndex),
 			source,
-			streamText,
 		});
 	}
 
@@ -330,14 +233,12 @@ export class TranscriptProjector {
 		for (const [index, source] of value.content.entries()) {
 			nextIndexes.add(index);
 			const previous = message.content.get(index);
-			const streamText = source.type === "text" ? source.text : source.type === "thinking" ? source.thinking : previous?.streamText ?? "";
 			const startedAt = message.thinkingStartedAt.get(index);
 			const durationMs = source.type === "thinking" && complete && startedAt !== undefined && eventTimestamp >= startedAt ? eventTimestamp - startedAt : undefined;
 			message.content.set(index, {
 				index,
 				entryId: previous?.entryId ?? messageEntryId(message.seq, index),
 				source: structuredClone(source),
-				streamText,
 				...(durationMs === undefined ? {} : { durationMs }),
 			});
 		}
@@ -347,16 +248,13 @@ export class TranscriptProjector {
 	}
 
 	private applyTool(toolCallId: string, toolName: string, args: Record<string, unknown> | undefined, value: AnyBlockEnvelope | undefined): void {
-		const tool = this.tools.get(toolCallId) ?? { toolCallId, toolName, executed: false };
+		const existing = this.tools.get(toolCallId);
+		const tool = existing ?? { toolCallId, toolName };
 		tool.toolName = toolName;
-		tool.executed = true;
 		if (args !== undefined) tool.args = structuredClone(args);
 		if (value !== undefined) tool.block = structuredClone(value);
 		this.tools.set(toolCallId, tool);
-		if (!this.standaloneToolOrder.includes(toolCallId)) {
-			this.standaloneToolOrder.push(toolCallId);
-			this.rootTimeline.push({ kind: "tool", toolCallId });
-		}
+		if (!existing) this.rootTimeline.push({ kind: "tool", toolCallId });
 		if (value !== undefined) this.reconcileIncomingDisplayState(toolCallId, value);
 	}
 
@@ -385,7 +283,7 @@ export class TranscriptProjector {
 		}
 		anchoredTools.add(source.id);
 		const tool = this.tools.get(source.id);
-		return this.toolEntry(content.entryId, { toolCallId: source.id, executed: false, ...tool, toolName: source.name }, source.arguments);
+		return this.toolEntry(content.entryId, { toolCallId: source.id, ...tool, toolName: source.name }, source.arguments);
 	}
 
 	private createMessage(role: SessionMessage["role"], timestamp: number, toolCallId?: string, implicit = false): MessageProjection {
