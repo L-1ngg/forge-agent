@@ -19,12 +19,13 @@
 
 | 文档 | 职责 |
 |---|---|
-| [TanStack 基座](phases/tanstack-foundation.md)、[本次验收](phases/tanstack-foundation-acceptance.md) | chat 唯一循环、职责处置、接口迁移与未测边界 |
+| [TanStack 基座](phases/tanstack-foundation.md)、[当时验收](phases/tanstack-foundation-acceptance.md) | chat 唯一循环、职责处置及原版本验收边界 |
+| [原生审批施工与验收](phases/native-tool-approval.md)、[ADR-027](decisions/027-native-tool-approval-and-interruption.md) | 当前权限审批、interrupt/resume、串行工具执行与取消合同 |
 | [职责收敛](phases/architecture-responsibilities.md)、[会话装配](phases/agent-assembly.md) | AgentTurn.result、输入归属、压缩协调和统一装配 |
 | [原生 Adapter](phases/model-adapter.md)、[逐轮停止策略](phases/turn-policy.md) | 模型接入、任务/摘要共享接缝、shouldStopAfterTurn 与调用用量 |
 | [Issue #37 施工图](phases/tool-ecosystem-issue-37.md)、[ADR-026](decisions/026-native-skills-and-markdown-memory.md) | 当前官方 Skills、Memory、Zod 接线和验收 |
 | [MCP 完整施工设计](phases/mcp-client.md)、[ADR-022](decisions/022-mcp-host-integration.md) | Issue #36 的完整实现与统一验收：官方 SDK、连接所有权、OAuth、Tools/Resources/Prompts、Elicitation；当前证据见[验收记录](phases/mcp-client-acceptance.md) |
-| [基座决策](decisions/025-tanstack-agent-foundation.md)、[工具批次与校验](phases/tool-argument-validation.md) | 第三方选型、严格参数、授权、并发、干预与提交屏障 |
+| [基座决策](decisions/025-tanstack-agent-foundation.md)、[工具参数与校验](phases/tool-argument-validation.md) | 第三方选型、严格参数、判权与提交屏障；执行归属以 ADR-027 为准 |
 | [架构决策](decisions) | ADR 及替代关系；先读状态行，再沿当前决策指针读取 |
 
 ### 上下文、记忆与会话

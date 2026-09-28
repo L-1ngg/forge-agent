@@ -84,6 +84,8 @@ function isValidResponseResult(kind: RequestKind, result: unknown): boolean {
 	const decision = (result as { decision: string }).decision;
 	switch (kind) {
 		case "permission": {
+			const edited = (result as { editedArgs?: unknown }).editedArgs;
+			if (edited !== undefined && (typeof edited !== "object" || edited === null || Array.isArray(edited))) return false;
 			if (decision === "allow_once") return true;
 			if (decision === "deny") return !("reason" in result) || typeof (result as { reason?: unknown }).reason === "string";
 			if (decision !== "allow_always") return false;
@@ -186,6 +188,11 @@ export class RequestBus {
 	 * Cancellation and timeout resolve as explicit outcomes rather than hanging.
 	 */
 	ask<K extends RequestKind>(kind: K, payload: RequestPayloadByKind[K], options: AskOptions = {}): Promise<RequestOutcome<K>> {
+		return new Promise(resolve => { this.publish(kind, payload, resolve, options); });
+	}
+
+	/** Publish a request without making the bus the owner of a model tool batch. */
+	publish<K extends RequestKind>(kind: K, payload: RequestPayloadByKind[K], onOutcome: (outcome: RequestOutcome<K>) => void, options: AskOptions = {}): string {
 		const timeoutMs = options.timeoutMs === undefined ? this.timeoutMs : options.timeoutMs;
 		if (timeoutMs !== null && (!Number.isFinite(timeoutMs) || timeoutMs < 0)) throw new RangeError("Request timeoutMs must be a non-negative finite number or null");
 		if (this.closed) {
@@ -193,18 +200,19 @@ export class RequestBus {
 			const outcome: RequestOutcome<K> = { status: "cancelled", requestId: id, reason: "bus_closed" };
 			this.settled.set(id, outcome as RequestOutcome<RequestKind>);
 			this.terminalQueue.push(outcome as RequestOutcome<RequestKind>);
-			return Promise.resolve(outcome);
+			onOutcome(outcome);
+			return id;
 		}
 
 		const id = this.allocateId();
 		const envelope = makeRequest(id, kind, payload);
-		return new Promise<RequestOutcome<K>>((resolve) => {
-			const pending: PendingRequest<K> = { kind, resolve };
+		{
+			const pending: PendingRequest<K> = { kind, resolve: onOutcome };
 			this.pending.set(id, pending as PendingRequest<RequestKind>);
 
 			if (options.signal?.aborted) {
 				this.settleCancelled(id, pending, "aborted");
-				return;
+				return id;
 			}
 			if (timeoutMs !== null) pending.timer = setTimeout(() => this.settleTimeout(id, pending), timeoutMs);
 
@@ -214,12 +222,13 @@ export class RequestBus {
 				options.signal.addEventListener("abort", pending.abortListener, { once: true });
 				if (options.signal.aborted) {
 					pending.abortListener();
-					return;
+					return id;
 				}
 			}
 
 			this.requestQueue.push(envelope);
-		});
+		}
+		return id;
 	}
 
 	/** Convenience form for callers that only need the response result. */

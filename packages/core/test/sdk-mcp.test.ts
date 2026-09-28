@@ -24,10 +24,10 @@ for (const transport of ["http", "stdio"] as const) for (const protocol of ["leg
 }, 15000);
 
 test("MCP permission refusal sends zero resource/tool business calls; annotations do not authorize", async () => {
-	calls.length = 0; const fixture = remote();
-	const model = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => modelResponse([{ id: "echo", name: mcpToolName("fixture", "echo"), arguments: { value: "denied" } }]) });
+	calls.length = 0; const fixture = remote(); let requests = 0;
+	const model = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => ++requests === 1 ? modelResponse([{ id: "echo", name: mcpToolName("fixture", "echo"), arguments: { value: "denied" } }]) : modelResponse() });
 	const agent = await createAgent({ ...base, baseUrl: `http://127.0.0.1:${model.port}`, permission: { mode: "deny-all" }, mcp: { servers: { fixture: { transport: "http", url: fixture.url } } } });
-	try { await expect(agent.mcp.readResource("fixture", "fixture://data")).rejects.toThrow("deny-all"); const turn = agent.runTurn("deny"); for await (const _event of turn) {} expect(calls).toHaveLength(0); }
+	try { await expect(agent.mcp.readResource("fixture", "fixture://data")).rejects.toThrow("deny-all"); const turn = agent.runTurn("deny"); for await (const _event of turn) {} expect(calls).toHaveLength(0); expect(requests).toBe(2); }
 	finally { await agent.dispose(); await fixture.close(); await model.stop(true); }
 });
 

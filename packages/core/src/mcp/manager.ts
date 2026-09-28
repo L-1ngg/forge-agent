@@ -211,7 +211,7 @@ export class McpManager implements McpController {
         const validator = new AjvJsonSchemaValidator();
         const validate = validator.getValidator<object>(definition.inputSchema as Parameters<AjvJsonSchemaValidator["getValidator"]>[0]);
 		const check = (args: unknown) => { const result = validate(args); if (!result.valid) throw new McpError("invalid-arguments", result.errorMessage); return result.data; };
-		return { name: mcpToolName(connection.id, definition.name), label: `${connection.id}/${definition.name}`, description: definition.description ?? `MCP tool ${connection.id}/${definition.name}`, parameters: definition.inputSchema, validateArguments: check, executionMode: "sequential",
+		return { name: mcpToolName(connection.id, definition.name), label: `${connection.id}/${definition.name}`, description: definition.description ?? `MCP tool ${connection.id}/${definition.name}`, parameters: definition.inputSchema, validateArguments: check,
 			execute: async (args, context) => {
                 if (this.revoking.has(connection.id)) throw new McpError("auth-required", "MCP authorization was revoked");
 				const result = await connection.client.callTool({ name: definition.name, arguments: args as Record<string, unknown> }, { toolDefinition: definition, signal: this.signal(connection, context.signal), timeout: connection.config.timeouts?.tool ?? 60000, resetTimeoutOnProgress: true, maxTotalTimeout: connection.config.timeouts?.total ?? 300000, onprogress: progress => context.onUpdate?.({ content: [{ type: "text", text: JSON.stringify(progress) }], details: { serverId: connection.id, progress } }) }).catch(error => this.failure(connection, error));

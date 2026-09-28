@@ -55,8 +55,8 @@ export interface RequestPayloadByKind {
 }
 
 export type PermissionResponseResult =
-	| { decision: "allow_once" }
-	| { decision: "allow_always"; scope: PermissionScope }
+	| { decision: "allow_once"; editedArgs?: Record<string, unknown> }
+	| { decision: "allow_always"; scope: PermissionScope; editedArgs?: Record<string, unknown> }
 	| { decision: "deny"; reason?: string };
 
 export type CancelConfirmResponseResult = { decision: "cancel" } | { decision: "keep_running" };

@@ -36,7 +36,7 @@ async function openAgent(model: Model, adapter: ModelAdapter) {
 
 `createAgent → AgentSession → TanStack chat() → TextAdapter` 是 SDK、CLI 与 TUI 共用的执行路径。`chat()` 负责模型与工具续轮，Forge 不再维护 Pi Agent/agent-loop。Forge 会话保留输入归属、配置 revision、权威终态、逐条持久化和证据型压缩；`onConfig` middleware 在请求边界准备投影和最终预算。
 
-工具通过原生 `toolDefinition().server()` 接入；Forge 在工具阶段完成整批参数准备、严格校验、授权、并行/串行副作用及结果干预，TanStack 续轮读取已保存的结果。`SessionMessage` 继续承担历史与展示合同，在请求/响应边界转换一次。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。设计和当前验证状态见 [ADR-025](decisions/025-tanstack-agent-foundation.md) 与[重构验收记录](phases/tanstack-foundation-acceptance.md)。
+工具通过原生 `toolDefinition().server()` 接入；Forge 在审批前完成参数准备、严格校验和逐调用判权，只展示 `ask`，TanStack 负责 interrupt/resume 与串行执行。Forge 在每项工具执行后保存结果，下一次模型请求读取已保存的历史。`SessionMessage` 继续承担历史与展示合同，在请求/响应边界转换一次。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。当前审批合同见 [ADR-027](decisions/027-native-tool-approval-and-interruption.md) 与[施工及验收](phases/native-tool-approval.md)。
 
 ## 每轮停止策略（shouldStopAfterTurn）
 
@@ -306,7 +306,9 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 ## 权限
 
-默认未允许的工具调用需要授权。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
+每个普通模型工具调用按最终参数经过现有权限策略。`allow` 自动批准、`deny` 自动拒绝,只有 `ask` 经 TanStack 原生 `needsApproval` interrupt 交给宿主;同批所有待审批项收齐后才恢复,获批工具串行执行。拒绝原因进入模型上下文,模型可调整方案;停止整个 Invocation 则使待批次及旧答复失效。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
+
+`agent.respond({ type: "response", id: request.id, result: { decision: "allow_once", editedArgs: { ... } } })` 可提交一次性修改参数;SDK 会严格重新校验和判权,非法或被策略拒绝的修改不会执行。展示、权限判断与执行使用最终参数,工具结果的 `toolArguments` 保存实际参数。`allow_always` 仅在请求允许记住且 scope 匹配时有效。审批仅支持进程内续接,恢复会话不会重放未完成工具;TUI 可停放权限卡、按 `c` 输入草稿或排队,按 Tab 或 `i` 返回权限卡。headless 自动拒绝需要人工审批的调用。
 
 每实例默认有独立权限记忆和请求总线。CLI 为兼容现有 TUI 显式传入独占 RequestBus,交互模式允许无限等待;SDK dispose 会关闭该总线,不得跨实例共享。请求观察、授权与释放不依赖 pi 类型。
 
@@ -352,7 +354,7 @@ const lookup: HarnessTool<{ key: string }, { source: string }> = {
 };
 ```
 
-`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错，终止提示为 `terminate: true`。进度使用同一结构，结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段，不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行，其返回对象也必须符合 schema。默认并行批次在副作用开始前按调用顺序完成初检、改写、before hook、最终校验和授权；任一工具配置 `executionMode: "sequential"` 会使整批串行，`toolHooks.toolExecution` 可指定整批策略。`beforeToolCall` 返回 block/reason/terminate，`afterToolCall` 可覆盖 content/details/isError/terminate。hooks 的 assistantMessage/context.messages 使用 `SessionMessage`，toolCall 使用 `ToolCallBlock`（`type: "tool_call"`）。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。结果按模型调用顺序保存。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`，授权请使用 SDK 权限配置。
+`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错,模型仍可继续;停止任务使用 `abort()`。进度使用同一结果形状,结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段,不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行,其返回对象也必须符合 schema。每个工具提案在审批前按调用顺序完成初检、改写、before hook、最终校验和判权；待审批项收齐后 TanStack 原生串行执行,每项保存后才开始下一项。`beforeToolCall` 返回 block/reason,`afterToolCall` 可覆盖 content/details/isError。hooks 的 assistantMessage/context.messages 使用 `SessionMessage`,toolCall 使用 `ToolCallBlock`（`type: "tool_call"`）。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`,授权请使用 SDK 权限配置。
 
 普通任务和摘要共用 `retry` 配置，但计数独立。任务仅对临时故障重试，默认三次、2/4/8 秒；原错误响应保存在历史并从重试请求排除。已消费输入和完成工具结果复用，不重复用户输入、不重放工具。overflow 使用独立的一次上下文恢复，不能套入普通 retry。`retry` 事件提供 scheduled/attempt/end，取消会中止等待。
 
@@ -367,7 +369,7 @@ const application = await receipt.applied;
 // application.status: applied | canceled，revision 与 receipt 一致。
 ```
 
-可更新 provider/model/adapter/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow/skills/mcp。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应或工具执行中接受更新后，整批沿用原配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
+可更新 provider/model/adapter/apiKey/baseUrl/systemPrompt/thinkingLevel/tools/maxTokens/contextWindow/skills/mcp。异步验证失败时更新拒绝，原配置保持。空闲时应用；响应、审批等待或工具执行中接受更新后，整批沿用提案时配置完成，再于下一请求前应用。手动摘要完成后应用。没有下一请求时更新不会主动请求模型；释放或故障取消尚未应用的配置。运行中等待 `applied` 应在事件消费之外进行。工具 schema 在接受前快照；回调闭包仍由宿主管理。配置应用使当前 usage 锚点失效，历史最后调用计数保留。
 
 职责替代、完整迁移与版本回退说明见[基座施工图](phases/tanstack-foundation.md)，实际验证见[验收记录](phases/tanstack-foundation-acceptance.md)。
 

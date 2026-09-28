@@ -6,6 +6,7 @@ const idle: InputRouterState = { cardFocused: false, cardParked: false, editorFo
 test("key owner priority is card → scrollback → composer → global", () => {
 	expect(resolveKeyOwner({ cardFocused: true, cardParked: false })).toBe("card");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: true })).toBe("scrollback");
+	expect(resolveKeyOwner({ cardFocused: false, cardParked: true, editorFocused: true })).toBe("composer");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: false, editorFocused: true })).toBe("composer");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: false, editorFocused: false })).toBe("scrollback");
 	expect(resolveKeyOwner({ cardFocused: false, cardParked: false })).toBe("global");

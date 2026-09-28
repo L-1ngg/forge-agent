@@ -97,10 +97,9 @@ test("SDK session fault disables reuse without additional persistence", async ()
 	} finally { await agent.dispose(); }
 });
 
-test("SDK tool batches finish serial preparation before parallel effects and persist in call order", async () => {
+test("SDK tool batches prepare before approval and persist each serial effect before the next", async () => {
 	const trace: string[] = [];
 	let calls = 0;
-	const secondDone = gate();
 	const server = Bun.serve({
 		hostname: "127.0.0.1", port: 0, async fetch(request) {
 			const body = await request.json(); trace.push(`model:${++calls}`);
@@ -126,13 +125,13 @@ test("SDK tool batches finish serial preparation before parallel effects and per
 		toolInputRewrites: { work: async input => { const value = input as { id: string }; trace.push(`rewrite:${value.id}`); return { id: `final-${value.id}` }; } },
 		tools: [{
 			name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false },
-			async execute(input) { const { id } = input as { id: string }; trace.push(`execute:${id}`); if (id === "final-a") await secondDone.promise; else secondDone.resolve(); return { content: [{ type: "text", text: id }], details: id }; },
+			async execute(input) { const { id } = input as { id: string }; trace.push(`execute:${id}`); return { content: [{ type: "text", text: id }], details: id }; },
 		}],
 	});
 	try {
 		await collect(agent.runTurn("work"));
-		expect(trace).toEqual(["save:user", "model:1", "save:assistant", "rewrite:a", "rewrite:b", "execute:final-a", "execute:final-b", "save:a", "save:b", "model:2", "save:assistant"]);
-	} finally { secondDone.resolve(); await agent.dispose(); server.stop(true); }
+		expect(trace).toEqual(["save:user", "model:1", "rewrite:a", "rewrite:b", "save:assistant", "execute:final-a", "save:a", "execute:final-b", "save:b", "model:2", "save:assistant"]);
+	} finally { await agent.dispose(); server.stop(true); }
 });
 
 test("SDK session binds steering receipts to one invocation and returns pending input on abort", async () => {

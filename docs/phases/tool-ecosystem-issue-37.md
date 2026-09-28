@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # Issue #37 工具体系收敛施工图
 
-> 状态:已完成(2026-09-28，本地验收通过；外部未测边界见下文)。任务需求与 AC 以 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 为唯一真相源；架构取舍见 [ADR-026](../decisions/026-native-skills-and-markdown-memory.md)。本文件记录接口、施工批次和验收证据，不复制任务清单。
+> 状态:已完成(2026-09-28，当时本地验收通过；外部未测边界见下文)。工具批次预执行接线随后被 [Issue #39 施工图](native-tool-approval.md) 取代，以下原始验收数字仅对应当时版本。任务需求与 AC 以 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 为真相源；Skills/Memory 架构见 [ADR-026](../decisions/026-native-skills-and-markdown-memory.md)。
 
 ## Entry
 
@@ -21,7 +21,7 @@ created: 2026-09-27
 
 1. `packages/tools/src/define-builtin.ts` 继续集中 Zod → `convertSchemaToJsonSchema` / `parseWithStandardSchema`；去除文件/进程工具中重复的形状检查，保留文件状态与业务失败。`read_context`、`search_context`、三个本地 `mcp_*` 辅助工具和 Markdown 工具改为 `z.strictObject` 与推导输入。`mcp_read_resource` 的 URI/模板二选一及模板展开仍保留业务校验。远端 MCP／SDK 动态 JSON Schema 继续由公共校验器处理，参数改写及 hooks 后复检和权限冻结顺序不变。
 2. `session-assembly.ts` 按现有宿主 roots 创建两个官方 `skillDirectory` Source，使用 `dedupe(aggregate([...]))` 确定项目同名优先。自动来源再由官方 `filter` 排除 `disable-model-invocation`；显式输入与 `/skills` 通过同一 Source 的 `list/load`，不再依赖 Pi catalog/loader。官方 `createResourceTool` 进入公共工具集合。仅保留所需的快照展示、显式输入归属和配置收据。
-3. 每次 `chat()` 以同一生效配置创建 `withSkills`、`memoryMiddleware` 和 Forge session middleware。官方 tools 经一次通用 native Tool → `HarnessTool` 接线进入 `executeToolBatch`，按注册来源赋予 internal/trusted 身份；普通工具名冲突在装配时拒绝。`beforeModel` 以最终 middleware config 构建模型请求和预算，不丢失官方 prompt/schema。官方 `execute` 仅在 Forge 批次中调用一次，原生 executor 领取按 toolCallId 保存的原生结果；失败结果不被输出 schema 伪装成成功。
+3. 每次 `chat()` 以同一生效配置创建 `withSkills`、`memoryMiddleware` 和 Forge session middleware。官方 tools 经 native Tool → `HarnessTool` 接线进入统一校验与判权，以注册来源赋予 internal/trusted 身份；普通工具名冲突在装配时拒绝。`beforeModel` 以最终 middleware config 构建模型请求和预算，不丢失官方 prompt/schema。Issue #39 后工具在原生 `.server()` 中串行执行一次，并逐项保存结果；失败结果不被输出 schema 伪装成成功。
 4. `MarkdownMemoryAdapter` 将可信宿主绑定的 user/project 目录映射为 TanStack `MemoryScope`；thread 只关联运行，不作为长期唯一隔离键。`recall` 读取短索引与必要固定内容，附来源、作用域和参考性质，返回按需管理工具。`save` 只取本轮 user/assistant 文本与可核对的本轮会话来源，使用现有模型 adapter 独立执行一次结构化整理，按计划读写主题及短索引；无价值结果不写盘。`autoUpdate=false` 跳过整理，`injection=false` 跳过召回，显式管理保持可用。整理调用不挂载记忆 middleware，不循环保存。
 5. `LongTermMemory` 保留普通 Markdown 的读/写/删除/分页/搜索及来源注释，`initializeMemoryCopy` 保留失败重试只补缺失文件；移除写入版本、操作 ID、回执、锁和临时原子替换协议及其专属测试。CLI `/memory` 继续提供可直接使用的显式管理，取消 read-before-edit 版本协议。删除旧 `ContextAssembler` 记忆投影、`MemoryTools` 专用操作/写入预算与旧 Skills scanner、formatter、loader；更新 SDK/CLI/TUI 和中英文使用文档。
 
@@ -65,7 +65,7 @@ created: 2026-09-27
 
 每个批次至少反向注入一处行为失败，使对应测试变红。提交前完成 `bun run check`、`bun run typecheck:examples`、`bun run test:headless`、`git diff --check` 和 code-review；全量测试在实现末尾运行一次，修复后只重跑受影响范围与必要门禁。真实模型样例覆盖稳定偏好、项目事实、经验、限定条件、无价值及未验证猜测，记录额外调用/usage/费用；没有实际执行的供应商、macOS/Windows、长期使用不记为通过。
 
-隔离接入探针使用发布的 `@tanstack/ai@0.61.0`、`ai-skills@0.1.11`、`ai-memory@0.2.6`，观察到一次 `recall`、官方目录/`load_skill` 注入、一次加载与续轮，以及一次 deferred `save`；`beforeTools` 预执行后原生 executor 仅消费结果，官方工具副作用计数为 1。探针位于工作区外的临时目录，不是产品验收证据；生产 SDK 与故障路径仍须按上表验证。
+当时隔离接入探针使用发布的 `@tanstack/ai@0.61.0`、`ai-skills@0.1.11`、`ai-memory@0.2.6`，观察到一次 `recall`、官方目录/`load_skill` 注入、一次加载与续轮，以及一次 deferred `save`；旧预执行路径的官方工具副作用计数为 1。探针位于工作区外的临时目录，不是 Issue #39 的产品验收证据；当前 native 执行与多 run memory 行为见[新验收](native-tool-approval.md)。
 
 ## 最终验收记录
 

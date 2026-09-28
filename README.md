@@ -75,7 +75,7 @@ The CLI discovers `SKILL.md` directories under `<project>/.forge/skills`, `~/.fo
 
 Use `/skills` to inspect available and shadowed entries. `/skill` supports name completion; press Enter to accept a suggestion, then type the task. It preserves the task text and loads instructions before submitting a single user input. Rejected inputs return to the editable draft. `--json -p '/skills'`, `--json -p '/skills reload'`, and `--json -p '/skill code-review Review this patch.'` use the same behavior in headless mode. Management commands do not call a model or create conversation history; startup still requires configured provider/model credentials.
 
-The model initially sees only names and descriptions through TanStack AI `withSkills`, then uses its `load_skill` tool to read a selected body. `disable-model-invocation: true` hides a skill from automatic selection while allowing explicit `/skill` invocation. The official `read_skill_resource` tool reads bundled files under `references/` or `assets/`. Loading never executes scripts, installs dependencies, or grants permissions through `allowed-tools`. Skills tools are internal: they use the ordinary tool batch and hooks without interactive approval, including under `deny-all`. Script commands still use ordinary tools and permissions.
+The model initially sees only names and descriptions through TanStack AI `withSkills`, then uses its `load_skill` tool to read a selected body. `disable-model-invocation: true` hides a skill from automatic selection while allowing explicit `/skill` invocation. The official `read_skill_resource` tool reads bundled files under `references/` or `assets/`. Loading never executes scripts, installs dependencies, or grants permissions through `allowed-tools`. Skills tools have a trusted source and run without interactive approval, including under `deny-all`. Script commands still use ordinary tools and permissions.
 
 TanStack `skillDirectory` handles discovery and metadata validation; malformed entries are skipped under its rules. The project source precedes the personal source, and the official first-wins combiner resolves names. `/skills reload` refreshes the sources. An accepted Skills change applies after the current `chat()` run; later runs can reload instructions after context compaction. Final request limits include the injected catalog and tools.
 
@@ -196,19 +196,19 @@ Assistant replies render Markdown in both the transcript and detail view, includ
 
 The dependency gate keeps UI dependencies out of the core and rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
 
-SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and durable history. TanStack `chat()` owns model/tool continuation; request middleware applies context projection and the final budget. Native `toolDefinition().server()` tools enter Forge's batch policy for argument validation, permission, execution, result hooks, and ordered persistence.
+SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and durable history. TanStack `chat()` owns model/tool continuation and serial tool execution; request middleware applies context projection and the final budget. Forge prepares final arguments and policy decisions before native `needsApproval` interrupts. Only undecided calls reach the host; an approved tool executes once in its native `.server()` callback, then Forge persists its result before the next model request. Approval resumes within the current process only.
 
 ```mermaid
 flowchart LR
   H[SDK / CLI / TUI] --> S[AgentSession]
   S --> C[TanStack chat]
   C --> A[Native TextAdapter]
-  C --> T[Forge tool batch]
+  C --> T[Native approval and serial tools]
   S --> D[SessionStorage]
   T --> D
 ```
 
-Original `SessionMessage` history and evidence checkpoints remain the recoverable state. A single request/response projection connects them to TanStack messages; there is no second runtime history or compatibility loop. The SDK accepts native adapters through `adapter`; the former `StreamFn` interface is removed. Existing JSONL, Markdown memory, and MCP attachments retain their formats. See the [SDK migration guide](docs/sdk.en.md#native-tanstack-model-adapters), [ADR-025](docs/decisions/025-tanstack-agent-foundation.md), and [current verification record](docs/phases/tanstack-foundation-acceptance.md).
+Original `SessionMessage` history and evidence checkpoints remain the recoverable state. A single request/response projection connects them to TanStack messages; there is no second runtime history or compatibility loop. The SDK accepts native adapters through `adapter`; the former `StreamFn` interface is removed. Existing JSONL, Markdown memory, and MCP attachments retain their formats. See the [SDK migration guide](docs/sdk.en.md#native-tanstack-model-adapters), [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md), and [approval verification record](docs/phases/native-tool-approval.md).
 
 ## Roadmap
 

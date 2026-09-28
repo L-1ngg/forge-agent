@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # ADR-026: 官方 Skills 与 Memory 生命周期，Markdown 本地存储
 
-> 状态:已批准(2026-09-27，operator 确认按本 ADR 与施工图实施；2026-09-28 已完成本地实现与验收，外部未测边界见施工图)。Issue [#37](https://github.com/L-1ngg/forge-agent/issues/37) 是需求与验收真相源；施工与证据见 [Issue #37 施工图](../phases/tool-ecosystem-issue-37.md)。
+> 状态:已批准(2026-09-27，2026-09-28 已完成本地实现与验收；可信来源与 Markdown 存储继续适用，工具批次调度引用被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代)。Issue [#37](https://github.com/L-1ngg/forge-agent/issues/37) 是当时需求与验收真相源；施工与证据见 [Issue #37 施工图](../phases/tool-ecosystem-issue-37.md)。
 
 ## 决定
 
@@ -13,13 +13,13 @@ created: 2026-09-27
 
 `@tanstack/ai-memory` 的 `memoryMiddleware()` 在 chat 运行开始时 `recall`，在成功结束后经官方 `ctx.defer` 调用 `save`。每次运行绑定一个 Markdown `MemoryAdapter` 到宿主提供的 user/project 目录；adapter 保存短 `MEMORY.md` 索引与普通主题文件，并调用同一模型配置整理本轮内容。当前 session、分支原文、压缩检查点和 JSONL 仍由 `AgentSession` 管理。SDK 未配置记忆时不读取或建立默认目录。
 
-Forge 的工具批次接收官方 middleware 注入的有效工具，以注册来源标记 Skills／Memory 为 internal/trusted；这些工具仍经过最终参数校验、统一 AbortSignal、并发调度、结果记录和存储屏障，省去交互授权。普通工具始终使用现有权限策略，不能通过同名或调用参数伪装成 internal。最终请求上限检查使用全部 middleware 注入后的 system prompts、工具与消息。
+Forge 接收官方 middleware 注入的有效工具，以注册来源标记 Skills／Memory 为 internal/trusted；这些工具仍经过最终参数校验、统一 AbortSignal、原生串行执行、结果记录和存储屏障，省去交互授权。普通工具始终使用现有权限策略，不能通过同名或调用参数伪装成 internal。最终请求上限检查使用全部 middleware 注入后的 system prompts、工具与消息。
 
 当前锁定的 `@tanstack/ai@0.61.0` 与发布的 `ai-skills@0.1.11`、`ai-memory@0.2.6` peer 范围兼容。2026-09-27 最新 `ai-skills@0.1.13`、`ai-memory@0.2.8` 均要求 `@tanstack/ai@^0.63.0`；本轮先在已验证的内核版本接入，避免把内核和所有 provider adapters 升级混入任务。实施时以最终 lockfile 和发布包源码再次核对 API。
 
 ## 替代与保留
 
-本决定替代 [ADR-025](025-tanstack-agent-foundation.md) 中“不采用 ai-skills／ai-memory”的选型结论，以及 [ADR-019](019-persistent-memory.md) 中“仅会话内工具更新、无 deferred 整理”和旧写保护协议。ADR-019 的 Markdown 索引/主题、user/project 域及 worktree 独立副本继续适用；ADR-025 的 `chat()` 唯一循环、会话权威终态和普通工具批次合同继续适用。
+本决定替代 [ADR-025](025-tanstack-agent-foundation.md) 中“不采用 ai-skills／ai-memory”的选型结论，以及 [ADR-019](019-persistent-memory.md) 中“仅会话内工具更新、无 deferred 整理”和旧写保护协议。ADR-019 的 Markdown 索引/主题、user/project 域及 worktree 独立副本继续适用；ADR-025 的 `chat()` 唯一循环和会话权威终态继续适用，普通工具审批与执行按 [ADR-027](027-native-tool-approval-and-interruption.md)。
 
 官方 `SkillSource` 不表达 `disable-model-invocation`；Forge 只在配置准备时从官方 Source 读取该字段，用官方 `filter` 隐藏自动目录，显式 `/skill` 对完整 Source 加载。这个薄接线不保留 Pi scanner、formatter、loader、缓存或第二套工具注册。官方目录扫描、资源路径约束和加载去重以其实际行为为准，旧忽略文件、修订检查和同轮重新加载语义不作为兼容要求。
 

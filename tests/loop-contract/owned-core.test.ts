@@ -111,7 +111,7 @@ test("owned core settles unserializable results and waits for sibling tools befo
 	expect(userTexts(await collect(port, "fresh"))).toEqual(["fresh"]);
 });
 
-test.each([false, true])("owned core preserves batch termination semantics with mixed permissions: %s", async (mixed) => {
+test.each([false, true])("owned core continues after a denied batch with mixed permissions: %s", async (mixed) => {
 	const executed: string[] = [];
 	const port = await createTestAgent({
 		tools: [tool(async (input) => { executed.push((input as { value: string }).value); return { content: [{ type: "text", text: "ok" }], details: "ok" }; })],
@@ -127,7 +127,7 @@ test.each([false, true])("owned core preserves batch termination semantics with 
 	const events = await collect(port);
 	expect(executed).toEqual(mixed ? ["allow"] : []);
 	expect(events.filter((event) => event.type === "message_end" && event.message.role === "toolResult")).toHaveLength(2);
-	expect(events.filter((event) => event.type === "turn_end").map((event) => event.stopReason)).toEqual(mixed ? ["tool_use", "stop"] : ["tool_use"]);
+	expect(events.filter((event) => event.type === "turn_end").map((event) => event.stopReason)).toEqual(["tool_use", "stop"]);
 });
 
 test.each(["steer", "followUp"] as const)("owned core drains %s after an entirely denied batch without leaking it into the next invocation", async (queue) => {
@@ -155,7 +155,9 @@ test.each(["steer", "followUp"] as const)("owned core drains %s after an entirel
 	}
 	expect(queued).toBe(true);
 	expect(userTexts(events)).toEqual(["initial", "queued-first", "queued-second"]);
-	expect(events.filter((event) => event.type === "turn_end").map((event) => event.stopReason)).toEqual(["tool_use", "stop", "stop"]);
+	const replies = events.flatMap(event => event.type === "message_end" && event.message.role === "assistant" && event.message.stopReason === "stop"
+		? event.message.content.flatMap(part => part.type === "text" ? [part.text] : []) : []);
+	expect(replies).toEqual(queue === "steer" ? ["queued-first", "queued-second"] : ["initial", "queued-first", "queued-second"]);
 	expect(userTexts(await collect(port, "fresh"))).toEqual(["fresh"]);
 });
 

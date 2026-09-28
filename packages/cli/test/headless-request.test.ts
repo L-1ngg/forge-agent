@@ -9,6 +9,10 @@ import {
 import { RequestBus } from "@forge-agent/core";
 import type { RequestEnvelopeFor, RequestKind } from "@forge-agent/protocol";
 import { block } from "@forge-agent/protocol";
+import { withScenario, bounded } from "../../../tests/support/scenario.ts";
+import { modelResponse } from "../../core/test/helpers/model-response.ts";
+import { mkdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 const requests: { [K in RequestKind]: RequestEnvelopeFor<K> } = {
 	permission: {
@@ -92,3 +96,23 @@ test("headless preserves the same structured block envelope consumed by TUI", as
 	}, "block", (line) => lines.push(line));
 	expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ block: richBlock });
 });
+
+test("real CLI headless approval denies without a prompt or tool effect", () => withScenario("headless-native-approval", async scenario => {
+	const proposal = await modelResponse([{ id: "write-one", name: "write", arguments: { path: "result.txt", content: "forbidden" } }]).text();
+	const fixture = scenario.httpFixture(scenario.id, [
+		{ id: "proposal", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("headless ask"); }, response: { chunks: [proposal] } },
+		{ id: "continuation", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("Interactive request is not available in headless mode"); }, response: { chunks: [await modelResponse([], "end_turn", "DENIED_COMPLETE").text()] } },
+	]);
+	await mkdir(join(scenario.cwd, ".forge-agent"));
+	await Bun.write(join(scenario.cwd, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", baseUrl: fixture.url, thinkingLevel: "off", retry: { enabled: false }, memory: { autoUpdate: false, injection: false } }));
+	const child = Bun.spawn([process.execPath, resolve(import.meta.dir, "../src/main.ts"), "--json", "-p", "headless ask"], {
+		cwd: scenario.cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...scenario.env, FORGE_AGENT_API_KEY: "", FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "" },
+	});
+	scenario.defer(async () => { if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; });
+	const output = await bounded(new Response(child.stdout).text(), "headless output", 6000);
+	const stderr = await new Response(child.stderr).text();
+	expect(await child.exited).toBe(HEADLESS_REQUEST_EXIT_CODES.permission);
+	expect(stderr).toBe("");
+	expect(output).toContain("DENIED_COMPLETE");
+	expect(await Bun.file(join(scenario.cwd, "result.txt")).exists()).toBe(false);
+}), 15_000);

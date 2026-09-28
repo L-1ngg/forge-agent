@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # TanStack 基座重构验收
 
-> 状态:本地实现与离线软件验收已完成(2026-09-27)，真实供应商及其他外部验收未完成。对应[设计](tanstack-foundation.md)与 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。本次设计与实施依据 operator 的自主执行授权，不表示人工验收通过；operator 在完成离线验收后明确授权本地提交，未 push、发布或修改远程任务。
+> 状态:本地实现与当时离线软件验收已完成(2026-09-27)，真实供应商及其他外部验收未完成。工具预执行与并行证据于 2026-09-28 被 [Issue #39 施工及验收](native-tool-approval.md) 取代；下列数字只对应原版本。对应[历史施工](tanstack-foundation.md)与 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。
 
 ## 基线
 

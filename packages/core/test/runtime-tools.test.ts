@@ -9,7 +9,7 @@ import { modelResponse, gate } from "./helpers/model-response.ts";
 import type { HarnessTool } from "@forge-agent/tools";
 const settings = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "tools", cwd: process.cwd() };
 const parameters = { type: "object" as const, properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false as const };
-for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw", "hook-block", "terminate", "sequential"] as const) test(`SDK native scheduling: ${scenario}`, async () => {
+for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw", "hook-block"] as const) test(`SDK native scheduling: ${scenario}`, async () => {
 	let requests = 0;
 	const effects: string[] = []; const after: string[] = []; const saved: string[] = [];
 	const server = Bun.serve({
@@ -20,7 +20,6 @@ for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw",
 	});
 	const tool: HarnessTool<object, unknown> = {
 		name: "work", label: "Work", description: "work", parameters,
-		...(scenario === "sequential" ? { executionMode: "sequential" } : {}),
 		async execute(input) { const { id } = input as { id: string }; effects.push(id); if (scenario === "throw") throw new Error("tool failed"); return { content: [{ type: "text", text: id }], details: id }; },
 	};
 	const storage = new MemorySessionStorage();
@@ -28,8 +27,8 @@ for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw",
 		...settings, baseUrl: server.url.toString(), tools: [tool],
 		storage: { load: () => storage.load(), async append(entry) { if (entry.type === "message" && entry.message.role === "toolResult") saved.push(entry.message.toolCallId!); await storage.append(entry); } },
 		toolHooks: {
-			beforeToolCall: async () => scenario === "hook-block" ? { block: true, reason: "blocked", terminate: true } : undefined,
-			afterToolCall: async ({ toolCall }) => { after.push(toolCall.id); return scenario === "terminate" ? { terminate: true } : undefined; },
+			beforeToolCall: async () => scenario === "hook-block" ? { block: true, reason: "blocked" } : undefined,
+			afterToolCall: async ({ toolCall }) => { after.push(toolCall.id); return undefined; },
 		},
 	});
 	const permissions = (async () => {
@@ -45,7 +44,7 @@ for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw",
 		if (["invalid", "unknown", "deny", "hook-block"].includes(scenario)) { expect(effects).toEqual([]); expect(after).toEqual([]); }
 		else if (scenario === "mixed") expect(effects).toEqual(["b"]);
 		else expect(effects).toEqual(["a", "b"]);
-		expect(requests).toBe(["deny", "hook-block", "terminate"].includes(scenario) ? 1 : 2);
+		expect(requests).toBe(2);
 	} finally { await agent.dispose(); await permissions; server.stop(true); }
 });
 
@@ -63,7 +62,7 @@ for (const failAt of ["assistant", "toolResult"] as const) test(`SDK ${failAt} s
 	try {
 		if (failAt === "toolResult") { await started.promise; await Promise.resolve(); release.resolve(); }
 		const error = await run; expect(error?.message).toBe("disk failed");
-		expect(requests).toBe(1); expect(effects).toBe(failAt === "assistant" ? 0 : 2); expect(writes).toBe(failAt === "assistant" ? 2 : 3);
+		expect(requests).toBe(1); expect(effects).toBe(failAt === "assistant" ? 0 : 1); expect(writes).toBe(failAt === "assistant" ? 2 : 3);
 		expect(() => agent.runTurn("again")).toThrow("faulted");
 	} finally { release.resolve(); await run; await agent.dispose(); server.stop(true); }
 });

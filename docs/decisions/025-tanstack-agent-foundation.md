@@ -5,13 +5,15 @@ created: 2026-09-27
 
 # ADR-025: 以 TanStack chat 组织单 Agent 执行基座
 
-> 状态:已批准(2026-09-27；内核设计仍适用，ai-skills/ai-memory 选型于 2026-09-28 被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
+> 状态:已批准(2026-09-27；唯一 `chat()` 循环与会话职责仍适用，Skills/Memory 选型被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代，工具批次预执行与并行选择于 2026-09-28 被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
 
 ## 决策
 
 采用已发布 `@tanstack/ai@0.61.0` 的 `chat()`、middleware 和 `toolDefinition()`。删除本地 Pi Agent/agent-loop、模型事件流兼容形状及多层生命周期包装。SDK 原生 `adapter` 同时接入任务和摘要；Forge 只维护会话输入/配置/持久化/终态、可取消的权限和工具批次策略、证据型上下文与宿主扩展。设计和全仓处置清单见[施工图](../phases/tanstack-foundation.md)。
 
 ## 取舍与证据
+
+以下工具批次原型与并行取舍记录当时决策，不是当前执行合同；当前路径见 ADR-027。
 
 原生chat存在四处行为差异：工具串行、transformArgs之后不再校验、after hook只观察、无工具stop后的onShouldContinue不能强制继续。依据为发布源码 `activities/chat/tools/tool-calls.ts` 与 `activities/chat/index.ts`。合理重设计原型已证明通过工具阶段预调度和native execute等待结果，可以维持严格校验/授权、并行、结果干预及保存屏障。外层处理新的输入与有限失败恢复，不接管工具续轮。因此继续维护Forge工具循环的方案B没有更低长期复杂度；一次迁移成本不构成保留旧内核理由。
 

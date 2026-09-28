@@ -12,6 +12,7 @@ export function defineLocalTool<TInput extends object, TOutput>(
 	if (parameters?.type !== "object" && !objectUnion) throw new TypeError(`Tool ${tool.name} requires an object schema`);
 	return {
 		...definition,
+		inputSchema,
 		parameters: { type: "object", ...parameters } as ObjectSchema,
 		validateArguments: args => {
 			const input = parseWithStandardSchema<TInput>(inputSchema, args);

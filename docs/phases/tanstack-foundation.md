@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # TanStack 单 Agent 基座重构
 
-> 状态:本地实现与离线验收已完成，外部验收未完成(2026-09-27)。operator 授权自主设计、自审与本地完整实施；本次替代 SOP 的等待设计确认环节，不代表人工验收通过。决策见 [ADR-025](../decisions/025-tanstack-agent-foundation.md)，验证见 [验收记录](tanstack-foundation-acceptance.md)。
+> 状态:本地实现与当时离线验收已完成，外部验收未完成(2026-09-27)；工具预执行及并行选择于 2026-09-28 被 [Issue #39 施工图](native-tool-approval.md) 取代。本文保留当时施工与验收边界，当前决策见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md)。
 
 ## Entry
 
@@ -25,7 +25,7 @@ flowchart TD
   S --> C[TanStack chat: 唯一模型与工具续轮循环]
   C --> M[onConfig: 快照、请求投影、记忆、最终预算]
   M --> A[TanStack TextAdapter: provider 协议]
-  C --> T[Forge 工具批次: 改写、校验、授权、并发、结果干预]
+  C --> T[原生工具: 审批续接、串行执行]
   A --> R[单一响应投影: 协议终态、增量、continuation、usage]
   R --> S
   T --> S
@@ -37,7 +37,7 @@ flowchart TD
 - 每次 `onConfig(beforeModel)` 捕获一个配置快照，准备 canonical `messages` 与独立 `providerMessages`；系统、工具、摘要与该响应工具批次共同使用快照。提交存储后才允许下一请求。
 - 公开模型接缝改为 TanStack 原生 `adapter`，类型为 `AnyTextAdapter`；对象模型须提供 adapter；字符串模型可覆盖 adapter，`adapter: null` 恢复内置目录传输。删除 `StreamFn`、Pi Message/EventStream 和默认流包装，不提供旧接口兼容层。
 - `SessionMessage` 保留为历史/展示领域格式和原有 JSONL 数据边界；只在模型请求与响应处同 TanStack 转换。MCP 快照、工具 details、证据身份并非普通 ModelMessage，不能静默丢弃。
-- 工具批次独占先改写、严格校验、授权，再执行的顺序。借助 native `toolDefinition().server()` 接入：TanStack 调度工具阶段，Forge 预调度整批、native execute 等待已完成结果；没有第二次工具副作用。默认并行、任何 sequential 工具使整批串行。完成干预先于存储；结果按模型调用顺序保存。
+- 工具提案先由 Forge 准备、严格校验并按最终参数判权；原生 `needsApproval` 仅将 `ask` 交宿主，整批决定收齐后续接。TanStack `.server()` 串行执行获批工具，Forge 在每项执行后提交结果；当前详细合同见 [Issue #39 施工图](native-tool-approval.md)。
 - provider 流在同一个响应收集器中验证终态、参数 JSON、thinking signature 与 usage。半截响应与 unknown finish reason 失败；length 不启动任何工具。传输重试为零，会话重试有界且不会重做已提交工具。
 - 压缩检查点只在 SessionStorage 持久化。请求投影从当前分支重建，middleware metadata 不保存任务状态。最终预算在宿主变换和记忆注入后检查 system、tools、messages、output、margin。
 
@@ -65,11 +65,11 @@ flowchart TD
 
 ## 选型及自审
 
-选择 A。已发布 `@tanstack/ai@0.61.0` 的原生循环初始存在串行执行、参数改写后未再校验、after hook不能替换结果、无工具stop不能强制继续等差异。隔离原型证明：beforeTools 批次准备 + native execute等待结果能实现并行 maxActive=2、授权参数一致、revision隔离和保存屏障。无工具 stop 后的新输入由会话启动新 chat run，是输入调度而非第二个工具循环。B 会继续维护模型/工具续轮和旧事件层，不采用。
+当时选择 A：隔离原型通过 beforeTools 预调度和 native execute 等待结果实现过并行 maxActive=2、授权参数一致及提交屏障。Issue #39 后放弃预调度与并行，采用原生审批和串行执行；这段原型结论仅解释当时选择，不构成当前运行保证。无工具 stop 后的新输入仍由会话启动新 chat run，是输入调度而非第二个工具循环。
 
 不采用 ai-compaction 0.1.9、ai-persistence 0.6.7、ai-mcp 0.4.6、ai-skills 0.1.11、ai-memory 0.2.6；比较的是围绕原生接口重设计后的整条链，具体发布源码、实验、能力差异见 ADR 和验收。保留现有 provider patches：latest 与锁定版本相同，无已发布替代修复证据。
 
-自审重点：不得把旧内核装进 adapter；不得因 native 终态成功忽略存储/协议失败；不得以 canonical transcript 或 middleware metadata 新建第二份可恢复状态；不将原生串行 executor 当作本项目并行执行保证。用 SDK 及真实本地 HTTP fixture 的行为验证上述各项。
+自审重点：不得把旧内核装进 adapter；不得因 native 终态成功忽略存储/协议失败；不得以 canonical transcript 或 middleware metadata 新建第二份可恢复状态。当前串行及审批续接按 Issue #39 的 SDK、HTTP 与 PTY 验收。
 
 ## 接口与数据迁移
 
@@ -81,7 +81,7 @@ JSONL schema、Markdown和MCP附件格式保持；只读版本解析继续兼容
 
 - [x] AC-1：原生 chat/toolDefinition/middleware 已在生产链；Pi循环、冗余生命周期/消息类型和旧模型接缝已删除。
 - [x] AC-2：输入processed、steering/follow-up、五类终态/策略停止、取消、idle/dispose与配置accepted/applied通过SDK行为验证。
-- [x] AC-3：严格最终参数、权限、并行/串行、before/after干预、取消及存储屏障覆盖，副作用不重放。
+- [x] AC-3：当时的严格最终参数、权限、并行/串行、before/after 干预、取消及存储屏障覆盖；当前执行保证按 Issue #39 重新验收。
 - [x] AC-4：所有内置协议本地HTTP fixture覆盖增量/工具/usage/continuation/终态/失败与摘要；自定义native adapter覆盖任务和摘要。
 - [x] AC-5：原文、检查点来源与分支、压缩失败/预算/存储故障、旧数据副本恢复、MCP/Skills/记忆行为通过。
 - [x] AC-6：frozen install、check、typecheck:examples、test:headless通过；受影响PTY通过；反向验证能发现破坏。

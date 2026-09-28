@@ -1,4 +1,5 @@
 import type { ImageBlock, TextBlock } from "@forge-agent/protocol";
+import type { ZodType } from "zod";
 
 export interface ObjectSchema {
 	type: "object";
@@ -24,10 +25,11 @@ export interface HarnessTool<TInput extends object, TOutput> {
 	label: string;
 	description: string;
 	parameters: ObjectSchema;
+	/** Native schema for local tools; dynamic SDK and MCP tools use parameters. */
+	inputSchema?: ZodType<TInput>;
 	prepareArguments?: (args: unknown) => TInput;
 	/** Exact final-input validator; runs before authorization without coercion. */
 	validateArguments?: (args: unknown) => TInput;
-	executionMode?: "parallel" | "sequential";
 	execute(input: TInput, context: ToolContext): Promise<ToolResult<TOutput>>;
 }
 
@@ -36,5 +38,4 @@ export interface ToolResult<TDetails = unknown> {
 	content: (TextBlock | ImageBlock)[];
 	details: TDetails | undefined;
 	isError?: boolean;
-	terminate?: boolean;
 }

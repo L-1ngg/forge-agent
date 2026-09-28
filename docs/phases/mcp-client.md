@@ -168,7 +168,7 @@ flowchart LR
 
 本段记录 #36 原施工范围；当前工具参数统一严格校验及内置工具行为变更见[后续施工图](tool-argument-validation.md)。模型原始参数经准备、schema 校验、改写、hook 后再次校验，再授权并固定参数发送。MCP 工具仍使用官方 Ajv 校验器和远端原 schema；不允许 execute 内部首次发现权限之外的参数变化。
 
-SDK outputSchema 验证使用执行快照 Tool，不重复手写输出 validator。调用传 `toolDefinition`、`signal`、`onprogress`，并将 Forge 内部 deadline 换算为 SDK 的 `timeout`、`resetTimeoutOnProgress` 和 `maxTotalTimeout`，不假设官方有 deadline 字段；未知副作用禁止自动重试。MCP 工具默认使用现有 `executionMode:'sequential'`，不会因 readOnlyHint 自动并发；本次不增加每 server 调度器或承诺跨 server 并行。明确具备并行合同的能力可以通过现有宿主工具配置讨论，但不是本规格的隐藏前置。
+SDK outputSchema 验证使用执行快照 Tool，不重复手写输出 validator。调用传 `toolDefinition`、`signal`、`onprogress`，并将 Forge 内部 deadline 换算为 SDK 的 `timeout`、`resetTimeoutOnProgress` 和 `maxTotalTimeout`，不假设官方有 deadline 字段；未知副作用禁止自动重试。模型 MCP 工具按 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md) 与其他工具一起由 TanStack 原生串行执行，不因 readOnlyHint 自动并发；本次不增加每 server 调度器或承诺跨 server 并行。
 
 ### 6. 内容、附件、预算与持久化
 

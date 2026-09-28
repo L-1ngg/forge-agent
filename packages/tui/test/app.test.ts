@@ -766,6 +766,32 @@ test("AC-33: Esc parks a card without calling respond(); Tab resumes it", async 
 	await app.stop();
 });
 
+test("a parked permission lets the host keep a draft without starting another turn", async () => {
+	const bus = new FakeBus(), calls: string[] = [];
+	let release: (() => void) | undefined;
+	const { app, input } = createApp({ bus, port: { runTurn(value) {
+		calls.push(String(value));
+		return scriptedTurn((async function* () { yield { type: "agent_start" as const, timestamp: 1 }; await new Promise<void>(resolve => { release = resolve; }); })());
+	}, abort() { release?.(); } } });
+	await app.start();
+	try {
+		input.emit(Buffer.from("initial\r"));
+		await waitFor(() => calls.length === 1);
+		bus.push(request("r-draft", "permission", { toolCall: { type: "tool_call", id: "t-1", name: "bash", arguments: { command: "pwd" } } }));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("Permission: bash"));
+		input.emit(Buffer.from("\x1b")); await Bun.sleep(35);
+		input.emit(Buffer.from("cqueued draft"));
+		expect(frameToText(app.composeFrameForTest())).toContain("queued draft");
+		expect(calls).toEqual(["initial"]);
+		expect(bus.responses).toEqual([]);
+		input.emit(Buffer.from("\t"));
+		expect(frameToText(app.composeFrameForTest())).toContain("Permission: bash");
+		input.emit(Buffer.from("2"));
+		await waitFor(() => bus.responses.length === 1);
+		expect(frameToText(app.composeFrameForTest())).toContain("queued draft");
+	} finally { release?.(); await app.stop(); }
+});
+
 test("AC-34: parked Esc does not abort the turn", async () => {
 	let aborted = 0;
 	let release: (() => void) | undefined;

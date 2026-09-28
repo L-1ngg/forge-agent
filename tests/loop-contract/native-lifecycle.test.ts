@@ -44,14 +44,14 @@ test("tool argument preparation runs before strict validation and authorization"
 	expect(ends.find(event => event.toolCallId === "invalid")).toMatchObject({ isError: true });
 });
 
-test("native loop emits tool completion order but commits results in call order before steering", async () => {
-	const releaseFirst = gate();
+test("native loop executes and commits tools in call order before steering", async () => {
+	const firstStarted = gate(), releaseFirst = gate();
 	const storage = new MemorySessionStorage();
 	let secondOverlapped = false, firstFinished = false;
 	const agent = await createTestAgent({
 		permission, storage,
 		tools: [{ name: "work", label: "Work", description: "work", parameters, async execute(_input, context) {
-			if (context.toolCallId === "call-0") { await releaseFirst.promise; firstFinished = true; }
+			if (context.toolCallId === "call-0") { firstStarted.resolve(); await releaseFirst.promise; firstFinished = true; }
 			else secondOverlapped = !firstFinished;
 			return { content: [{ type: "text", text: context.toolCallId! }], details: {} };
 		} }],
@@ -60,19 +60,21 @@ test("native loop emits tool completion order but commits results in call order 
 	const turn = agent.runTurn("initial"); const events: SessionEvent[] = [];
 	let processed: Promise<boolean> | undefined;
 	try {
-		for await (const event of turn) {
+		const running = (async () => { for await (const event of turn) {
 			events.push(event);
 			if (event.type === "tool_execution_end" && event.toolCallId === "call-1") {
 				const receipt = agent.steer("after complete batch", turn.id);
 				expect(receipt.accepted).toBe(true);
 				if (receipt.accepted) processed = receipt.processed;
-				releaseFirst.resolve();
 			}
-		}
+		} })();
+		await firstStarted.promise;
+		expect(secondOverlapped).toBe(false);
+		releaseFirst.resolve(); await running;
 		expect(await turn.result).toEqual({ status: "success" });
 		expect(await processed).toBe(true);
-		expect(secondOverlapped).toBe(true);
-		expect(events.flatMap(event => event.type === "tool_execution_end" ? [event.toolCallId] : [])).toEqual(["call-1", "call-0"]);
+		expect(secondOverlapped).toBe(false);
+		expect(events.flatMap(event => event.type === "tool_execution_end" ? [event.toolCallId] : [])).toEqual(["call-0", "call-1"]);
 		expect(events.flatMap(event => event.type === "message_end" && event.message.role === "toolResult" ? [event.message.toolCallId] : [])).toEqual(["call-0", "call-1"]);
 		const saved = sessionMessages(await storage.load());
 		expect(saved.map(message => message.role)).toEqual(["user", "assistant", "toolResult", "toolResult", "user", "assistant"]);
@@ -81,7 +83,7 @@ test("native loop emits tool completion order but commits results in call order 
 	} finally { releaseFirst.resolve(); await agent.dispose(); }
 });
 
-for (const sameTool of [true, false]) test(`one sequential tool serializes the full native batch; sameTool=${sameTool}`, async () => {
+for (const sameTool of [true, false]) test(`native executor serializes the full batch; sameTool=${sameTool}`, async () => {
 	const firstStarted = gate(); const releaseFirst = gate();
 	const effects: string[] = [];
 	const execute: HarnessTool<object, unknown>["execute"] = async (_input, context) => {
@@ -92,7 +94,7 @@ for (const sameTool of [true, false]) test(`one sequential tool serializes the f
 	};
 	const agent = await createTestAgent({
 		permission,
-		tools: [{ name: "serial", label: "Serial", description: "serial", parameters, executionMode: "sequential", execute }, { name: "parallel", label: "Parallel", description: "parallel", parameters, executionMode: "parallel", execute }],
+		tools: [{ name: "serial", label: "Serial", description: "serial", parameters, execute }, { name: "parallel", label: "Parallel", description: "parallel", parameters, execute }],
 		responses: [{ toolCalls: toolCalls(["serial", sameTool ? "serial" : "parallel"]) }, { text: "done" }],
 	});
 	const turn = agent.runTurn("batch"); const running = collect(turn);
@@ -137,30 +139,6 @@ test("settled tool progress is ignored while a sibling still runs and after invo
 		expect(fresh.filter(event => event.type === "tool_execution_update")).toHaveLength(0);
 		expect(JSON.stringify(fresh)).not.toContain("late after turn");
 	} finally { releaseSlow.resolve(); await agent.dispose(); }
-});
-
-for (const source of ["tool", "before", "after"] as const) for (const all of [false, true]) test(`native batch termination requires every result; source=${source}, all=${all}`, async () => {
-	const storage = new MemorySessionStorage(); const effects: string[] = [];
-	const terminate = (id: string) => all || id === "call-0";
-	const agent = await createTestAgent({
-		permission, storage,
-		toolHooks: {
-			beforeToolCall: async ({ toolCall }) => source === "before" && terminate(toolCall.id) ? { block: true, reason: "host stopped this call", terminate: true } : undefined,
-			afterToolCall: async ({ toolCall }) => source === "after" ? { terminate: terminate(toolCall.id) } : undefined,
-		},
-		tools: [{ name: "work", label: "Work", description: "work", parameters, async execute(_input, context) {
-			effects.push(context.toolCallId!);
-			return { content: [], details: {}, ...(source === "tool" ? { terminate: terminate(context.toolCallId!) } : {}) };
-		} }],
-		responses: [{ toolCalls: toolCalls(["work", "work"]) }, { text: "continued" }],
-	});
-	const turn = agent.runTurn("batch"); const events = await collect(turn);
-	expect(await turn.result).toEqual({ status: "success" });
-	expect(effects).toEqual(source === "before" ? all ? [] : ["call-1"] : ["call-0", "call-1"]);
-	expect(events.flatMap(event => event.type === "turn_end" ? [event.stopReason] : [])).toEqual(all ? ["tool_use"] : ["tool_use", "stop"]);
-	const saved = sessionMessages(await storage.load());
-	expect(saved.filter(message => message.role === "toolResult").map(message => message.toolCallId)).toEqual(["call-0", "call-1"]);
-	expect(saved.filter(message => message.role === "assistant")).toHaveLength(all ? 1 : 2);
 });
 
 test("native continuation consumes persisted user context without duplicating its events or storage", async () => {

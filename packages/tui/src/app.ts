@@ -235,7 +235,7 @@ export class App {
 	}
 
 	private visibleCard(): RequestCard | undefined {
-		const record = this.focus.top() ?? this.focus.parkedTop();
+		const record = this.focus.top() ?? (this.browsing ? this.focus.parkedTop() : undefined);
 		return record ? this.cards.get(record.id) : undefined;
 	}
 
@@ -315,6 +315,11 @@ export class App {
 	}
 
 	private handleScrollbackKey(key: Key): void {
+		if (this.focus.hasParked && key.type === "char" && key.text === "c") {
+			this.browsing = false;
+			this.repaint();
+			return;
+		}
 		const result = this.focus.handleKey(key.type === "char" && key.text === "i" ? { type: "tab" } : key);
 		if (result.action === "resume" && result.card) {
 			this.cards.get(result.card.id)?.resume();
@@ -353,6 +358,12 @@ export class App {
 	private handleComposerKey(key: Key): void {
 		if (this.picker && this.handlePickerKey(key)) return;
 		if (key.type === "tab") {
+			const parked = this.focus.resume();
+			if (parked) {
+				this.cards.get(parked.id)?.resume();
+				this.repaint();
+				return;
+			}
 			this.browsing = true;
 			this.transcript().enter();
 			this.suggestionVersion++;
@@ -966,7 +977,7 @@ export class App {
 			});
 		}
 		if (plan.status.height === 1) paintStatus(frame, offsets.status, segments, this.theme);
-		if (this.browsing || this.focus.hasParked) delete frame.cursor;
+		if (this.browsing) delete frame.cursor;
 		if (plan.shortcuts.height === 1) {
 			const routes = shortcutRoutes(this.routerState());
 			const hints: ShortcutHint[] = routes.map((route) => ({ keys: route.keys, label: route.label, ...(route.pinned ? { pinned: true } : {}) }));

@@ -2,7 +2,7 @@ import { createTestAgent } from "../support/test-agent.ts";
 import { expect, test } from "bun:test";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
 
-test("native agent parallel tool settlement retains every result when one tool fails", async () => {
+test("native serial tool settlement retains every result when one tool fails", async () => {
 	const tool: HarnessTool<{ fail?: boolean }, unknown> = {
 		name: "settle",
 		label: "Settle",
@@ -36,7 +36,7 @@ test("native agent parallel tool settlement retains every result when one tool f
 		],
 	});
 	const settled: Array<{ id: string; isError: boolean }> = [];
-	for await (const event of port.runTurn("parallel")) {
+	for await (const event of port.runTurn("serial")) {
 		if (event.type === "tool_execution_end") settled.push({ id: event.toolCallId, isError: event.isError });
 	}
 	expect(settled).toHaveLength(3);

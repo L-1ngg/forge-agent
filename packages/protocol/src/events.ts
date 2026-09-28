@@ -42,6 +42,8 @@ export interface SessionMessage {
 	timestamp: number;
 	toolCallId?: string;
 	toolName?: string;
+	/** Final approved arguments for this tool result, including host edits. */
+	toolArguments?: Record<string, unknown>;
 	/** Tool display payload; never converted into model content. */
 	details?: unknown;
 	isError?: boolean;
