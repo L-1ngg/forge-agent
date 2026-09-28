@@ -196,7 +196,7 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 
 依赖门禁禁止 core 引入 UI，并拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
 
-SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和持久历史。TanStack `chat()` 负责模型/工具续轮及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 在原生 `needsApproval` interrupt 前准备最终参数并判权；仅未能自动决定的调用交给宿主。批准后工具在原生 `.server()` 中执行一次，Forge 在下一次模型请求前保存结果。审批仅在当前进程续接。
+SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和持久历史。TanStack `chat()` 负责模型/工具续轮、成功响应聚合及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 审计原始 provider 协议，并在任何工具执行前保存完整提案与最终参数；仅未能自动决定的审批交给宿主。批准后工具在原生 `.server()` 中执行一次，Forge 在下一次模型请求前保存结果。审批仅在当前进程续接。
 
 ```mermaid
 flowchart LR
@@ -208,7 +208,7 @@ flowchart LR
   T --> D
 ```
 
-`SessionMessage` 原文与证据检查点是唯一可恢复状态；它们只在请求/响应边界与 TanStack 消息转换一次，不再维护第二份 runtime 历史或兼容循环。SDK 通过 `adapter` 接受原生 adapter，旧 `StreamFn` 接口已移除；已有 JSONL、Markdown 记忆和 MCP 附件格式保持。迁移见 [SDK 指南](docs/sdk.md#原生-tanstack-模型-adapter)，权限决策见 [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md)，当前证据见[审批验收记录](docs/phases/native-tool-approval.md)。
+`SessionMessage` 原文与证据检查点是唯一可恢复状态；它们只在请求/响应边界与 TanStack 消息转换一次，不再维护第二份 runtime 历史或兼容循环。SDK 通过 `adapter` 接受原生 adapter，旧 `StreamFn` 接口已移除；已有 JSONL、Markdown 记忆和 MCP 附件格式保持。迁移见 [SDK 指南](docs/sdk.md#原生-tanstack-模型-adapter)，权限决策见 [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md)，响应边界见 [ADR-028](docs/decisions/028-model-response-boundary.md)。
 
 ## Roadmap
 

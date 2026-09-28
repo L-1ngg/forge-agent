@@ -35,6 +35,23 @@ test("Bedrock reasoning text and redacted signature reach Forge output and Conve
 	]);
 });
 
+test("Bedrock reasoning content spans steps under one reasoning message ID", async () => {
+	let nextId = 0;
+	const events = (async function* (): AsyncGenerator<ConverseStreamOutput> {
+		yield { contentBlockDelta: { contentBlockIndex: 0, delta: { reasoningContent: { text: "first" } } } };
+		yield { contentBlockStop: { contentBlockIndex: 0 } };
+		yield { contentBlockDelta: { contentBlockIndex: 1, delta: { reasoningContent: { text: "second" } } } };
+		yield { contentBlockStop: { contentBlockIndex: 1 } };
+		yield { messageStop: { stopReason: "end_turn" } };
+	})();
+	const response = await collectResponse(model, processConverseStream(events, () => `id_${++nextId}`));
+	expect(response.stopReason).toBe("stop");
+	expect(response.content).toEqual([
+		{ type: "thinking", thinking: "first" },
+		{ type: "thinking", thinking: "second" },
+	]);
+});
+
 test("Bedrock rejects incomplete reasoning and preserves failed tool status", async () => {
 	let nextId = 0;
 	const response = await collectResponse(model, processConverseStream(converseEvents(false), () => `id_${++nextId}`));

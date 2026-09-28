@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # TanStack 单 Agent 基座重构
 
-> 状态:本地实现与当时离线验收已完成，外部验收未完成(2026-09-27)；工具预执行及并行选择于 2026-09-28 被 [Issue #39 施工图](native-tool-approval.md) 取代。本文保留当时施工与验收边界，当前决策见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md)。
+> 状态:本地实现与当时离线验收已完成，外部验收未完成(2026-09-27)；工具预执行及并行选择被 [Issue #39 施工图](native-tool-approval.md) 取代，响应收集器职责被 [Issue #40 施工图](model-response-boundary.md) 取代。本文保留当时施工与验收边界，当前决策见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md) 和 [ADR-028](../decisions/028-model-response-boundary.md)。
 
 ## Entry
 

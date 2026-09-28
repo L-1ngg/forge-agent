@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # TanStack 基座重构验收
 
-> 状态:本地实现与当时离线软件验收已完成(2026-09-27)，真实供应商及其他外部验收未完成。工具预执行与并行证据于 2026-09-28 被 [Issue #39 施工及验收](native-tool-approval.md) 取代；下列数字只对应原版本。对应[历史施工](tanstack-foundation.md)与 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。
+> 状态:本地实现与当时离线软件验收已完成(2026-09-27)，真实供应商及其他外部验收未完成。工具预执行与并行证据被 [Issue #39 施工及验收](native-tool-approval.md) 取代，响应收集器证据被 [Issue #40 施工与证据](model-response-boundary.md) 取代；下列数字只对应原版本。对应[历史施工](tanstack-foundation.md)与 [ADR-025](../decisions/025-tanstack-agent-foundation.md)。
 
 ## 基线
 

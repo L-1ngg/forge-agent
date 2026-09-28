@@ -1,4 +1,4 @@
-import { chat, toolDefinition, convertSchemaToJsonSchema, parseWithStandardSchema, readInterruptBinding, type ChatMiddleware, type TextOptions, type JSONSchema, type AnyTool, type Interrupt, type ModelMessage, type RunAgentResumeItem } from "@tanstack/ai";
+import { chat, toolDefinition, convertSchemaToJsonSchema, parseWithStandardSchema, readInterruptBinding, type ChatMiddleware, type TextOptions, type JSONSchema, type AnyTool, type Interrupt, type ModelMessage, type RunAgentResumeItem, type TokenUsage } from "@tanstack/ai";
 import { z } from "zod";
 import { createResourceTool, filter, withSkills } from "@tanstack/ai-skills";
 import { memoryMiddleware } from "@tanstack/ai-memory";
@@ -10,7 +10,7 @@ import type { ConfigurationPatch, ConfigurationReceipt, SessionAssembly, Session
 import { snapshotConfiguration } from "./session-configuration.ts";
 import { RequestBus } from "./request-bus.ts";
 import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
-import { toModelMessages } from "./model-response.ts";
+import { isProviderExecutedCall, toModelMessages, type RawResponseAudit } from "./model-response.ts";
 import { observeModelResponse, linkedController } from "./model-call.ts";
 import { transformMessages } from "./context/transform.ts";
 import { checkRequestBudget, isolateRequest, requestFixedText, REQUEST_MARGIN, type RequestBudget } from "./context/request-budget.ts";
@@ -38,7 +38,8 @@ interface ResponseSnapshot {
 	options: SessionConfiguration; revision: number; settings: ModelRequestSettings;
 	internalTools: ReadonlySet<HarnessTool<object, unknown>>;
 	prepared: Map<string, PreparedToolCall>; savedResults: Set<string>; startedTools: Set<string>; toolResults: SessionMessage[];
-	nativeTools: AnyTool[]; completed: boolean;
+	nativeTools: AnyTool[]; completed: boolean; committed: boolean; baseMessageCount: number;
+	audit?: RawResponseAudit; nativeUsage?: TokenUsage;
 }
 interface PendingApprovalBatch {
 	requestIds: Set<string>; remaining: number; sealed: boolean; finish(): void;
@@ -340,8 +341,22 @@ export class AgentSession implements Agent {
 		if (!["error", "aborted", "length"].includes(message.stopReason ?? "")) { this.taskFailures = 0; this.recoveryUsed = false; }
 		if (this.settings.enabled && this.recoverableLength(message)) message.contextExcluded = true;
 		await this.persistMessage(message);
+		current.committed = true;
 		this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
 		if (["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "") || !message.content.some(block => block.type === "tool_call")) await this.completeTurn(current);
+	}
+	private async commitModelResponse(current: ResponseSnapshot, messages: readonly ModelMessage[]): Promise<void> {
+		if (current.committed || this.failure !== undefined) return;
+		if (!current.audit) throw new Error("Model response audit is unavailable");
+		const message = current.audit.project(messages.slice(current.baseMessageCount), current.nativeUsage);
+		if (message.content.some(part => part.type === "tool_call")) await this.prepareResponseTools(message, current);
+		await this.completeResponse(message, current);
+	}
+	private async commitPartialResponse(current: ResponseSnapshot | undefined, error: unknown, signal: AbortSignal): Promise<void> {
+		if (!current?.audit || current.committed || this.failure !== undefined) return;
+		const reason = signal.aborted || current.audit.reason === "aborted" ? "aborted" : current.audit.reason === "length" || current.audit.reason === "deferred" ? current.audit.reason : "error";
+		const detail = reason === "aborted" ? "Request aborted" : reason === "error" ? current.audit.failure ?? (error instanceof Error ? error.message : String(error)) : undefined;
+		await this.completeResponse(current.audit.partialMessage(reason, detail), current);
 	}
 	private async completeTurn(current: ResponseSnapshot): Promise<void> {
 		if (current.completed) return;
@@ -354,7 +369,7 @@ export class AgentSession implements Agent {
 	private async prepareResponseTools(message: SessionMessage, current: ResponseSnapshot): Promise<void> {
 		const history = sessionMessages(this.state);
 		for (const call of message.content) {
-			if (call.type !== "tool_call") continue;
+			if (call.type !== "tool_call" || isProviderExecutedCall(call)) continue;
 			const prepared = await prepareToolCall(message, call, current.options, history, current.internalTools, current.settings.signal);
 			current.prepared.set(call.id, prepared);
 			if (prepared.tool && prepared.decision.kind !== "deny") call.arguments = structuredClone(prepared.args);
@@ -378,7 +393,7 @@ export class AgentSession implements Agent {
 	}
 	private async flushPriorDenials(current: ResponseSnapshot, callId: string): Promise<void> {
 		for (const call of this.lastResponse?.content ?? []) {
-			if (call.type !== "tool_call") continue;
+			if (call.type !== "tool_call" || isProviderExecutedCall(call)) continue;
 			if (call.id === callId) return;
 			if (current.savedResults.has(call.id)) continue;
 			const prepared = current.prepared.get(call.id);
@@ -478,7 +493,7 @@ export class AgentSession implements Agent {
 					self.responseDriver = self.driver;
 					const settle = self.turnPolicy?.beginRequest();
 					try {
-						yield* observeModelResponse(adapter, { ...request, model: adapter.model }, snapshot.options, event => self.emit(event), async message => { settle?.(message.usage); if (!["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "") && message.content.some(part => part.type === "tool_call")) await self.prepareResponseTools(message, snapshot); await self.completeResponse(message, snapshot); });
+						yield* observeModelResponse(adapter, { ...request, model: adapter.model }, snapshot.options, event => self.emit(event), audit => { snapshot.audit = audit; settle?.(audit.usage(snapshot.nativeUsage)); });
 					} finally { settle?.(); }
 				})();
 			},
@@ -525,7 +540,7 @@ export class AgentSession implements Agent {
 				if (new Set(effectiveTools.map(tool => tool.name)).size !== effectiveTools.length) throw new Error("Tool name collision with an internal tool");
 				current = {
 					options: { ...this.options, tools: effectiveTools }, internalTools: internal, revision: this.appliedRevision, completed: false,
-					prepared: new Map(), savedResults: new Set(), startedTools: new Set(), toolResults: [], nativeTools: [],
+					prepared: new Map(), savedResults: new Set(), startedTools: new Set(), toolResults: [], nativeTools: [], committed: false, baseMessageCount: 0,
 					settings: { signal, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(this.options.thinkingLevel !== "off" ? { reasoning: this.options.thinkingLevel } : {}) }
 				};
 				this.emit({ type: "turn_start", timestamp: Date.now() });
@@ -549,12 +564,19 @@ export class AgentSession implements Agent {
 					return toolDefinition({ name: tool.name, description: tool.description, needsApproval: true, approvalSchema, inputSchema: inputSchema as JSONSchema, outputSchema: { type: "string" } }).server((args, context) => this.executeNativeTool(snapshot, context?.toolCallId, args, false));
 				});
 				current.nativeTools = tools;
-				return { messages: toModelMessages(projectMessages(sessionMessages(this.state))), providerMessages: toModelMessages(request.messages), systemPrompts: prompts, tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
+				const messages = toModelMessages(projectMessages(sessionMessages(this.state)));
+				current.baseMessageCount = messages.length;
+				return { messages, providerMessages: toModelMessages(request.messages), systemPrompts: prompts, tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
 			},
+			onInterruptBoundary: async ctx => {
+				if (ctx.phase === "beforeTools" && current.audit?.hasTools) await this.commitModelResponse(current, ctx.messages);
+				return { interrupts: [] };
+			},
+			onUsage: (_ctx, usage) => { current.nativeUsage = usage; },
 			onToolPhaseComplete: async (ctx, info) => {
 				if (!current || !this.lastResponse || info.needsApproval.length || signal.aborted || this.failure !== undefined) return;
 				for (const call of this.lastResponse.content) {
-					if (call.type !== "tool_call" || current.savedResults.has(call.id)) continue;
+					if (call.type !== "tool_call" || isProviderExecutedCall(call) || current.savedResults.has(call.id)) continue;
 					const prepared = current.prepared.get(call.id);
 					const native = info.results.find(result => result.toolCallId === call.id);
 					const result = prepared?.decision.kind === "deny" ? errorResult(prepared.decision.reason) : errorResult(native ? JSON.stringify(native.result) : "Tool was not executed");
@@ -563,8 +585,24 @@ export class AgentSession implements Agent {
 				await this.completeTurn(current);
 				if (this.turnPolicy?.stopped) ctx.abort("forge:policy_stop");
 			},
-			onShouldContinue: () => !signal.aborted && !this.turnPolicy?.stopped && !this.turnPolicy?.failed && !this.preparationFailed,
-			onError: (_ctx, info) => { engineFailure = info.error; },
+			onShouldContinue: async ctx => {
+				// TanStack skips beforeTools and onToolPhaseComplete when every call
+				// already has a native error result. Save both sides before its next model request.
+				if (current?.audit?.hasTools && !current.committed && !signal.aborted && this.failure === undefined) {
+					await this.commitModelResponse(current, ctx.messages);
+					for (const call of this.lastResponse?.content ?? []) {
+						if (call.type !== "tool_call" || isProviderExecutedCall(call) || current.savedResults.has(call.id)) continue;
+						const native = ctx.messages.find(message => message.role === "tool" && message.toolCallId === call.id);
+						const detail = native ? typeof native.content === "string" ? native.content : JSON.stringify(native.content) : "Tool was not executed";
+						await this.saveToolResult(current, call, errorResult(detail));
+					}
+					await this.completeTurn(current);
+				}
+				return !signal.aborted && !this.turnPolicy?.stopped && !this.turnPolicy?.failed && !this.preparationFailed;
+			},
+			onFinish: async ctx => { if (current?.audit && !current.committed) await this.commitModelResponse(current, ctx.messages); },
+			onError: async (_ctx, info) => { engineFailure = info.error; await this.commitPartialResponse(current, info.error, signal); },
+			onAbort: async () => { await this.commitPartialResponse(current, new Error("Request aborted"), signal); },
 		};
 		const linked = linkedController(signal);
 		try {
@@ -600,7 +638,7 @@ export class AgentSession implements Agent {
 		if (this.failure !== undefined) throw this.failure;
 		if (signal.aborted && current && this.lastResponse?.content.some(part => part.type === "tool_call")) {
 			for (const call of this.lastResponse.content) {
-				if (call.type === "tool_call" && !current.savedResults.has(call.id)) await this.saveToolResult(current, call, errorResult("Operation aborted"));
+				if (call.type === "tool_call" && !isProviderExecutedCall(call) && !current.savedResults.has(call.id)) await this.saveToolResult(current, call, errorResult("Operation aborted"));
 			}
 		}
 		if (signal.aborted && this.lastResponse?.stopReason !== "aborted" && (!this.lastResponse || this.lastResponse.content.some(part => part.type === "tool_call"))) {

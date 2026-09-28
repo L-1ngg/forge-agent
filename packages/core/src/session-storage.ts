@@ -1,5 +1,6 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { validateCompactionCheckpoint, type CompactionCheckpoint } from "./context/checkpoint.ts";
+import { isProviderExecutedCall } from "./model-response.ts";
 import { randomUUID } from "node:crypto";
 
 interface EntryIdentity {
@@ -98,7 +99,7 @@ export function projectMessages(messages: readonly SessionMessage[]): SessionMes
 			continue;
 		}
 		projected.push(message);
-		if (message.role === "assistant") pending = message.content.filter((block): block is typeof pending[number] => block.type === "tool_call");
+		if (message.role === "assistant") pending = message.content.filter((block): block is typeof pending[number] => block.type === "tool_call" && !isProviderExecutedCall(block));
 	}
 	finish();
 	return structuredClone(projected);

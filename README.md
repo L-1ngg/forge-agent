@@ -196,7 +196,7 @@ Assistant replies render Markdown in both the transcript and detail view, includ
 
 The dependency gate keeps UI dependencies out of the core and rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
 
-SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and durable history. TanStack `chat()` owns model/tool continuation and serial tool execution; request middleware applies context projection and the final budget. Forge prepares final arguments and policy decisions before native `needsApproval` interrupts. Only undecided calls reach the host; an approved tool executes once in its native `.server()` callback, then Forge persists its result before the next model request. Approval resumes within the current process only.
+SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and durable history. TanStack `chat()` owns model/tool continuation, successful response aggregation, and serial tool execution; request middleware applies context projection and the final budget. Forge checks the raw provider protocol and appends complete tool proposals with final arguments before any tool executes. Only undecided approvals reach the host; an approved tool executes once in its native `.server()` callback, then Forge persists its result before the next model request. Approval resumes within the current process only.
 
 ```mermaid
 flowchart LR
@@ -208,7 +208,7 @@ flowchart LR
   T --> D
 ```
 
-Original `SessionMessage` history and evidence checkpoints remain the recoverable state. A single request/response projection connects them to TanStack messages; there is no second runtime history or compatibility loop. The SDK accepts native adapters through `adapter`; the former `StreamFn` interface is removed. Existing JSONL, Markdown memory, and MCP attachments retain their formats. See the [SDK migration guide](docs/sdk.en.md#native-tanstack-model-adapters), [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md), and [approval verification record](docs/phases/native-tool-approval.md).
+Original `SessionMessage` history and evidence checkpoints remain the recoverable state. A single request/response projection connects them to TanStack messages; there is no second runtime history or compatibility loop. The SDK accepts native adapters through `adapter`; the former `StreamFn` interface is removed. Existing JSONL, Markdown memory, and MCP attachments retain their formats. See the [SDK migration guide](docs/sdk.en.md#native-tanstack-model-adapters), [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md), and [ADR-028](docs/decisions/028-model-response-boundary.md).
 
 ## Roadmap
 

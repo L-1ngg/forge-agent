@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
-import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
-import { EventType, type AdapterYieldChunk, type ModelMessage } from "@tanstack/ai";
-import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import type { SessionMessage } from "@forge-agent/protocol";
+import { EventType, type AdapterYieldChunk } from "@tanstack/ai";
 import { getCatalogModel } from "../src/model-catalog.ts";
-import { providerModelOptions, resolveProviderAdapter } from "../src/model-adapter.ts";
-import { ResponseCollector, toModelMessages } from "../src/model-response.ts";
+import { toModelMessages } from "../src/model-response.ts";
+import { collectResponse, nativeRequest } from "./helpers/native-request.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 const terminal = (finishReason: "stop" | "tool_calls" | "length" = "stop"): AdapterYieldChunk => ({ type: EventType.RUN_FINISHED, runId: "run", threadId: "thread", finishReason });
@@ -13,54 +12,59 @@ const text: AdapterYieldChunk[] = [
 	{ type: EventType.TEXT_MESSAGE_CONTENT, messageId: "message", delta: "partial" },
 	{ type: EventType.TEXT_MESSAGE_END, messageId: "message" },
 ];
+const stream = (...chunks: AdapterYieldChunk[]) => (async function* () { yield* chunks; })();
 
-test("a response settles only after a confirmed terminal and successful drainage", async () => {
-	for (const scenario of ["missing", "late-error", "cancelled"] as const) {
-		const events: SessionEvent[] = [];
-		const collector = new ResponseCollector(model, event => { events.push(event); });
-		for (const chunk of text) await collector.accept(chunk);
-		if (scenario !== "missing") await collector.accept(terminal());
-		const controller = new AbortController();
-		if (scenario === "cancelled") controller.abort();
-		const result = collector.finish(controller.signal, scenario === "late-error" ? new Error("body failed after terminal") : undefined);
-		expect(result.stopReason).toBe(scenario === "cancelled" ? "aborted" : "error");
+test("summary chat rejects missing or late-failed protocol terminals and keeps partial text", async () => {
+	for (const scenario of ["missing", "late-error"] as const) {
+		const chunks = async function* () {
+			yield* text;
+			if (scenario === "late-error") { yield terminal(); throw new Error("body failed after terminal"); }
+		};
+		const result = await collectResponse(model, chunks());
+		expect(result.stopReason).toBe("error");
 		expect(result.content).toEqual([{ type: "text", text: "partial" }]);
-		expect(events[0]).toMatchObject({ type: "message_start", message: { content: [] } });
-		expect(events.filter(event => event.type === "message_delta")).toHaveLength(1);
 	}
 });
 
-test("a malformed tool cannot be made valid by a permissive final input", async () => {
-	const collector = new ResponseCollector(model, () => {});
-	await collector.accept({ type: "TOOL_CALL_START", toolCallId: "call", toolCallName: "write" });
-	await collector.accept({ type: EventType.TOOL_CALL_ARGS, toolCallId: "call", delta: '{"path":' });
-	await expect(collector.accept({ type: "TOOL_CALL_END", toolCallId: "call", input: {} })).rejects.toThrow();
-	expect(collector.finish()).toMatchObject({ stopReason: "error", content: [{ type: "tool_call", id: "call", name: "write" }] });
+test("late adapter failure overrides a truncation terminal", async () => {
+	const result = await collectResponse(model, (async function* () {
+		yield* text;
+		yield { type: EventType.RUN_ERROR, code: "max_tokens", message: "max_output_tokens" } satisfies AdapterYieldChunk;
+		throw new Error("body failed after truncation");
+	})());
+	expect(result).toMatchObject({ stopReason: "error", errorMessage: "body failed after truncation", content: [{ type: "text", text: "partial" }] });
 });
 
-test("length and deferred responses stay distinct and never become tool_use", async () => {
-	const truncated = new ResponseCollector(model, () => {});
-	await truncated.accept({ type: "TOOL_CALL_START", toolCallId: "call", toolCallName: "write" });
-	await truncated.accept({ type: EventType.TOOL_CALL_ARGS, toolCallId: "call", delta: '{"path":' });
-	await truncated.accept(terminal("length"));
-	expect(truncated.finish().stopReason).toBe("length");
-	const deferred = new ResponseCollector(model, () => {});
-	await deferred.accept({ ...terminal(), metadata: { forge: { stopReason: "deferred" } } });
-	expect(deferred.finish().stopReason).toBe("deferred");
+test("summary chat rejects malformed and incomplete tool arguments", async () => {
+	for (const ended of [true, false]) {
+		const result = await collectResponse(model, stream(
+			{ type: EventType.TOOL_CALL_START, toolCallId: "call", toolCallName: "write" },
+			{ type: EventType.TOOL_CALL_ARGS, toolCallId: "call", delta: '{"path":' },
+			...(ended ? [{ type: EventType.TOOL_CALL_END, toolCallId: "call", input: {} } satisfies AdapterYieldChunk] : []),
+			terminal("tool_calls"),
+		));
+		expect(result.stopReason).toBe("error");
+	}
 });
 
-test("provider continuation signatures and original tool input survive history projection", async () => {
-	const collector = new ResponseCollector(model, () => {});
-	for (const chunk of [
-		{ type: EventType.STEP_STARTED, stepId: "reason", stepName: "reason", stepType: "thinking" },
-		{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "reason", delta: "reasoning" },
-		{ type: EventType.STEP_FINISHED, stepId: "reason", stepName: "reason", content: "", signature: "encrypted-signature" },
-		{ type: "TOOL_CALL_START", toolCallId: "call", toolCallName: "read", metadata: { itemId: "response-item", thoughtSignature: "gemini-signature" } },
-		{ type: EventType.TOOL_CALL_ARGS, toolCallId: "call", delta: '{"path":"a"}' },
-		{ type: "TOOL_CALL_END", toolCallId: "call", input: { path: "a" } },
-		terminal("tool_calls"),
-	] satisfies AdapterYieldChunk[]) await collector.accept(chunk);
-	const saved = structuredClone(collector.finish());
+test("summary chat distinguishes length and deferred from a complete answer", async () => {
+	const truncated = await collectResponse(model, stream(...text, terminal("length")));
+	expect(truncated).toMatchObject({ stopReason: "length", content: [{ type: "text", text: "partial" }] });
+	const geminiTail = await collectResponse(model, stream(
+		text[0]!, text[1]!,
+		{ type: EventType.RUN_ERROR, code: "max_tokens", message: "max_output_tokens" },
+		text[2]!, terminal(),
+	));
+	expect(geminiTail).toMatchObject({ stopReason: "length", content: [{ type: "text", text: "partial" }] });
+	const deferred = await collectResponse(model, stream({ ...terminal(), metadata: { forge: { stopReason: "deferred" } } }));
+	expect(deferred.stopReason).toBe("deferred");
+});
+
+test("provider continuation signatures and original tool input survive history projection", () => {
+	const saved: SessionMessage = { role: "assistant", content: [
+		{ type: "thinking", thinking: "reasoning", thinkingSignature: "encrypted-signature" },
+		{ type: "tool_call", id: "call", name: "read", arguments: { path: "a" }, thoughtSignature: '{"forge":"tanstack-tool","version":1,"metadata":{"itemId":"response-item","thoughtSignature":"gemini-signature"}}' },
+	], timestamp: 1 };
 	const history: SessionMessage[] = [saved, { role: "toolResult", toolCallId: "call", toolName: "read", content: [{ type: "text", text: "source" }], details: { secretDisplayOnly: "ui" }, timestamp: 1 }];
 	const projected = toModelMessages(history);
 	expect(projected[0]).toMatchObject({ thinking: [{ content: "reasoning", signature: "encrypted-signature" }], toolCalls: [{ id: "call", function: { name: "read", arguments: '{"path":"a"}' }, metadata: { itemId: "response-item", thoughtSignature: "gemini-signature" } }] });
@@ -70,49 +74,94 @@ test("provider continuation signatures and original tool input survive history p
 	expect(toModelMessages([old])[0]?.toolCalls?.[0]?.metadata).toEqual({ itemId: "legacy-item" });
 });
 
-test("reasoning message and step lifecycles share a block while distinct messages stay separate", async () => {
-	const collector = new ResponseCollector(model, () => {});
-	for (const chunk of [
-		{ type: EventType.REASONING_MESSAGE_START, messageId: "reason-message", role: "reasoning" },
-		{ type: EventType.STEP_STARTED, stepId: "reason-step", stepName: "reason-step", stepType: "thinking" },
-		{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "reason-message", delta: "first" },
-		{ type: EventType.STEP_FINISHED, stepId: "reason-step", stepName: "reason-step", content: "first", signature: "first-signature" },
-		{ type: EventType.REASONING_MESSAGE_END, messageId: "reason-message" },
-		{ type: EventType.REASONING_MESSAGE_START, messageId: "custom-message", role: "reasoning" },
-		{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "custom-message", delta: "second" },
-		{ type: EventType.REASONING_MESSAGE_END, messageId: "custom-message" },
-		terminal(),
-	] satisfies AdapterYieldChunk[]) await collector.accept(chunk);
-	expect(collector.finish().content).toEqual([{ type: "thinking", thinking: "first", thinkingSignature: "first-signature" }, { type: "thinking", thinking: "second" }]);
+test("provider-executed tool history keeps later reasoning in a separate model segment", () => {
+	const history: SessionMessage[] = [{ role: "assistant", timestamp: 1, content: [
+		{ type: "thinking", thinking: "before", thinkingSignature: "first" },
+		{ type: "tool_call", id: "provider-call", name: "web_search", arguments: { query: "source" }, thoughtSignature: '{"forge":"tanstack-tool","version":1,"metadata":{"providerExecuted":true}}' },
+		{ type: "thinking", thinking: "after", thinkingSignature: "second" },
+		{ type: "text", text: "answer" },
+	] }];
+	const projected = toModelMessages(history);
+	expect(projected).toHaveLength(2);
+	expect(projected[0]).toMatchObject({ thinking: [{ content: "before", signature: "first" }], toolCalls: [{ id: "provider-call" }] });
+	expect(projected[1]).toMatchObject({ thinking: [{ content: "after", signature: "second" }], content: "answer", toolCalls: [] });
 });
 
-test("raw and AG-UI usage preserve cache accounting and provider failures retain partial text", async () => {
+test("unknown and duplicate provider terminals cannot complete a summary", async () => {
+	for (const chunks of [
+		[...text, { ...terminal(), finishReason: "new-reason" as never }],
+		[...text, terminal(), terminal()],
+	]) {
+		const result = await collectResponse(model, stream(...chunks));
+		expect(result.stopReason).toBe("error");
+		expect(result.content).toEqual([{ type: "text", text: "partial" }]);
+	}
+});
+
+test("a terminal cannot complete an open text event", async () => {
+	const result = await collectResponse(model, stream(text[0]!, text[1]!, terminal()));
+	expect(result.stopReason).toBe("error");
+	expect(result.content).toEqual([{ type: "text", text: "partial" }]);
+});
+
+test("orphan or unfinished reasoning events cannot complete a response", async () => {
+	for (const chunks of [
+		[{ type: EventType.REASONING_MESSAGE_END, messageId: "orphan" } satisfies AdapterYieldChunk],
+		[{ type: EventType.REASONING_END, messageId: "orphan" } satisfies AdapterYieldChunk],
+		[{ type: EventType.STEP_FINISHED, stepId: "orphan", stepName: "thinking", content: "unpaired" } satisfies AdapterYieldChunk],
+		[{ type: EventType.REASONING_MESSAGE_START, messageId: "open", role: "reasoning" } satisfies AdapterYieldChunk],
+		[{ type: EventType.REASONING_START, messageId: "open" } satisfies AdapterYieldChunk],
+		[{ type: EventType.REASONING_START, messageId: "repeat" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_END, messageId: "repeat" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_END, messageId: "repeat" } satisfies AdapterYieldChunk],
+		[{ type: EventType.STEP_STARTED, stepId: "open", stepName: "thinking", stepType: "thinking" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "open", delta: "partial" } satisfies AdapterYieldChunk],
+		[{ type: EventType.STEP_STARTED, stepId: "active", stepName: "thinking", stepType: "thinking" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "orphan", delta: "misattributed" } satisfies AdapterYieldChunk,
+			{ type: EventType.STEP_FINISHED, stepId: "active", stepName: "thinking", content: "misattributed" } satisfies AdapterYieldChunk],
+		[{ type: EventType.STEP_STARTED, stepId: "active", stepName: "thinking", stepType: "thinking" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_MESSAGE_START, messageId: "linked", role: "reasoning" } satisfies AdapterYieldChunk,
+			{ type: EventType.REASONING_MESSAGE_CONTENT, messageId: "orphan", delta: "misattributed" } satisfies AdapterYieldChunk],
+	]) {
+		const result = await collectResponse(model, stream(...chunks, terminal()));
+		expect(result.stopReason).toBe("error");
+	}
+});
+
+test("raw audit drains an error response before settling its terminal", async () => {
+	let afterError = false;
+	const response = await collectResponse(model, (async function* () {
+		yield { type: EventType.RUN_ERROR, message: "provider failed", code: "503" } satisfies AdapterYieldChunk;
+		afterError = true;
+		yield terminal();
+	})());
+	expect(afterError).toBe(true);
+	expect(response.stopReason).toBe("error");
+});
+
+test("raw error usage keeps cache accounting on a partial answer", async () => {
 	for (const api of ["openai-responses", "anthropic-messages"] as const) {
-		const collector = new ResponseCollector({ ...model, api }, () => {});
-		for (const chunk of text) await collector.accept(chunk);
-		await collector.accept({ type: EventType.RUN_ERROR, code: "503", message: "unavailable", usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120, promptTokensDetails: { cachedTokens: 30, cacheWriteTokens: 10 } } });
-		expect(collector.finish()).toMatchObject({ stopReason: "error", errorMessage: "503: unavailable", usage: { input: api === "anthropic-messages" ? 100 : 60, output: 20, cacheRead: 30, cacheWrite: 10, totalTokens: api === "anthropic-messages" ? 160 : 120 } });
+		const result = await collectResponse({ ...model, api }, stream(...text, { type: EventType.RUN_ERROR, code: "503", message: "unavailable", usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120, promptTokensDetails: { cachedTokens: 30, cacheWriteTokens: 10 } } }));
+		expect(result).toMatchObject({ stopReason: "error", errorMessage: "503: unavailable", content: [{ type: "text", text: "partial" }], usage: { input: api === "anthropic-messages" ? 100 : 60, output: 20, cacheRead: 30, cacheWrite: 10, totalTokens: api === "anthropic-messages" ? 160 : 120 } });
 	}
-	const collector = new ResponseCollector(model, () => {});
-	await collector.accept({ type: EventType.RUN_FINISHED, runId: "run", threadId: "thread", metadata: { tanstack: { finishReason: "stop" } }, usage: [{ inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 30, cacheWriteInputTokens: 10 }] });
-	expect(collector.finish().usage).toMatchObject({ input: 60, output: 20, cacheRead: 30, cacheWrite: 10, totalTokens: 120 });
 });
 
-test("host adapters preserve explicit costs and distinguish absent usage from absent cost", async () => {
-	const absent = new ResponseCollector(model, () => {}, { calculateCost: false });
-	await absent.accept(terminal());
-	expect(absent.finish().usage).toBeUndefined();
+test("custom adapter explicit cost is distinct from missing cost", async () => {
 	for (const cost of [undefined, 0, 0.02]) {
-		const collector = new ResponseCollector(model, () => {}, { calculateCost: false });
-		await collector.accept({ ...terminal(), usage: { promptTokens: 15, completionTokens: 5, totalTokens: 20, ...(cost !== undefined ? { cost } : {}) } });
-		expect(collector.finish().usage).toMatchObject({ input: 15, output: 5, totalTokens: 20 });
-		expect(collector.message.usage?.cost?.total).toBe(cost);
+		const result = await collectResponse(model, stream({ ...terminal(), usage: { promptTokens: 15, completionTokens: 5, totalTokens: 20, ...(cost !== undefined ? { cost } : {}) } }));
+		expect(result.usage).toMatchObject({ input: 15, output: 5, totalTokens: 20 });
+		expect(result.usage?.cost?.total).toBe(cost);
 	}
 });
 
-test("opaque text continuation metadata survives model history projection", () => {
-	const projected = toModelMessages([{ role: "assistant", timestamp: 1, content: [{ type: "text", text: "prior answer", textSignature: "opaque-text" }] }]);
+test("opaque text and redacted thinking retain their provider semantics", () => {
+	const projected = toModelMessages([{ role: "assistant", timestamp: 1, content: [
+		{ type: "text", text: "prior answer", textSignature: "opaque-text" },
+		{ type: "thinking", thinking: "", thinkingSignature: "encrypted", redacted: true },
+	] }]);
 	expect(projected[0]?.content).toEqual([{ type: "text", content: "prior answer", metadata: { forge: { textSignature: "opaque-text" } } }]);
+	expect(projected[0]?.thinking).toMatchObject([{ content: "", signature: "encrypted" }]);
+	expect((projected[0]?.thinking?.[0] as { redacted?: boolean })?.redacted).toBe(true);
 });
 
 test("native provider factory sends Responses and Chat Completions through their declared APIs", async () => {
@@ -128,11 +177,8 @@ test("native provider factory sends Responses and Chat Completions through their
 	try {
 		for (const catalog of [model, getCatalogModel("deepseek", "deepseek-v4-flash")!]) {
 			const selected = { ...catalog, baseUrl: server.url.toString() };
-			const settings = { signal: new AbortController().signal, apiKey: "fixture-key", maxTokens: 100 };
-			const native = await resolveProviderAdapter(selected, settings);
-			const collector = new ResponseCollector(selected, () => {});
-			for await (const chunk of native.chatStream({ model: native.model, messages: [{ role: "user", content: "hello" }], modelOptions: providerModelOptions(selected, settings), request: { signal: settings.signal }, logger: resolveDebugOption(false) })) await collector.accept(chunk);
-			expect(collector.finish()).toMatchObject({ stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 5, output: 2 } });
+			const result = await nativeRequest(selected, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], { apiKey: "fixture-key", maxTokens: 100 });
+			expect(result).toMatchObject({ stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 5, output: 2 } });
 		}
 		expect(requests.map(request => request.path)).toEqual(["/responses", "/chat/completions"]);
 		expect(requests[0]?.body).toMatchObject({ model: "gpt-5.4", max_output_tokens: 100, store: false });
@@ -145,14 +191,8 @@ test("Gemini transport performs one HTTP attempt so session retry remains the so
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return Response.json({ error: { code: 503, message: "fixture unavailable", status: "UNAVAILABLE" } }, { status: 503, headers: { "retry-after": "0" } }); } });
 	try {
 		const selected = { ...getCatalogModel("google", "gemini-2.5-flash")!, baseUrl: server.url.toString() };
-		const settings = { signal: AbortSignal.timeout(2500), apiKey: "fixture-key", maxTokens: 100 };
-		const native = await resolveProviderAdapter(selected, settings);
-		const collector = new ResponseCollector(selected, () => {});
-		let error: unknown;
-		try {
-			for await (const chunk of native.chatStream({ model: native.model, messages: [{ role: "user", content: "hello" }] satisfies ModelMessage[], modelOptions: providerModelOptions(selected, settings), request: { signal: settings.signal }, logger: resolveDebugOption(false) })) await collector.accept(chunk);
-		} catch (caught) { error = caught; }
-		expect(collector.finish(undefined, error).stopReason).toBe("error");
+		const response = await nativeRequest(selected, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], { apiKey: "fixture-key", maxTokens: 100, signal: AbortSignal.timeout(2500) });
+		expect(response.stopReason).toBe("error");
 		expect(requests).toBe(1);
 	} finally { server.stop(true); }
 });

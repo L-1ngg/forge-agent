@@ -36,7 +36,7 @@ async function openAgent(model: Model, adapter: ModelAdapter) {
 
 `createAgent → AgentSession → TanStack chat() → TextAdapter` 是 SDK、CLI 与 TUI 共用的执行路径。`chat()` 负责模型与工具续轮，Forge 不再维护 Pi Agent/agent-loop。Forge 会话保留输入归属、配置 revision、权威终态、逐条持久化和证据型压缩；`onConfig` middleware 在请求边界准备投影和最终预算。
 
-工具通过原生 `toolDefinition().server()` 接入；Forge 在审批前完成参数准备、严格校验和逐调用判权，只展示 `ask`，TanStack 负责 interrupt/resume 与串行执行。Forge 在每项工具执行后保存结果，下一次模型请求读取已保存的历史。`SessionMessage` 继续承担历史与展示合同，在请求/响应边界转换一次。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。当前审批合同见 [ADR-027](decisions/027-native-tool-approval-and-interruption.md) 与[施工及验收](phases/native-tool-approval.md)。
+工具通过原生 `toolDefinition().server()` 接入；Forge 在审批前完成参数准备、严格校验和逐调用判权，只展示 `ask`，TanStack 负责 interrupt/resume 与串行执行。完整工具提案及最终参数先逐条保存，才允许工具副作用；Forge 在每项工具执行后保存结果，下一次模型请求读取已保存的历史。成功响应内容由 TanStack 当前 `ModelMessage` 聚合，Forge 审计原始协议、补足续轮签名并投影成 `SessionMessage`；无工具回答在 run 结束时提交一次，失败和取消保留已有部分内容。`SessionMessage` 继续承担历史与展示合同。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。当前审批合同见 [ADR-027](decisions/027-native-tool-approval-and-interruption.md)，响应边界见 [ADR-028](decisions/028-model-response-boundary.md)。
 
 ## 每轮停止策略（shouldStopAfterTurn）
 

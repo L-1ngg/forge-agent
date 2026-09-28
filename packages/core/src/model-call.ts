@@ -3,40 +3,38 @@ import { chat, type AdapterYieldChunk, type TextOptions } from "@tanstack/ai";
 import type { SessionMessage, SessionEvent } from "@forge-agent/protocol";
 import type { SessionConfiguration } from "./configuration.ts";
 import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
-import { ResponseCollector, toModelMessages } from "./model-response.ts";
+import { RawResponseAudit, toModelMessages } from "./model-response.ts";
 
 /** Validate raw provider completion before any tool phase or durable response commit. */
 export async function* observeModelResponse(
 	adapter: ModelAdapter, request: TextOptions, configuration: SessionConfiguration,
-	emit: (event: SessionEvent) => void | Promise<void>, complete: (message: SessionMessage) => Promise<void>,
+	emit: (event: SessionEvent) => void | Promise<void>, complete: (audit: RawResponseAudit) => void | Promise<void>,
 ): AsyncGenerator<AdapterYieldChunk> {
-	const collector = new ResponseCollector(configuration.model, emit, { calculateCost: !configuration.adapter });
-	await collector.start();
+	const audit = new RawResponseAudit(configuration.model, emit, !configuration.adapter);
 	let failure: unknown;
-	let terminal = false;
-	let response: SessionMessage;
+	let terminal: AdapterYieldChunk | undefined;
+	await audit.start();
 	try {
 		for await (const chunk of adapter.chatStream(request)) {
-			await collector.accept(chunk);
-			terminal ||= chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR";
-			// Native chat executes a tool phase even after length. Keep that incomplete
-			// response in history but stop its native cycle before any tool can run.
-			if (chunk.type === "RUN_FINISHED" && (collector.message.stopReason === "length" || collector.message.stopReason === "deferred")) {
-				yield { type: EventType.RUN_ERROR, timestamp: Date.now(), message: collector.message.stopReason === "length" ? "max_output_tokens" : "Response deferred", code: collector.message.stopReason === "length" ? "max_tokens" : "deferred" };
-			} else if (chunk.type === "RUN_FINISHED" && collector.message.stopReason === "stop" && collector.message.content.some(part => part.type === "tool_call")) {
-				// Some compatible providers finish a complete tool response with stop.
-				// Preserve the original history terminal but let chat schedule its tools.
-				yield { ...chunk, finishReason: "tool_calls" };
-			} else yield chunk;
+			await audit.accept(chunk);
+			if (chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR") terminal = chunk;
+			else yield chunk;
 		}
 	} catch (error) { failure = error; }
 	finally {
-		// chat() closes its provider iterator early on RUN_ERROR and cancellation.
-		// The response and durable barrier must also settle on that return path.
-		response = collector.finish(request.request?.signal ?? undefined, failure);
-		await complete(response);
+		// The raw iterator and its finally settle before chat() sees a terminal.
+		audit.finish(request.request?.signal ?? undefined, failure);
+		await complete(audit);
 	}
-	if (failure !== undefined || !terminal) yield { type: EventType.RUN_ERROR, timestamp: Date.now(), message: response.errorMessage ?? "Model stream ended without a terminal event", code: response.stopReason === "aborted" ? "aborted" : "incomplete-stream" };
+	if (failure !== undefined || !terminal || request.request?.signal?.aborted) {
+		yield { type: EventType.RUN_ERROR, timestamp: Date.now(), message: audit.failure ?? "Model stream ended without a terminal event", code: audit.reason === "aborted" ? "aborted" : "incomplete-stream" };
+	} else if (terminal.type === "RUN_FINISHED" && (audit.reason === "length" || audit.reason === "deferred")) {
+		// chat() would otherwise start a tool phase for a truncated response.
+		yield { type: EventType.RUN_ERROR, timestamp: Date.now(), message: audit.reason === "length" ? "max_output_tokens" : "Response deferred", code: audit.reason === "length" ? "max_tokens" : "deferred" };
+	} else if (terminal.type === "RUN_FINISHED" && audit.reason === "stop" && audit.hasTools) {
+		// A complete tool proposal may be labelled stop by a compatible provider.
+		yield { ...terminal, finishReason: "tool_calls" };
+	} else yield terminal;
 }
 
 /** One native chat request, used for summaries; task runs use the same observer. */
@@ -44,15 +42,22 @@ export async function callModel(configuration: SessionConfiguration, messages: S
 	const adapter = configuration.adapter ?? await resolveProviderAdapter(configuration.model, settings);
 	let result: SessionMessage | undefined;
 	let failure: unknown;
+	let audit: RawResponseAudit | undefined;
+	const input = toModelMessages(messages);
 	const observed: ModelAdapter = {
 		kind: "text", name: adapter.name, model: adapter.model, "~types": adapter["~types"],
-		chatStream: request => observeModelResponse(adapter, request, configuration, () => { }, async message => { result = message; }),
+		chatStream: request => observeModelResponse(adapter, request, configuration, () => { }, settled => { audit = settled; }),
 		structuredOutput: request => adapter.structuredOutput(request),
 	};
 	const linked = linkedController(settings.signal);
 	try {
-		for await (const _ of chat({ adapter: observed, messages: toModelMessages(messages), ...(settings.sessionId ? { threadId: settings.sessionId } : {}), systemPrompts: [systemPrompt], modelOptions: providerModelOptions(configuration.model, settings), abortController: linked.controller, debug: false, middleware: [{ onError: (_ctx, info) => { failure = info.error; } }] })) { }
-	} finally { linked.dispose(); }
+		for await (const _ of chat({ adapter: observed, messages: input, ...(settings.sessionId ? { threadId: settings.sessionId } : {}), systemPrompts: [systemPrompt], modelOptions: providerModelOptions(configuration.model, settings), abortController: linked.controller, debug: false, middleware: [{
+			onFinish: ctx => { if (audit) result = audit.project(ctx.messages.slice(input.length)); },
+			onError: (_ctx, info) => { failure = info.error; if (audit) result = audit.partialMessage(); },
+			onAbort: () => { if (audit) result = audit.partialMessage("aborted", "Request aborted"); },
+		}] })) { }
+	} catch (error) { failure = error; }
+	finally { linked.dispose(); }
 	if (result) return result;
 	throw failure ?? new Error("Model did not return a response");
 }

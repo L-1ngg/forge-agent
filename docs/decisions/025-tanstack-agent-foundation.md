@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # ADR-025: 以 TanStack chat 组织单 Agent 执行基座
 
-> 状态:已批准(2026-09-27；唯一 `chat()` 循环与会话职责仍适用，Skills/Memory 选型被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代，工具批次预执行与并行选择于 2026-09-28 被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
+> 状态:已批准(2026-09-27；唯一 `chat()` 循环与会话职责仍适用，Skills/Memory 选型被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代，工具批次选择被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代，响应收集器职责被 [ADR-028](028-model-response-boundary.md) 收窄)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
 
 ## 决策
 
@@ -35,6 +35,6 @@ created: 2026-09-27
 
 ## 摘要与结构化输出
 
-摘要要求 JSON TaskCheckpoint，`parseCheckpoint` 还验证当前分支、原文出处、替代链与授权证据。已比较 native `outputSchema`：无工具摘要可走单请求 schema-only 路径，并非一定增加请求；但发布的 `ai-bedrock@0.3.15` 的 `structuredOutputStream` 在缺失 `messageStop` 时仍可因 JSON 可解析而合成成功。隔离探针复现了该情况，而当前通用 `chatStream` 的补丁/ResponseCollector 会拒绝缺失协议终态。
+摘要要求 JSON TaskCheckpoint，`parseCheckpoint` 还验证当前分支、原文出处、替代链与授权证据。已比较 native `outputSchema`：无工具摘要可走单请求 schema-only 路径，并非一定增加请求；但发布的 `ai-bedrock@0.3.15` 的 `structuredOutputStream` 在缺失 `messageStop` 时仍可因 JSON 可解析而合成成功。隔离探针复现了该情况，而当前通用 `chatStream` 的补丁/原始流审计会拒绝缺失协议终态。
 
-因此摘要继续使用同一个已严格验证的 native `chatStream` 接缝，再调用证据解析器。采用 schema-only 需要再维护一套 provider 终态、usage 与取消检查，不能替代证据验证，现阶段整体成本更高。模型输出结构校验不等于历史证据可信；没有据此承诺质量、费用或延迟改善。探针来源与结果见本次验收。
+因此摘要继续使用同一个已严格验证的 native `chatStream` 接缝，再调用证据解析器。Issue #40 后该接缝由原始流审计和 TanStack `ModelMessage` 投影组成，当前合同见 [ADR-028](028-model-response-boundary.md)。采用 schema-only 需要再维护一套 provider 终态、usage 与取消检查，不能替代证据验证，现阶段整体成本更高。模型输出结构校验不等于历史证据可信；没有据此承诺质量、费用或延迟改善。探针来源与结果见本次验收。

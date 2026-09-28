@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAgent, LongTermMemory, MemorySessionStorage } from "@forge-agent/core/sdk";
 import type { HarnessTool } from "@forge-agent/tools";
 import { nativeAdapter, requestMessages, responseChunks } from "./helpers/native-adapter.ts";
+import { EventType } from "@tanstack/ai";
 import type { Model } from "../src/model-types.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -17,6 +18,61 @@ const model: Model = {
 	contextWindow: 128000, maxTokens: 16384,
 };
 
+test("native tool errors save their proposal before the next model request", async () => {
+	const storage = new MemorySessionStorage();
+	const requests: SessionMessage[][] = [];
+	let effects = 0;
+	const adapter = nativeAdapter(model, async function* (request) {
+		requests.push(requestMessages(request.messages));
+		if (requests.length === 1) {
+			yield { type: EventType.TOOL_CALL_START, toolCallId: "bad", toolCallName: "work", parentMessageId: "answer" };
+			yield { type: EventType.TOOL_CALL_ARGS, toolCallId: "bad", delta: '{"value":"x"}' };
+			yield { type: EventType.TOOL_CALL_END, toolCallId: "bad", input: { value: "x" }, state: "output-error", result: "Provider rejected tool" };
+			yield { type: EventType.RUN_FINISHED, threadId: "fixture", runId: "first", finishReason: "tool_calls" };
+		} else yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: Date.now() });
+	});
+	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(), storage,
+		tools: [{ name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
+			async execute() { effects++; return { content: [], details: {} }; } }],
+	});
+	try {
+		const turn = agent.runTurn("work");
+		for await (const _event of turn) {}
+		expect(await turn.result).toEqual({ status: "success" });
+		expect(effects).toBe(0);
+		expect(requests).toHaveLength(2);
+		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+		expect(saved.filter(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"))).toHaveLength(1);
+		expect(saved.filter(message => message.role === "toolResult" && message.toolCallId === "bad")).toHaveLength(1);
+	} finally { await agent.dispose(); }
+});
+
+test("provider-executed calls retain their metadata without a local missing-result record", async () => {
+	const storage = new MemorySessionStorage();
+	const requests: SessionMessage[][] = [];
+	const adapter = nativeAdapter(model, async function* (request) {
+		requests.push(requestMessages(request.messages));
+		if (requests.length === 1) {
+			yield { type: EventType.TOOL_CALL_START, toolCallId: "remote", toolCallName: "web_search", parentMessageId: "answer", metadata: { providerExecuted: true, sourceId: "citation-1" } };
+			yield { type: EventType.TOOL_CALL_ARGS, toolCallId: "remote", delta: '{"query":"source"}' };
+			yield { type: EventType.TOOL_CALL_END, toolCallId: "remote", input: { query: "source" } };
+			yield { type: EventType.RUN_FINISHED, threadId: "fixture", runId: "first", finishReason: "tool_calls" };
+		} else yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: Date.now() });
+	});
+	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(), storage });
+	try {
+		const turn = agent.runTurn("search");
+		for await (const _event of turn) {}
+		expect(await turn.result).toEqual({ status: "success" });
+		expect(requests).toHaveLength(2);
+		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+		expect(saved.filter(message => message.role === "toolResult")).toHaveLength(0);
+		const proposal = saved.find(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"));
+		expect(proposal?.content).toContainEqual(expect.objectContaining({ id: "remote", thoughtSignature: expect.stringContaining('"providerExecuted":true') }));
+		expect(requests[1]?.find(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"))?.content).toContainEqual(expect.objectContaining({ id: "remote", thoughtSignature: expect.stringContaining('"sourceId":"citation-1"') }));
+	} finally { await agent.dispose(); }
+});
+
 function fixture(requests: SessionMessage[][]) {
 	let count = 0;
 	return nativeAdapter(model, async function* (request) {
@@ -29,7 +85,7 @@ function fixture(requests: SessionMessage[][]) {
 }
 
 test("one native approval batch waits for ask, executes allowed calls once, and lets the model see denial", async () => {
-	const requests: SessionMessage[][] = [], effects: string[] = [];
+	const requests: SessionMessage[][] = [], effects: string[] = [], sessionEvents: SessionEvent[] = [];
 	const storage = new MemorySessionStorage();
 	const tool: HarnessTool<object, unknown> = {
 		name: "work", label: "Work", description: "record a value",
@@ -44,13 +100,14 @@ test("one native approval batch waits for ask, executes allowed calls once, and 
 		} }] },
 	});
 	const turn = agent.runTurn("work");
-	const events = (async () => { for await (const _event of turn) { } })();
+	const events = (async () => { for await (const event of turn) sessionEvents.push(event); })();
 	try {
 		const next = await agent.requests[Symbol.asyncIterator]().next();
 		if (next.done || next.value.kind !== "permission") throw new Error("Expected a permission request");
 		expect(next.value.payload.toolCall.arguments).toEqual({ value: "ask" });
 		expect(effects).toEqual([]);
 		expect(requests).toHaveLength(1);
+		expect((await storage.load()).entries.filter(entry => entry.type === "message" && entry.message.role === "assistant")).toHaveLength(1);
 		expect(agent.respond(response(next.value.id, { decision: "allow_once" }))).toBe(true);
 		await events;
 		expect(await turn.result).toEqual({ status: "success" });
@@ -59,7 +116,15 @@ test("one native approval batch waits for ask, executes allowed calls once, and 
 		expect(JSON.stringify(requests[1])).toContain("policy denied");
 		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
 		expect(saved.filter(message => message.role === "user")).toHaveLength(1);
+		expect(saved.filter(message => message.role === "assistant")).toHaveLength(2);
 		expect(saved.filter(message => message.role === "toolResult")).toHaveLength(3);
+		const proposalEnd = sessionEvents.findIndex(event => event.type === "message_end" && event.message.role === "assistant" && event.message.content.some(part => part.type === "tool_call"));
+		const firstTool = sessionEvents.findIndex(event => event.type === "tool_execution_start");
+		const finalAnswer = sessionEvents.findIndex(event => event.type === "message_end" && event.message.role === "assistant" && event.message.content.some(part => part.type === "text"));
+		expect(proposalEnd).toBeGreaterThan(-1);
+		expect(firstTool).toBeGreaterThan(proposalEnd);
+		expect(finalAnswer).toBeGreaterThan(firstTool);
+		expect(sessionEvents.at(-1)?.type).toBe("agent_end");
 	} finally { agent.abort(); await events; await agent.dispose(); }
 });
 
