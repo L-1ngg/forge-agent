@@ -1,6 +1,6 @@
 # 当前研究与实验依据
 
-> 状态:生效(2026-09-21)。本目录保留仍被现行验收引用的研究方法和原始数据；选型已结束的历史调研从[归档索引](../archive/README.md)按需进入。
+> 状态:生效(2026-09-28)。本目录保留仍被现行验收引用的研究方法和原始数据；选型已结束的历史调研从[归档索引](../archive/README.md)按需进入。
 
 | 材料 | 用途与边界 |
 |---|---|
@@ -9,6 +9,5 @@
 | [上下文压缩实验数据](context-compaction/)、[盲评记录](context-compaction/blinded-review.md) | [首次压缩验收](../phases/adaptive-context-compaction-acceptance.md)的原始依据；不证明[后续短投影](../phases/context-notes-search.md)的真实模型质量 |
 | [近期选择实验](context-selection/README.md)、[v2 报告](context-selection/v2-holdout-report.json) | [近期选择评估](../phases/context-selection-evaluation.md)的 A/B 原始记录、失败的 v1 与通过的 v2；限单模型构造任务 |
 | [Issue #32 持久记忆验收](persistent-memory/acceptance.md)、[原始结果](persistent-memory/) | [旧施工图](../archive/phases/persistent-memory.md)的质量与成本证据，仅适用于旧会话内实现；当前接线见 [Issue #37](../phases/tool-ecosystem-issue-37.md) |
-| [TanStack AI 候选应用](tanstack-ai-opportunities.md) | 基于当前源码的待讨论清单与首项验证问题；不构成迁移决策或收益验收 |
 
 历史数据不因文档整理改写或重跑。需要新质量结论时，先确定对应实现、实验方案和未使用保留集，再新增证据；不能将旧结果重新命名为新验收。当前有效设计从[文档导航](../README.md)进入。

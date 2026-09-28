@@ -1,6 +1,6 @@
 # 历史文档归档
 
-> 状态:生效(2026-09-21)。本目录保留已被替代的设计、施工记录及选型研究，继续由 Git 管理。当前任务从[文档导航](../README.md)开始。
+> 状态:生效(2026-09-28)。本目录保留已被替代的设计、施工记录及选型研究，继续由 Git 管理。当前任务从[文档导航](../README.md)开始。
 
 仅在追溯旧版本行为、设计来源或用户指定时读取。正文中的“当前”“待实现”“下一步”属于记录当时的语境，不产生新实施授权。归档不会将历史未测、豁免、中止或失败改为通过。原始实验数据及仍被现行合同依赖的验收记录保留在当前目录，见[证据导航](../research/README.md)。
 
@@ -36,6 +36,7 @@
 | [Pi Bash 输出归档调研](research/pi-bash-output-archive.md) | [SDK](../sdk.md)；不恢复已放弃的长期日志承诺 |
 | [Claude Code 上下文调研](research/claude-code-context-management.md) | [压缩设计](../phases/adaptive-context-compaction.md)；官方资料为当时访问快照 |
 | [Pi 与 Claude Code 比较](research/context-management-comparison.md) | [当前投影与搜索](../phases/context-notes-search.md)；旧建议不覆盖后续决策 |
+| [TanStack AI 候选应用](research/tanstack-ai-opportunities.md) | [TanStack 基座](../phases/tanstack-foundation.md)与[Issue #37 施工](../phases/tool-ecosystem-issue-37.md)已实现其中的执行循环及 Skills 接入；其他候选须按当前源码重新核对 |
 
 ## TUI、编排与 Skills 选型
 

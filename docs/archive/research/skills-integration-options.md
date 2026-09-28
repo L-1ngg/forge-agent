@@ -1,6 +1,6 @@
 # Skills 接入方案调研
 
-> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[当前合同与设计](../../phases/skills.md)。历史未测、豁免及中止结论保持原意。
+> 状态:已归档(2026-09-21)。下文保留当时设计与验证，不作为当前实施依据；现行入口见[Issue #37 施工与验收](../../phases/tool-ecosystem-issue-37.md)。历史未测、豁免及中止结论保持原意。
 
 > 历史状态:调研完成，首轮规格见 [Issue #35](https://github.com/L-1ngg/forge-agent/issues/35)(2026-09-19)。本文保留选型时的比较与建议，不代表功能已实现；用户后续指定的首轮范围、目录与验收以该 Issue 为准，Vercel 安装器和备用 SDK 不进入首轮。Forge 核查基线 `1d37dc1d08d79a94c11036257d2bdb09e0e3fd4a`；社区候选的补充源码、版本与验证证据见 [社区方案核查](skills-community-options.md)。
 
@@ -43,7 +43,7 @@ Pi 官方将 Skills 用在自身 coding-agent 中，采用“元数据常驻，�
 
 所以“只 import 一个函数”不等于“只安装 Skills 模块”。未经完整 import 运行与打包分析，也不能假定 tree shaking 可以消除入口副作用或依赖安装成本。
 
-Forge 已本地维护执行内核，依赖边界检查禁止直接依赖/import `pi-agent-core`。完整 coding-agent 的传递依赖未必被当前脚本直接拦截，但会引入另一套 Agent 与 UI 组件，偏离本次需要的能力边界。依据见 [当前上游来源](../../../packages/core/src/runtime/upstream.json)、[依赖检查](../../../scripts/check-deps.ts)、[SDK](../../sdk.md)。
+Forge 已本地维护执行内核，依赖边界检查禁止直接依赖/import `pi-agent-core`。完整 coding-agent 的传递依赖未必被当前脚本直接拦截，但会引入另一套 Agent 与 UI 组件，偏离本次需要的能力边界。历史依据见 [Pi 来源记录](pi-runtime-provenance/upstream.json)、[依赖检查](../../../scripts/check-deps.ts)、[SDK](../../sdk.md)。
 
 ### 2.3 最小复用单元
 

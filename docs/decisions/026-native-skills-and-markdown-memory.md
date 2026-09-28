@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # ADR-026: 官方 Skills 与 Memory 生命周期，Markdown 本地存储
 
-> 状态:已批准(2026-09-27，operator 确认按本 ADR 与施工图实施；不代表代码或验收完成)。Issue [#37](https://github.com/L-1ngg/forge-agent/issues/37) 是需求与验收真相源；施工见 [Issue #37 施工图](../phases/tool-ecosystem-issue-37.md)。
+> 状态:已批准(2026-09-27，operator 确认按本 ADR 与施工图实施；2026-09-28 已完成本地实现与验收，外部未测边界见施工图)。Issue [#37](https://github.com/L-1ngg/forge-agent/issues/37) 是需求与验收真相源；施工与证据见 [Issue #37 施工图](../phases/tool-ecosystem-issue-37.md)。
 
 ## 决定
 

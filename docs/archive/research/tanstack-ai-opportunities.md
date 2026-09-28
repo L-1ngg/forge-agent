@@ -5,13 +5,13 @@ created: 2026-09-27
 
 # TanStack AI 在 Forge Agent 中的候选应用
 
-> 状态:待逐项讨论(2026-09-27)。本记录是重新核对当前实现后的候选清单，不批准迁移、不替代现行 ADR 或施工图。后续版本、收益和提供方行为须在实施前重新验证。
+> 状态:已归档(2026-09-28；历史状态:待逐项讨论)。本记录是 2026-09-27 的选型快照；执行循环与 Skills 候选已由 [ADR-025](../../decisions/025-tanstack-agent-foundation.md) 和 [ADR-026](../../decisions/026-native-skills-and-markdown-memory.md) 决定并实施。当前能力、施工与证据从[当前文档导航](../../README.md)进入；其余候选须按届时源码和版本重新评估。
 
 ## 范围与证据
 
 本次以仓库锁定的 `@tanstack/ai@0.61.0`、已安装包的源码，以及 Forge 当前实现为准。第一项还核对了已发布的 `@tanstack/ai-compaction@0.1.9` 源码；它当前未安装在 Forge。TanStack 包内 `skills/ai-core` 的说明自标面向 `0.42.0`，具体 API 判断以本地 `0.61.0` 源码为准。下面的“可用”仅表示存在相应 API 或扩展点，不表示已满足 Forge 合同或提升质量。其他未安装扩展包只列为待核验候选。
 
-[ADR-024](../decisions/024-incremental-tanstack-ai-adoption.md) 已决定由 Forge 保留执行循环、会话、权限、输入归属与 MCP 宿主语义。这是当时的架构选择；已安装 TanStack `chat()` 实际包含工具循环与结构化输出流程，不能据 ADR 推断它技术上无法承担循环。是否改变该选择须另行比较并作新决策。
+[ADR-024](../../decisions/024-incremental-tanstack-ai-adoption.md) 已决定由 Forge 保留执行循环、会话、权限、输入归属与 MCP 宿主语义。这是当时的架构选择；已安装 TanStack `chat()` 实际包含工具循环与结构化输出流程，不能据 ADR 推断它技术上无法承担循环。是否改变该选择须另行比较并作新决策。
 
 ## 逐项讨论清单
 
@@ -48,11 +48,11 @@ TanStack `summarize()` 提供文本摘要、焦点/风格/长度选项，不生�
 
 可比较的最小试验是：固定同一批历史、模型与压缩预算，把摘要生成改为 `chat({ outputSchema })` 的隔离原型，再调用原有 `parseCheckpoint()` 和投影选择。分别记录有效检查点率、实际模型请求数、usage、耗时、取消与错误分类；用无效来源、旧状态静默丢失、截断响应及存储失败检验拒绝路径。`chat()` 直接返回的对象不含 Forge 的 `usage`、`stopReason`；须核对 TanStack `onUsage` 等事件能否完整映射现有计数与失败分类。当前摘要预算只计 system/prompt 与输出预留；提供方请求中的 schema 也需计入新路径的预算。对内置 provider 和宿主自定义 `streamFn` 分别说明能否接入，因为后者当前不提供 TanStack adapter。只有质量和合同均达到现行基线，才讨论是否纳入生产；若摘要改走 `chat()` 而任务仍走现有 `streamFn`，还须重新评估 ADR-024 对同一供应商单一生产传输路径的决定。
 
-这一步尚未实现或运行模型实验。2026-09-12 的[上下文压缩验收](../phases/adaptive-context-compaction-acceptance.md)记录了单 provider 旧实现的任务质量和费用，但早于当前传输实现，也没有单列摘要格式失败率；不能作为新方案的当前基线。当前不能宣称 TanStack 策略或 `outputSchema` 会降低成本、减少幻觉，或替代 Forge 的来源校验。
+这一步尚未实现或运行模型实验。2026-09-12 的[上下文压缩验收](../../phases/adaptive-context-compaction-acceptance.md)记录了单 provider 旧实现的任务质量和费用，但早于当前传输实现，也没有单列摘要格式失败率；不能作为新方案的当前基线。当前不能宣称 TanStack 策略或 `outputSchema` 会降低成本、减少幻觉，或替代 Forge 的来源校验。
 
 ## 核对入口
 
-- Forge：[摘要生成与预算](../../packages/core/src/context/compact.ts)、[检查点校验](../../packages/core/src/context/checkpoint.ts)、[摘要传输](../../packages/core/src/session-configuration.ts)、[AgentSession](../../packages/core/src/agent-session.ts)、[模型传输](../../packages/core/src/provider-stream.ts)。
-- Forge：[记忆搜索](../../packages/core/src/memory/store.ts)、[历史搜索](../../packages/core/src/context/search-context.ts)、[Skills 扫描](../../packages/core/src/skills/catalog.ts)、[模型目录](../../packages/core/src/model-catalog.ts)。
+- Forge 当时的源码入口：`packages/core/src/context/compact.ts`、`context/checkpoint.ts`、`session-configuration.ts`、`agent-session.ts`、`provider-stream.ts`；后者已由新执行路径替代。
+- Forge 当时的源码入口：`packages/core/src/memory/store.ts`、`context/search-context.ts`、`skills/catalog.ts`、`model-catalog.ts`；旧 Skills 扫描器已移除。
 - TanStack `0.61.0` 本地源码（依赖安装后可读）：`packages/core/node_modules/@tanstack/ai/src/activities/chat/index.ts` 的 `chat` / structured output 分支、`src/activities/chat/middleware/types.ts` 的 `onUsage`，以及 `packages/core/node_modules/@tanstack/ai/src/index.ts` 的 `embed` / `rerank` 导出；模型元数据见已安装 provider 包的 `src/model-meta.ts`。扩展包能力须在具体讨论时核对其实际版本源码。
 - TanStack [Compaction 官方文档](https://tanstack.com/ai/latest/docs/advanced/compaction)及 npm 已发布的 `@tanstack/ai-compaction@0.1.9` 包内 `src/index.ts`；上游 `main` 的 `packages/ai-compaction/package.json` 已标 `0.1.10`，本项 API 判断以已发布的 `0.1.9` 为准。

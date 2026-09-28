@@ -9,7 +9,7 @@ created: 2026-09-27
 
 ## Entry
 
-起点 `1336da5ff869f08df37959f01eb353f6c8d9dc96`。保留启动前 `docs/research/README.md` 与 `docs/research/tanstack-ai-opportunities.md`，本地原文副本位于 `review-notes/foundation-baseline/`。用户数据、会话和配置不自动迁移；初始交付限定本地工作区，operator 在完成离线验收后明确授权本地 commit。不 push、发布或修改远端任务。
+起点 `1336da5ff869f08df37959f01eb353f6c8d9dc96`。当时保留启动前 `docs/research/README.md` 与 `docs/research/tanstack-ai-opportunities.md`，后者现见[历史研究](../archive/research/tanstack-ai-opportunities.md)；本地原文副本位于 `review-notes/foundation-baseline/`。用户数据、会话和配置不自动迁移；初始交付限定本地工作区，operator 在完成离线验收后明确授权本地 commit。不 push、发布或修改远端任务。
 
 基线 frozen install、依赖/五包/automation/test/example 类型检查通过。Linux network-namespace 下 contract 558、integration 378、CLI/PTY 14，共 950 pass；headless 通过。首轮 contract 误收本次下载发布包内的测试并失败，移入研究目录的 node_modules 后重跑通过；不视为产品已有失败。实际命令和日志见验收记录。
 
