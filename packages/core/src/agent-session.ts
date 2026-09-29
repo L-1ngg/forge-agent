@@ -26,7 +26,7 @@ import { contextReader } from "./context/read-context.ts";
 import { contextSearcher } from "./context/search-context.ts";
 import { messageEntry, projectMessages, selectedBranch, sessionMessages, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
 import { buildContext, resolveRetryPolicy, waitForRetry, DEFAULT_CONTEXT, type CompactionResult, type ContextSettings } from "./context/compaction.ts";
-import { compactionInputBudget } from "./context/compact.ts";
+import { compactionInputBudget, type CompactionBudget } from "./context/compact.ts";
 import { createMemoryTools } from "./memory/tools.ts";
 import { MarkdownMemoryAdapter } from "./memory/adapter.ts";
 
@@ -267,21 +267,21 @@ export class AgentSession implements Agent {
 		const snapshot = this.usage.snapshot(), request = this.requestProjection;
 		return request?.tokens === undefined ? snapshot : { ...snapshot, contextTokens: request.tokens, contextWindow: request.contextWindow, contextEstimated: true };
 	}
-	private requestBudget(fixedText?: string): RequestBudget {
-		const budget = this.compaction.budget();
+	private requestBudget(budget: CompactionBudget): RequestBudget {
 		return {
 			contextWindow: budget.window, inputBudget: compactionInputBudget(budget, this.settings.reserveTokens), maxInputTokens: budget.window - budget.output - REQUEST_MARGIN,
-			fixedTokens: Math.ceil((fixedText ?? budget.fixedText).length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output
+			fixedTokens: Math.ceil(budget.fixedText.length / 4), maxTokens: this.compaction.taskMaxTokens(), effectiveOutputTokens: budget.output
 		};
 	}
-	private async prepareRequestContext(signal: AbortSignal, fixedText: string): Promise<SessionMessage[]> {
+	private async prepareRequestContext(signal: AbortSignal, compactionBudget: CompactionBudget): Promise<SessionMessage[]> {
 		try {
 			signal.throwIfAborted(); this.requestProjection = undefined;
 			const history = () => projectMessages(this.messages());
-			this.compaction.syncUsage();
-			const budget = this.requestBudget(fixedText);
-			if (this.settings.enabled && (this.getUsage()?.contextTokens ?? 0) > budget.inputBudget) {
-				const result = await this.compaction.run("threshold", signal, this.emit);
+			this.compaction.syncUsage(compactionBudget);
+			const budget = this.requestBudget(compactionBudget);
+			const contextTokens = calculateContextUsage({ messages: history(), fixedText: compactionBudget.fixedText }).contextTokens ?? 0;
+			if (this.settings.enabled && contextTokens > budget.inputBudget) {
+				const result = await this.compaction.run("threshold", signal, this.emit, undefined, compactionBudget);
 				if (result.status !== "complete") throw new Error(result.error ?? "Context cannot fit request budget");
 			}
 			signal.throwIfAborted();
@@ -548,10 +548,11 @@ export class AgentSession implements Agent {
 				forgePrompt = current.options.systemPrompt;
 				const systemPrompt = prompts.map(prompt => typeof prompt === "string" ? prompt : prompt.content).join("\n\n");
 				const fixedText = requestFixedText({ systemPrompt, tools: effectiveTools });
-				const projection = await this.prepareRequestContext(signal, fixedText);
+			const compactionBudget = this.compaction.budget(fixedText);
+			const projection = await this.prepareRequestContext(signal, compactionBudget);
 				const request = isolateRequest({ messages: projectMessages(projection), systemPrompt, tools: effectiveTools });
 				try {
-					const tokens = checkRequestBudget(request, this.requestBudget(fixedText), current.revision);
+					const tokens = checkRequestBudget(request, this.requestBudget(compactionBudget), current.revision);
 					if (this.requestProjection) this.requestProjection.tokens = tokens;
 				} catch (error) { this.preparationFailed = true; throw error; }
 				signal.throwIfAborted();

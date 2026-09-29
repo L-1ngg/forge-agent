@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import type { SessionAssembly } from "../configuration.ts";
 import { projectMessages, type SessionEntry, type SessionState } from "../session-storage.ts";
-import { UsageTracker, estimateContextTokens } from "../usage.ts";
+import { UsageTracker, calculateContextUsage } from "../usage.ts";
 import { buildContext, type CompactionReason, type CompactionResult, type ContextSettings } from "./compaction.ts";
-import { compactContext, type CompactionMetrics } from "./compact.ts";
+import { assertProtectedContextFits, compactContext, type CompactionBudget, type CompactionMetrics } from "./compact.ts";
+import { requestFixedText } from "./request-budget.ts";
 
 interface CompactionHost {
 	messages(): SessionMessage[];
@@ -23,37 +24,39 @@ export class CompactionCoordinator {
 		const { options } = this.host.configuration();
 		return options.maxTokens ?? Math.min(4096, options.model.maxTokens || 4096);
 	}
-	budget() {
+	budget(fixedText?: string): CompactionBudget {
 		const { options, driver } = this.host.configuration();
-		return { window: options.contextWindow ?? options.model.contextWindow, output: driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: options.systemPrompt + JSON.stringify(this.host.tools().map(({ name, description, parameters }) => ({ name, description, parameters }))) };
+		return { window: options.contextWindow ?? options.model.contextWindow, output: driver.outputTokens?.(this.taskMaxTokens(), "inherit") ?? this.taskMaxTokens(), fixedText: fixedText ?? requestFixedText({ systemPrompt: options.systemPrompt, tools: this.host.tools() }) };
 	}
-	syncUsage(): void {
+	syncUsage(budget = this.budget()): void {
 		const { options } = this.host.configuration();
-		this.host.usage.setContext({ messages: projectMessages(this.host.messages()), contextWindow: options.contextWindow ?? options.model.contextWindow, identity: JSON.stringify([options.model, options.systemPrompt, options.thinkingLevel, options.tools]), fixedText: this.budget().fixedText });
+		this.host.usage.setContext({ messages: projectMessages(this.host.messages()), contextWindow: budget.window, identity: JSON.stringify([options.model, options.thinkingLevel, budget.output, budget.fixedText]), fixedText: budget.fixedText });
 	}
-	rebuild(): void {
+	rebuild(budget?: CompactionBudget): void {
 		buildContext(this.host.history()); // Validate the committed branch before publishing usage.
 		this.host.usage.invalidate();
-		this.syncUsage();
+		this.syncUsage(budget);
 	}
-	async run(reason: CompactionReason, signal: AbortSignal, emit: (event: SessionEvent) => void, instructions?: string): Promise<CompactionResult> {
+	async run(reason: CompactionReason, signal: AbortSignal, emit: (event: SessionEvent) => void, instructions?: string, requestBudget?: CompactionBudget): Promise<CompactionResult> {
 		const { settings, driver } = this.host.configuration();
 		const operationId = randomUUID();
-		this.syncUsage();
-		const beforeTokens = estimateContextTokens(projectMessages(this.host.messages())) + Math.ceil(this.budget().fixedText.length / 4);
+		const budget = requestBudget ?? this.budget();
+		this.syncUsage(budget);
+		const beforeTokens = calculateContextUsage({ messages: projectMessages(this.host.messages()), fixedText: budget.fixedText }).contextTokens ?? 0;
 		let compactionMetrics: CompactionMetrics | undefined;
 		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...compactionMetrics, ...extra });
 		try {
 			signal.throwIfAborted();
 			event("start");
-			const result = await compactContext(this.host.history(), settings, driver, this.budget(), beforeTokens, signal, details => {
+			if (reason === "threshold") assertProtectedContextFits(this.host.history(), budget, settings.reserveTokens);
+			const result = await compactContext(this.host.history(), settings, driver, budget, beforeTokens, signal, details => {
 				const changed = details.modelCalls !== (compactionMetrics?.modelCalls ?? 0);
 				compactionMetrics = details;
 				if (changed) emit({ type: "compaction", phase: "attempt", operationId, reason, beforeTokens, timestamp: Date.now(), ...details });
 			}, instructions);
 			signal.throwIfAborted();
 			await this.host.persist(result.entry);
-			this.rebuild();
+			this.rebuild(budget);
 			const afterTokens = this.host.usage.snapshot().contextTokens ?? result.afterTokens;
 			emit({ type: "compaction", phase: "end", operationId, reason, beforeTokens, afterTokens, timestamp: Date.now(), ...compactionMetrics });
 			return { status: "complete", operationId, beforeTokens, afterTokens };
