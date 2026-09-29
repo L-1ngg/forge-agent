@@ -41,15 +41,25 @@ export class LongTermMemory {
 		return { scope, path, text: chars.slice(offset, offset + limit).join(""), modifiedAt, sources, warnings, ...(offset + limit < chars.length ? { nextOffset: offset + limit } : {}) };
 	}
 	async readText(scope: MemoryScope, path: string): Promise<string> { return (await this.readFull(scope, path)).text; }
+	/** Static checks only; each file operation still checks current filesystem state. */
+	validatePath(scope: MemoryScope, path: string): void { this.file(scope, path); }
+	validateWrite(input: MemoryWrite, source: MemorySource): void {
+		this.file(input.scope, input.path);
+		this.writeContent(input, source);
+	}
 	async write(input: MemoryWrite, source: MemorySource): Promise<MemoryCommit> {
-		if (typeof input.content !== "string") throw new Error("Memory content must be Markdown text");
 		const file = this.file(input.scope, input.path);
-		const content = `${input.content}\n\n<!-- forge-memory-source ${JSON.stringify({ ...source, scope: input.scope, scopeRoot: this.root(input.scope) })} -->\n`;
-		if (Buffer.byteLength(content) > MEMORY_FILE_BYTES) throw new Error("Memory write exceeds 256 KiB resource limit");
+		const content = this.writeContent(input, source);
 		await this.checkPath(input.scope, input.path);
 		await this.files.mkdir(dirname(file), { recursive: true });
 		await this.files.writeFile(file, content, "utf8");
 		return { saved: true, scope: input.scope, path: input.path };
+	}
+	private writeContent(input: MemoryWrite, source: MemorySource): string {
+		if (typeof input.content !== "string") throw new Error("Memory content must be Markdown text");
+		const content = `${input.content}\n\n<!-- forge-memory-source ${JSON.stringify({ ...source, scope: input.scope, scopeRoot: this.root(input.scope) })} -->\n`;
+		if (Buffer.byteLength(content) > MEMORY_FILE_BYTES) throw new Error("Memory write exceeds 256 KiB resource limit");
+		return content;
 	}
 	async delete(scope: MemoryScope, path: string): Promise<MemoryCommit> {
 		await this.checkPath(scope, path);

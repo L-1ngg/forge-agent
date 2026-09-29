@@ -38,3 +38,7 @@ export function replyAdapter(model: Model | string, respond: (request: TextOptio
 export function systemText(request: Pick<TextOptions, "systemPrompts">): string {
 	return request.systemPrompts?.map(prompt => typeof prompt === "string" ? prompt : prompt.content).join("\n") ?? "";
 }
+
+export function isMemoryOrganizerRequest(request: Pick<TextOptions, "systemPrompts">): boolean {
+	return systemText(request).startsWith("Maintain concise long-term Markdown memory.");
+}

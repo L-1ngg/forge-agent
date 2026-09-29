@@ -36,7 +36,7 @@
 | [默认上下文压缩](decisions/018-adaptive-default.md)、[近期选择](decisions/023-deterministic-context-selection.md) | CLI/SDK 默认策略、旧会话恢复与当前材料选择规则 |
 | [压缩设计](phases/adaptive-context-compaction.md)、[首次验收](phases/adaptive-context-compaction-acceptance.md)、[近期选择施工与验收](phases/context-selection-simplification.md)、[新质量评估](phases/context-selection-evaluation.md) | 独立状态、证据、预算及历史模型对照；近期选择的软件证据与新质量实验 |
 | [短检查点与历史搜索](phases/context-notes-search.md) | 当前请求投影、search_context、软件验证和未测质量边界 |
-| [Issue #37 施工图](phases/tool-ecosystem-issue-37.md)、[ADR-019](decisions/019-persistent-memory.md) | 当前 deferred 整理、Markdown 与 worktree 副本；旧质量数据按[归档索引](archive/README.md)进入 |
+| [Issue #42 整理施工与证据](phases/memory-organizer-issue-42.md)、[Issue #37 原验收](phases/tool-ecosystem-issue-37.md)、[ADR-019](decisions/019-persistent-memory.md) | 当前 deferred 整理的响应校验、Markdown 与 worktree 副本；旧质量数据按[归档索引](archive/README.md)进入 |
 | [宿主上下文变换](phases/context-transform.md)、[分层预算决策](decisions/021-host-context-transform-and-request-budget.md) | transformContext、记忆组合、最终请求预算的接口与本地验收证据 |
 | [会话管理](phases/session-management.md)、[首次写入](phases/session-first-write.md) | 新会话、清屏、项目内恢复及增量落盘 |
 | [会话恢复体验](phases/session-resume-experience.md)、[记录浏览](phases/transcript-browser.md)、[TUI 投影状态收敛](phases/transcript-projector.md) | 会话标题、原文预览、缓存、历史浏览与投影状态 |

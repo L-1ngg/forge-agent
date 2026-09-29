@@ -1,6 +1,6 @@
 # 通用 Agent — 规划
 
-> 状态:后续路线(2026-09-28)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
+> 状态:后续路线(2026-09-29)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
 > 按[当前文档导航](README.md)读取合同与证据；历史路线仅在追溯时进入[归档索引](archive/README.md)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [TanStack 基座](phases/tanstack-foundation.md)、[基座验收](phases/tanstack-foundation-acceptance.md)。
 
@@ -28,7 +28,7 @@
 - 当前默认上下文压缩见 [ADR-018](decisions/018-adaptive-default.md)；已移除 pi 策略的历史设计见 [ADR-014](decisions/014-pi-aligned-context-management.md)；上下文压缩的状态/证据/预算见 [ADR-017](decisions/017-evidence-backed-context-compaction.md) 与 [GitHub #31](https://github.com/L-1ngg/forge-agent/issues/31)，当前短投影和搜索见[后续施工与证据](phases/context-notes-search.md)。后续工作以这些已有能力为起点，不重新规划一次基础压缩实现。
 - 保留原始需求、上下文用量真相点、压缩余量与恢复载荷作用域的设计原则;具体参数由施工与验证确定。
 - 会话恢复保留 provider continuation 信息;取消和权限策略须在真实任务中验证。
-- 当前持久记忆按 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 使用官方 deferred 调度及 Markdown adapter，实施与验收见[施工图](phases/tool-ecosystem-issue-37.md)；[Issue #32 记录](archive/phases/persistent-memory.md)只证明旧会话内方案。知识库和额外检索基础设施仍按场景另行接入。
+- 当前持久记忆按 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 使用官方 deferred 调度及 Markdown adapter；整理响应与计划预检见 [Issue #42 施工图](phases/memory-organizer-issue-42.md)，原接入验收见 [Issue #37 施工图](phases/tool-ecosystem-issue-37.md)。[Issue #32 记录](archive/phases/persistent-memory.md)只证明旧会话内方案。知识库和额外检索基础设施仍按场景另行接入。
 
 ### 第五批 — 服务 API 与分发
 

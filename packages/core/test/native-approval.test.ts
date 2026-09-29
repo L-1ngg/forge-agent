@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAgent, LongTermMemory, MemorySessionStorage } from "@forge-agent/core/sdk";
 import type { HarnessTool } from "@forge-agent/tools";
 import { nativeAdapter, requestMessages, responseChunks } from "./helpers/native-adapter.ts";
+import { isMemoryOrganizerRequest } from "./helpers/native-reply.ts";
 import { EventType } from "@tanstack/ai";
 import type { Model } from "../src/model-types.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
@@ -331,14 +332,19 @@ test("memory saves once after a native approval continuation", async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-native-approval-memory-"));
 	const requests: SessionMessage[][] = [], events: SessionEvent[] = [];
 	let saves = 0;
-	const adapter = Object.assign(fixture(requests), { async structuredOutput() {
-		saves++;
-		return { data: { updates: [], indexes: [] }, rawText: "{}" };
-	} });
+	let organizerInput = "";
+	const task = fixture(requests);
+	const adapter = nativeAdapter(model, async function* (request) {
+		if (isMemoryOrganizerRequest(request)) {
+			saves++;
+			organizerInput = JSON.stringify(request.messages);
+			yield* responseChunks({ role: "assistant", content: [{ type: "text", text: '{"updates":[],"indexes":[]}' }], stopReason: "stop", timestamp: Date.now() });
+		} else yield* task.chatStream(request);
+	});
 	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: root,
 		memory: { store: new LongTermMemory({ project: root }) },
 		tools: [{ name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
-			async execute() { return { content: [], details: {} }; } }],
+			async execute() { return { content: [{ type: "text", text: "Verified by tool" }], details: {} }; } }],
 		permission: { hooks: [{ evaluate: call => call.arguments.value === "ask" ? undefined : { kind: "allow", source: "hook" } }] },
 	});
 	const turn = agent.runTurn("remember one task");
@@ -352,6 +358,7 @@ test("memory saves once after a native approval continuation", async () => {
 		expect(await turn.result).toEqual({ status: "success" });
 		expect(requests).toHaveLength(2);
 		expect(saves).toBe(1);
+		expect(organizerInput).toContain("Verified by tool");
 		expect(events.filter(event => event.type === "memory" && event.phase === "save")).toHaveLength(1);
 		expect(events.filter(event => event.type === "agent_end")).toHaveLength(1);
 	} finally { agent.abort(); await running; await agent.dispose(); await rm(root, { recursive: true, force: true }); }

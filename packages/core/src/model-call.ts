@@ -1,5 +1,5 @@
 import { EventType } from "@ag-ui/core";
-import { chat, type AdapterYieldChunk, type TextOptions } from "@tanstack/ai";
+import { chat, type AdapterYieldChunk, type TextOptions, type TokenUsage } from "@tanstack/ai";
 import type { SessionMessage, SessionEvent } from "@forge-agent/protocol";
 import type { SessionConfiguration } from "./configuration.ts";
 import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
@@ -37,16 +37,17 @@ export async function* observeModelResponse(
 	} else yield terminal;
 }
 
-/** One native chat request, used for summaries; task runs use the same observer. */
-export async function callModel(configuration: SessionConfiguration, messages: SessionMessage[], systemPrompt: string, settings: ModelRequestSettings): Promise<SessionMessage> {
+/** One native chat request for summaries and memory; task runs use the same observer. */
+export async function callModel(configuration: SessionConfiguration, messages: SessionMessage[], systemPrompt: string, settings: ModelRequestSettings, hooks?: { onRequest?: () => void; onUsage?: (usage: TokenUsage) => void }): Promise<SessionMessage> {
 	const adapter = configuration.adapter ?? await resolveProviderAdapter(configuration.model, settings);
 	let result: SessionMessage | undefined;
 	let failure: unknown;
 	let audit: RawResponseAudit | undefined;
+	let nativeUsage: TokenUsage | undefined;
 	const input = toModelMessages(messages);
 	const observed: ModelAdapter = {
 		kind: "text", name: adapter.name, model: adapter.model, "~types": adapter["~types"],
-		chatStream: request => observeModelResponse(adapter, request, configuration, () => { }, settled => { audit = settled; }),
+		chatStream: request => { hooks?.onRequest?.(); return observeModelResponse(adapter, request, configuration, () => { }, settled => { audit = settled; }); },
 		structuredOutput: request => adapter.structuredOutput(request),
 	};
 	const linked = linkedController(settings.signal);
@@ -55,9 +56,12 @@ export async function callModel(configuration: SessionConfiguration, messages: S
 			onFinish: ctx => { if (audit) result = audit.project(ctx.messages.slice(input.length)); },
 			onError: (_ctx, info) => { failure = info.error; if (audit) result = audit.partialMessage(); },
 			onAbort: () => { if (audit) result = audit.partialMessage("aborted", "Request aborted"); },
+			onUsage: (_ctx, usage) => { nativeUsage = usage; },
 		}] })) { }
 	} catch (error) { failure = error; }
 	finally { linked.dispose(); }
+	const usage = nativeUsage ?? audit?.reportedUsage;
+	if (usage) hooks?.onUsage?.(usage);
 	if (result) return result;
 	throw failure ?? new Error("Model did not return a response");
 }

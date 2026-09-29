@@ -1,14 +1,18 @@
-import { chat, type TokenUsage } from "@tanstack/ai";
+import type { TokenUsage } from "@tanstack/ai";
 import type { MemoryAdapter, MemoryScope as NativeMemoryScope, MemoryTurn, RecallResult, SaveReceipt } from "@tanstack/ai-memory";
 import { z } from "zod";
 import type { SessionConfiguration } from "../configuration.ts";
-import { resolveProviderAdapter, providerModelOptions, type ModelRequestSettings } from "../model-adapter.ts";
+import { callModel } from "../model-call.ts";
+import type { ModelRequestSettings } from "../model-adapter.ts";
 import type { LongTermMemory, MemoryScope, MemorySource } from "./store.ts";
 import { MEMORY_GUIDANCE, type MemoryOptions } from "./tools.ts";
 
 const scopeSchema = z.enum(["user", "project"]);
 const planSchema = z.strictObject({
-	updates: z.array(z.strictObject({ action: z.enum(["write", "delete"]), scope: scopeSchema, path: z.string().min(1), content: z.string().optional() })),
+	updates: z.array(z.discriminatedUnion("action", [
+		z.strictObject({ action: z.literal("write"), scope: scopeSchema, path: z.string().min(1), content: z.string() }),
+		z.strictObject({ action: z.literal("delete"), scope: scopeSchema, path: z.string().min(1) }),
+	])),
 	indexes: z.array(z.strictObject({ scope: scopeSchema, content: z.string() })),
 });
 
@@ -74,21 +78,23 @@ export class MarkdownMemoryAdapter implements MemoryAdapter {
 			...(this.configuration.sessionId ? { sessionId: this.configuration.sessionId } : {}),
 			...(this.configuration.thinkingLevel !== "off" ? { reasoning: this.configuration.thinkingLevel } : {}),
 		};
-		const adapter = this.configuration.adapter ?? await resolveProviderAdapter(this.configuration.model, settings);
-		this.calls++;
-		const plan = await chat({
-			adapter,
-				messages: [{ role: "user", content: `User: ${turn.user}\nAssistant: ${turn.assistant}\nConfirmed tool results in this turn: ${this.evidence() || "none"}\nExisting indexes and linked topics:\n${existing.join("\n\n") || "none"}` }],
-			systemPrompts: [{ content: "Maintain concise long-term Markdown memory. Return only durable user preferences, long-term constraints, verified project facts, or useful sourced lessons. Preserve conditions, exceptions, uncertainty and provenance. Never treat the assistant's assertion as proof of a tool effect. Skip temporary task progress, full transcript, and unverified guesses. Use user scope for cross-project preferences, project scope for current repository facts. Write or delete topic files first; include a short MEMORY.md index update only when needed. Return empty arrays when nothing is worth saving." }],
-			modelOptions: providerModelOptions(this.configuration.model, settings), outputSchema: planSchema,
-			middleware: [{ onUsage: (_ctx, value) => { this.lastUsage = value; } }], debug: false,
-		});
+		const response = await callModel(this.configuration, [{ role: "user", content: [{ type: "text", text: `User: ${turn.user}\nAssistant: ${turn.assistant}\nConfirmed tool results in this turn: ${this.evidence() || "none"}\nExisting indexes and linked topics:\n${existing.join("\n\n") || "none"}` }], timestamp: Date.now() }],
+			"Maintain concise long-term Markdown memory. Return only durable user preferences, long-term constraints, verified project facts, or useful sourced lessons. Preserve conditions, exceptions, uncertainty and provenance. Never treat the assistant's assertion as proof of a tool effect. Skip temporary task progress, full transcript, and unverified guesses. Use user scope for cross-project preferences, project scope for current repository facts. Write or delete topic files first; include a short MEMORY.md index update only when needed. Return one plain JSON object with updates and indexes arrays; use empty arrays when nothing is worth saving.", settings, { onRequest: () => { this.calls++; }, onUsage: usage => { this.lastUsage = usage; } });
+		if (response.stopReason !== "stop" || response.content.some(part => part.type === "tool_call")) throw new Error(response.errorMessage ?? `Memory organizer did not return a complete text response (${response.stopReason ?? "unknown"})`);
+		const text = response.content.filter(part => part.type === "text").map(part => part.text).join("");
+		if (!text.trim()) throw new Error("Memory organizer returned no plan");
+		const plan = planSchema.parse(JSON.parse(text));
 		const receipts: SaveReceipt[] = [];
 		const source = this.source();
 		for (const update of plan.updates) {
 			if (update.path === "MEMORY.md") throw new Error("Write MEMORY.md through the indexes plan");
 			if (update.action === "write") {
-				if (update.content === undefined) throw new Error("Memory write has no content");
+				this.memory.store.validateWrite({ scope: update.scope, path: update.path, content: update.content }, source);
+			} else this.memory.store.validatePath(update.scope, update.path);
+		}
+		for (const index of plan.indexes) this.memory.store.validateWrite({ scope: index.scope, path: "MEMORY.md", content: index.content }, source);
+		for (const update of plan.updates) {
+			if (update.action === "write") {
 				receipts.push({ ok: (await this.memory.store.write({ scope: update.scope, path: update.path, content: update.content }, source)).saved, raw: { scope: update.scope, path: update.path, usage: this.lastUsage } });
 			} else {
 				await this.memory.store.delete(update.scope, update.path);

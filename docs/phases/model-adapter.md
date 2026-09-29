@@ -5,9 +5,9 @@ created: 2026-09-27
 
 # 原生模型 Adapter 合同
 
-> 状态:已实现，Issue #40 响应边界的 Linux 离线验收已完成(2026-09-28)；外部验收单列。决策见 [ADR-028](../decisions/028-model-response-boundary.md)，当前证据见 [Issue #40 施工图](model-response-boundary.md)，公共示例见[SDK](../sdk.md)。
+> 状态:已实现，Issue #40 响应边界的 Linux 离线验收已完成(2026-09-28)；deferred 记忆整理的接入和新证据见 [Issue #42 施工图](memory-organizer-issue-42.md)，外部验收单列。决策见 [ADR-028](../decisions/028-model-response-boundary.md)，原响应边界证据见 [Issue #40 施工图](model-response-boundary.md)，公共示例见[SDK](../sdk.md)。
 
-`createAgent({ model, adapter })` 接受 TanStack `AnyTextAdapter`，SDK 导出名称为 `ModelAdapter`。对象 `Model` 必须配 adapter；目录字符串可以覆盖 adapter，更新时 `adapter: null` 恢复内置传输。旧 `streamFn` 在创建和更新时显式拒绝，不提供兼容包装。任务与摘要均通过 `chat()` 和同一个 adapter 接缝，`sessionId` 映射到原生 `threadId`，请求取消使用 `TextOptions.request.signal`。
+`createAgent({ model, adapter })` 接受 TanStack `AnyTextAdapter`，SDK 导出名称为 `ModelAdapter`。对象 `Model` 必须配 adapter；目录字符串可以覆盖 adapter，更新时 `adapter: null` 恢复内置传输。旧 `streamFn` 在创建和更新时显式拒绝，不提供兼容包装。任务、摘要与 deferred 记忆整理均通过 `chat()` 和同一个受审计 adapter 接缝，`sessionId` 映射到原生 `threadId`，请求取消使用 `TextOptions.request.signal`。
 
 `model-adapter.ts` 集中目录协议到原生 adapter 的映射、认证和 modelOptions。当前目录为 37 个 provider、1314 个模型、7 种 api；无等价内置传输的 Mistral Conversations 和 Codex Responses 不在目录中。宿主可以通过对象模型与原生 adapter 接入其他能力。增加 provider 时只修改相关 adapter 工厂、目录和认证，不修改会话循环、工具策略或 UI。
 

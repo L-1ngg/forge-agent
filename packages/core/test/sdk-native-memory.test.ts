@@ -5,27 +5,33 @@ import { join } from "node:path";
 import { createAgent, LongTermMemory, MemorySessionStorage } from "../src/sdk.ts";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import { nativeAdapter, responseChunks } from "./helpers/native-adapter.ts";
+import { isMemoryOrganizerRequest } from "./helpers/native-reply.ts";
+import { memoryFiles } from "../src/memory/files.ts";
 import { barrier, bounded } from "../../../tests/support/control.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 
-test("deferred memory save calls one structured model and a new session recalls persisted Markdown", async () => {
+test("deferred memory save uses one audited model response and a new session recalls persisted Markdown", async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-native-memory-"));
 	const store = new LongTermMemory({ project: root });
-	let structuredCalls = 0;
-	const taskAdapter = Object.assign(nativeAdapter(model, async function* () {
-		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "Acknowledged." }], timestamp: 1, stopReason: "stop" });
-	}), { async structuredOutput() {
-		structuredCalls++;
-		return { data: { updates: [{ action: "write", scope: "project", path: "stack.md", content: "Project uses Bun." }], indexes: [{ scope: "project", content: "[stack](stack.md) - Project uses Bun." }] }, rawText: "{}" };
-	} });
+	let organizerCalls = 0;
+	const taskAdapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		if (organizer) organizerCalls++;
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer
+			? JSON.stringify({ updates: [{ action: "write", scope: "project", path: "stack.md", content: "Project uses Bun." }], indexes: [{ scope: "project", content: "[stack](stack.md) - Project uses Bun." }] })
+			: "Acknowledged." }], timestamp: 1, stopReason: "stop" });
+	});
 	try {
 		const first = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter: taskAdapter, memory: { store } });
 		try {
 			const turn = first.runTurn("Remember that this project uses Bun.");
-			for await (const _ of turn) {}
+			const events = []; for await (const event of turn) events.push(event);
 			expect(await turn.result).toEqual({ status: "success" });
-			expect(structuredCalls).toBe(1);
+			expect(organizerCalls).toBe(1);
+			const save = events.find(event => event.type === "memory" && event.phase === "save");
+			expect(save).toMatchObject({ status: "saved", calls: 1 });
+			expect(save && "usage" in save).toBe(false);
 			expect(await readFile(join(root, "stack.md"), "utf8")).toContain("Project uses Bun.");
 			expect(await readFile(join(root, "MEMORY.md"), "utf8")).toContain("stack.md");
 		} finally { await first.dispose(); }
@@ -63,6 +69,44 @@ test("host-bound memory stays isolated when sessions share a thread ID", async (
 				expect(prompts[0]).not.toContain(excluded);
 			} finally { await agent.dispose(); }
 		}
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("deferred saves keep user memory shared while project memory stays in its host root", async () => {
+	const root = await mkdtemp(join(tmpdir(), "forge-memory-save-scope-"));
+	const userRoot = join(root, "user"), firstRoot = join(root, "first"), secondRoot = join(root, "second");
+	await mkdir(userRoot); await mkdir(firstRoot); await mkdir(secondRoot);
+	const store = new LongTermMemory({ user: userRoot, project: firstRoot });
+	const firstAdapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer
+			? JSON.stringify({ updates: [
+				{ action: "write", scope: "user", path: "preference.md", content: "Prefer concise replies." },
+				{ action: "write", scope: "project", path: "build.md", content: "First project uses Bun." },
+			], indexes: [{ scope: "user", content: "USER_INDEX [preference](preference.md)" }, { scope: "project", content: "FIRST_PROJECT_INDEX [build](build.md)" }] })
+			: "Noted." }], timestamp: 1, stopReason: "stop" });
+	});
+	try {
+		const first = await createAgent({ cwd: root, sessionId: "shared-thread", systemPrompt: "BASE", model, adapter: firstAdapter, memory: { store } });
+		try {
+			const turn = first.runTurn("Save my preference and this project's build setup.");
+			for await (const _ of turn) {}
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(await readFile(join(userRoot, "preference.md"), "utf8")).toContain("Prefer concise replies.");
+			expect(await readFile(join(firstRoot, "build.md"), "utf8")).toContain("First project uses Bun.");
+			expect(await readdir(secondRoot)).toEqual([]);
+		} finally { await first.dispose(); }
+		let recalled = "";
+		const reopened = await createAgent({ cwd: root, sessionId: "shared-thread", systemPrompt: "BASE", model, memory: { store: new LongTermMemory({ user: userRoot, project: secondRoot }), autoUpdate: false }, adapter: nativeAdapter(model, async function* (request) {
+			recalled = JSON.stringify(request.systemPrompts);
+			yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "Done." }], timestamp: 2, stopReason: "stop" });
+		}) });
+		try {
+			const turn = reopened.runTurn("Check memory."); for await (const _ of turn) {}
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(recalled).toContain("USER_INDEX");
+			expect(recalled).not.toContain("FIRST_PROJECT_INDEX");
+		} finally { await reopened.dispose(); }
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -129,12 +173,11 @@ test("deferred organizer sees indexed topic content before revising it", async (
 	await writeFile(join(root, "MEMORY.md"), "[deployment](deployment.md) - deployment constraints");
 	await writeFile(join(root, "deployment.md"), "Production remains on Node; Bun is for local tests.");
 	let organizerInput = "";
-	const adapter = Object.assign(nativeAdapter(model, async function* () {
-		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "Noted." }], timestamp: 1, stopReason: "stop" });
-	}), { async structuredOutput(options: unknown) {
-		organizerInput = JSON.stringify(options);
-		return { data: { updates: [], indexes: [] }, rawText: "{}" };
-	} });
+	const adapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		if (organizer) organizerInput = JSON.stringify(request.messages);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer ? '{"updates":[],"indexes":[]}' : "Noted." }], timestamp: 1, stopReason: "stop" });
+	});
 	try {
 		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store: new LongTermMemory({ project: root }) } });
 		try {
@@ -148,11 +191,10 @@ test("deferred organizer sees indexed topic content before revising it", async (
 
 test("no-value organization reports its call and usage without creating files", async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-memory-noop-"));
-	const adapter = Object.assign(nativeAdapter(model, async function* () {
-		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "Done." }], timestamp: 1, stopReason: "stop" });
-	}), { async structuredOutput() {
-		return { data: { updates: [], indexes: [] }, rawText: "{}", usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14, cost: 0.001 } };
-	} });
+	const adapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer ? '{"updates":[],"indexes":[]}' : "Done." }], timestamp: 1, stopReason: "stop", ...(organizer ? { usage: { input: 10, output: 4, cacheRead: 0, cacheWrite: 0, totalTokens: 14, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.001 } } } : {}) });
+	});
 	try {
 		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store: new LongTermMemory({ project: root }) } });
 		try {
@@ -167,9 +209,10 @@ test("no-value organization reports its call and usage without creating files", 
 
 test("organizer failure is observable and leaves a successful task result intact", async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-memory-fail-"));
-	const adapter = Object.assign(nativeAdapter(model, async function* () {
+	const adapter = nativeAdapter(model, async function* (request) {
+		if (isMemoryOrganizerRequest(request)) throw new Error("organizer failed");
 		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "Done." }], timestamp: 1, stopReason: "stop" });
-	}), { async structuredOutput(): Promise<never> { throw new Error("organizer failed"); } });
+	});
 	try {
 		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store: new LongTermMemory({ project: root }) } });
 		try {
@@ -178,6 +221,76 @@ test("organizer failure is observable and leaves a successful task result intact
 			expect(await turn.result).toEqual({ status: "success" });
 			expect(events.find(event => event.type === "memory" && event.phase === "save")).toMatchObject({ status: "failed", calls: 1, receipts: [{ ok: false, error: expect.stringContaining("organizer failed") }] });
 			expect(await readdir(root)).toEqual([]);
+		} finally { await agent.dispose(); }
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a later invalid memory operation rejects the whole plan before any file changes", async () => {
+	const root = await mkdtemp(join(tmpdir(), "forge-memory-plan-"));
+	const adapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer
+			? JSON.stringify({ updates: [
+				{ action: "write", scope: "project", path: "valid.md", content: "Should not persist" },
+				{ action: "write", scope: "project", path: "../invalid.md", content: "Invalid path" },
+			], indexes: [] }) : "Done." }], timestamp: 1, stopReason: "stop" });
+	});
+	try {
+		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store: new LongTermMemory({ project: root }) } });
+		try {
+			const turn = agent.runTurn("Remember the deployment rule.");
+			const events = []; for await (const event of turn) events.push(event);
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(events.find(event => event.type === "memory" && event.phase === "save")).toMatchObject({ status: "failed", receipts: [{ ok: false }] });
+			expect(await readdir(root)).toEqual([]);
+		} finally { await agent.dispose(); }
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("an invalid delete operation cannot change an existing memory topic", async () => {
+	const root = await mkdtemp(join(tmpdir(), "forge-memory-delete-plan-"));
+	await writeFile(join(root, "existing.md"), "Original note");
+	const adapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer
+			? JSON.stringify({ updates: [{ action: "delete", scope: "project", path: "existing.md", content: "unexpected" }], indexes: [] })
+			: "Done." }], timestamp: 1, stopReason: "stop" });
+	});
+	try {
+		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store: new LongTermMemory({ project: root }) } });
+		try {
+			const turn = agent.runTurn("Update memory.");
+			const events = []; for await (const event of turn) events.push(event);
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(events.find(event => event.type === "memory" && event.phase === "save")).toMatchObject({ status: "failed", receipts: [{ ok: false }] });
+			expect(await readFile(join(root, "existing.md"), "utf8")).toBe("Original note");
+		} finally { await agent.dispose(); }
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("memory writes topics before indexes and an index I/O failure stays nonfatal", async () => {
+	const root = await mkdtemp(join(tmpdir(), "forge-memory-index-io-"));
+	const writes: string[] = [];
+	const store = new LongTermMemory({ project: root }, { ...memoryFiles, async writeFile(file, data, options) {
+		writes.push(String(file).split("/").at(-1)!);
+		if (String(file).endsWith("MEMORY.md")) throw new Error("index disk full");
+		await memoryFiles.writeFile(file, data, options);
+	} });
+	const adapter = nativeAdapter(model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: organizer
+			? JSON.stringify({ updates: [{ action: "write", scope: "project", path: "topic.md", content: "Saved topic" }], indexes: [{ scope: "project", content: "[topic](topic.md)" }] })
+			: "Done." }], timestamp: 1, stopReason: "stop" });
+	});
+	try {
+		const agent = await createAgent({ cwd: root, systemPrompt: "BASE", model, adapter, memory: { store } });
+		try {
+			const turn = agent.runTurn("Remember this topic.");
+			const events = []; for await (const event of turn) events.push(event);
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(events.find(event => event.type === "memory" && event.phase === "save")).toMatchObject({ status: "failed", calls: 1, receipts: [{ ok: false, error: expect.stringContaining("index disk full") }] });
+			expect(writes).toEqual(["topic.md", "MEMORY.md"]);
+			expect(await readFile(join(root, "topic.md"), "utf8")).toContain("Saved topic");
 		} finally { await agent.dispose(); }
 	} finally { await rm(root, { recursive: true, force: true }); }
 });

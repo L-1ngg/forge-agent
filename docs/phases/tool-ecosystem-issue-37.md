@@ -5,7 +5,7 @@ created: 2026-09-27
 
 # Issue #37 工具体系收敛施工图
 
-> 状态:已完成(2026-09-28，当时本地验收通过；外部未测边界见下文)。工具批次预执行接线随后被 [Issue #39 施工图](native-tool-approval.md) 取代，以下原始验收数字仅对应当时版本。任务需求与 AC 以 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 为真相源；Skills/Memory 架构见 [ADR-026](../decisions/026-native-skills-and-markdown-memory.md)。
+> 状态:已完成(2026-09-28，当时本地验收通过；外部未测边界见下文)。工具批次预执行接线随后被 [Issue #39 施工图](native-tool-approval.md) 取代，记忆整理响应接线见 [Issue #42 施工图](memory-organizer-issue-42.md)；以下原始验收数字仅对应当时版本。任务需求与 AC 以 [Issue #37](https://github.com/L-1ngg/forge-agent/issues/37) 为真相源；Skills/Memory 架构见 [ADR-026](../decisions/026-native-skills-and-markdown-memory.md)。
 
 ## Entry
 

@@ -151,6 +151,7 @@ export class RawResponseAudit {
 	get reason(): SessionMessage["stopReason"] { return this.stopReason; }
 	get failure(): string | undefined { return this.errorMessage; }
 	get hasTools(): boolean { return this.toolIndexes.size > 0; }
+	get reportedUsage(): TokenUsage | undefined { return this.tokenUsage; }
 
 	async accept(chunk: AdapterYieldChunk): Promise<void> {
 		try {
