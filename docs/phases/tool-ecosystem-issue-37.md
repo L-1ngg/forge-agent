@@ -51,6 +51,8 @@ created: 2026-09-27
 
 ## 真实模型样例
 
+原始报告已保存为 [issue-37-samples.json](../research/persistent-memory/issue-37-samples.json)，文件哈希、来源及读取边界见[证据说明](../research/persistent-memory/README.md)。2026-09-29 的保存只补齐共享入口，不产生新的模型验收。
+
 2026-09-28 使用 xAI `grok-4.6`、关闭思考、输出上限 2048、最多重试 1 次、关闭自动上下文压缩，运行 `bun scripts/memory-quality.ts --split holdout --fixture scripts/fixtures/memory-quality-v2.json --out /tmp/forge-issue37-memory-samples.json`。样例为已有 v2 场景复用，**不是新的盲测**。原始报告固定了 fixture hash `2e93bdf70996b3f8d0d8724651e83c977731f2d8eb1671f2b618db5bad83070d`、实现 hash `3c4b77f93524fa85125984d37406396f99dd7e850c9b009b158245f8d10cf943`、harness hash `e11e580cd2a884f4111c0c6260fa0800ae1d5c19b7dc6d1d813a4e1679f226e2`。样例之后修改了 Skills 解析/展示及请求预算接线，Markdown adapter、整理提示词和文件存储未变；样例不证明后续预算增量的运行结果，预算行为以后续确定性测试为准。
 
 | 场景 | 文件与整理结果 | 人工核对的限定条件 |

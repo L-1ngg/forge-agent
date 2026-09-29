@@ -1,4 +1,5 @@
 import { App, type AppPort, type AppRequestBus } from "../packages/tui/src/index.ts";
+import type { SessionEvent, TurnResult } from "../packages/protocol/src/index.ts";
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
 	console.error("Run in an interactive terminal: bun scripts/markdown-preview.ts");
@@ -7,18 +8,30 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 const markdown = await Bun.file(new URL("./fixtures/markdown-preview.md", import.meta.url)).text();
 let aborted = false;
 const port: AppPort = {
-	async *runTurn() {
+	runTurn() {
 		aborted = false;
-		const timestamp = Date.now();
-		yield { type: "message_start", timestamp, message: { role: "assistant", content: [], timestamp } };
-		let received = "";
-		for (let offset = 0; offset < markdown.length && !aborted; offset += 12) {
-			const delta = markdown.slice(offset, offset + 12);
-			received += delta;
-			yield { type: "message_delta", timestamp: Date.now(), contentIndex: 0, contentType: "text", delta };
-			await Bun.sleep(60);
+		let settle!: (result: TurnResult) => void;
+		const result = new Promise<TurnResult>(resolve => { settle = resolve; });
+		async function* events(): AsyncGenerator<SessionEvent> {
+			let status: TurnResult["status"] = "aborted";
+			try {
+				const timestamp = Date.now();
+				yield { type: "message_start", timestamp, message: { role: "assistant", content: [], timestamp } };
+				let received = "";
+				for (let offset = 0; offset < markdown.length && !aborted; offset += 12) {
+					const delta = markdown.slice(offset, offset + 12);
+					received += delta;
+					yield { type: "message_delta", timestamp: Date.now(), contentIndex: 0, contentType: "text", delta };
+					await Bun.sleep(60);
+				}
+				yield { type: "message_end", timestamp: Date.now(), message: { role: "assistant", content: [{ type: "text", text: received }], timestamp } };
+				status = aborted ? "aborted" : "success";
+			} catch (error) {
+				status = "error";
+				throw error;
+			} finally { settle({ status }); }
 		}
-		yield { type: "message_end", timestamp: Date.now(), message: { role: "assistant", content: [{ type: "text", text: received }], timestamp } };
+		return Object.assign(events(), { result });
 	},
 	abort() { aborted = true; },
 };

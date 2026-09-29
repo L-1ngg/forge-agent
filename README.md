@@ -63,6 +63,25 @@ Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive
 
 Restoring a conversation rebuilds its history and model context; it does not replay interrupted tools. Tools must cooperate with cancellation; switching can wait for their cleanup. A damaged conversation is reported and requires a verified copy using the SDK conversion workflow before it can be resumed.
 
+## MCP servers
+
+Forge can connect to local stdio and remote Streamable HTTP or legacy SSE MCP servers. Tools use the existing permission pipeline; Resources, URI templates, Prompts, OAuth, and form/URL elicitation are available through the SDK and `/mcp`. Configure `mcp.servers` in `.forge-agent/config.json` or the user configuration; a project definition replaces the entire server with the same ID.
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
+      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
+    }
+  }
+}
+```
+
+`bun run forge-agent -- --mcp 'status'` needs no model credentials. Use `/mcp login remote` for explicit browser authorization, `/mcp resources files` to browse, and `/mcp use-prompt files review --args '{"topic":"change"}' -- Review this change` to submit a Prompt as context. `--no-mcp` disables connections. Persistent CLI changes require `--mcp 'disable files --scope project'` (or `user`); TUI enable/disable without a scope affects the current Agent.
+
+CLI credentials use the system credential store. Linux requires Secret Service by default; explicitly selecting `mcp.credentialStore: "linux-keyutils"` saves credentials within the current Linux/WSL instance and may require login again after a system restart. There is no silent fallback. SDK stores default to instance-local memory. See [SDK MCP contracts](docs/sdk.en.md#mcp), the runnable [catalog example](examples/mcp-client.ts), and [current acceptance evidence](docs/phases/mcp-client-acceptance.md) for tested behavior and remaining external validation.
+
 ## Local Skills
 
 The CLI discovers `SKILL.md` directories under `<project>/.forge/skills`, `~/.forge/skills`, and the bundled `packages/cli/builtin_skills` collection (currently empty), in that priority order. `<project>` is the current Git worktree root, or the startup directory outside Git. Existing `.forge-agent` configuration and sessions stay in their current locations.
@@ -94,7 +113,7 @@ Missing defaults are empty; a missing explicit override is an error. Set `enable
 
 ## Persistent Memory
 
-Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. TanStack `memoryMiddleware` recalls the index at run start and defers an additional model call to organize a completed turn; useful changes are then written to local Markdown. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Current implementation and acceptance evidence are tracked in the [Issue #37 record](docs/phases/tool-ecosystem-issue-37.md).
+Persistent memory uses ordinary Markdown topics and a short `MEMORY.md` index. TanStack `memoryMiddleware` recalls the index at run start and defers an additional model call to organize a completed turn; useful changes are then written to local Markdown. Current requests and authoritative project documents take precedence over notes; saved notes do not grant permission. Current organizer validation is documented in [Issue #42](docs/phases/memory-organizer-issue-42.md); the original integration and its evidence remain in the [Issue #37 record](docs/phases/tool-ecosystem-issue-37.md).
 
 The CLI enables memory injection and deferred updates by default. You can disable them independently. Memory management tools are internal and do not prompt for permission, including under `permissionMode: "deny-all"`; ordinary file and shell tools still follow their permission policy.
 
@@ -164,7 +183,7 @@ try {
 }
 ```
 
-The SDK starts with in-memory history and no coding tools. The [custom-tool example](examples/embedded-agent.ts) supplies an explicit tool and permission rule:
+The runnable [SDK quickstart](examples/sdk-quickstart.ts) contains the minimal example above. The SDK starts with in-memory history and no coding tools. The [custom-tool example](examples/embedded-agent.ts) supplies an explicit tool and permission rule:
 
 ```bash
 bun examples/embedded-agent.ts
@@ -238,7 +257,7 @@ bun run test:headless
 bun run typecheck:examples
 ```
 
-`check` uses local fixtures, fake credentials, and isolated configuration on both platforms. Linux additionally enforces OS network isolation with `unshare` and `ip`, and needs Python 3 for native network probes. macOS runs the full compatibility suite without OS network isolation or firewall setup. `test:network` is Linux-only. Use `test:contract`, `test:integration`, or `test:cli` for individual groups. Reports and timings, including the isolation mode, are written to `.test-results/`. The opt-in `test:live` probe requires an explicit target and request/time budgets; see the [testing guide](docs/phases/testing-system-implementation.md) (Chinese).
+See [Contributing](CONTRIBUTING.md#local-checks) for platform requirements, focused test groups, and evidence output. Its [scripts and examples guide](CONTRIBUTING.md#scripts-and-examples) distinguishes offline commands from live model experiments.
 
 [SDK guide](docs/sdk.en.md) · [中文 SDK 指南](docs/sdk.md) · [Contributing](CONTRIBUTING.md) · [Internal documentation](docs/README.md) (Chinese)
 
@@ -249,22 +268,3 @@ Design references: [pi](https://github.com/earendil-works/pi) and [grok-build](h
 ## License
 
 [MIT](LICENSE), copyright 2026 L1ngg.
-
-### MCP servers
-
-Forge can connect to local stdio and remote Streamable HTTP or legacy SSE MCP servers. Tools use the existing permission pipeline; Resources, URI templates, Prompts, OAuth, and form/URL elicitation are available through the SDK and `/mcp`. Configure `mcp.servers` in `.forge-agent/config.json` or the user configuration; a project definition replaces the entire server with the same ID.
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
-      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
-    }
-  }
-}
-```
-
-`bun run forge-agent -- --mcp 'status'` needs no model credentials. Use `/mcp login remote` for explicit browser authorization, `/mcp resources files` to browse, and `/mcp use-prompt files review --args '{"topic":"change"}' -- Review this change` to submit a Prompt as context. `--no-mcp` disables connections. Persistent CLI changes require `--mcp 'disable files --scope project'` (or `user`); TUI enable/disable without a scope affects the current Agent.
-
-CLI credentials use the system credential store. Linux requires Secret Service by default; explicitly selecting `mcp.credentialStore: "linux-keyutils"` saves credentials within the current Linux/WSL instance and may require login again after a system restart. There is no silent fallback. SDK stores default to instance-local memory. See [SDK MCP contracts](docs/sdk.en.md#mcp), the runnable [catalog example](examples/mcp-client.ts), and [current acceptance evidence](docs/phases/mcp-client-acceptance.md) for tested behavior and remaining external validation.

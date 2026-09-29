@@ -21,8 +21,12 @@ function parseArgs(argv: string[]): Args {
 	const args: Args = { command };
 	for (let index = 1; index < argv.length; index++) {
 		const value = argv[index]!;
-		if (value === "--out") args.out = argv[++index];
-		else if (value === "--manifest") args.manifest = argv[++index];
+		if (value === "--out" || value === "--manifest") {
+			const path = argv[++index];
+			if (!path || path.startsWith("--")) throw new Error(`${value} requires a path`);
+			if (value === "--out") args.out = path;
+			else args.manifest = path;
+		}
 		else if (!args.expected) args.expected = value;
 		else args.actual = value;
 	}
@@ -39,7 +43,7 @@ class NullBus implements AppRequestBus {
 }
 
 const emptyPort: AppPort = {
-	async *runTurn() {},
+	runTurn() { return { async *[Symbol.asyncIterator]() {}, result: Promise.resolve({ status: "success" as const }) }; },
 };
 
 class MemoryOutput {

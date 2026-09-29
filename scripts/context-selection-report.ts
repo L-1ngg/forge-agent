@@ -36,7 +36,7 @@ const fixture = JSON.parse(fixtureText) as { version: number; cases: Case[] };
 const fixtureHash = createHash("sha256").update(fixtureText).digest("hex");
 const runnerHash = createHash("sha256").update(await Bun.file(new URL("./context-selection-benchmark.ts", import.meta.url)).text()).digest("hex");
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const assert = (condition: unknown, reason: string): asserts condition => { if (!condition) throw new Error(reason); };
+function assert(condition: unknown, reason: string): asserts condition { if (!condition) throw new Error(reason); }
 assert(fixture.version === 2 && fixture.cases.length === 16, "Fixture version/count mismatch");
 assert(baseline.metadata.implementation === "baseline" && candidate.metadata.implementation === "candidate", "Implementation labels mismatch");
 assert(baseline.metadata.split === candidate.metadata.split && baseline.metadata.phase === "run" && candidate.metadata.phase === "run", "Mixed split or phase");
@@ -101,7 +101,7 @@ const distribution = (values: number[]) => {
 };
 function compactionMs(row: Row): number {
 	const spans = new Map<string, { start?: number; end?: number }>();
-	for (const event of row.compactions) if (event.operationId) {
+	for (const event of row.compactions) if (event.operationId && event.timestamp !== undefined) {
 		const span = spans.get(event.operationId) ?? {};
 		if (event.phase === "start") span.start = event.timestamp;
 		if (["end", "error", "skipped"].includes(event.phase ?? "")) span.end = event.timestamp;

@@ -63,6 +63,25 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 
 恢复会话重建历史和模型上下文，不重放中断工具。工具需要配合取消，切换会等待其收尾。损坏会话会报告诊断，需按 SDK 的副本转换流程检查后恢复。
 
+## MCP 服务
+
+Forge 可连接本地 stdio、远程 Streamable HTTP 和旧版 SSE MCP 服务。Tools 走现有权限流程；SDK 与 `/mcp` 提供 Resources、URI templates、Prompts、OAuth 和 form/URL Elicitation。在 `.forge-agent/config.json` 或用户配置中设置 `mcp.servers`；项目配置按同名 server 整条覆盖。
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
+      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
+    }
+  }
+}
+```
+
+`bun run forge-agent -- --mcp 'status'` 无需模型凭据。`/mcp login remote` 显式启动浏览器授权；`/mcp resources files` 浏览目录；`/mcp use-prompt files review --args '{"topic":"change"}' -- 审查这个变更` 将 Prompt 作为上下文提交。`--no-mcp` 禁止连接。CLI 持久修改使用 `--mcp 'disable files --scope project'`（或 `user`）；TUI 不带 scope 的 enable/disable 只改变当前 Agent。
+
+CLI 凭据默认使用系统凭据库，Linux 要求 Secret Service；显式设置 `mcp.credentialStore: "linux-keyutils"` 时只在当前 Linux/WSL 实例内保存，系统重启后可能需要重新登录，不静默 fallback。SDK 默认使用实例内存存储。具体合同见 [SDK MCP](docs/sdk.md#mcp)，可运行[目录示例](examples/mcp-client.ts)；已测行为和未完成的外部验收见[验收证据](docs/phases/mcp-client-acceptance.md)。
+
 ## 本地 Skills
 
 CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skills`、`~/.forge/skills`、产品随附 `packages/cli/builtin_skills`（本轮为空）中的 `SKILL.md` 目录。`<project>` 是当前 Git worktree 根，无 Git 时为启动目录；既有 `.forge-agent` 配置、会话与记忆路径不迁移。
@@ -94,7 +113,7 @@ CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skill
 
 ## 持久记忆
 
-持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。TanStack `memoryMiddleware` 在运行开始召回索引，在成功结束后 deferred 调用现有模型整理本轮内容，再将有价值的变化写入本机 Markdown。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。当前实现与验收证据见 [Issue #37 施工记录](docs/phases/tool-ecosystem-issue-37.md)。
+持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。TanStack `memoryMiddleware` 在运行开始召回索引，在成功结束后 deferred 调用现有模型整理本轮内容，再将有价值的变化写入本机 Markdown。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。当前整理校验见 [Issue #42](docs/phases/memory-organizer-issue-42.md)；原始接入及其证据保留在 [Issue #37 施工记录](docs/phases/tool-ecosystem-issue-37.md)。
 
 CLI 默认启用记忆注入与 deferred 更新，可分别关闭。记忆管理工具是 internal 工具，`permissionMode: "deny-all"` 下也不触发交互授权；普通文件和 shell 工具仍受权限策略约束。
 
@@ -164,7 +183,7 @@ try {
 }
 ```
 
-SDK 默认使用内存历史,不装配 coding 工具。[自定义工具示例](examples/embedded-agent.ts) 显式提供工具和授权规则:
+可运行的 [SDK quickstart](examples/sdk-quickstart.ts) 对应上方最小示例。SDK 默认使用内存历史,不装配 coding 工具。[自定义工具示例](examples/embedded-agent.ts) 显式提供工具和授权规则:
 
 ```bash
 bun examples/embedded-agent.ts
@@ -238,7 +257,7 @@ bun run test:headless
 bun run typecheck:examples
 ```
 
-`check` 在两平台均使用本地 fixtures、假凭据和独立配置。Linux 额外通过 `unshare` 和 `ip` 强制网络隔离，并需要 Python 3 运行原生网络探针；macOS 运行完整兼容性测试，不启用系统网络隔离或配置防火墙。`test:network` 仅支持 Linux。可用 `test:contract`、`test:integration`、`test:cli` 单独运行各组，报告、耗时及隔离模式保存在 `.test-results/`。`test:live` 是独立显式入口，需要指定目标及请求/时间额度；详见[测试指南](docs/phases/testing-system-implementation.md)。
+平台要求、定向测试和证据输出见 [Contributing](CONTRIBUTING.md#local-checks)；[脚本与示例入口](CONTRIBUTING.md#scripts-and-examples) 区分离线命令与真实模型实验。
 
 [中文 SDK](docs/sdk.md) · [English SDK](docs/sdk.en.md) · [贡献说明](CONTRIBUTING.md) · [内部文档](docs/README.md)
 
@@ -249,22 +268,3 @@ bun run typecheck:examples
 ## 许可证
 
 [MIT](LICENSE),copyright 2026 L1ngg。
-
-### MCP 服务
-
-Forge 可连接本地 stdio、远程 Streamable HTTP 和旧版 SSE MCP 服务。Tools 走现有权限流程；SDK 与 `/mcp` 提供 Resources、URI templates、Prompts、OAuth 和 form/URL Elicitation。在 `.forge-agent/config.json` 或用户配置中设置 `mcp.servers`；项目配置按同名 server 整条覆盖。
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
-      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
-    }
-  }
-}
-```
-
-`bun run forge-agent -- --mcp 'status'` 无需模型凭据。`/mcp login remote` 显式启动浏览器授权；`/mcp resources files` 浏览目录；`/mcp use-prompt files review --args '{"topic":"change"}' -- 审查这个变更` 将 Prompt 作为上下文提交。`--no-mcp` 禁止连接。CLI 持久修改使用 `--mcp 'disable files --scope project'`（或 `user`）；TUI 不带 scope 的 enable/disable 只改变当前 Agent。
-
-CLI 凭据默认使用系统凭据库，Linux 要求 Secret Service；显式设置 `mcp.credentialStore: "linux-keyutils"` 时只在当前 Linux/WSL 实例内保存，系统重启后可能需要重新登录，不静默 fallback。SDK 默认使用实例内存存储。具体合同见 [SDK MCP](docs/sdk.md#mcp)，可运行[目录示例](examples/mcp-client.ts)；已测行为和未完成的外部验收见[验收证据](docs/phases/mcp-client-acceptance.md)。

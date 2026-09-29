@@ -6,6 +6,7 @@ created: 2026-09-18
 # 确定性测试体系施工与证据
 
 > 状态:已完成（2026-09-19 核对）。实现与 Linux、三台 macOS 验收证据见下文；Linux 强制断网，macOS 仅提供完整 fixture 兼容性证据，PF 接入已撤回。[Issue #33](https://github.com/L-1ngg/forge-agent/issues/33) 已于 2026-09-18 关闭，需求与验收以该 Issue 为准；规格入口见 [testing-system.md](testing-system.md)。
+> 后续维护：2026-09-29 补齐周边脚本类型检查；本次 Linux 证据单列于下方，不改写 Issue #33 原版本和 macOS 验收。
 
 ## Entry 与设计
 
@@ -64,6 +65,20 @@ live probe 要求 `FORGE_PROBE_PROVIDER`、`FORGE_PROBE_MODEL`、`FORGE_PROBE_AP
 
 ## 验证记录
 
+### 周边脚本检查范围（2026-09-29）
+
+本次文档与周边文件整理将 `tsconfig.automation.json` 的入口改为 `scripts/**/*.ts`，覆盖维护脚本及其测试；`tsconfig.tests.json` 负责根目录 `tests/**/*.ts`，包内检查和示例检查继续使用各自配置。类型检查只检查源码，不执行发布、真实模型实验或探针。
+
+补齐覆盖时同步修复 Markdown 预览和帧导出替身的 `SessionTurn.result`，以及报告断言、可选参数的严格类型错误；生产接口保持不变。历史实验复算使用冻结脚本和源码，不放宽来源校验。验收检查脚本实际覆盖集合、相关脚本行为、离线复算及既有门禁；回退仅需恢复本次配置、脚本和文档，不改变会话格式或实验原始数据内容。
+
+- Ran：Linux x64、Bun 1.3.12；`bun run check` 通过，JUnit 为 contract 541、integration 375、CLI 15，共 931 项通过、0 失败、0 跳过；三个组均为 `network-namespace`。`bun run test:headless`、`bun run typecheck:examples` 通过，全部 22 个脚本文件进入 automation 配置。
+- Ran：Markdown 预览在真实 PTY 中完成一次流式输出、取消第二次输出并正常退出，无运行时类型错误；帧导出/比较的既有测试通过，缺失 `--out`/`--manifest` 参数被拒绝。
+- Ran：冻结 v2 开发集与保留集离线复算均与原报告的汇总、失败和来源信息一致；在临时副本修改 runner 后被来源校验拒绝且未导出报告。复算方法见[实验入口](../research/context-selection/README.md#离线复算-v2)。本次临时副本已删除，原始实验内容不变。
+- Not run / Why：未调用真实模型、重跑历史付费实验或执行 macOS/Windows 验收；本次修改文档、配置和维护脚本。
+- Risk：Linux PTY 检查不替代外层终端人工体验；旧模型样例及复算结果不证明当前实现的模型质量。冻结复算要求本地可读取记录中的 Git 基线，源码压缩包或缺少历史的浅克隆不能直接复算。
+
+### Issue #33 原版本证据
+
 当前简化版本的 `bun run check`、`bun run test:headless`、`bun run typecheck:examples` 在以下环境全部通过；各次 check 均为 623 pass / 0 fail（495 contract、116 integration、12 CLI）。没有自动重跑掩盖失败。
 
 | 环境 | contract / integration / cli 耗时 | 网络证据 |
@@ -106,4 +121,4 @@ Apple XNU 的公开调用路径在 `solisten` 前执行 `mac_socket_check_listen
 
 PF 的三台边界原型 [35343687658](https://github.com/L-1ngg/forge-agent/actions/runs/35343687658) 通过原生/Bun/Bash/CLI 与规则清理检查，但正式接入因 anchor 名称长度限制失败；审查还指出现有规则提前放行和安装期信号清理缺口。operator 随后拒绝该复杂度并确认简化方案。因此 PF 接入与专用探针已撤回，不再继续 PF、系统 DNS 或 Seatbelt 调查，不将原型结果记作正式验收。
 
-operator 已授权一次临时分支 bootstrap 提交 `bd9919d091a91412b8e943150a14da91817e65b2`，后续通过 dispatch 输入传递未提交补丁，避免反复提交。入口与运行记录见 [诊断入口方案](../../review-notes/2026-09-18-issue33-actions-diagnostic-plan.md)。最终验收后已删除临时诊断分支和 bootstrap checkout，复现器移入本地证据备份；Actions 记录与必要实验材料保留在 `.git/task-backups/issue33-actions-bootstrap-20260918/`。清理时本地与远端 `master` 均保持基线；其后 operator 授权正式提交推送，交付版本以 Git 历史及对应 CI 运行记录为准。
+operator 已授权一次临时分支 bootstrap 提交 `bd9919d091a91412b8e943150a14da91817e65b2`，后续通过 dispatch 输入传递未提交补丁，避免反复提交。共享运行入口见上述 [最终三台 runner 验证](https://github.com/L-1ngg/forge-agent/actions/runs/35346406650)及本节历史运行链接。最终验收后已删除临时诊断分支和 bootstrap checkout，复现器移入本地证据备份；`.git/task-backups/issue33-actions-bootstrap-20260918/` 与 `review-notes/` 仅为操作者本地副本，不随克隆分发，不能作为其他读者的唯一证据入口。清理时本地与远端 `master` 均保持基线；其后 operator 授权正式提交推送，交付版本以 Git 历史及对应 CI 运行记录为准。远端 Actions 日志和 artifacts 的后续可用性受 GitHub 保留期限影响，本次文档整理不补造缺失的原始记录。

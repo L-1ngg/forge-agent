@@ -1,6 +1,8 @@
 # 持久记忆真实模型验收
 
-> 状态:质量/估算成本门槛通过(2026-09-17)，包含一次未改实现与样本的传输补跑。需求见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，预先确定的发布门槛与软件证据见[历史施工图](../../archive/phases/persistent-memory.md)。本页保存旧实现的实验结果，不另定义当前验收标准。
+> 状态:已归档(2026-09-29)。仅证明 Issue #32 的旧会话内实现；当前 deferred 接入与后续修复见 [Issue #37](../../../phases/tool-ecosystem-issue-37.md)、[Issue #42](../../../phases/memory-organizer-issue-42.md)。
+
+> 历史状态:质量/估算成本门槛通过(2026-09-17)，包含一次未改实现与样本的传输补跑。需求见 [Issue #32](https://github.com/L-1ngg/forge-agent/issues/32)，预先确定的发布门槛与软件证据见[历史施工图](../../phases/persistent-memory.md)。本页保存旧实现的实验结果，不另定义当前验收标准。
 
 ## 方法与复现
 
@@ -10,7 +12,7 @@
 
 语义判定由本次实现 Agent 逐场景核对完整回答、笔记与冻结 rubric，未以文件格式或关键词匹配自动宣布通过，也未引入独立人工评审。基线是跨会话不带记忆/历史，不用于证明持久记忆优于所有其他检索系统。样本较小，不推断长期生产效果。
 
-复现（付费，**不会**由测试或 CI 自动执行）：
+历史复现须先在独立 checkout 检出 Issue #32 交付提交 `a1e2ce6a5868a47a8fac29e591a2241ed5d8a8cd`，安装该版本锁定的依赖。当前 `scripts/memory-quality.ts` 已迁移至官方 deferred 整理，不会复现本页的旧会话内方案。以下命令只属于历史版本（付费，**不会**由测试或 CI 自动执行）：
 
 ```sh
 bun scripts/memory-quality.ts --split development --out /tmp/memory-development.json

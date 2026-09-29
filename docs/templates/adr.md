@@ -5,7 +5,7 @@ created: YYYY-MM-DD
 
 # ADR-NNN: <标题>
 
-> 状态:提议 | 已批准 | 被 NNN 取代(YYYY-MM-DD)
+> 状态:草稿 | 已批准 | 被 NNN 取代(YYYY-MM-DD)
 > 参与者:<谁发起、谁评审>
 
 ## 背景

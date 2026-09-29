@@ -1,0 +1,2599 @@
+{
+  "split": "holdout",
+  "fixtureHash": "2e93bdf70996b3f8d0d8724651e83c977731f2d8eb1671f2b618db5bad83070d",
+  "implementationHash": "3c4b77f93524fa85125984d37406396f99dd7e850c9b009b158245f8d10cf943",
+  "harnessHash": "e11e580cd2a884f4111c0c6260fa0800ae1d5c19b7dc6d1d813a4e1679f226e2",
+  "provider": "xai",
+  "model": "grok-4.6",
+  "thinking": "off",
+  "outputLimit": 2048,
+  "retryMaxRetries": 1,
+  "compactionEnabled": false,
+  "totalRequests": 100,
+  "conservativeReservedCostUsd": 2.338068000000001,
+  "note": "Raw evidence, not an automatic semantic pass. Review notes and responses against frozen rubrics. Automatic context compaction is disabled to isolate memory quality; software tests cover integration. Usage costs use catalog prices and are not an invoice.",
+  "rows": [
+    {
+      "id": "v2-project",
+      "split": "holdout",
+      "mode": "explicit",
+      "scope": "project",
+      "learn": "请保存 Lyra 项目决定：沙盒导入最多重试 4 次，只针对 sandbox 环境；线上上限还在讨论，不要推断。",
+      "recall": {
+        "answer": "**Sandbox：** 导入最多重试 **4 次**。\n\n**线上/生产：** 重试上限还在讨论中，目前没有定论，不能用 sandbox 的 4 次去推断。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790526807768
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1c555de8-8ca3-4892-9a4b-981fc9c843b4-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"lyra/sandbox-import-retries.md\\\",\\\"text\\\":\\\"# Sandbox import retries (Lyra)\\\\n\\\\n- Sandbox import retries: at most 4 times.\\\\n- Scope: sandbox only.\\\\n- Production/online retry limit: still under discussion; do not infer from the sandbox cap.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:33:07.912Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"690345a8-9978-4a4e-bfb0-16cd167f0069\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-project/project\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:33:27.748Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:33:07.912Z\\\",\\\"sessionId\\\":\\\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\\\",\\\"entryId\\\":\\\"690345a8-9978-4a4e-bfb0-16cd167f0069\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-project/project\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"lyra/sandbox-import-retries.md\",\"text\":\"# Sandbox import retries (Lyra)\\n\\n- Sandbox import retries: at most 4 times.\\n- Scope: sandbox only.\\n- Production/online retry limit: still under discussion; do not infer from the sandbox cap.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:33:07.912Z\\\",\\\"sessionId\\\":\\\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\\\",\\\"entryId\\\":\\\"690345a8-9978-4a4e-bfb0-16cd167f0069\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-project/project\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:33:27.748Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:33:07.912Z\",\"sessionId\":\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\",\"entryId\":\"690345a8-9978-4a4e-bfb0-16cd167f0069\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-project/project\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790526814573
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790526837938
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 3290,
+        "outputTokens": 207,
+        "costUsd": 0.004941999999999999,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 30185
+      },
+      "rubric": "sandbox at most 4 retries; online limit undecided; project scope",
+      "baselineLearn": {
+        "answer": "已记下这条 Lyra 决定，范围按你给的原文保存，不外推：\n\n- **沙盒导入重试**：最多 **4 次**\n- **适用范围**：仅 **sandbox**\n- **线上上限**：仍在讨论，**不推断、不定稿**",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5917a436-6982-417d-9b8b-b3f6e9a857b3-0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"45645dc2-82b0-40a2-9ec4-96c0d670b28f\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"请保存 Lyra 项目决定：沙盒导入最多重试 4 次，只针对 sandbox 环境；线上上限还在讨论，不要推断。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"45645dc2-82b0-40a2-9ec4-96c0d670b28f\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"请保存 Lyra 项目决定：沙盒导入最多重试 4 次，只针对 sandbox 环境；线上上限还在讨论，不要推断。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526779847
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-5917a436-6982-417d-9b8b-b3f6e9a857b3-1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"45645dc2-82b0-40a2-9ec4-96c0d670b28f\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"请保存 Lyra 项目决定：沙盒导入最多重试 4 次，只针对 sandbox 环境；线上上限还在讨论，不要推断。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"45645dc2-82b0-40a2-9ec4-96c0d670b28f\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"请保存 Lyra 项目决定：沙盒导入最多重试 4 次，只针对 sandbox 环境；线上上限还在讨论，不要推断。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526779847
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 2067,
+        "outputTokens": 507,
+        "costUsd": 0.006215999999999999,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 10412
+      },
+      "baselineRecall": {
+        "answer": "按已记下的 Lyra 决定：\n\n- **Sandbox 导入**：最多 **4 次**\n- **线上导入**：上限仍在讨论，**没有定稿，不能按 sandbox 推断**",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 908,
+        "outputTokens": 127,
+        "costUsd": 0.0023859999999999997,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 2806
+      },
+      "learning": {
+        "answer": "已保存到项目记忆：`lyra/sandbox-import-retries.md`\n\n- 沙盒导入最多重试 4 次，仅限 sandbox\n- 线上上限仍在讨论，不会据此推断",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790526787919
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-f03a4c20-d884-4d25-983a-5144aedbedc8-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526791425
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-f03a4c20-d884-4d25-983a-5144aedbedc8-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526791425
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-f03a4c20-d884-4d25-983a-5144aedbedc8-2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526791425
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d9321c4b-9117-43df-bb3c-5421da57cb65-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526793063
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1b79984f-b70e-409d-b195-92f35940276b-4",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"lyra/sandbox-import-retries.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"lyra/sandbox-import-retries.md\"}}",
+            "isError": false,
+            "timestamp": 1790526797571
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1638,
+              "completionTokens": 593,
+              "totalTokens": 2231,
+              "promptTokensDetails": {
+                "cachedTokens": 128
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 423
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "lyra/sandbox-import-retries.md",
+                  "usage": {
+                    "promptTokens": 1638,
+                    "completionTokens": 593,
+                    "totalTokens": 2231,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 423
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1638,
+                    "completionTokens": 593,
+                    "totalTokens": 2231,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 423
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790526807752
+          }
+        ],
+        "requests": 5,
+        "usageReports": 4,
+        "inputTokens": 5860,
+        "outputTokens": 458,
+        "costUsd": 0.012164,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1638,
+        "organizerOutputTokens": 593,
+        "organizerCostUsd": 0.006642,
+        "elapsedMs": 19843
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Sandbox import retries](lyra/sandbox-import-retries.md) — sandbox import max 4 retries; production limit still under discussion, do not infer.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:33:07.912Z\",\"sessionId\":\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\",\"entryId\":\"690345a8-9978-4a4e-bfb0-16cd167f0069\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-project/project\"} -->\n",
+        "project/lyra/sandbox-import-retries.md": "# Sandbox import retries (Lyra)\n\n- Sandbox import retries: at most 4 times.\n- Scope: sandbox only.\n- Production/online retry limit: still under discussion; do not infer from the sandbox cap.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:33:07.912Z\",\"sessionId\":\"f5eff0bd-0527-47ba-80d3-f685f4b502bc\",\"entryId\":\"690345a8-9978-4a4e-bfb0-16cd167f0069\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-project/project\"} -->\n"
+      }
+    },
+    {
+      "id": "v2-user",
+      "split": "holdout",
+      "mode": "explicit",
+      "scope": "user",
+      "learn": "记住我的跨项目习惯：排查网络问题时先给三步以内的检查清单，命令保持原文；写正式法律文件时不套用这个清单结构。",
+      "recall": {
+        "answer": "按你存下来的习惯，两类写法要分开：\n\n**网络排查**\n- 开头用一份**最多 3 步**的清单。\n- 命令保持**原文**，不翻译、不改写。\n\n**正式法律文件**\n- **不要**用上面那种排查清单结构。\n\n也就是说：短清单只给排障用；法律文书走正式体例，不要套排查步骤。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "user/MEMORY.md"
+            ],
+            "timestamp": 1790526864911
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e684c394-78e1-4283-a55a-cba43895885a-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"habits/troubleshooting-and-legal.md\\\",\\\"text\\\":\\\"# Troubleshooting vs legal writing\\\\n\\\\n- Network troubleshooting: start with a checklist of at most 3 steps; keep commands in original form (do not translate or rewrite).\\\\n- Formal legal documents: do not use this checklist structure.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:34:06.483Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"user\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-user/user\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:34:24.896Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:06.483Z\\\",\\\"sessionId\\\":\\\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\\\",\\\"entryId\\\":\\\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\\\",\\\"scope\\\":\\\"user\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-user/user\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"user\",\"path\":\"habits/troubleshooting-and-legal.md\",\"text\":\"# Troubleshooting vs legal writing\\n\\n- Network troubleshooting: start with a checklist of at most 3 steps; keep commands in original form (do not translate or rewrite).\\n- Formal legal documents: do not use this checklist structure.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:06.483Z\\\",\\\"sessionId\\\":\\\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\\\",\\\"entryId\\\":\\\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\\\",\\\"scope\\\":\\\"user\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-user/user\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:34:24.896Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:06.483Z\",\"sessionId\":\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\",\"entryId\":\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-user/user\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790526871695
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790526876274
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 3330,
+        "outputTokens": 422,
+        "costUsd": 0.0070799999999999995,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 11372
+      },
+      "rubric": "network troubleshooting checklist at most 3 steps; commands unchanged; legal document exception; user scope",
+      "baselineLearn": {
+        "answer": "已记下这条跨项目习惯：\n\n- **排查网络问题**：先给 **不超过三步** 的检查清单，命令保持原文\n- **写正式法律文件**：不套用这个清单结构",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 786,
+        "outputTokens": 240,
+        "costUsd": 0.0022440000000000003,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 5532
+      },
+      "baselineRecall": {
+        "answer": "按你定的跨项目习惯：\n\n**网络排查**  \n先给不超过三步的检查清单，命令保持原文。\n\n**正式法律文件**  \n不套用上述清单结构。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 880,
+        "outputTokens": 131,
+        "costUsd": 0.0023539999999999998,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 3006
+      },
+      "learning": {
+        "answer": "已记住这条跨项目习惯：\n\n- **网络排查**：先给三步以内检查清单，命令保持原文。\n- **正式法律文件**：不套用该清单结构。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790526846486
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-afb52c4b-5771-41f4-935a-23793c3b6fe4-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526849715
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-afb52c4b-5771-41f4-935a-23793c3b6fe4-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526849715
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-97a4d4bd-86ce-4800-8570-972b9ad08dfc-2",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"habits/troubleshooting-and-legal.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"user\",\"path\":\"habits/troubleshooting-and-legal.md\"}}",
+            "isError": false,
+            "timestamp": 1790526853046
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1317,
+              "completionTokens": 692,
+              "totalTokens": 2009,
+              "promptTokensDetails": {
+                "cachedTokens": 128
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 520
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "user",
+                  "path": "habits/troubleshooting-and-legal.md",
+                  "usage": {
+                    "promptTokens": 1317,
+                    "completionTokens": 692,
+                    "totalTokens": 2009,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 520
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "user",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1317,
+                    "completionTokens": 692,
+                    "totalTokens": 2009,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 520
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790526864900
+          }
+        ],
+        "requests": 4,
+        "usageReports": 3,
+        "inputTokens": 4173,
+        "outputTokens": 336,
+        "costUsd": 0.0067139999999999995,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1317,
+        "organizerOutputTokens": 692,
+        "organizerCostUsd": 0.006594,
+        "elapsedMs": 18421
+      },
+      "notes": {
+        "user/MEMORY.md": "# User memory\n\n- [Troubleshooting vs legal writing](habits/troubleshooting-and-legal.md) — network issues: ≤3-step checklist with original commands; do not use that structure for formal legal documents.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:06.483Z\",\"sessionId\":\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\",\"entryId\":\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-user/user\"} -->\n",
+        "user/habits/troubleshooting-and-legal.md": "# Troubleshooting vs legal writing\n\n- Network troubleshooting: start with a checklist of at most 3 steps; keep commands in original form (do not translate or rewrite).\n- Formal legal documents: do not use this checklist structure.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:06.483Z\",\"sessionId\":\"9705ce5a-dae7-46d6-81bd-f3dd83d2f2f3\",\"entryId\":\"570a88ff-3b7f-4f25-9e93-2c4d712a9c54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-user/user\"} -->\n"
+      }
+    },
+    {
+      "id": "v2-error",
+      "split": "holdout",
+      "mode": "explicit",
+      "scope": "project",
+      "learn": "保存已确认经验：只有出现 E_LOCK_86 且 config/worker.toml 仍用旧锁模式时，先确认 owner 进程已退出再重建锁。仅在离线模拟器验证过，生产未验证。",
+      "recall": {
+        "answer": "**适用条件（须同时满足）**\n- 出现 `E_LOCK_86`\n- `config/worker.toml` 仍使用旧锁模式\n\n**处理顺序**\n1. 先确认上述两个条件都成立  \n2. 再确认锁的 owner 进程已经退出  \n3. 最后才重建锁  \n\n**验证范围**\n- 仅在离线 simulator 上验证过  \n- 生产环境未验证",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790526915967
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-4b0b535f-d8f5-48d3-aa3d-7dcf70e5077c-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# Project memory\\\\n\\\\n- [Lock recovery (E_LOCK_86)](ops/lock-recovery.md) — only with `E_LOCK_86` and old lock mode in `config/worker.toml`: confirm owner process exited, then rebuild lock. Simulator-only; production unverified.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:34:46.822Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:35:15.948Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:46.822Z\\\",\\\"sessionId\\\":\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\",\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# Project memory\\n\\n- [Lock recovery (E_LOCK_86)](ops/lock-recovery.md) — only with `E_LOCK_86` and old lock mode in `config/worker.toml`: confirm owner process exited, then rebuild lock. Simulator-only; production unverified.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:46.822Z\\\",\\\"sessionId\\\":\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\",\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:35:15.948Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:46.822Z\",\"sessionId\":\"e0719885-a25c-45d2-9407-543195b8f79b\",\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-error/project\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790526923353
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-4b0b535f-d8f5-48d3-aa3d-7dcf70e5077c-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# Project memory\\\\n\\\\n- [Lock recovery (E_LOCK_86)](ops/lock-recovery.md) — only with `E_LOCK_86` and old lock mode in `config/worker.toml`: confirm owner process exited, then rebuild lock. Simulator-only; production unverified.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"ki\\\",\\\"offset\\\":0},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"ops/lock-recovery.md\\\",\\\"text\\\":\\\"# Lock recovery (E_LOCK_86)\\\\n\\\\nOnly when **both** are true:\\\\n- `E_LOCK_86` appears\\\\n- `config/worker.toml` still uses the old lock mode\\\\n\\\\nthen confirm the owner process has already exited before rebuilding the lock.\\\\n\\\\nProvenance: verified only on the offline sim\\\",\\\"offset\\\":0}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# Project memory\\n\\n- [Lock recovery (E_LOCK_86)](ops/lock-recovery.md) — only with `E_LOCK_86` and old lock mode in `config/worker.toml`: confirm owner process exited, then rebuild lock. Simulator-only; production unverified.\\n\\n\\n<!-- forge-memory-source {\\\"ki\",\"offset\":0},{\"scope\":\"project\",\"path\":\"ops/lock-recovery.md\",\"text\":\"# Lock recovery (E_LOCK_86)\\n\\nOnly when **both** are true:\\n- `E_LOCK_86` appears\\n- `config/worker.toml` still uses the old lock mode\\n\\nthen confirm the owner process has already exited before rebuilding the lock.\\n\\nProvenance: verified only on the offline sim\",\"offset\":0}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526923355
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-9ca59ddd-65c8-48f1-b81a-7da874a2ff65-2",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"ops/lock-recovery.md\\\",\\\"text\\\":\\\"# Lock recovery (E_LOCK_86)\\\\n\\\\nOnly when **both** are true:\\\\n- `E_LOCK_86` appears\\\\n- `config/worker.toml` still uses the old lock mode\\\\n\\\\nthen confirm the owner process has already exited before rebuilding the lock.\\\\n\\\\nProvenance: verified only on the offline simulator; not verified in production.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:34:46.822Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:35:15.948Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:46.822Z\\\",\\\"sessionId\\\":\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\",\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"ops/lock-recovery.md\",\"text\":\"# Lock recovery (E_LOCK_86)\\n\\nOnly when **both** are true:\\n- `E_LOCK_86` appears\\n- `config/worker.toml` still uses the old lock mode\\n\\nthen confirm the owner process has already exited before rebuilding the lock.\\n\\nProvenance: verified only on the offline simulator; not verified in production.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:34:46.822Z\\\",\\\"sessionId\\\":\\\"e0719885-a25c-45d2-9407-543195b8f79b\\\",\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-error/project\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:35:15.948Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:46.822Z\",\"sessionId\":\"e0719885-a25c-45d2-9407-543195b8f79b\",\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-error/project\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790526925134
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790526928654
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 6314,
+        "outputTokens": 436,
+        "costUsd": 0.01486,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 12701
+      },
+      "rubric": "E_LOCK_86 AND old lock mode in config/worker.toml; confirm owner exited before rebuild; offline simulator only; production unverified",
+      "baselineLearn": {
+        "answer": "已记下这条已确认经验：\n\n**适用条件（须同时满足）**  \n- 出现 `E_LOCK_86`  \n- `config/worker.toml` 仍是旧锁模式  \n\n**处理顺序**  \n先确认 owner 进程已退出，再重建锁。\n\n**验证范围**  \n仅离线模拟器验证过，生产环境未验证。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 805,
+        "outputTokens": 425,
+        "costUsd": 0.003968,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 7294
+      },
+      "baselineRecall": {
+        "answer": "**适用条件（须同时满足）**\n- 出现 `E_LOCK_86`\n- `config/worker.toml` 仍用旧锁模式\n\n**处理顺序**\n先确认 owner 进程已退出，再重建锁。\n\n**验证范围**\n仅离线模拟器验证过，生产未验证。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 1066,
+        "outputTokens": 186,
+        "costUsd": 0.0024800000000000004,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 3248
+      },
+      "learning": {
+        "answer": "已写入项目记忆 `ops/lock-recovery.md`。\n\n要点：\n- 仅当同时出现 `E_LOCK_86` 且 `config/worker.toml` 仍是旧锁模式时，才先确认 owner 进程已退出，再重建锁\n- 仅离线模拟器验证过，生产未验证",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790526886826
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fb28a8ae-527c-4fc8-96c9-2fb42ea19cd2-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"保存已确认经验：只有出现 E_LOCK_86 且 config/worker.toml 仍用旧锁模式时，先确认 owner 进程已退出再重建锁。仅在离线模拟器验证过，生产未验证。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"保存已确认经验：只有出现 E_LOCK_86 且 config/worker.toml 仍用旧锁模式时，先确认 owner 进程已退出再重建锁。仅在离线模拟器验证过，生产未验证。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526894133
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fb28a8ae-527c-4fc8-96c9-2fb42ea19cd2-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526894133
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fb28a8ae-527c-4fc8-96c9-2fb42ea19cd2-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526894133
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1d7341c2-5a7c-431e-a303-2045f5ec68d4-5",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"4c28fb53-2827-43fd-af65-60c0189f7878\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"保存已确认经验：只有出现 E_LOCK_86 且 config/worker.toml 仍用旧锁模式时，先确认 owner 进程已退出再重建锁。仅在离线模拟器验证过，生产未验证。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"保存已确认经验：只有出现 E_LOCK_86 且 config/worker.toml 仍用旧锁模式时，先确认 owner 进程已退出再重建锁。仅在离线模拟器验证过，生产未验证。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526896916
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1d7341c2-5a7c-431e-a303-2045f5ec68d4-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526896917
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1d7341c2-5a7c-431e-a303-2045f5ec68d4-4",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526896917
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-82245f34-c0b1-491e-aae8-2c1459100bda-8",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526899852
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-82245f34-c0b1-491e-aae8-2c1459100bda-7",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526899852
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-82245f34-c0b1-491e-aae8-2c1459100bda-6",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-smwc1w/v2-error/project/ops/lock-recovery.md'\"}],\"details\":{},\"isError\":true}",
+            "isError": true,
+            "timestamp": 1790526899852
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fe9ea819-ede7-45ae-a208-dccf54d6e27c-9",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"ops/lock-recovery.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"ops/lock-recovery.md\"}}",
+            "isError": false,
+            "timestamp": 1790526906640
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1848,
+              "completionTokens": 555,
+              "totalTokens": 2403,
+              "promptTokensDetails": {
+                "cachedTokens": 384
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 336
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "ops/lock-recovery.md",
+                  "usage": {
+                    "promptTokens": 1848,
+                    "completionTokens": 555,
+                    "totalTokens": 2403,
+                    "promptTokensDetails": {
+                      "cachedTokens": 384
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 336
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1848,
+                    "completionTokens": 555,
+                    "totalTokens": 2403,
+                    "promptTokensDetails": {
+                      "cachedTokens": 384
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 336
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790526915952
+          }
+        ],
+        "requests": 6,
+        "usageReports": 5,
+        "inputTokens": 9647,
+        "outputTokens": 993,
+        "costUsd": 0.013731999999999998,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1848,
+        "organizerOutputTokens": 555,
+        "organizerCostUsd": 0.00645,
+        "elapsedMs": 29135
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Lock recovery (E_LOCK_86)](ops/lock-recovery.md) — only with `E_LOCK_86` and old lock mode in `config/worker.toml`: confirm owner process exited, then rebuild lock. Simulator-only; production unverified.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:46.822Z\",\"sessionId\":\"e0719885-a25c-45d2-9407-543195b8f79b\",\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-error/project\"} -->\n",
+        "project/ops/lock-recovery.md": "# Lock recovery (E_LOCK_86)\n\nOnly when **both** are true:\n- `E_LOCK_86` appears\n- `config/worker.toml` still uses the old lock mode\n\nthen confirm the owner process has already exited before rebuilding the lock.\n\nProvenance: verified only on the offline simulator; not verified in production.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:34:46.822Z\",\"sessionId\":\"e0719885-a25c-45d2-9407-543195b8f79b\",\"entryId\":\"4c28fb53-2827-43fd-af65-60c0189f7878\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-error/project\"} -->\n"
+      }
+    },
+    {
+      "id": "v2-authority",
+      "split": "holdout",
+      "mode": "automatic",
+      "scope": "project",
+      "learn": "维护者确认当前项目离线分发包为 ember-airgap.tgz，仅供断网机房，权威说明在 docs/bundles.md。请用一句话整理这个结论，不需要改仓库文档。",
+      "recall": {
+        "answer": "断网机房应使用 **`ember-airgap.tgz`**，且仅限这类环境。\n\n权威说明在仓库的 **`docs/bundles.md`**（项目记忆里记为维护者确认的位置）。\n\n**没有。** 我没有改过那份仓库说明，也改不了仓库文件。当前只有项目记忆指向它，不能当成已经提交的文档改动。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790526961861
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-91caef74-5fb8-4141-94f7-cdb730d5151e-2",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\",\\\"text\\\":\\\"# Offline distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794cc828-bd36-47e6-b621-d20940f8a8b0\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:36:01.840Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"sessionId\\\":\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\",\\\"entryId\\\":\\\"794cc828-bd36-47e6-b621-d20940f8a8b0\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"offline-distribution.md\",\"text\":\"# Offline distribution\\n\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"sessionId\\\":\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\",\\\"entryId\\\":\\\"794cc828-bd36-47e6-b621-d20940f8a8b0\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:36:01.840Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:35:34.126Z\",\"sessionId\":\"dffadb8f-cf3f-49fa-ba71-a935f5274665\",\"entryId\":\"794cc828-bd36-47e6-b621-d20940f8a8b0\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790526971101
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-91caef74-5fb8-4141-94f7-cdb730d5151e-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# Project memory\\\\n\\\\n- [Offline distribution](offline-distribution.md) — bundle is `ember-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"session\\\",\\\"offset\\\":0},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\",\\\"text\\\":\\\"# Offline distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794cc828-bd36-4\\\",\\\"offset\\\":0}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# Project memory\\n\\n- [Offline distribution](offline-distribution.md) — bundle is `ember-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"session\",\"offset\":0},{\"scope\":\"project\",\"path\":\"offline-distribution.md\",\"text\":\"# Offline distribution\\n\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"sessionId\\\":\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\",\\\"entryId\\\":\\\"794cc828-bd36-4\",\"offset\":0}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526971103
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-91caef74-5fb8-4141-94f7-cdb730d5151e-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794cc828-bd36-47e6-b621-d209\\\",\\\"offset\\\":82},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\",\\\"text\\\":\\\"ine distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794cc828-bd36-47e6-b6\\\",\\\"offset\\\":6}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"sessionId\\\":\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\",\\\"entryId\\\":\\\"794cc828-bd36-47e6-b621-d209\",\"offset\":82},{\"scope\":\"project\",\"path\":\"offline-distribution.md\",\"text\":\"ine distribution\\n\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:35:34.126Z\\\",\\\"sessionId\\\":\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\",\\\"entryId\\\":\\\"794cc828-bd36-47e6-b6\",\"offset\":6}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526971103
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c9717d0c-6a71-42a8-a98e-2e50b6c06099-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"cece37bb-fe12-475f-a956-2f9449d42528\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":68,\\\"text\\\":\\\"e distribution\\\\\\\\n\\\\\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"sessionId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"entryId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"794\\\"},{\\\"entryId\\\":\\\"e9c6fc1f-911c-4288-a0e6-a5bd59ddac23\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":58,\\\"text\\\":\\\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"sessionId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"entryId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"794cc828-b\\\"},{\\\"entryId\\\":\\\"758f8e57-9ee1-4cfd-95d8-5940f8110deb\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":142,\\\"text\\\":\\\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"session\\\\\\\",\\\\\\\"offset\\\\\\\":0},{\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"path\\\\\\\":\\\\\\\"offline-distribution.md\\\\\\\",\\\\\\\"tex\\\"},{\\\"entryId\\\":\\\"386473bb-89e2-4942-807c-345ce3719142\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":128,\\\"text\\\":\\\"imit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"docs/bundles.md\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call read_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"path\\\\\\\":\\\\\\\"offline-distribution.md\\\\\\\",\\\\\\\"offset\\\\\\\":0,\\\\\\\"limit\\\\\\\":4096}\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"cece37bb-fe12-475f-a956-2f9449d42528\",\"role\":\"toolResult\",\"isError\":false,\"offset\":68,\"text\":\"e distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794\"},{\"entryId\":\"e9c6fc1f-911c-4288-a0e6-a5bd59ddac23\",\"role\":\"toolResult\",\"isError\":false,\"offset\":58,\"text\":\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba71-a935f5274665\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"794cc828-b\"},{\"entryId\":\"758f8e57-9ee1-4cfd-95d8-5940f8110deb\",\"role\":\"toolResult\",\"isError\":false,\"offset\":142,\"text\":\"mber-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"session\\\",\\\"offset\\\":0},{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\",\\\"tex\"},{\"entryId\":\"386473bb-89e2-4942-807c-345ce3719142\",\"role\":\"assistant\",\"isError\":false,\"offset\":128,\"text\":\"imit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"docs/bundles.md\\\",\\\"limit\\\":10}\\n[tool call read_memory] {\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\",\\\"offset\\\":0,\\\"limit\\\":4096}\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526976404
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c9717d0c-6a71-42a8-a98e-2e50b6c06099-4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"cece37bb-fe12-475f-a956-2f9449d42528\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":34,\\\"text\\\":\\\"-distribution.md\\\\\\\",\\\\\\\"text\\\\\\\":\\\\\\\"# Offline distribution\\\\\\\\n\\\\\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"sessionId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"dffadb8f-cf3f-49fa-ba7\\\"},{\\\"entryId\\\":\\\"e9c6fc1f-911c-4288-a0e6-a5bd59ddac23\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":375,\\\"text\\\":\\\"ffline-distribution.md\\\\\\\",\\\\\\\"text\\\\\\\":\\\\\\\"ine distribution\\\\\\\\n\\\\\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"sessionId\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"dffadb8f-cf3f-49fa-ba7\\\"},{\\\"entryId\\\":\\\"758f8e57-9ee1-4cfd-95d8-5940f8110deb\\\",\\\"role\\\":\\\"toolResult\\\",\\\"isError\\\":false,\\\"offset\\\":77,\\\"text\\\":\\\"n- [Offline distribution](offline-distribution.md) — bundle is `ember-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\\\\\n\\\\\\\\n\\\\\\\\n<!-- forge-memory-source {\\\\\\\\\\\\\\\"kind\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"session\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"timestamp\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\\\\\\\\\",\\\\\\\\\\\\\\\"session\\\\\\\",\\\\\\\"of\\\"},{\\\"entryId\\\":\\\"386473bb-89e2-4942-807c-345ce3719142\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":32,\\\"text\\\":\\\"库说明是否已改过。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"ember-airgap bundles offline\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"docs/bundles.md\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call read_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"path\\\\\\\":\\\\\\\"offline-distribu\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"cece37bb-fe12-475f-a956-2f9449d42528\",\"role\":\"toolResult\",\"isError\":false,\"offset\":34,\"text\":\"-distribution.md\\\",\\\"text\\\":\\\"# Offline distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba7\"},{\"entryId\":\"e9c6fc1f-911c-4288-a0e6-a5bd59ddac23\",\"role\":\"toolResult\",\"isError\":false,\"offset\":375,\"text\":\"ffline-distribution.md\\\",\\\"text\\\":\\\"ine distribution\\\\n\\\\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"dffadb8f-cf3f-49fa-ba7\"},{\"entryId\":\"758f8e57-9ee1-4cfd-95d8-5940f8110deb\",\"role\":\"toolResult\",\"isError\":false,\"offset\":77,\"text\":\"n- [Offline distribution](offline-distribution.md) — bundle is `ember-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:35:34.126Z\\\\\\\",\\\\\\\"session\\\",\\\"of\"},{\"entryId\":\"386473bb-89e2-4942-807c-345ce3719142\",\"role\":\"assistant\",\"isError\":false,\"offset\":32,\"text\":\"库说明是否已改过。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"ember-airgap bundles offline\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"docs/bundles.md\\\",\\\"limit\\\":10}\\n[tool call read_memory] {\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribu\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790526976404
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c9717d0c-6a71-42a8-a98e-2e50b6c06099-5",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526976404
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790526989240
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 8334,
+        "outputTokens": 1237,
+        "costUsd": 0.018138,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 27394
+      },
+      "rubric": "ember-airgap.tgz; disconnected machine rooms only; authoritative repository path docs/bundles.md retained as a reference; memory topic separately named; never claim the repository document was edited",
+      "baselineLearn": {
+        "answer": "当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用，权威说明见 `docs/bundles.md`。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 857,
+        "outputTokens": 115,
+        "costUsd": 0.0016359999999999999,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 2404
+      },
+      "baselineRecall": {
+        "answer": "断网机房应使用 `ember-airgap.tgz`。权威说明在 `docs/bundles.md`。我没有改过那份仓库说明。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 763,
+        "outputTokens": 168,
+        "costUsd": 0.001766,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 3058
+      },
+      "learning": {
+        "answer": "当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用，权威说明见 `docs/bundles.md`。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790526934136
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-4617dbe1-4636-443e-bb98-736ccb2e04e4-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526937419
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-4617dbe1-4636-443e-bb98-736ccb2e04e4-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526937419
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6a4cd82c-72d9-49d2-9c4a-3491fb25aed5-2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526941009
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6a4cd82c-72d9-49d2-9c4a-3491fb25aed5-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790526941009
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a85347d4-d8dd-42b0-a975-981260c5bb40-4",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"offline-distribution.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"offline-distribution.md\"}}",
+            "isError": false,
+            "timestamp": 1790526943585
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1351,
+              "completionTokens": 1051,
+              "totalTokens": 2402,
+              "promptTokensDetails": {
+                "cachedTokens": 128
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 885
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "offline-distribution.md",
+                  "usage": {
+                    "promptTokens": 1351,
+                    "completionTokens": 1051,
+                    "totalTokens": 2402,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 885
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1351,
+                    "completionTokens": 1051,
+                    "totalTokens": 2402,
+                    "promptTokensDetails": {
+                      "cachedTokens": 128
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 885
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790526961845
+          }
+        ],
+        "requests": 5,
+        "usageReports": 4,
+        "inputTokens": 6022,
+        "outputTokens": 486,
+        "costUsd": 0.007664000000000001,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1351,
+        "organizerOutputTokens": 1051,
+        "organizerCostUsd": 0.008816,
+        "elapsedMs": 27722
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Offline distribution](offline-distribution.md) — bundle is `ember-airgap.tgz`, air-gapped rooms only; authoritative note in `docs/bundles.md`.\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:35:34.126Z\",\"sessionId\":\"dffadb8f-cf3f-49fa-ba71-a935f5274665\",\"entryId\":\"794cc828-bd36-47e6-b621-d20940f8a8b0\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\"} -->\n",
+        "project/offline-distribution.md": "# Offline distribution\n\n当前项目离线分发包为 `ember-airgap.tgz`，仅供断网机房使用；权威说明在 `docs/bundles.md`（维护者确认）。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:35:34.126Z\",\"sessionId\":\"dffadb8f-cf3f-49fa-ba71-a935f5274665\",\"entryId\":\"794cc828-bd36-47e6-b621-d20940f8a8b0\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-authority/project\"} -->\n"
+      }
+    },
+    {
+      "id": "v2-auto-user",
+      "split": "holdout",
+      "mode": "automatic",
+      "scope": "user",
+      "learn": "我跨项目都习惯先看一段纯文字结论，再看图；不是禁止图表。这个稳定习惯以后也适用，请确认理解。",
+      "recall": {
+        "answer": "先写一段纯文字结论，再给图或表。图表可以用，但不要一上来就放图。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "user/MEMORY.md"
+            ],
+            "timestamp": 1790527014966
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c99da542-1e42-43bb-9ac4-b34239a76dfd-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"preferences/reading-order.md\\\",\\\"text\\\":\\\"# Reading order\\\\n\\\\n跨项目习惯：先给一段纯文字结论，再给图或表。图表不禁止，只是放在文字结论之后。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:36:37.790Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"99e8a394-7f40-4125-9150-b3450c6e7f54\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"user\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:36:54.952Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:36:37.790Z\\\",\\\"sessionId\\\":\\\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\\\",\\\"entryId\\\":\\\"99e8a394-7f40-4125-9150-b3450c6e7f54\\\",\\\"scope\\\":\\\"user\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"user\",\"path\":\"preferences/reading-order.md\",\"text\":\"# Reading order\\n\\n跨项目习惯：先给一段纯文字结论，再给图或表。图表不禁止，只是放在文字结论之后。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:36:37.790Z\\\",\\\"sessionId\\\":\\\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\\\",\\\"entryId\\\":\\\"99e8a394-7f40-4125-9150-b3450c6e7f54\\\",\\\"scope\\\":\\\"user\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:36:54.952Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:36:37.790Z\",\"sessionId\":\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\",\"entryId\":\"99e8a394-7f40-4125-9150-b3450c6e7f54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790527021282
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527023507
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 3258,
+        "outputTokens": 198,
+        "costUsd": 0.005592,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 8552
+      },
+      "rubric": "plain-text conclusion before chart; charts allowed; user scope",
+      "baselineLearn": {
+        "answer": "已理解：跨项目先给纯文字结论，再给图；图表可以用，只是不要先甩图。之后按这个习惯来。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 823,
+        "outputTokens": 200,
+        "costUsd": 0.002078,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 4471
+      },
+      "baselineRecall": {
+        "answer": "先结论，后图表。\n\n1. **先给纯文字结论**：把判断、要点、建议写清楚，让人不用看图也能抓住主旨。  \n2. **再给图**：用图补充结构、关系、流程，不要一上来就甩图。  \n3. **图后可补一句**：必要时用一两句把图和结论对上，别让图自己说话。\n\n图表可以用，只是不要先图后文。之后按这个顺序来。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 836,
+        "outputTokens": 170,
+        "costUsd": 0.0019240000000000001,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 4072
+      },
+      "learning": {
+        "answer": "已记下，并会作为跨项目习惯执行。\n\n之后回复会先给一段纯文字结论，再给图或表。图表不禁止，只是放在文字结论之后。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790526997798
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c4a7f782-1f28-42d8-a40e-6b7523d51ee9-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527001174
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c4a7f782-1f28-42d8-a40e-6b7523d51ee9-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527001174
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fc536613-67a2-4b99-a110-2a7f359a815e-2",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"user\\\",\\\"path\\\":\\\"preferences/reading-order.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"user\",\"path\":\"preferences/reading-order.md\"}}",
+            "isError": false,
+            "timestamp": 1790527004878
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1770,
+              "completionTokens": 468,
+              "totalTokens": 2238,
+              "promptTokensDetails": {
+                "cachedTokens": 512
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 322
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "user",
+                  "path": "preferences/reading-order.md",
+                  "usage": {
+                    "promptTokens": 1770,
+                    "completionTokens": 468,
+                    "totalTokens": 2238,
+                    "promptTokensDetails": {
+                      "cachedTokens": 512
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 322
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "user",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1770,
+                    "completionTokens": 468,
+                    "totalTokens": 2238,
+                    "promptTokensDetails": {
+                      "cachedTokens": 512
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 322
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790527014955
+          }
+        ],
+        "requests": 4,
+        "usageReports": 3,
+        "inputTokens": 4098,
+        "outputTokens": 309,
+        "costUsd": 0.005058,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1770,
+        "organizerOutputTokens": 468,
+        "organizerCostUsd": 0.00558,
+        "elapsedMs": 17169
+      },
+      "notes": {
+        "user/MEMORY.md": "# User memory\n\n- [Reading order](preferences/reading-order.md) — 先纯文字结论，再图表；图表不禁止。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:36:37.790Z\",\"sessionId\":\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\",\"entryId\":\"99e8a394-7f40-4125-9150-b3450c6e7f54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\"} -->\n",
+        "user/preferences/reading-order.md": "# Reading order\n\n跨项目习惯：先给一段纯文字结论，再给图或表。图表不禁止，只是放在文字结论之后。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:36:37.790Z\",\"sessionId\":\"a1f42ac9-14e0-45ee-a058-5c7a94d95b14\",\"entryId\":\"99e8a394-7f40-4125-9150-b3450c6e7f54\",\"scope\":\"user\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-auto-user/user\"} -->\n"
+      }
+    },
+    {
+      "id": "v2-inherited",
+      "split": "holdout",
+      "mode": "automatic",
+      "scope": "project",
+      "inherited": true,
+      "seed": "Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.",
+      "learn": "当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。",
+      "recall": {
+        "answer": "本 worktree 用 **jade-r4.tar**（`packaging.md` 已确认）。\n\n主 worktree 和生产**没有**同步确认：\n\n- 主 worktree：2025-02-02 记录仍是 **jade-r1.tar**，不代表已改成 r4。\n- 生产：未知。不能用本分支结论选生产包。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [
+          "Request timed out."
+        ],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790527088721
+          },
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790527150737
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-104c0829-4f23-44ad-b722-aad45da17efa-1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"current-worktree-packaging.md\\\",\\\"text\\\":\\\"# Current worktree packaging\\\\n\\\\n本 worktree / 本分支：`packaging.md` 已确认发行包为 **jade-r4.tar**。\\\\n\\\\n不代表主 worktree 已更新（主 worktree 仍按 2025-02-02 记录为 jade-r1.tar）。生产部署仍未知，不能用本分支结论选择生产包。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:37:29.253Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:38:08.704Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:37:29.253Z\\\",\\\"sessionId\\\":\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\",\\\"entryId\\\":\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"current-worktree-packaging.md\",\"text\":\"# Current worktree packaging\\n\\n本 worktree / 本分支：`packaging.md` 已确认发行包为 **jade-r4.tar**。\\n\\n不代表主 worktree 已更新（主 worktree 仍按 2025-02-02 记录为 jade-r1.tar）。生产部署仍未知，不能用本分支结论选择生产包。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:37:29.253Z\\\",\\\"sessionId\\\":\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\",\\\"entryId\\\":\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:38:08.704Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:37:29.253Z\",\"sessionId\":\"5914c367-c8d4-4914-90b3-8afdad4e9462\",\"entryId\":\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790527154464
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-104c0829-4f23-44ad-b722-aad45da17efa-2",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:37:03.557Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.\",\"modifiedAt\":\"2026-09-27T16:37:03.557Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527154464
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-104c0829-4f23-44ad-b722-aad45da17efa-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"# Project memory\\\\n\\\\n- [Project background](background.md) — 主 worktree 2025-02-02 为 jade-r1.tar；其他 worktree 未核实；生产未知。\\\\n- [Current worktree packaging](current-worktree-packaging.md) — 本分支 jade-r4.tar；不外推主 worktree 或生产。\\\\n\\\\n\\\\n<!-- forge-memory-source {\\\\\\\"kind\\\\\\\":\\\\\\\"session\\\\\\\",\\\\\\\"timestamp\\\\\\\":\\\\\\\"2026-09-27T16:37:29.253Z\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\\\\\",\\\\\\\"entryId\\\\\\\":\\\\\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\\\\\",\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"scopeRoot\\\\\\\":\\\\\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\\\\\"} -->\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:38:08.704Z\\\",\\\"sources\\\":[{\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:37:29.253Z\\\",\\\"sessionId\\\":\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\",\\\"entryId\\\":\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\"}],\\\"warnings\\\":[\\\"Source pointers are not verified here; external edits do not reverify sources\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"# Project memory\\n\\n- [Project background](background.md) — 主 worktree 2025-02-02 为 jade-r1.tar；其他 worktree 未核实；生产未知。\\n- [Current worktree packaging](current-worktree-packaging.md) — 本分支 jade-r4.tar；不外推主 worktree 或生产。\\n\\n\\n<!-- forge-memory-source {\\\"kind\\\":\\\"session\\\",\\\"timestamp\\\":\\\"2026-09-27T16:37:29.253Z\\\",\\\"sessionId\\\":\\\"5914c367-c8d4-4914-90b3-8afdad4e9462\\\",\\\"entryId\\\":\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\",\\\"scope\\\":\\\"project\\\",\\\"scopeRoot\\\":\\\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\\\"} -->\\n\",\"modifiedAt\":\"2026-09-27T16:38:08.704Z\",\"sources\":[{\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:37:29.253Z\",\"sessionId\":\"5914c367-c8d4-4914-90b3-8afdad4e9462\",\"entryId\":\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\"}],\"warnings\":[\"Source pointers are not verified here; external edits do not reverify sources\"]}}",
+            "isError": false,
+            "timestamp": 1790527154464
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-104c0829-4f23-44ad-b722-aad45da17efa-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527154467
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527158099
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 4555,
+        "outputTokens": 327,
+        "costUsd": 0.006848,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 69390
+      },
+      "rubric": "jade-r4.tar here; main may still use jade-r1.tar, not newly verified; production unknown; main memory untouched",
+      "baselineLearn": {
+        "answer": "本分支、当前 worktree 用 **jade-r4.tar**。\n\n依据只到这里：`packaging.md` 已确认本分支改用该包。主 worktree 是否同步、生产实际部署哪个包，都还未知，不能据此改结论。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eb2765bd-1416-4d86-be38-3bf3a6f96a4d-0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527027037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eb2765bd-1416-4d86-be38-3bf3a6f96a4d-1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527027037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-eb2765bd-1416-4d86-be38-3bf3a6f96a4d-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527027037
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d0350d50-69a3-43bc-ab4b-47d89eccbda0-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527029141
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d0350d50-69a3-43bc-ab4b-47d89eccbda0-4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527029141
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-d0350d50-69a3-43bc-ab4b-47d89eccbda0-5",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527029141
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e8c7de-cd72-4870-8b34-53c95a456719-6",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527031745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e8c7de-cd72-4870-8b34-53c95a456719-7",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527031745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e8c7de-cd72-4870-8b34-53c95a456719-8",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527031745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e8c7de-cd72-4870-8b34-53c95a456719-9",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":2,\\\"text\\\":\\\" worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":2,\"text\":\" worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527031745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fea7e6a1-c966-4216-9039-874ebaacb9c7-10",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527039355
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fea7e6a1-c966-4216-9039-874ebaacb9c7-11",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":4,\\\"text\\\":\\\"orktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":4,\"text\":\"orktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527039355
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fea7e6a1-c966-4216-9039-874ebaacb9c7-12",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527039355
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fea7e6a1-c966-4216-9039-874ebaacb9c7-13",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"839e8b5c-a6e9-49ce-8ee8-fb971b8061e7\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527039355
+          }
+        ],
+        "requests": 5,
+        "usageReports": 5,
+        "inputTokens": 8226,
+        "outputTokens": 1008,
+        "costUsd": 0.015396,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 20551
+      },
+      "baselineRecall": {
+        "answer": "本 worktree：**jade-r4.tar**（`packaging.md` 已确认）。\n\n主 worktree：未确认，不能当成已同步。\n\n生产：未确认，不能当成已同步。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 855,
+        "outputTokens": 286,
+        "costUsd": 0.002658,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 5141
+      },
+      "learning": {
+        "answer": "当前这个 worktree / 本分支：用 **jade-r4.tar**（`packaging.md` 已确认）。\n\n不要外推：\n- 主 worktree 仍按原记录 **jade-r1.tar**，本次不能当成已改\n- 生产部署仍未知，不能用本分支结论去选生产包",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790527049272
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3afc8f66-43b2-441c-9aa3-f990ae324f66-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"当前 worktree 的 packaging.md 已确认本分支改用 jade-r4.tar；不代表主 worktree 也更新，生产部署仍未知。请据这个新结论回答该用哪个包。\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527057661
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3afc8f66-43b2-441c-9aa3-f990ae324f66-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"[Project background](background.md)\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:37:03.556Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"[Project background](background.md)\\n\",\"modifiedAt\":\"2026-09-27T16:37:03.556Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527057669
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3afc8f66-43b2-441c-9aa3-f990ae324f66-1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:37:03.557Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.\",\"modifiedAt\":\"2026-09-27T16:37:03.557Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527057669
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3afc8f66-43b2-441c-9aa3-f990ae324f66-2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527057670
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-2db6f4f5-3f1c-4b01-8039-5561f7194d49-4",
+            "toolName": "write_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"saved\\\":true,\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"current-worktree-packaging.md\\\"}\"}],\"details\":{\"saved\":true,\"scope\":\"project\",\"path\":\"current-worktree-packaging.md\"}}",
+            "isError": false,
+            "timestamp": 1790527073478
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "saved",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1563,
+              "completionTokens": 913,
+              "totalTokens": 2476,
+              "promptTokensDetails": {
+                "cachedTokens": 512
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 665
+              }
+            },
+            "receipts": [
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "current-worktree-packaging.md",
+                  "usage": {
+                    "promptTokens": 1563,
+                    "completionTokens": 913,
+                    "totalTokens": 2476,
+                    "promptTokensDetails": {
+                      "cachedTokens": 512
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 665
+                    }
+                  }
+                }
+              },
+              {
+                "ok": true,
+                "raw": {
+                  "scope": "project",
+                  "path": "MEMORY.md",
+                  "usage": {
+                    "promptTokens": 1563,
+                    "completionTokens": 913,
+                    "totalTokens": 2476,
+                    "promptTokensDetails": {
+                      "cachedTokens": 512
+                    },
+                    "completionTokensDetails": {
+                      "reasoningTokens": 665
+                    }
+                  }
+                }
+              }
+            ],
+            "timestamp": 1790527088707
+          }
+        ],
+        "requests": 4,
+        "usageReports": 3,
+        "inputTokens": 5998,
+        "outputTokens": 1304,
+        "costUsd": 0.015212000000000002,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1563,
+        "organizerOutputTokens": 913,
+        "organizerCostUsd": 0.007836,
+        "elapsedMs": 39458
+      },
+      "notes": {
+        "project/MEMORY.md": "# Project memory\n\n- [Project background](background.md) — 主 worktree 2025-02-02 为 jade-r1.tar；其他 worktree 未核实；生产未知。\n- [Current worktree packaging](current-worktree-packaging.md) — 本分支 jade-r4.tar；不外推主 worktree 或生产。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:37:29.253Z\",\"sessionId\":\"5914c367-c8d4-4914-90b3-8afdad4e9462\",\"entryId\":\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\"} -->\n",
+        "project/background.md": "Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown.",
+        "project/current-worktree-packaging.md": "# Current worktree packaging\n\n本 worktree / 本分支：`packaging.md` 已确认发行包为 **jade-r4.tar**。\n\n不代表主 worktree 已更新（主 worktree 仍按 2025-02-02 记录为 jade-r1.tar）。生产部署仍未知，不能用本分支结论选择生产包。\n\n\n<!-- forge-memory-source {\"kind\":\"session\",\"timestamp\":\"2026-09-27T16:37:29.253Z\",\"sessionId\":\"5914c367-c8d4-4914-90b3-8afdad4e9462\",\"entryId\":\"5b5e9bc0-0bd0-4844-8516-dd3b44712483\",\"scope\":\"project\",\"scopeRoot\":\"/tmp/forge-memory-quality-smwc1w/v2-inherited/data/forge-agent/memory/projects/4bcd32d197f4d8af62a4b3c56c473e0ff7edc96aee9ee3abef32d3ca419b85b9/822e02f27374bf965398e237cdd8df27533225dfba52c63edbb9e6dc4a5f7c56\"} -->\n"
+      },
+      "mainAfter": "Main worktree background checked 2025-02-02: release bundle is jade-r1.tar. Not verified on other worktrees. Production deployment is unknown."
+    },
+    {
+      "id": "v2-temporary",
+      "split": "holdout",
+      "mode": "none",
+      "scope": "project",
+      "learn": "仅这一次允许在 /tmp/trial-97 里生成演示输出，不授权以后更改仓库；这不是长期约定。现在只回答 7×8。",
+      "recall": {
+        "answer": "**不能。** 上次那次临时许可不能用来改你的仓库。\n\n依据：\n- 那次许可是**一次性**的\n- 范围只覆盖在 `/tmp/trial-97` **生成演示输出**\n- 原文已写明：**不授权后续改仓库**\n- 也写明了：**不是长期约定**\n\n所以现在改仓库需要你**重新、明确授权**（范围、路径、做什么）。没有新许可前，我不会改仓库。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527179026
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e800b9-162d-460c-8cd4-003a01a16a94-0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527186567
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-34e800b9-162d-460c-8cd4-003a01a16a94-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527186573
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b55b23c4-4163-45d4-a5fa-83fa2f3ccde3-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527188753
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b55b23c4-4163-45d4-a5fa-83fa2f3ccde3-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"4b68810c-205f-4a3a-b8b2-06a64feae275\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"你现在可以根据上次临时许可修改我的仓库吗？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"4b68810c-205f-4a3a-b8b2-06a64feae275\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"你现在可以根据上次临时许可修改我的仓库吗？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527188753
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-b55b23c4-4163-45d4-a5fa-83fa2f3ccde3-4",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527188754
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527199894
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 4795,
+        "outputTokens": 1064,
+        "costUsd": 0.011942,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 20873
+      },
+      "rubric": "learning answer 56; no persistent note; no inherited authorization",
+      "baselineLearn": {
+        "answer": "56",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 946,
+        "outputTokens": 130,
+        "costUsd": 0.0019039999999999999,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 3088
+      },
+      "baselineRecall": {
+        "answer": "不能。\n\n上次许可是一次性的，而且范围很窄：只允许在 `/tmp/trial-97` 里生成演示输出，并明确写了**不授权以后更改仓库**，也**不是长期约定**。\n\n所以现在不能据此改你的仓库。如果确实需要改仓库，请再单独、明确授权（包括改哪些路径、做什么）。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 766,
+        "outputTokens": 484,
+        "costUsd": 0.0036680000000000003,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 8425
+      },
+      "learning": {
+        "answer": "结论：7×8 = 56。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527169627
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1500,
+              "completionTokens": 340,
+              "totalTokens": 1840,
+              "promptTokensDetails": {
+                "cachedTokens": 512
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 332
+              }
+            },
+            "receipts": [],
+            "timestamp": 1790527179021
+          }
+        ],
+        "requests": 2,
+        "usageReports": 1,
+        "inputTokens": 1224,
+        "outputTokens": 187,
+        "costUsd": 0.003378,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1500,
+        "organizerOutputTokens": 340,
+        "organizerCostUsd": 0.004272,
+        "elapsedMs": 9406
+      },
+      "notes": {}
+    },
+    {
+      "id": "v2-failure",
+      "split": "holdout",
+      "mode": "none",
+      "scope": "project",
+      "verify": true,
+      "learn": "调用 check_fixture 检查这次一次性迁移演练。只报告已发生的结果，不运行修复，不保存长期经验，不把下一步打算写成成功。",
+      "recall": {
+        "answer": "**没有。** 这次演练目前看不到成功迁移的证据。\n\n依据现有记录：\n\n- **项目记忆、用户记忆**：都没有迁移结果、验收记录或成功标记。\n- **本分支会话**：检索不到已完成迁移的产出说明。\n- **已知范围**：此前只有一次性、仅限 `/tmp/trial-97` 的演示输出许可，**不授权后续改仓库**；那次许可也不能当成迁移已完成。\n\n因此：临时演示许可 ≠ 仓库内迁移成功。若要宣称迁移成功，需要可核验的产物（例如仓库中的变更、测试/验收记录，或明确写入记忆的结果）。当前这些都不存在。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527248947
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e766435f-c86b-45e2-9fea-66f4bac5fc9a-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527253970
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e766435f-c86b-45e2-9fea-66f4bac5fc9a-4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"a37a0638-0329-48a5-922d-a862bd1faa1e\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"这次演练是否已有成功迁移的证据？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"a37a0638-0329-48a5-922d-a862bd1faa1e\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"这次演练是否已有成功迁移的证据？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527253970
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e766435f-c86b-45e2-9fea-66f4bac5fc9a-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527253970
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e766435f-c86b-45e2-9fea-66f4bac5fc9a-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527253970
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e766435f-c86b-45e2-9fea-66f4bac5fc9a-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527253970
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-5",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527257224
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-6",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527257224
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-7",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527257224
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-8",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527257225
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-9",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527257225
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a9a2ac1c-8177-4b5c-986c-0a1210a0d177-10",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527257225
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-11",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-12",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-13",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-14",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-15",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-dbed70b3-e81a-4cf8-aa5a-a045197e8c5a-16",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527260065
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-01ab12e4-fcab-4173-a4cd-ee4934df9352-19",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527273122
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-01ab12e4-fcab-4173-a4cd-ee4934df9352-20",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527273122
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-01ab12e4-fcab-4173-a4cd-ee4934df9352-17",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527273122
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-01ab12e4-fcab-4173-a4cd-ee4934df9352-18",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527273122
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-01ab12e4-fcab-4173-a4cd-ee4934df9352-21",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527273122
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527282069
+          }
+        ],
+        "requests": 5,
+        "usageReports": 5,
+        "inputTokens": 10646,
+        "outputTokens": 1695,
+        "costUsd": 0.023398000000000002,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 33127
+      },
+      "rubric": "actual E_DEMO_19 failure reported; no invented fix or success; no memory growth",
+      "baselineLearn": {
+        "answer": "迁移演练检查结果：`E_DEMO_19: migration check FAILED`。未发生修复，也未发生成功部署。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-76ddb03e-d439-46d3-9846-0bc05d9ec951-0",
+            "toolName": "check_fixture",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"E_DEMO_19: migration check FAILED. No repair or successful deployment has occurred.\"}],\"details\":{\"exitCode\":1},\"isError\":true}",
+            "isError": true,
+            "timestamp": 1790527207022
+          }
+        ],
+        "requests": 2,
+        "usageReports": 2,
+        "inputTokens": 1527,
+        "outputTokens": 191,
+        "costUsd": 0.003816,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 9720
+      },
+      "baselineRecall": {
+        "answer": "没有。这次会话里看不到成功迁移的证据。\n\n已确认的只有：\n- 先前一次性授权仅覆盖 `/tmp/trial-97` 的演示输出，且未授权事后改仓库\n- 当时实际只回答了 `7 × 8 = 56`，没有留下迁移产物\n- 之后基于该授权改仓库的请求已被拒绝\n\n因此：没有仓库变更、没有可核验的迁移结果。一次性 `/tmp` 许可也不能当作迁移已成功。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ee6cdc48-c636-4341-9c38-9e98f2d6e2ae-0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527214521
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ee6cdc48-c636-4341-9c38-9e98f2d6e2ae-1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"2db0244d-fdd6-4045-9b93-c5b00d38dcdd\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"这次演练是否已有成功迁移的证据？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"2db0244d-fdd6-4045-9b93-c5b00d38dcdd\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"这次演练是否已有成功迁移的证据？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527214521
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ee6cdc48-c636-4341-9c38-9e98f2d6e2ae-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"2db0244d-fdd6-4045-9b93-c5b00d38dcdd\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"这次演练是否已有成功迁移的证据？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"2db0244d-fdd6-4045-9b93-c5b00d38dcdd\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"这次演练是否已有成功迁移的证据？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527214521
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6288ec61-096f-4794-9149-4fa80ad7af8e-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527217767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6288ec61-096f-4794-9149-4fa80ad7af8e-4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527217767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6288ec61-096f-4794-9149-4fa80ad7af8e-5",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527217767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6288ec61-096f-4794-9149-4fa80ad7af8e-6",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527217767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6288ec61-096f-4794-9149-4fa80ad7af8e-7",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527217767
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1ead08b1-17dd-46eb-a8c8-2ce061a24e17-8",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527226502
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1ead08b1-17dd-46eb-a8c8-2ce061a24e17-9",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527226502
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1ead08b1-17dd-46eb-a8c8-2ce061a24e17-10",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527226502
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1ead08b1-17dd-46eb-a8c8-2ce061a24e17-11",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527226502
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1ead08b1-17dd-46eb-a8c8-2ce061a24e17-12",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527226502
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 5607,
+        "outputTokens": 1327,
+        "costUsd": 0.014184,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 24781
+      },
+      "learning": {
+        "answer": "迁移演练检查结果：\n\n**E_DEMO_19: migration check FAILED.**\n\n未发生修复，也未发生成功部署。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527234413
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-1f107ac9-541c-48b9-b0be-046946b2483a-0",
+            "toolName": "check_fixture",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"E_DEMO_19: migration check FAILED. No repair or successful deployment has occurred.\"}],\"details\":{\"exitCode\":1},\"isError\":true}",
+            "isError": true,
+            "timestamp": 1790527240594
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 946,
+              "completionTokens": 395,
+              "totalTokens": 1341,
+              "promptTokensDetails": {
+                "cachedTokens": 512
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 387
+              }
+            },
+            "receipts": [],
+            "timestamp": 1790527248942
+          }
+        ],
+        "requests": 3,
+        "usageReports": 2,
+        "inputTokens": 2544,
+        "outputTokens": 180,
+        "costUsd": 0.004248,
+        "organizerCalls": 1,
+        "organizerInputTokens": 946,
+        "organizerOutputTokens": 395,
+        "organizerCostUsd": 0.003494,
+        "elapsedMs": 14541
+      },
+      "notes": {}
+    },
+    {
+      "id": "v2-noise",
+      "split": "holdout",
+      "mode": "none",
+      "scope": "project",
+      "learn": "请计算 37-12。本次没有任何新增项目事实或长期偏好。",
+      "recall": {
+        "answer": "没有。当前项目记忆是空的，用户记忆里也没有可沿用的项目约定。\n\n之后如果有固定偏好（语言、目录结构、提交风格、技术栈等），告诉我，我可以写入项目记忆并沿用。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527304092
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6c4d6a64-635b-494c-b7f9-88d8b4fe1cb3-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527307320
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6c4d6a64-635b-494c-b7f9-88d8b4fe1cb3-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527307320
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6c4d6a64-635b-494c-b7f9-88d8b4fe1cb3-3",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527307320
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-6c4d6a64-635b-494c-b7f9-88d8b4fe1cb3-2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527307320
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c480d23f-9693-43e0-b3d8-381ac25db82d-4",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527311608
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c480d23f-9693-43e0-b3d8-381ac25db82d-5",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527311608
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c480d23f-9693-43e0-b3d8-381ac25db82d-8",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527311608
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c480d23f-9693-43e0-b3d8-381ac25db82d-6",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527311608
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-c480d23f-9693-43e0-b3d8-381ac25db82d-7",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527311608
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3b7cc6fa-37db-42f0-9b38-bfc09c540909-9",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"9b171e8e-3d03-476f-bc43-b326c67a29c1\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"目前没搜到匹配项，我再按常见约定关键词扩大检索。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"项目\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"规则\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"AGENTS\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search\\\"},{\\\"entryId\\\":\\\"fc034a41-41c0-43c8-92d8-e1eae7624ae6\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"我先查一下已保存的项目约定，确认有没有需要沿用的内容。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"convention\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"preference\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[t\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"9b171e8e-3d03-476f-bc43-b326c67a29c1\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"目前没搜到匹配项，我再按常见约定关键词扩大检索。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"项目\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"规则\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"AGENTS\\\",\\\"limit\\\":10}\\n[tool call search\"},{\"entryId\":\"fc034a41-41c0-43c8-92d8-e1eae7624ae6\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"我先查一下已保存的项目约定，确认有没有需要沿用的内容。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"convention\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"preference\\\",\\\"limit\\\":10}\\n[t\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527314133
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3b7cc6fa-37db-42f0-9b38-bfc09c540909-10",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"9b171e8e-3d03-476f-bc43-b326c67a29c1\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"目前没搜到匹配项，我再按常见约定关键词扩大检索。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"项目\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"规则\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"AGENTS\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search\\\"},{\\\"entryId\\\":\\\"fc034a41-41c0-43c8-92d8-e1eae7624ae6\\\",\\\"role\\\":\\\"assistant\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"我先查一下已保存的项目约定，确认有没有需要沿用的内容。\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"约定\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"convention\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[tool call search_memory] {\\\\\\\"scope\\\\\\\":\\\\\\\"project\\\\\\\",\\\\\\\"query\\\\\\\":\\\\\\\"preference\\\\\\\",\\\\\\\"limit\\\\\\\":10}\\\\n[t\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"9b171e8e-3d03-476f-bc43-b326c67a29c1\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"目前没搜到匹配项，我再按常见约定关键词扩大检索。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"项目\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"规则\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"AGENTS\\\",\\\"limit\\\":10}\\n[tool call search\"},{\"entryId\":\"fc034a41-41c0-43c8-92d8-e1eae7624ae6\",\"role\":\"assistant\",\"isError\":false,\"offset\":0,\"text\":\"我先查一下已保存的项目约定，确认有没有需要沿用的内容。\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"约定\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"convention\\\",\\\"limit\\\":10}\\n[tool call search_memory] {\\\"scope\\\":\\\"project\\\",\\\"query\\\":\\\"preference\\\",\\\"limit\\\":10}\\n[t\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527314133
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-3b7cc6fa-37db-42f0-9b38-bfc09c540909-11",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"ENOENT: no such file or directory, open '/tmp/forge-memory-quality-smwc1w/v2-noise/project/AGENTS.md'\"}],\"details\":{},\"isError\":true}",
+            "isError": true,
+            "timestamp": 1790527314133
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527316925
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 7074,
+        "outputTokens": 558,
+        "costUsd": 0.009624,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 12841
+      },
+      "rubric": "learning answer 25; no note or meaningless growth",
+      "baselineLearn": {
+        "answer": "25",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 1043,
+        "outputTokens": 83,
+        "costUsd": 0.001816,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 2486
+      },
+      "baselineRecall": {
+        "answer": "当前会话里没有已保存、需要沿用的新项目约定。\n\n目前也没有可调用的跨会话项目记忆可查。接下来按你这次给出的范围和资格正常处理即可。若你有要固定下来的约定，直接发我，我按你的说明执行。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ea30e231-c3b4-4e9f-86e7-9dc8a0d5241b-0",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"23e0ec89-0769-446d-8eea-4150a907bd7b\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"23e0ec89-0769-446d-8eea-4150a907bd7b\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527290051
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ea30e231-c3b4-4e9f-86e7-9dc8a0d5241b-1",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527290051
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-ea30e231-c3b4-4e9f-86e7-9dc8a0d5241b-2",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"entryId\\\":\\\"23e0ec89-0769-446d-8eea-4150a907bd7b\\\",\\\"role\\\":\\\"user\\\",\\\"isError\\\":false,\\\"offset\\\":0,\\\"text\\\":\\\"是否有已保存的新项目约定需要沿用？\\\"}],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[{\"entryId\":\"23e0ec89-0769-446d-8eea-4150a907bd7b\",\"role\":\"user\",\"isError\":false,\"offset\":0,\"text\":\"是否有已保存的新项目约定需要沿用？\"}],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527290051
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7c671747-90a5-439c-abab-7e460a88bb59-3",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527292313
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7c671747-90a5-439c-abab-7e460a88bb59-4",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527292313
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-7c671747-90a5-439c-abab-7e460a88bb59-5",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527292313
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a73402b1-1fa0-4780-9fe2-e172d11e20da-6",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527294745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a73402b1-1fa0-4780-9fe2-e172d11e20da-7",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527294745
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-a73402b1-1fa0-4780-9fe2-e172d11e20da-8",
+            "toolName": "search_context",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false}\"}],\"details\":{\"matches\":[],\"hasMore\":false}}",
+            "isError": false,
+            "timestamp": 1790527294745
+          }
+        ],
+        "requests": 4,
+        "usageReports": 4,
+        "inputTokens": 4694,
+        "outputTokens": 723,
+        "costUsd": 0.008734,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 14845
+      },
+      "learning": {
+        "answer": "**25**",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [],
+            "timestamp": 1790527299418
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 955,
+              "completionTokens": 125,
+              "totalTokens": 1080,
+              "promptTokensDetails": {
+                "cachedTokens": 512
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 117
+              }
+            },
+            "receipts": [],
+            "timestamp": 1790527304083
+          }
+        ],
+        "requests": 2,
+        "usageReports": 1,
+        "inputTokens": 1566,
+        "outputTokens": 61,
+        "costUsd": 0.003306,
+        "organizerCalls": 1,
+        "organizerInputTokens": 955,
+        "organizerOutputTokens": 125,
+        "organizerCostUsd": 0.001892,
+        "elapsedMs": 4679
+      },
+      "notes": {}
+    },
+    {
+      "id": "v2-repeat",
+      "split": "holdout",
+      "mode": "automatic",
+      "scope": "project",
+      "seed": "Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.",
+      "learn": "再次确认已有设置：QA 快照前缀 aurora-snapshot，不适用 production，权威入口 docs/snapshots.md。没有新信息，请简短确认。",
+      "recall": {
+        "answer": "QA 快照前缀是 `aurora-snapshot`。\n\n不能用于 production，仅限 QA。权威说明见 `docs/snapshots.md`。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790527336215
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fcdccd41-159b-4862-b8bf-e0927eb70954-2",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"[Project background](background.md)\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:41:56.928Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"[Project background](background.md)\\n\",\"modifiedAt\":\"2026-09-27T16:41:56.928Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527339715
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fcdccd41-159b-4862-b8bf-e0927eb70954-0",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527339716
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-fcdccd41-159b-4862-b8bf-e0927eb70954-1",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"offset\\\":0}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"offset\":0}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527339717
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e25ce508-df02-48b0-927d-0fd127332d72-3",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:41:56.928Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"modifiedAt\":\"2026-09-27T16:41:56.928Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527342577
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e25ce508-df02-48b0-927d-0fd127332d72-5",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"t is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"offset\\\":57}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"t is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"offset\":57}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527342578
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e25ce508-df02-48b0-927d-0fd127332d72-4",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"offset\\\":0}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"offset\":0}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527342578
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 0,
+            "receipts": [],
+            "timestamp": 1790527346777
+          }
+        ],
+        "requests": 3,
+        "usageReports": 3,
+        "inputTokens": 4744,
+        "outputTokens": 462,
+        "costUsd": 0.007652,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 10578
+      },
+      "rubric": "aurora-snapshot; QA only; production excluded; no duplicate topic growth",
+      "baselineLearn": {
+        "answer": "已确认：QA 快照前缀为 `aurora-snapshot`，不用于 production，权威入口为 `docs/snapshots.md`。无新信息。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 864,
+        "outputTokens": 165,
+        "costUsd": 0.00195,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 3107
+      },
+      "baselineRecall": {
+        "answer": "QA 快照前缀是 `aurora-snapshot`，不用于 production。权威说明见 `docs/snapshots.md`。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [],
+        "requests": 1,
+        "usageReports": 1,
+        "inputTokens": 804,
+        "outputTokens": 151,
+        "costUsd": 0.001746,
+        "organizerCalls": 0,
+        "organizerInputTokens": 0,
+        "organizerOutputTokens": 0,
+        "organizerCostUsd": 0,
+        "elapsedMs": 4635
+      },
+      "learning": {
+        "answer": "已核对现有记录，口径不变：\n\n- QA 快照前缀：`aurora-snapshot`\n- 不适用于 production\n- 权威入口：`docs/snapshots.md`\n\n无新信息，未改记忆。",
+        "result": {
+          "status": "success"
+        },
+        "errors": [],
+        "operations": [
+          {
+            "type": "memory",
+            "phase": "recall",
+            "selected": [
+              "project/MEMORY.md"
+            ],
+            "timestamp": 1790527324685
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e1ee9440-a486-4033-b1a6-6092c5629c99-0",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"MEMORY.md\\\",\\\"text\\\":\\\"[Project background](background.md)\\\\n\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:41:56.928Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"MEMORY.md\",\"text\":\"[Project background](background.md)\\n\",\"modifiedAt\":\"2026-09-27T16:41:56.928Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527330652
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e1ee9440-a486-4033-b1a6-6092c5629c99-1",
+            "toolName": "read_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"modifiedAt\\\":\\\"2026-09-27T16:41:56.928Z\\\",\\\"sources\\\":[],\\\"warnings\\\":[\\\"Source unavailable; content has not been historically verified\\\"]}\"}],\"details\":{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"modifiedAt\":\"2026-09-27T16:41:56.928Z\",\"sources\":[],\"warnings\":[\"Source unavailable; content has not been historically verified\"]}}",
+            "isError": false,
+            "timestamp": 1790527330652
+          },
+          {
+            "type": "tool_execution_end",
+            "toolCallId": "call-e1ee9440-a486-4033-b1a6-6092c5629c99-2",
+            "toolName": "search_memory",
+            "content": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"matches\\\":[{\\\"scope\\\":\\\"project\\\",\\\"path\\\":\\\"background.md\\\",\\\"text\\\":\\\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\\\",\\\"offset\\\":0}],\\\"hasMore\\\":false,\\\"warnings\\\":[]}\"}],\"details\":{\"matches\":[{\"scope\":\"project\",\"path\":\"background.md\",\"text\":\"Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md.\",\"offset\":0}],\"hasMore\":false,\"warnings\":[]}}",
+            "isError": false,
+            "timestamp": 1790527330653
+          },
+          {
+            "type": "memory",
+            "phase": "save",
+            "status": "skipped",
+            "calls": 1,
+            "usage": {
+              "promptTokens": 1049,
+              "completionTokens": 154,
+              "totalTokens": 1203,
+              "promptTokensDetails": {
+                "cachedTokens": 128
+              },
+              "completionTokensDetails": {
+                "reasoningTokens": 146
+              }
+            },
+            "receipts": [],
+            "timestamp": 1790527336199
+          }
+        ],
+        "requests": 3,
+        "usageReports": 2,
+        "inputTokens": 3108,
+        "outputTokens": 444,
+        "costUsd": 0.008496,
+        "organizerCalls": 1,
+        "organizerInputTokens": 1049,
+        "organizerOutputTokens": 154,
+        "organizerCostUsd": 0.00283,
+        "elapsedMs": 11526
+      },
+      "notes": {
+        "project/MEMORY.md": "[Project background](background.md)\n",
+        "project/background.md": "Confirmed project setting: snapshot prefix aurora-snapshot is for QA only, not production. Authoritative reference: docs/snapshots.md."
+      }
+    }
+  ]
+}

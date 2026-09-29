@@ -5,7 +5,7 @@ created: YYYY-MM-DD
 
 # <Phase / Feature 名称>
 
-> 状态:草稿 | 施工图 | 已完成(YYYY-MM-DD) | Owner:<谁>
+> 状态:草稿 | 实现中 | 已完成(YYYY-MM-DD) | Owner:<谁>
 > 中 / 大改动使用本模板,按 [SOP.md](../SOP.md) 流程骨架填空。
 
 ## Why
@@ -30,17 +30,23 @@ created: YYYY-MM-DD
 
 ## Acceptance Criteria
 
+任务级范围与 AC 引用对应 GitHub Issue 和编号，不复制正文；本节只定义由本施工图负责的跨任务验收和发布边界。归属见 [Issue tracker](../agents/issue-tracker.md#规格与进度归属)。
+
+任务验收来源:<Issue URL 与 AC 编号>
+
+本施工图验收（没有独立标准时省略）:
+
+- [ ] AC-1:<可验证标准,checkbox 不是感觉>
+- [ ] AC-2:…
+
 出口条件(Release):
 
-- 下方 AC 全部为 ✅
+- 所属验收标准通过；获准暂缓或豁免的项目单列未验证边界，不标记为通过
 - <其它出口条件,如 bug bar / dogfooding>
 
 明确**不**作为出口条件:
 
 - …
-
-- [ ] AC-1:<可验证标准,checkbox 不是感觉>
-- [ ] AC-2:…
 
 ## Test plan
 

@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-27)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
+> 状态:生效(2026-09-29)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
 > 原则:文档领路，代码跟随；证据说话，不是信心说话。
 
 ## 当前导航
@@ -55,6 +55,7 @@
 | 文档 | 职责 |
 |---|---|
 | [SOP.md](SOP.md) | 工作规则、流程裁剪、验证纪律与交接 |
+| [Contributing](../CONTRIBUTING.md#local-checks)、[脚本与示例](../CONTRIBUTING.md#scripts-and-examples) | 开发检查、平台要求、周边命令用途及输出位置 |
 | [Issue tracker](agents/issue-tracker.md) | GitHub Issues 与施工图的职责分工 |
 | [Domain docs](agents/domain.md)、[CONTEXT.md](../CONTEXT.md) | single-context 读取规则与领域术语 |
 | [Triage labels](agents/triage-labels.md) | triage 角色到标签的映射 |

@@ -1,8 +1,8 @@
 # 历史文档归档
 
-> 状态:生效(2026-09-28)。本目录保留已被替代的设计、施工记录及选型研究，继续由 Git 管理。当前任务从[文档导航](../README.md)开始。
+> 状态:生效(2026-09-29)。本目录保留已被替代的设计、施工记录及选型研究，继续由 Git 管理。当前任务从[文档导航](../README.md)开始。
 
-仅在追溯旧版本行为、设计来源或用户指定时读取。正文中的“当前”“待实现”“下一步”属于记录当时的语境，不产生新实施授权。归档不会将历史未测、豁免、中止或失败改为通过。原始实验数据及仍被现行合同依赖的验收记录保留在当前目录，见[证据导航](../research/README.md)。
+仅在追溯旧版本行为、设计来源或用户指定时读取。正文中的“当前”“待实现”“下一步”属于记录当时的语境，不产生新实施授权。归档不会将历史未测、豁免、中止或失败改为通过。仍被现行合同依赖的原始实验数据和验收记录保留在当前目录，见[证据导航](../research/README.md)；仅证明被替代实现的数据随历史验收归档，原始内容不变。
 
 2026-09-21 起按适用性归档，不按年龄或任务是否完成批量归档。ADR 保持原编号与路径，按其状态和替代指针解释。维护规范见[归档与读取规则](../README.md#归档与读取规则)。
 
@@ -55,6 +55,7 @@
 |---|---|
 | [Skills 首轮施工](phases/skills.md)、[验收](phases/skills-acceptance.md) | [Issue #37 施工与验收](../phases/tool-ecosystem-issue-37.md)；旧 Pi scanner、loader 与首轮证据不证明官方接入 |
 | [Issue #32 记忆施工与验收](phases/persistent-memory.md) | [ADR-019](../decisions/019-persistent-memory.md) 保留 Markdown/worktree 决定；当前 deferred 调度和质量边界见 [Issue #37](../phases/tool-ecosystem-issue-37.md) |
+| [Issue #32 真实模型验收与原始数据](research/persistent-memory/acceptance.md) | 旧会话内实现的 v1 失败、v2 补跑与费用记录；官方 deferred 接入的独立样例见 [Issue #37 原始证据](../research/persistent-memory/README.md)，不混用两版结果 |
 
 ## 显式查阅
 
