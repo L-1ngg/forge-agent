@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { modelResponse } from "../../core/test/helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { createMemoryHost } from "../src/memory-host.ts";
 
 for (const mode of ["default", "deny-all"] as const) {

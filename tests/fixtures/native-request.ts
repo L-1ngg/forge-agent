@@ -1,9 +1,9 @@
-import type { SessionMessage } from "@forge-agent/protocol";
+import type { SessionMessage } from "../../packages/protocol/src/index.ts";
 import type { AdapterYieldChunk } from "@tanstack/ai";
-import { callModel } from "../../src/model-call.ts";
-import type { ModelRequestSettings } from "../../src/model-adapter.ts";
-import type { SessionConfiguration } from "../../src/configuration.ts";
-import type { Model } from "../../src/model-types.ts";
+import { callModel } from "../../packages/core/src/model-call.ts";
+import type { ModelRequestSettings } from "../../packages/core/src/model-adapter.ts";
+import type { SessionConfiguration } from "../../packages/core/src/configuration.ts";
+import type { Model } from "../../packages/core/src/model-types.ts";
 import { nativeAdapter } from "./native-adapter.ts";
 
 const user: SessionMessage = { role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 };

@@ -1,15 +1,16 @@
-import type { Agent } from "../../packages/core/src/sdk.ts";
-import { createTestAgent } from "../support/test-agent.ts";
-import { createAgent } from "../../packages/core/src/sdk.ts";
-import { fauxModel } from "../support/model.ts";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import fc from "fast-check";
-import { response, type SessionEvent } from "../../packages/protocol/src/index.ts";
 import { RequestBus, SessionStore } from "../../packages/core/src/index.ts";
+import type { Agent } from "../../packages/core/src/sdk.ts";
+import { createAgent } from "../../packages/core/src/sdk.ts";
+import { response, type SessionEvent } from "../../packages/protocol/src/index.ts";
 import type { HarnessTool } from "../../packages/tools/src/index.ts";
+import { fauxModel } from "../support/model.ts";
+import { propertyOptions } from "../support/property.ts";
+import { createTestAgent } from "../support/test-agent.ts";
 
 function tool(execute: HarnessTool<object, unknown>["execute"]): HarnessTool<object, unknown> {
 	return {
@@ -233,7 +234,7 @@ test("owned core preserves one result per call across generated tool failures", 
 			expect(events.filter((event) => event.type === "message_end" && event.message.toolCallId === `call-${index}`)).toHaveLength(1);
 		}
 		expect(events.at(-1)?.type).toBe("agent_end");
-	}), { numRuns: 25, seed: 90209 });
+	}), propertyOptions(90209, 25));
 });
 
 test("owned core drains steering before follow-ups and preserves FIFO in both queues", async () => {

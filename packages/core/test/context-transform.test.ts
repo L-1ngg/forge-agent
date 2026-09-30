@@ -1,5 +1,5 @@
 import type { TextOptions } from "@tanstack/ai";
-import { replyAdapter, systemText, type NativeReply } from "./helpers/native-reply.ts";
+import { replyAdapter, systemText, type NativeReply } from "../../../tests/fixtures/native-reply.ts";
 import { expect, test } from "bun:test";
 import { createAgent, LongTermMemory, MemorySessionStorage, type AgentTurn, type CreateAgentOptions, type Model, type TransformContext, type TransformContextContext } from "../src/sdk.ts";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";

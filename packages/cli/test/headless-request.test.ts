@@ -10,7 +10,7 @@ import { RequestBus } from "@forge-agent/core";
 import type { RequestEnvelopeFor, RequestKind } from "@forge-agent/protocol";
 import { block } from "@forge-agent/protocol";
 import { withScenario, bounded } from "../../../tests/support/scenario.ts";
-import { modelResponse } from "../../core/test/helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm, readdir, realpath } from "node:fs/promis
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { HttpFixture } from "../../../tests/support/http-fixture.ts";
-import { modelResponse } from "../../core/test/helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { skillInput, cliSkills } from "../src/skills-command.ts";
 import { createInputCompletionSource } from "../../core/src/input/completion.ts";
 const entry = resolve(import.meta.dir, "../src/main.ts");

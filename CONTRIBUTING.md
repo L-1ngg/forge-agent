@@ -9,7 +9,6 @@ Use Bun 1.3.12 and the existing workspace toolchain:
 ```bash
 bun install --frozen-lockfile
 bun run check
-bun run test:headless
 bun run typecheck:examples
 ```
 
@@ -17,13 +16,13 @@ The test suite uses local provider replays and real PTYs. It does not require an
 
 `check` and `test:headless` use local fixtures, fake credentials, a restricted environment, and isolated configuration directories on both platforms. Linux additionally enforces OS network isolation inherited by CLI and tool subprocesses: it requires `unshare`, `ip`, and Python 3 for the independent native socket probe (unprivileged namespaces locally; CI can create the namespace with sudo then drop privileges). Missing Linux isolation support fails the check. macOS runs the full compatibility suite without OS network isolation, Seatbelt, or PF. `test:network` is Linux-only. Reports distinguish the platforms' evidence; this is not a filesystem or arbitrary-code sandbox.
 
-Use `bun run test:contract`, `bun run test:integration`, and `bun run test:cli` for focused groups. `.test-results/` contains JUnit, raw failure traces, network evidence, and timings; CI uploads these even on failure. `bun test <file>` is useful for quick local work but does not supply OS isolation evidence. The [testing guide](docs/phases/testing-system-implementation.md) describes fixture maintenance, property replay, and the separately budgeted `test:live` probe. Do not use live credentials in ordinary tests or update fixtures automatically on a mismatch.
+Use `bun run test:contract`, `bun run test:integration`, and `bun run test:cli` for focused groups. Headless smoke is included in `check`; `test:headless` runs that same test alone. `bun run test:plan` verifies that every discovered suite is registered exactly once. Each invocation prints its own `.test-results/run-*/` directory containing JUnit, raw logs, the execution plan and a summary with source hash, environment, group status, exit codes and elapsed time. `latest-<selection>.json` points to one run; old reports are never reused. CI uploads evidence even on failure. `bun test <file>` is useful for quick local work but does not supply OS isolation evidence. The [testing guide](docs/phases/testing-system-implementation.md) describes fixture maintenance, property replay, and the separately budgeted `test:live` probe. Do not use live credentials in ordinary tests or update fixtures automatically on a mismatch.
 
 Do not include API keys, local configuration, or session history in issues, commits, logs, or screenshots. `.forge-agent/` is local runtime data.
 
 ## Scripts and Examples
 
-`typecheck:automation` checks every `scripts/**/*.ts` entry, including script tests; `typecheck:tests` checks root `tests/**/*.ts`. Package checks cover their own source/tests, and `typecheck:examples` covers `examples/**/*.ts`. Type checking does not execute scripts. Test discovery and grouping remain in [test-offline.ts](scripts/test-offline.ts).
+`typecheck:automation` checks every `scripts/**/*.ts` entry, including script tests; `typecheck:tests` checks root `tests/**/*.ts`. Package checks cover their own source/tests, and `typecheck:examples` covers `examples/**/*.ts`. Type checking does not execute scripts. [test-plan.ts](scripts/test-plan.ts) owns discovery and explicit grouping; [test-offline.ts](scripts/test-offline.ts) owns isolation and execution.
 
 Run commands from the repository root. Choose an explicit output path for experiments; keep existing evidence unchanged.
 

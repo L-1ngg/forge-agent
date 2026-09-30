@@ -14,6 +14,23 @@ export function barrier(label: string) {
 	return { release, wait: () => bounded(promise, label) };
 }
 
+export function nextTurn(): Promise<void> { return new Promise(resolve => setImmediate(resolve)); }
+
+/** Poll observations, not business time; report the last public state on failure. */
+export async function waitFor(check: () => boolean | Promise<boolean>, label: string, options: { timeoutMs?: number; diagnostics?: () => unknown } = {}): Promise<void> {
+	const deadline = performance.now() + (options.timeoutMs ?? 4000);
+	try {
+		while (true) {
+			const remaining = deadline - performance.now();
+			if (remaining <= 0) throw new Error(`Timed out: ${label}`);
+			if (await bounded(Promise.resolve().then(check), label, remaining)) return;
+			await Bun.sleep(Math.min(5, Math.max(0, deadline - performance.now())));
+		}
+	} catch (error) {
+		throw new Error(`${label}: ${error instanceof Error ? error.message : String(error)}${options.diagnostics ? `\nLast observation: ${JSON.stringify(options.diagnostics())}` : ""}`, { cause: error });
+	}
+}
+
 export class Trace {
 	readonly entries: Array<{ order: number; kind: string; value: unknown }> = [];
 	record(kind: string, value: unknown): void {

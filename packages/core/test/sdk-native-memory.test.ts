@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgent, LongTermMemory, MemorySessionStorage } from "../src/sdk.ts";
 import { getCatalogModel } from "../src/model-catalog.ts";
-import { nativeAdapter, responseChunks } from "./helpers/native-adapter.ts";
-import { isMemoryOrganizerRequest } from "./helpers/native-reply.ts";
+import { nativeAdapter, responseChunks } from "../../../tests/fixtures/native-adapter.ts";
+import { isMemoryOrganizerRequest } from "../../../tests/fixtures/native-reply.ts";
 import { memoryFiles } from "../src/memory/files.ts";
 import { barrier, bounded } from "../../../tests/support/control.ts";
 

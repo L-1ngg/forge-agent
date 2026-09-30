@@ -1,10 +1,11 @@
-import { fauxModel } from "../../../tests/support/model.ts";
+import { response } from "@forge-agent/protocol";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { scriptedModel } from "../../../tests/fixtures/scripted-model.ts";
+import { fauxModel } from "../../../tests/support/model.ts";
+import { propertyOptions } from "../../../tests/support/property.ts";
 import { createAgent, type CreateAgentOptions } from "../src/agent.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
-import { response } from "@forge-agent/protocol";
-import { scriptedModel } from "./helpers/scripted-model.ts";
 
 const options: CreateAgentOptions = { provider: "faux", model: "faux-1", systemPrompt: "", cwd: process.cwd() };
 
@@ -25,7 +26,7 @@ test("SDK disposal remains terminal across generated queued inputs and cancellat
 		expect((await iterator.next()).done).toBe(true);
 		expect(agent.getUsage()).toBeUndefined();
 		expect(() => agent.runTurn("late")).toThrow("disposed");
-	}), { numRuns: 20, seed: 90502 });
+	}), propertyOptions(90502, 20));
 });
 
 test("SDK retains complete calls even when the consumer breaks at agent_end", async () => {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { probeConfig, runProbe, type ProbeConfig } from "./live-probe.ts";
 import { frames } from "../tests/fixtures/protocol.ts";
-import { modelResponse } from "../packages/core/test/helpers/model-response.ts";
+import { modelResponse } from "../tests/fixtures/model-response.ts";
 
 test("live probe refuses missing/invalid explicit target and budgets before any request", () => {
 	expect(() => probeConfig({})).toThrow("Missing explicit");

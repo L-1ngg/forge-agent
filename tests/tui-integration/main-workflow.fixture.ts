@@ -1,13 +1,14 @@
-import { fauxModel } from "../support/model.ts";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { App, dumpFrame } from "../../packages/tui/src/index.ts";
 import { createAgent, createInputCompletionSource, RequestBus, SessionStore } from "../../packages/core/src/index.ts";
-import { builtinTools } from "../../packages/tools/src/index.ts";
 import type { PermissionContext } from "../../packages/core/src/permission/index.ts";
+import { builtinTools } from "../../packages/tools/src/index.ts";
+import { App } from "../../packages/tui/src/index.ts";
+import { fauxModel } from "../support/model.ts";
+import { installPtyControl } from "../support/pty-control.ts";
 
-const directory = await mkdtemp(join(tmpdir(), "forge-main-workflow-"));
+const directory = process.env.FORGE_AGENT_PTY_DIRECTORY;
+if (!directory) throw new Error("Missing parent-owned PTY directory");
 for (let file = 0; file < 10; file++) {
 	await writeFile(join(directory, `sample-${file}.ts`), Array.from({ length: 90 }, (_, line) => `FILE_${file}_LINE_${line + 1} ${line === 32 ? "中文内容" : "const value = true;"}`).join("\n"));
 }
@@ -25,23 +26,19 @@ const agent = await createAgent({ systemPrompt: "TUI workflow fixture", thinking
 		{ text: "The sample is updated and the command completed successfully." },
 	] }) });
 const app = new App({
-	port: { runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { yield* turn; process.send?.({ completed: input }); } }; }, abort() { agent.abort(); } },
+	port: { runTurn(input) { const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() { yield* turn; await turn.result; process.send?.({ completed: input }); } }; }, abort() { agent.abort(); } },
 	host: "alt", requestBus: bus, cwd: directory, homeDir: directory, showWelcome: true,
 	...(process.connected ? { stdout: process.stdout } : {}),
 	getStatus: () => ({ provider: "faux", model: "faux-1" }),
 	completionSource: createInputCompletionSource({ commands: [{ name: "help", description: "Commands" }], listFiles: async () => [] }),
 });
-const capture = (message: unknown) => {
-	if (message === "capture") process.send?.({ frame: dumpFrame(app.composeFrameForTest()) });
-};
-process.on("message", capture);
+const removeControl = installPtyControl(app);
 try {
 	await app.start(); process.send?.("ready");
 	await app.waitUntilStopped();
 } finally {
 	await agent.dispose();
-	await rm(directory, { recursive: true, force: true });
-	process.off("message", capture);
+	removeControl();
 	process.send?.({ raw: process.stdin.isRaw });
 	if (process.connected) process.disconnect?.();
 }

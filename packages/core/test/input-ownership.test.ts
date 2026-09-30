@@ -1,8 +1,9 @@
+import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
+import { scriptedModel, type ScriptedModel } from "../../../tests/fixtures/scripted-model.ts";
+import { propertyOptions } from "../../../tests/support/property.ts";
 import { createAgent } from "../src/agent.ts";
-import { scriptedModel, type ScriptedModel } from "./helpers/scripted-model.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 
 function gate() {
@@ -216,5 +217,5 @@ test("ADR010: generated input/end/cancel interleavings process each accepted inp
 			await agent.dispose();
 			expect(seen.slice(count)).toEqual(["fresh"]);
 		},
-	), { seed: 91004, numRuns: 40 });
+	), propertyOptions(91004, 40));
 });

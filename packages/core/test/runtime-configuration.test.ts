@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgent } from "@forge-agent/core/sdk";
-import { modelResponse, gate } from "./helpers/model-response.ts";
+import { modelResponse, gate } from "../../../tests/fixtures/model-response.ts";
 const settings = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "old prompt", cwd: process.cwd() };
 
 test("invalid Azure endpoint cannot replace the applied model configuration", async () => {

@@ -4,7 +4,7 @@ import { createAgent, MemorySessionStorage, SessionStore, type CompactionCheckpo
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gate, modelResponse } from "./helpers/model-response.ts";
+import { gate, modelResponse } from "../../../tests/fixtures/model-response.ts";
 
 const options = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "task-system", cwd: process.cwd(), maxTokens: 512, contextWindow: 32000, context: { reserveTokens: 1024, keepRecentTokens: 100 } } satisfies CreateAgentOptions;
 const msg = (role: "user" | "assistant", text: string): SessionMessage => ({ role, content: [{ type: "text", text }], timestamp: 1, ...(role === "assistant" ? { stopReason: "stop" } : {}) });

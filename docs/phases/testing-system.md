@@ -6,6 +6,7 @@ created: 2026-09-10
 # 软件测试体系：规格与施工入口
 
 > 状态:已完成（2026-09-19 核对）。[Issue #33](https://github.com/L-1ngg/forge-agent/issues/33) 已于 2026-09-18 关闭；需求规格与任务状态以该 Issue 为准。实际设计、执行入口、Linux 网络隔离与 macOS fixture 兼容性验收证据见 [施工记录](testing-system-implementation.md)。
+> 后续重构(2026-09-30)：[测试体系全面重设计与重构](testing-system-redesign.md) 已按 operator 授权实施，包含冗余审计、路径修复与本轮验证；当前执行说明见施工记录，不把本轮 Linux 结果扩展为历史 macOS 验收。
 
 ## 已确认的目标与边界
 

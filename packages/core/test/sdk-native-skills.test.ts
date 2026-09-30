@@ -6,7 +6,7 @@ import type { SessionMessage } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import { sessionMessages } from "../src/session-storage.ts";
-import { nativeAdapter, responseChunks } from "./helpers/native-adapter.ts";
+import { nativeAdapter, responseChunks } from "../../../tests/fixtures/native-adapter.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 const answer: SessionMessage = { role: "assistant", content: [{ type: "text", text: "done" }], timestamp: 1, stopReason: "stop" };

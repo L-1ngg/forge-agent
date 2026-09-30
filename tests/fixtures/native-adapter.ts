@@ -1,8 +1,8 @@
 import { BaseTextAdapter } from "@tanstack/ai/adapters";
 import { EventType } from "@ag-ui/core";
 import { type AdapterYieldChunk, type DefaultMessageMetadataByModality, type ModelMessage, type TextOptions } from "@tanstack/ai";
-import type { SessionContentBlock, SessionMessage } from "@forge-agent/protocol";
-import type { Model } from "../../src/model-types.ts";
+import type { SessionContentBlock, SessionMessage } from "../../packages/protocol/src/index.ts";
+import type { Model } from "../../packages/core/src/model-types.ts";
 
 export type NativeRequest = TextOptions<Record<string, unknown>>;
 export type NativeStream = (request: NativeRequest) => AsyncIterable<AdapterYieldChunk>;

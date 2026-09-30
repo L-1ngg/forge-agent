@@ -7,6 +7,7 @@ created: 2026-09-18
 
 > 状态:已完成（2026-09-19 核对）。实现与 Linux、三台 macOS 验收证据见下文；Linux 强制断网，macOS 仅提供完整 fixture 兼容性证据，PF 接入已撤回。[Issue #33](https://github.com/L-1ngg/forge-agent/issues/33) 已于 2026-09-18 关闭，需求与验收以该 Issue 为准；规格入口见 [testing-system.md](testing-system.md)。
 > 后续维护：2026-09-29 补齐周边脚本类型检查；本次 Linux 证据单列于下方，不改写 Issue #33 原版本和 macOS 验收。
+> 2026-09-30 的全仓重构见 [施工图与本轮证据](testing-system-redesign.md)；本文件的执行说明同步当前入口，历史验证记录仍对应各自版本。
 
 ## Entry 与设计
 
@@ -47,19 +48,20 @@ macOS 使用相同测试分组与完整门禁，直接运行本地 fixtures；�
 | 命令 | 范围 | CI |
 |---|---|---|
 | `bun run check` | 依赖边界、包/automation/测试类型检查、以下三组完整测试 | Ubuntu/macOS 必跑 |
-| `bun run test:contract` | 工具、cell golden、纯契约及支撑层自检 | 完整检查的 contract 组 |
+| `bun run test:plan` | 核对显式登记与实际发现集合并输出计划 | 完整测试启动前核对 |
+| `bun run test:contract` | 纯模块、AppPort 交互合同、cell golden 及支撑层自检 | 完整检查的 contract 组 |
 | `bun run test:integration` | 真实 SDK、会话、HTTP 协议、属性序列、probe 的本地控制测试 | 完整检查的 integration 组 |
-| `bun run test:cli` | 全部 PTY，包括正式 CLI 权限、取消和恢复 | 完整检查的 cli 组 |
+| `bun run test:cli` | 正式 CLI 子进程、全部 PTY、headless smoke | 完整检查的 cli 组 |
 | `bun run test:network` | Linux 本进程/原生 socket/Bun 子进程/真实 Bash 工具/正式 CLI 越界探针 | 每次 Linux 测试组开始前必跑；macOS 明确报仅支持 Linux |
-| `bun run test:headless` | 原有 headless smoke；Linux 强制断网，macOS 使用 fixture 环境 | 双平台必跑 |
+| `bun run test:headless` | 单独执行已包含在 cli 组的正式 headless smoke | 完整门禁已覆盖，不重复运行 |
 | `bun run typecheck:examples` | 公开 SDK 示例 | 双平台必跑 |
 | `bun run test:live` | 显式真实目标的独立有限协议探针 | 不自动运行 |
 
-`scripts/test-offline.ts` 按 Bun 支持的 test/spec 后缀发现测试，按 `testGroup` 互斥分组；未单列的用例归 contract，不删除旧测试。直接 `bun test <file>` 仍可用于局部开发，但不构成 OS 离线证据。Linux 需要 `unshare`、`ip` 和 Python 3，隔离不可用时入口失败；macOS 直接运行相同测试，不配置防火墙或进程网络沙箱。
+`scripts/test-plan.ts` 按 Bun 支持的 test/spec 后缀发现 `packages/*/test/`、`tests/`、`scripts/` 下的测试，每个文件必须显式登记且恰好归一组。漏登记、重复、丢失或空组都失败；不再按文件名前缀或默认回退分组。直接 `bun test <file>` 可用于局部开发，但不构成 OS 离线证据。Linux 需要 `unshare`、`ip` 和 Python 3，隔离不可用时入口失败；macOS 直接运行相同测试，不配置防火墙或进程网络沙箱。
 
-`.test-results/{contract,integration,cli}.xml` 为 Bun JUnit；同名 `.log` 保存原始输出（含失败场景的顺序 trace 和 fast-check 参数）；`network.log` 在 Linux 保存越界探针结果，在 macOS 明确写入 `NETWORK_ISOLATION_NOT_ENFORCED`。`timings.json` 记录分组文件数、耗时、Bun/OS/架构及 `networkIsolation`（Linux 为 `network-namespace`，macOS 为 `none`）。CI 即使失败也上传 `test-evidence-<os>`，同时保留 Actions 日志。目录被 Git 忽略，正常测试不会更新 fixture。Linux/macOS 结果分别报告。
+每次执行打印本轮 `.test-results/run-*/` 路径。目录中的 `plan.json`、`summary.json`、`{contract,integration,cli}.xml` 和同名 `.log` 属于同一轮；`runner.log` 保存隔离启动及总输出，`network.log` 保存 Linux 越界探针或 macOS 的 `NETWORK_ISOLATION_NOT_ENFORCED`。summary 记录 HEAD、工作树是否 dirty、实际代码/测试/配置文件的 SHA-256、Bun/OS/架构、`networkIsolation`、组状态、退出码及耗时。setup 失败保留未执行组，日志显式截断；`latest-<selection>.json` 仅指向具体 run-id，不合并旧报告。并发执行使用独立目录。CI 失败也上传证据及 Actions 日志；目录被 Git 忽略，正常测试不更新 fixture。Linux/macOS 结果分别报告。
 
-属性序列通过真实 SDK 的默认 HTTP 装配执行，不使用参考模型执行器。示例复现：`FORGE_TEST_SEED=33004 FORGE_TEST_PATH='0:2:2:2' bun test tests/integration/lifecycle.property.test.ts`；离线复现用相同环境加 `bun run test:integration`。数组任意值支持 seed/path 缩减，本期未使用 command model，故无 `replayPath`。旧 `abort-machine` 自检保留并明确标注非生产覆盖。
+所有属性用例使用 `tests/support/property.ts` 的固定默认 seed 与运行预算，支持 `FORGE_TEST_SEED`、`FORGE_TEST_PATH`。失败保留 fast-check 给出的 seed/path、最小操作序列，以及真实 SDK 场景的 trace。先用 `bun test <file> -t '<test name>'` 精确复现对应性质；路径只对产生它的性质有效，不把一条 path 套用到全部性质。真实 SDK 操作序列继续执行生产生命周期、配置、审批、取消和记忆；无生产用途的 `abort-machine` 及两个参考模型自检已删除，真实流式取消用例保留于 `tests/loop-contract/abort.test.ts`。
 
 live probe 要求 `FORGE_PROBE_PROVIDER`、`FORGE_PROBE_MODEL`、`FORGE_PROBE_API_KEY`、`FORGE_PROBE_BASE_URL`、`FORGE_PROBE_MAX_REQUESTS`、`FORGE_PROBE_TIMEOUT_MS`。URL 为供应商 API 根（例如 Anthropic 不附加 `/v1/messages`，Responses 不附加 `/responses`），不能含凭据、query 或 fragment。所有模型及重试请求经外层代理计数，达到额度后禁止下一请求；所有阶段共享时间上限，超限杀掉 worker 并取消上游连接。目标 API key 只存在父进程，子进程只接触代理假 key；报告仅有分类、请求数、时间、HTTP 状态码。支持 `passed/refused/budget_exceeded/timeout/authentication/environment/protocol_failure`；取消用第二次任务的首个实际 delta 触发。普通离线测试仅使用回环假凭据验证此入口，不授权真实执行。
 

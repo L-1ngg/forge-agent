@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgent } from "../src/agent.ts";
-import { scriptedModel } from "./helpers/scripted-model.ts";
+import { scriptedModel } from "../../../tests/fixtures/scripted-model.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 
@@ -52,7 +52,7 @@ test("abort immediately after requesting manual compaction never starts a summar
 });
 
 for (const fail of [false, true]) test(`compaction waits for durable checkpoint before success or reuse: fail=${fail}`, async () => {
-	const { gate } = await import("./helpers/model-response.ts");
+	const { gate } = await import("../../../tests/fixtures/model-response.ts");
 	const saving = gate(); const release = gate();
 	const storage = new MemorySessionStorage([message("user", "old goal"), message("assistant", "old work ".repeat(1000)), message("user", "recent goal")]);
 	const initial = await storage.load();

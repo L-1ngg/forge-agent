@@ -30,16 +30,19 @@ test("provider thinking signatures survive session storage and replay over HTTP"
 		},
 	});
 	const directory = await mkdtemp(join(tmpdir(), "forge-agent-replay-"));
+	const agents: Awaited<ReturnType<typeof createAgent>>[] = [];
 	try {
 		const path = join(directory, "session.jsonl");
 		const store = await SessionStore.open(path, directory);
 		const options = { provider: "anthropic", model, apiKey: "test-local-key", baseUrl: server.url.toString(), cwd: directory, systemPrompt: "test", thinkingLevel: "low" as const };
 		const first = await createAgent({ ...options, storage: store });
+		agents.push(first);
 		for await (const event of first.runTurn("first")) {
 			if (event.type === "message_end") expect(event.message.errorMessage).toBeUndefined();
 		}
 		const reopened = await SessionStore.open(path, directory);
 		const second = await createAgent({ ...options, storage: reopened });
+		agents.push(second);
 		for await (const event of second.runTurn("second")) {
 			if (event.type === "message_end") expect(event.message.errorMessage).toBeUndefined();
 		}
@@ -48,6 +51,7 @@ test("provider thinking signatures survive session storage and replay over HTTP"
 		expect(replayed).toContainEqual({ type: "thinking", thinking: "reason", signature: "test-signature" });
 		expect(replayed).toContainEqual({ type: "redacted_thinking", data: "test-opaque-payload" });
 	} finally {
+		await Promise.all(agents.map(agent => agent.dispose()));
 		server.stop(true);
 		await rm(directory, { recursive: true, force: true });
 	}

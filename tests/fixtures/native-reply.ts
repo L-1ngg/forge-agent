@@ -1,6 +1,6 @@
 import { EventType } from "@ag-ui/core";
 import type { AdapterYieldChunk, TextOptions, TokenUsage } from "@tanstack/ai";
-import type { Model } from "../../src/model-types.ts";
+import type { Model } from "../../packages/core/src/model-types.ts";
 import { nativeAdapter } from "./native-adapter.ts";
 
 /** Declarative native adapter fixture: no Agent loop, history or model event compatibility. */

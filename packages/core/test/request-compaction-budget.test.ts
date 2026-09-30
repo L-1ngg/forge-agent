@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { SessionEvent, SessionMessage } from "@forge-agent/protocol";
 import { createAgent, LongTermMemory, MemorySessionStorage, type AgentTurn, type Model } from "../src/sdk.ts";
 import { SUMMARY_SYSTEM } from "../src/context/compaction.ts";
-import { nativeAdapter, responseChunks } from "./helpers/native-adapter.ts";
+import { nativeAdapter, responseChunks } from "../../../tests/fixtures/native-adapter.ts";
 import { withScenario } from "../../../tests/support/scenario.ts";
 
 const model: Model<string> = { id: "budget-fixture", name: "Budget fixture", api: "faux", provider: "host", baseUrl: "https://unused.invalid", reasoning: false, input: ["text"], contextWindow: 8000, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };

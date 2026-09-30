@@ -3,7 +3,7 @@ import type { SessionMessage } from "@forge-agent/protocol";
 import { EventType, type AdapterYieldChunk } from "@tanstack/ai";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import { toModelMessages } from "../src/model-response.ts";
-import { collectResponse, nativeRequest } from "./helpers/native-request.ts";
+import { collectResponse, nativeRequest } from "../../../tests/fixtures/native-request.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 const terminal = (finishReason: "stop" | "tool_calls" | "length" = "stop"): AdapterYieldChunk => ({ type: EventType.RUN_FINISHED, runId: "run", threadId: "thread", finishReason });

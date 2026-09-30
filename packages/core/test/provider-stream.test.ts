@@ -7,8 +7,8 @@ import { getCatalogModel, listCatalogModels, listCatalogProviders } from "../src
 import type { SessionMessage } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
 import { assertBuiltinTransport } from "../src/model-adapter.ts";
-import { collectResponse, nativeRequest } from "./helpers/native-request.ts";
-import { modelResponse } from "./helpers/model-response.ts";
+import { collectResponse, nativeRequest } from "../../../tests/fixtures/native-request.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { EventType } from "@tanstack/ai";
 
 const frame = (event: unknown) => `data: ${JSON.stringify(event)}\n\n`;

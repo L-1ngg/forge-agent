@@ -253,11 +253,10 @@ This is a personal project under active development. APIs and configuration may 
 
 ```bash
 bun run check
-bun run test:headless
 bun run typecheck:examples
 ```
 
-See [Contributing](CONTRIBUTING.md#local-checks) for platform requirements, focused test groups, and evidence output. Its [scripts and examples guide](CONTRIBUTING.md#scripts-and-examples) distinguishes offline commands from live model experiments.
+`check` includes the formal headless smoke and every registered suite. `test:headless` runs that smoke alone. See [Contributing](CONTRIBUTING.md#local-checks) for platform requirements, focused groups, and per-run evidence. Its [scripts and examples guide](CONTRIBUTING.md#scripts-and-examples) distinguishes offline commands from live model experiments.
 
 [SDK guide](docs/sdk.en.md) · [中文 SDK 指南](docs/sdk.md) · [Contributing](CONTRIBUTING.md) · [Internal documentation](docs/README.md) (Chinese)
 

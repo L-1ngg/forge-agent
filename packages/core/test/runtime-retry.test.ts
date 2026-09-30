@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createAgent, MemorySessionStorage } from "@forge-agent/core/sdk";
 import { sessionMessages } from "../src/session-storage.ts";
-import { modelResponse } from "./helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 const settings = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "retry", cwd: process.cwd() };
 for (const cancel of [false, true]) test(`SDK transient retry preserves input and tool effects; cancel=${cancel}`, async () => {
 	let requests = 0; let effects = 0;
@@ -33,7 +33,7 @@ for (const cancel of [false, true]) test(`SDK transient retry preserves input an
 });
 
 test("SDK task retry schedules exponential backoff and resets for a new invocation", async () => {
-	const { scriptedModel } = await import("./helpers/scripted-model.ts");
+	const { scriptedModel } = await import("../../../tests/fixtures/scripted-model.ts");
 	const waits: number[] = []; let calls = 0;
 	const storage = new MemorySessionStorage();
 	const agent = await createAgent({ ...settings, ...scriptedModel({

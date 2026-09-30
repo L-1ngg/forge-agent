@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgent, MemorySessionStorage, type Agent, type CreateAgentOptions, type SessionEntry } from "../../packages/core/src/sdk.ts";
@@ -16,16 +16,19 @@ export class Scenario {
 	private readonly fixtures: HttpFixture[] = [];
 	private readonly executions = new Set<Promise<SessionEvent[]>>();
 	private closing: Promise<void> | undefined;
-	private constructor(readonly id: string, readonly directory: string) {}
-	static async open(id: string): Promise<Scenario> {
+	private constructor(readonly id: string, readonly directory: string, private readonly pathAlias: boolean) {}
+	static async open(id: string, options: { pathAlias?: boolean } = {}): Promise<Scenario> {
 		const directory = await mkdtemp(join(tmpdir(), "forge-scenario-"));
-		const scenario = new Scenario(id, directory);
-		try { await Promise.all(["config", "data", "work"].map(name => mkdir(join(directory, name)))); }
+		const scenario = new Scenario(id, directory, options.pathAlias ?? false);
+		try {
+			await Promise.all(["home", "config", "data", "work"].map(name => mkdir(join(directory, name))));
+			if (options.pathAlias) await symlink(join(directory, "work"), join(directory, "work-alias"), "dir");
+		}
 		catch (error) { await scenario.close(); throw error; }
 		return scenario;
 	}
-	get cwd(): string { return join(this.directory, "work"); }
-	get env(): Record<string, string> { return { XDG_CONFIG_HOME: join(this.directory, "config"), XDG_DATA_HOME: join(this.directory, "data") }; }
+	get cwd(): string { return join(this.directory, this.pathAlias ? "work-alias" : "work"); }
+	get env(): Record<string, string> { return { HOME: join(this.directory, "home"), XDG_CONFIG_HOME: join(this.directory, "config"), XDG_DATA_HOME: join(this.directory, "data") }; }
 	defer(cleanup: () => unknown | Promise<unknown>): void { this.assertOpen(); this.cleanups.push(cleanup); }
 	httpFixture(id: string, exchanges: readonly Exchange[]): HttpFixture {
 		this.assertOpen();
@@ -83,11 +86,11 @@ export class Scenario {
 	}
 }
 
-export async function withScenario(id: string, run: (scenario: Scenario) => Promise<void>): Promise<void> {
-	const scenario = await Scenario.open(id);
+export async function withScenario(id: string, run: (scenario: Scenario) => Promise<void>, options: { pathAlias?: boolean; timeoutMs?: number } = {}): Promise<void> {
+	const scenario = await Scenario.open(id, options);
 	let failure: unknown;
 	let failed = false;
-	try { await bounded(run(scenario), `${id}/scenario`); } catch (error) { failed = true; failure = error; }
+	try { await bounded(run(scenario), `${id}/scenario`, options.timeoutMs); } catch (error) { failed = true; failure = error; }
 	try { await scenario.close(); } catch (error) {
 		if (!failed) { failed = true; failure = error; }
 		else console.error(scenario.trace.format(`${id}/secondary settlement failure`, error));

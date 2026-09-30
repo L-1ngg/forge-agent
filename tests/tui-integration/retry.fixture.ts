@@ -1,6 +1,6 @@
 import { createAgent, RequestBus } from "../../packages/core/src/index.ts";
 import { App } from "../../packages/tui/src/index.ts";
-import { modelResponse } from "../../packages/core/test/helpers/model-response.ts";
+import { modelResponse } from "../fixtures/model-response.ts";
 
 let calls = 0;
 const server = Bun.serve({

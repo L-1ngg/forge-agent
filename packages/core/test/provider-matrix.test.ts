@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
 import { SessionStore } from "../src/index.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
-import { modelResponse } from "./helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 
 const protocols = [
 	{ api: "openai-completions", provider: "deepseek", model: "deepseek-v4-flash" },

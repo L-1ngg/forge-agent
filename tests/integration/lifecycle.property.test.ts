@@ -1,21 +1,21 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import type { AgentTurn } from "../../packages/core/src/sdk.ts";
-import type { Exchange } from "../support/http-fixture.ts";
-import { withScenario, bounded } from "../support/scenario.ts";
-import { frames, settings, path } from "../fixtures/protocol.ts";
-import { LongTermMemory, type Model } from "../../packages/core/src/sdk.ts";
-import { nativeAdapter } from "../../packages/core/test/helpers/native-adapter.ts";
-import { nativeReply, isMemoryOrganizerRequest } from "../../packages/core/test/helpers/native-reply.ts";
-import { join } from "node:path";
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import type { AgentTurn } from "../../packages/core/src/sdk.ts";
+import { LongTermMemory, type Model } from "../../packages/core/src/sdk.ts";
+import { nativeAdapter } from "../fixtures/native-adapter.ts";
+import { isMemoryOrganizerRequest, nativeReply } from "../fixtures/native-reply.ts";
+import { frames, path, settings } from "../fixtures/protocol.ts";
+import type { Exchange } from "../support/http-fixture.ts";
+import { propertyOptions } from "../support/property.ts";
+import { bounded, withScenario } from "../support/scenario.ts";
 
 const operations = ["run", "unstarted-cancel", "stream-cancel", "steer", "follow-up", "stale", "dispose"] as const;
 type Operation = typeof operations[number];
 
 test("generated operations drive the real SDK: ownership, cancellation, reuse and disposal", async () => {
-	const seed = Number(process.env.FORGE_TEST_SEED ?? 33004);
-	const replayPath = process.env.FORGE_TEST_PATH;
+	const options = propertyOptions(33004, 50), seed = options.seed, replayPath = options.path;
 	await fc.assert(fc.asyncProperty(fc.array(fc.constantFrom(...operations), { minLength: 1, maxLength: 20 }), async commands => {
 		await withScenario("sdk-sequence", async scenario => {
 			scenario.trace.record("reproduction", { seed, path: replayPath ?? "", commands });
@@ -79,11 +79,11 @@ test("generated operations drive the real SDK: ownership, cancellation, reuse an
 			await agent.dispose();
 			expect(() => agent.runTurn("closed")).toThrow("disposed");
 		});
-	}), { seed, numRuns: 50, ...(replayPath !== undefined ? { path: replayPath } : {}), endOnFailure: false });
+	}), { ...options, endOnFailure: false });
 }, 30_000);
 
 test("replayable SDK sequences combine deferred memory, configuration, approval and cancellation", async () => {
-	const seed = Number(process.env.FORGE_TEST_SEED ?? 44017), replayPath = process.env.FORGE_TEST_PATH;
+	const options = propertyOptions(44017, 8), seed = options.seed, replayPath = options.path;
 	const choices = ["save", "configure", "approve", "deny", "cancel-save"] as const;
 	const model: Model = { id: "sequence", name: "Sequence", api: "faux", provider: "fixture", baseUrl: "https://unused.invalid", reasoning: false, input: ["text"], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 	await fc.assert(fc.asyncProperty(fc.array(fc.constantFrom(...choices), { minLength: 1, maxLength: 8 }), async suffix => {
@@ -136,5 +136,5 @@ test("replayable SDK sequences combine deferred memory, configuration, approval 
 				expect(effects).toBe(expectedEffects); old = turn; index++;
 			}
 		});
-	}), { seed, numRuns: 8, ...(replayPath !== undefined ? { path: replayPath } : {}) });
+	}), options);
 }, 30_000);

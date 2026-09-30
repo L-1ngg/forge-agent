@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { TurnResult } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage, type Model } from "../src/sdk.ts";
-import { gate } from "./helpers/model-response.ts";
-import { replyAdapter, type NativeReply } from "./helpers/native-reply.ts";
+import { gate } from "../../../tests/fixtures/model-response.ts";
+import { replyAdapter, type NativeReply } from "../../../tests/fixtures/native-reply.ts";
 
 const model: Model = {
 	id: "lifecycle-model", name: "Lifecycle model", api: "faux", provider: "fixture", baseUrl: "https://unused.invalid",

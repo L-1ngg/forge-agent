@@ -106,7 +106,7 @@ test("explicit memory import reads only a bounded selected project session witho
 
 test("session resume reconstructs old pi sessions from original history", async () => {
 	const { SessionStore, messageEntry } = await import("@forge-agent/core");
-	const { modelResponse } = await import("../../core/test/helpers/model-response.ts");
+	const { modelResponse } = await import("../../../tests/fixtures/model-response.ts");
 	const cwd = await mkdtemp(join(tmpdir(), "forge-resume-summary-"));
 	const bodies: string[] = [];
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { bodies.push(await request.text()); return modelResponse(); } });
@@ -150,7 +150,7 @@ test("first persistence failure prevents any model request and readonly open can
 
 test("project history remains resumable after its original working subdirectory is removed", async () => {
 	const { mkdir } = await import("node:fs/promises");
-	const { modelResponse } = await import("../../core/test/helpers/model-response.ts");
+	const { modelResponse } = await import("../../../tests/fixtures/model-response.ts");
 	const root = await mkdtemp(join(tmpdir(), "forge-moved-cwd-"));
 	const sub = join(root, "old-src");
 	await mkdir(sub);

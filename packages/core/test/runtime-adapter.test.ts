@@ -3,8 +3,8 @@ import type { TextOptions } from "@tanstack/ai";
 import { createAgent, MemorySessionStorage, type Model, type Agent } from "@forge-agent/core/sdk";
 import { sessionMessages } from "../src/session-storage.ts";
 import { SUMMARY_SYSTEM } from "../src/context/compaction.ts";
-import { gate, modelResponse } from "./helpers/model-response.ts";
-import { replyAdapter, systemText, type NativeReply } from "./helpers/native-reply.ts";
+import { gate, modelResponse } from "../../../tests/fixtures/model-response.ts";
+import { replyAdapter, systemText, type NativeReply } from "../../../tests/fixtures/native-reply.ts";
 
 const model: Model = {
 	id: "host-model", name: "Host model", api: "faux", provider: "host-provider", baseUrl: "https://unused.invalid",

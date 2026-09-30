@@ -3,8 +3,8 @@ import type { SessionEvent, SessionMessage } from "../../packages/protocol/src/i
 import type { HarnessTool, ToolContext } from "../../packages/tools/src/index.ts";
 import { createAgent, MemorySessionStorage, type AgentTurn } from "../../packages/core/src/sdk.ts";
 import { sessionMessages } from "../../packages/core/src/session-storage.ts";
-import { gate } from "../../packages/core/test/helpers/model-response.ts";
-import { nativeAdapter, responseChunks } from "../../packages/core/test/helpers/native-adapter.ts";
+import { gate } from "../fixtures/model-response.ts";
+import { nativeAdapter, responseChunks } from "../fixtures/native-adapter.ts";
 import { createTestAgent } from "../support/test-agent.ts";
 import { fauxModel } from "../support/model.ts";
 

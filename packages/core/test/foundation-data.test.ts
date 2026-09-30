@@ -8,7 +8,7 @@ import {
 	createAgent, LongTermMemory, SessionStore,
 	type AgentTurn, type CompactionCheckpoint, type CreateAgentOptions, type McpArtifactStore, type MessageEntry, type Model,
 } from "../src/sdk.ts";
-import { replyAdapter } from "./helpers/native-reply.ts";
+import { replyAdapter } from "../../../tests/fixtures/native-reply.ts";
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });

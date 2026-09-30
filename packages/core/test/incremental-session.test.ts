@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgent } from "../src/agent.ts";
-import { scriptedModel } from "./helpers/scripted-model.ts";
+import { scriptedModel } from "../../../tests/fixtures/scripted-model.ts";
 import { MemorySessionStorage, sessionMessages } from "../src/session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 

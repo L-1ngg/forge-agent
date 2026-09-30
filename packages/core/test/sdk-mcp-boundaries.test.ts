@@ -3,7 +3,7 @@ import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
 import { sessionMessages } from "../src/session-storage.ts";
 import { mcpFixture } from "./helpers/mcp-server.ts";
-import { modelResponse } from "./helpers/model-response.ts";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { mcpToolName } from "../src/mcp/config.ts";
 
 const base = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "base", cwd: process.cwd() };

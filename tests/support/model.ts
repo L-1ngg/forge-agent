@@ -1,4 +1,4 @@
-import { nativeAdapter, responseChunks } from "../../packages/core/test/helpers/native-adapter.ts";
+import { nativeAdapter, responseChunks } from "../fixtures/native-adapter.ts";
 import type { Model } from "../../packages/core/src/model-types.ts";
 import type { SessionMessage, StopReason } from "../../packages/protocol/src/index.ts";
 

@@ -3,7 +3,7 @@ import type { ConverseStreamOutput } from "@aws-sdk/client-bedrock-runtime";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import { processConverseStream } from "../node_modules/@tanstack/ai-bedrock/dist/esm/converse/stream-processor.js";
 import { toConverseMessages } from "../node_modules/@tanstack/ai-bedrock/dist/esm/converse/message-converter.js";
-import { collectResponse } from "./helpers/native-request.ts";
+import { collectResponse } from "../../../tests/fixtures/native-request.ts";
 import { toModelMessages } from "../src/model-response.ts";
 
 const model = getCatalogModel("amazon-bedrock", "anthropic.claude-sonnet-4-5-20250929-v1:0")!;

@@ -4,8 +4,8 @@ import { createAgent } from "../src/sdk.ts";
 import { RequestBus } from "../src/request-bus.ts";
 import { MemorySessionStorage } from "../src/session-storage.ts";
 import { fauxModel } from "../../../tests/support/model.ts";
-import { nativeAdapter } from "./helpers/native-adapter.ts";
-import { gate } from "./helpers/model-response.ts";
+import { nativeAdapter } from "../../../tests/fixtures/native-adapter.ts";
+import { gate } from "../../../tests/fixtures/model-response.ts";
 
 const options = { systemPrompt: "", cwd: process.cwd() };
 

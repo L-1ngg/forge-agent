@@ -5,7 +5,8 @@ import { SessionStore } from "@forge-agent/core/sdk";
 import { expect, test } from "bun:test";
 import { createAgent, MemorySessionStorage } from "@forge-agent/core/sdk";
 import { response } from "@forge-agent/protocol";
-import { modelResponse, gate } from "./helpers/model-response.ts";
+import { modelResponse, gate } from "../../../tests/fixtures/model-response.ts";
+import { nextTurn } from "../../../tests/support/control.ts";
 import type { HarnessTool } from "@forge-agent/tools";
 const settings = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", systemPrompt: "tools", cwd: process.cwd() };
 const parameters = { type: "object" as const, properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false as const };
@@ -142,11 +143,13 @@ test("SDK assistant persistence barrier prevents tool effects while its write is
   } },
   tools: [{ name: "work", label: "Work", description: "work", parameters, async execute() { effects++; return { content: [], details: {} }; } }],
  });
- const running = (async () => { for await (const _event of agent.runTurn("work")) {} })();
+ const turn = agent.runTurn("work");
+ const running = (async () => { for await (const _event of turn) {} })();
  try {
-  await saving.promise; await Bun.sleep(20);
+  await saving.promise; await nextTurn();
   expect(effects).toBe(0); expect(requests).toBe(1);
   release.resolve(); await running;
+  expect(await turn.result).toEqual({ status: "success" });
   expect(effects).toBe(1); expect(requests).toBe(2);
  } finally { release.resolve(); await running; await agent.dispose(); server.stop(true); }
 });

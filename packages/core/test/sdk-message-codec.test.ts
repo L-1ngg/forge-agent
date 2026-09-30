@@ -5,8 +5,8 @@ import { join } from "node:path";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage, SessionStore, messageEntry, type SessionState } from "../src/index.ts";
 import { getCatalogModel } from "../src/model-catalog.ts";
-import { nativeAdapter } from "./helpers/native-adapter.ts";
-import { nativeReply } from "./helpers/native-reply.ts";
+import { nativeAdapter } from "../../../tests/fixtures/native-adapter.ts";
+import { nativeReply } from "../../../tests/fixtures/native-reply.ts";
 
 const badBlocks = [null, { type: "text", text: 42 }, { type: "future", text: "lost" }, { type: "tool_call", id: "call", name: "tool", arguments: [] }, { type: "thinking", thinking: null }, { type: "image", data: "bytes" }];
 

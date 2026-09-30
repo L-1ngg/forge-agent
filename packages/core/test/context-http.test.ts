@@ -157,7 +157,7 @@ test("switching custom and builtin adapters commits the preflight policy atomica
 	const { withScenario } = await import("../../../tests/support/scenario.ts");
 	const { fauxModel } = await import("../../../tests/support/model.ts");
 	await withScenario("transport-switch", async s => {
-		const body = await (await import("./helpers/model-response.ts")).modelResponse().text();
+		const body = await (await import("../../../tests/fixtures/model-response.ts")).modelResponse().text();
 		const fixture = s.httpFixture("builtin-request", [{ id: "builtin", method: "POST", path: "/v1/messages", match() {}, response: { chunks: [body] } }]); let customCalls = 0;
 		const custom = fauxModel({ responses: [{ text: "custom one" }, { text: "custom two" }] });
 		const adapter: import("../src/sdk.ts").ModelAdapter = { kind: "text", name: custom.adapter.name, model: custom.adapter.model, "~types": custom.adapter["~types"], chatStream: request => { customCalls++; return custom.adapter.chatStream(request); }, structuredOutput: () => custom.adapter.structuredOutput() };
@@ -172,7 +172,7 @@ test("switching custom and builtin adapters commits the preflight policy atomica
 
 test("builtin request ignores stale historical usage and respects a smaller local window", async () => {
 	const { withScenario } = await import("../../../tests/support/scenario.ts");
-	const { modelResponse } = await import("./helpers/model-response.ts");
+	const { modelResponse } = await import("../../../tests/fixtures/model-response.ts");
 	await withScenario("stale-usage-http", async s => {
 		const body = await modelResponse().text();
 		const fixture = s.httpFixture("one-request", [{ id: "short", method: "POST", path: "/v1/messages", match(body) { expect(body).toMatchObject({ max_tokens: 1024 }); }, response: { chunks: [body] } }]);

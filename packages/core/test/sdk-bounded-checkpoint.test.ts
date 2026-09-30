@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { createAgent, MemorySessionStorage, type Model } from "../src/sdk.ts";
 import { messageEntry, type SessionState } from "../src/session-storage.ts";
-import { nativeAdapter, requestMessages } from "./helpers/native-adapter.ts";
-import { nativeReply } from "./helpers/native-reply.ts";
+import { nativeAdapter, requestMessages } from "../../../tests/fixtures/native-adapter.ts";
+import { nativeReply } from "../../../tests/fixtures/native-reply.ts";
 
 const model: Model<string> = { id: "bounded", name: "Bounded fixture", api: "faux", provider: "host", baseUrl: "https://unused.invalid", reasoning: false, input: ["text"], contextWindow: 20_000, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 function history(count: number): SessionState {

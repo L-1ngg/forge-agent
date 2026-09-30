@@ -9,8 +9,8 @@ import { createAgent, LongTermMemory, type Agent } from "../src/sdk.ts";
 import { getCatalogModel } from "../src/model-catalog.ts";
 import type { Model } from "../src/model-types.ts";
 import { processConverseStream } from "../node_modules/@tanstack/ai-bedrock/dist/esm/converse/stream-processor.js";
-import { nativeAdapter, type NativeStream } from "./helpers/native-adapter.ts";
-import { isMemoryOrganizerRequest, nativeReply } from "./helpers/native-reply.ts";
+import { nativeAdapter, type NativeStream } from "../../../tests/fixtures/native-adapter.ts";
+import { isMemoryOrganizerRequest, nativeReply } from "../../../tests/fixtures/native-reply.ts";
 import { barrier, bounded } from "../../../tests/support/control.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;

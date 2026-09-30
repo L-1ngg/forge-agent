@@ -1,7 +1,8 @@
-import { fauxModel } from "../support/model.ts";
-import { App, frameToText } from "../../packages/tui/src/index.ts";
 import { createAgent, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
 import { sessionMessages } from "../../packages/core/src/session-storage.ts";
+import { App, frameToText } from "../../packages/tui/src/index.ts";
+import { fauxModel } from "../support/model.ts";
+import { installPtyControl } from "../support/pty-control.ts";
 
 const bus = new RequestBus({ timeoutMs: null });
 const storage = new MemorySessionStorage();
@@ -25,13 +26,14 @@ const app = new App({
 		runTurn(input) { if (typeof input !== "string") throw new Error("Text fixture"); const turn = agent.runTurn(input); return { result: turn.result, async *[Symbol.asyncIterator]() {
 			calls.push(input);
 			try { yield* turn; }
-			finally { process.send?.({ type: "settled", calls: [...calls] }); }
+			finally { await turn.result; process.send?.({ type: "settled", calls: [...calls] }); }
 		} }; },
 		abort: () => agent.abort(),
 		getUsage: () => agent.getUsage(),
 	},
 	host: "alt", requestBus: bus, cwd: process.cwd(), homeDir: process.cwd(), getStatus: () => ({ provider: "faux", model: "faux-1" }),
 });
+const removeControl = installPtyControl(app);
 process.on("message", (message) => {
 	if (message === "commit") releaseCommit();
 	if (message === "frame") process.send?.({ type: "frame", text: frameToText(app.composeFrameForTest()), calls: [...calls] });
@@ -40,6 +42,6 @@ try {
 	await app.start();
 	process.send?.({ type: "ready" });
 	await app.waitUntilStopped();
-} finally { await agent.dispose(); }
+} finally { removeControl(); await agent.dispose(); }
 process.send?.({ type: "result", raw: process.stdin.isRaw, pending: bus.pendingCount, calls, messages: sessionMessages(await storage.load()) });
 process.disconnect?.();

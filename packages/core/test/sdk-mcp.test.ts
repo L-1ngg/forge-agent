@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
 import { mcpFixture, calls } from "./helpers/mcp-server.ts";
-import { modelResponse, gate } from "./helpers/model-response.ts";
+import { modelResponse, gate } from "../../../tests/fixtures/model-response.ts";
 import { mcpToolName } from "../src/mcp/config.ts";
 import { sessionMessages } from "../src/session-storage.ts";
 const base = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "BASE", thinkingLevel: "off" as const, cwd: process.cwd() };

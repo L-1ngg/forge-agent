@@ -253,11 +253,10 @@ flowchart LR
 
 ```bash
 bun run check
-bun run test:headless
 bun run typecheck:examples
 ```
 
-平台要求、定向测试和证据输出见 [Contributing](CONTRIBUTING.md#local-checks)；[脚本与示例入口](CONTRIBUTING.md#scripts-and-examples) 区分离线命令与真实模型实验。
+`check` 已包含正式 headless smoke 与全部登记测试；`test:headless` 单独执行同一 smoke。平台要求、定向分组和每轮独立证据见 [Contributing](CONTRIBUTING.md#local-checks)；[脚本与示例入口](CONTRIBUTING.md#scripts-and-examples) 区分离线命令与真实模型实验。
 
 [中文 SDK](docs/sdk.md) · [English SDK](docs/sdk.en.md) · [贡献说明](CONTRIBUTING.md) · [内部文档](docs/README.md)
 

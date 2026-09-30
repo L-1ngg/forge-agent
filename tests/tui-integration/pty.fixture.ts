@@ -1,7 +1,8 @@
-import { fauxModel } from "../support/model.ts";
-import { App, dumpFrame } from "../../packages/tui/src/index.ts";
 import { createAgent, RequestBus, SessionStore } from "../../packages/core/src/index.ts";
 import { editTool } from "../../packages/tools/src/index.ts";
+import { App, dumpFrame } from "../../packages/tui/src/index.ts";
+import { fauxModel } from "../support/model.ts";
+import { installPtyControl } from "../support/pty-control.ts";
 
 const directory = process.env.FORGE_AGENT_PTY_DIRECTORY!;
 const bus = new RequestBus({ timeoutMs: null });
@@ -16,20 +17,13 @@ const app = new App({
 	cwd: directory, homeDir: directory, getStatus: () => ({ provider: "faux", model: "faux-1" }),
 });
 const snapshots = new Map<string, ReturnType<typeof dumpFrame>>();
-let snapshotName = 0;
-// IPC keeps frame sampling on the event loop instead of a native signal callback.
-const capture = (message: unknown) => {
-	if (message !== "capture") return;
-	snapshots.set(`frame-${snapshotName++}`, dumpFrame(app.composeFrameForTest()));
-	process.send?.("captured");
-};
-process.on("message", capture);
+const removeControl = installPtyControl(app, frame => snapshots.set(`${frame.columns}x${frame.rows}`, frame));
 try {
 	await app.start();
 	await app.waitUntilStopped();
 } finally {
 	await agent.dispose();
 }
-process.off("message", capture);
+removeControl();
 if (process.connected) process.disconnect?.();
 await Bun.write(`${directory}/result.json`, JSON.stringify({ raw: process.stdin.isRaw, frames: [...snapshots.values()], pending: bus.pendingCount }));

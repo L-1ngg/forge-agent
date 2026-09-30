@@ -1,6 +1,6 @@
-import { fauxModel } from "../support/model.ts";
 import { createAgent, MemorySessionStorage, RequestBus } from "../../packages/core/src/index.ts";
 import { App } from "../../packages/tui/src/index.ts";
+import { fauxModel } from "../support/model.ts";
 
 const bus = new RequestBus({ timeoutMs: null });
 const storage = new MemorySessionStorage([

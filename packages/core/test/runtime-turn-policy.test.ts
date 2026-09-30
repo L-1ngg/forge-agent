@@ -1,11 +1,11 @@
 import type { TextOptions } from "@tanstack/ai";
-import { replyAdapter, systemText, type NativeReply } from "./helpers/native-reply.ts";
+import { replyAdapter, systemText, type NativeReply } from "../../../tests/fixtures/native-reply.ts";
 import { expect, test } from "bun:test";
 import { createAgent, MemorySessionStorage, type AgentTurn, type CreateAgentOptions, type Model, type ShouldStopAfterTurnContext } from "@forge-agent/core/sdk";
 import type { SessionEvent } from "@forge-agent/protocol";
 import { sessionMessages } from "../src/session-storage.ts";
 import { SUMMARY_SYSTEM } from "../src/context/compaction.ts";
-import { gate } from "./helpers/model-response.ts";
+import { gate } from "../../../tests/fixtures/model-response.ts";
 
 const model: Model<string> = {
 	id: "policy-model", name: "Policy model", api: "faux", provider: "host", baseUrl: "https://unused.invalid",

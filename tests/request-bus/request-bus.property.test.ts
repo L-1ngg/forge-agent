@@ -1,4 +1,5 @@
 import fc from "fast-check";
+import { propertyOptions } from "../support/property.ts";
 import { expect, test } from "bun:test";
 import { RequestBus } from "../../packages/core/src/index.ts";
 import { response } from "../../packages/protocol/src/index.ts";
@@ -21,6 +22,7 @@ test("request bus terminal outcomes are absorbing under arbitrary late input", a
 				idFactory: (sequence, prefix) => `${prefix}-${sequence}`,
 			});
 			const promises = [0, 1, 2].map((index) => bus.ask("permission", { ...payload, toolCall: { ...payload.toolCall, id: `call-${index}` } }));
+			try {
 			const requestIterator = bus.requests()[Symbol.asyncIterator]();
 			const ids: string[] = [];
 			for (let index = 0; index < promises.length; index++) {
@@ -60,8 +62,8 @@ test("request bus terminal outcomes are absorbing under arbitrary late input", a
 				expect(bus.getTerminal(outcome.requestId)).toEqual(snapshot);
 			}
 			expect(bus.pendingCount).toBe(0);
-			bus.close();
+			} finally { bus.close(); await Promise.all(promises); }
 		}),
-		{ numRuns: 500 },
+		propertyOptions(33005, 500),
 	);
 });

@@ -13,6 +13,7 @@
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "typecheck:automation": "tsc --noEmit -p tsconfig.automation.json",
     "test": "bun scripts/test-offline.ts all",
+    "test:plan": "bun scripts/test-plan.ts",
     "test:contract": "bun scripts/test-offline.ts contract",
     "test:integration": "bun scripts/test-offline.ts integration",
     "test:cli": "bun scripts/test-offline.ts cli",
@@ -26,14 +27,15 @@
     "benchmark:resume": "bun scripts/session-resume-benchmark.ts"
   },
   "devDependencies": {
+    "@ag-ui/core": "1.0.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@modelcontextprotocol/server": "2.0.0",
+    "@tanstack/ai": "0.61.0",
     "@types/bun": "1.3.12",
+    "@xterm/headless": "5.5.0",
     "fast-check": "4.3.0",
     "typescript": "5.9.2",
-    "zod": "4.3.6",
-    "@ag-ui/core": "1.0.0",
-    "@tanstack/ai": "0.61.0"
+    "zod": "4.3.6"
   },
   "patchedDependencies": {
     "@tanstack/openai-base@0.11.1": "patches/@tanstack%2Fopenai-base@0.11.1.patch",

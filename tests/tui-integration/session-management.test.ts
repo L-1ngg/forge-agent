@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { modelResponse } from "../../packages/core/test/helpers/model-response.ts";
+import { modelResponse } from "../fixtures/model-response.ts";
+import { PtyDriver } from "../support/pty.ts";
+import { withScenario } from "../support/scenario.ts";
 
-test("real CLI PTY: empty exit, clear, new, resume, active cancellation and restart", async () => {
-	const cwd = await mkdtemp(join(tmpdir(), "forge-session-pty-"));
+test("real CLI PTY: empty exit, clear, new, resume, active cancellation and restart", async () => withScenario("real CLI PTY: empty exit, clear, new, resume, active cancellation and restart", async scenario => {
+	const cwd = scenario.cwd;
 	const requests: string[] = [];
 	let hold = false;
 	let release: (() => void) | undefined;
@@ -14,6 +15,7 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		if (hold) await new Promise<void>(resolve => { release = resolve; request.signal.addEventListener("abort", () => resolve(), { once: true }); });
 		return modelResponse();
 	} });
+	scenario.defer(() => server.stop(true));
 	await mkdir(join(cwd, ".forge-agent"));
 	await writeFile(join(cwd, ".forge-agent", "config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "test-local", baseUrl: server.url.toString(), thinkingLevel: "off", memory: { autoUpdate: false, injection: false } }));
 	const files = async () => (await readdir(join(cwd, ".forge-agent", "sessions")).catch(() => [])).filter(name => name.endsWith(".jsonl"));
@@ -21,19 +23,19 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		for (const name of await files()) if ((await readFile(join(cwd, ".forge-agent", "sessions", name), "utf8")).includes(text)) return true;
 		return false;
 	};
-	const children: Array<{ child: Bun.Subprocess; terminal: Bun.Terminal }> = [];
 	const launch = () => {
-		let output = "";
-		const decoder = new TextDecoder();
-		const terminal = new Bun.Terminal({ cols: 110, rows: 32, data(_terminal, bytes) { output += decoder.decode(bytes, { stream: true }); } });
-		const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../packages/cli/src/main.ts")], { cwd, terminal, env: { ...process.env, XDG_CONFIG_HOME: join(cwd, "config-home"), XDG_DATA_HOME: join(cwd, "data-home"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "" } });
-		children.push({ child, terminal });
-		const wait = async (condition: () => boolean | Promise<boolean>) => {
-			for (let i = 0; i < 500; i++) { if (await condition()) return; if (child.exitCode !== null) throw new Error(`CLI exited: ${output.slice(-1000)}`); await Bun.sleep(10); }
-			throw new Error(`PTY timeout: ${output.slice(-1000)}`);
+
+		const pty = new PtyDriver([join(import.meta.dir, "../../packages/cli/src/main.ts")], { columns: 110, rows: 32, cwd, env: { ...process.env, XDG_CONFIG_HOME: join(cwd, "config-home"), XDG_DATA_HOME: join(cwd, "data-home"), FORGE_AGENT_PROVIDER: "", FORGE_AGENT_MODEL: "", FORGE_AGENT_API_KEY: "" } });
+		scenario.defer(() => pty.close());
+		const terminal = pty, child = pty.child;
+		const wait = pty.waitFor.bind(pty);
+		const send = async (command: string) => {
+			// A completed slash command with a space has no completion picker to consume Enter.
+			terminal.write(`\x1b[200~${command}${command.startsWith("/") ? " " : ""}\x1b[201~`);
+			await wait(() => pty.screenText.includes(`❯ ${command}`), `editable command ${command}`);
+			pty.clear(); terminal.write("\r");
 		};
-		const send = (command: string) => { output = ""; terminal.write(`\x1b[200~${command}\x1b[201~\r`); };
-		return { child, terminal, wait, send, clear: () => { output = ""; }, output: () => output };
+		return { child, terminal, wait, send, clear: () => pty.clear(), output: () => pty.text.length ? pty.screenText : "" };
 	};
 	try {
 		const empty = launch();
@@ -43,38 +45,40 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		expect(await files()).toEqual([]);
 		const live = launch();
 		await live.wait(() => live.output().includes("Type a message"));
-		live.send("PTY_OLD");
+		await live.send("PTY_OLD");
 		await live.wait(() => saved("saved answer"));
-		live.send("/clear");
+		await live.send("/clear");
 		await live.wait(() => live.output().includes("已清屏，上下文仍保留"));
-		live.send("PTY_FOLLOWUP");
+		await live.send("PTY_FOLLOWUP");
 		await live.wait(() => requests.length === 2 && live.output().includes("saved answer"));
 		expect(requests[1]).toContain("PTY_OLD");
-		live.send("/new");
+		await live.send("/new");
 		await live.wait(() => live.output().includes("Type a message"));
-		live.send("PTY_NEW");
+		await live.send("PTY_NEW");
 		await live.wait(async () => (await files()).length === 2 && live.output().includes("saved answer"));
 		expect(requests[2]).not.toContain("PTY_OLD");
-		live.send("/resume");
+		await live.send("/resume");
 		await live.wait(() => live.output().includes("选择会话"));
 		live.terminal.write("\x05");
 		await live.wait(() => live.output().includes("最近对话"));
 		expect(requests).toHaveLength(3);
-		live.terminal.write("\x1b"); await Bun.sleep(60);
+		live.clear(); live.terminal.write("\x1b");
+		await live.wait(() => live.output().includes("Ctrl+E 预览"));
 		live.terminal.write("\x1b[B\r");
 		await live.wait(() => live.output().includes("PTY_FOLLOWUP"));
 		hold = true;
-		live.send("PTY_RUNNING");
+		await live.send("PTY_RUNNING");
 		await live.wait(() => requests.length === 4);
-		live.send("/resume");
+		await live.send("/resume");
 		await live.wait(() => live.output().includes("选择会话"));
 		live.terminal.write("\x05");
 		await live.wait(() => live.output().includes("最近对话"));
-		live.terminal.write("\x1b"); await Bun.sleep(60);
-		live.terminal.write("\x1b");
-		await Bun.sleep(80);
+		live.clear(); live.terminal.write("\x1b");
+		await live.wait(() => live.output().includes("Ctrl+E 预览"));
+		live.clear(); live.terminal.write("\x1b");
+		await live.wait(() => live.output().includes("working"));
 		expect(requests).toHaveLength(4);
-		live.send("/new");
+		await live.send("/new");
 		release?.(); hold = false;
 		await live.wait(() => live.output().includes("Type a message"));
 		live.terminal.write("\x03");
@@ -96,10 +100,9 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		// Enter and Escape are decoded in one input batch: Escape runs while list() awaits I/O.
 		reopened.terminal.write("\x1b[200~/resume\x1b[201~\r\x1b\x00\x1b[200~LOADING_EXIT_DRAFT\x1b[201~");
 		await reopened.wait(() => reopened.output().includes("LOADING_EXIT_DRAFT"));
-		await Bun.sleep(80);
 		expect(reopened.output()).not.toContain("选择会话");
 		reopened.terminal.write("\x7f".repeat("LOADING_EXIT_DRAFT".length));
-		reopened.send("/resume");
+		await reopened.send("/resume");
 		await reopened.wait(() => reopened.output().includes("PTY_OLD"));
 		reopened.terminal.write("\x05");
 		await reopened.wait(() => reopened.output().includes("最近对话"));
@@ -117,8 +120,6 @@ test("real CLI PTY: empty exit, clear, new, resume, active cancellation and rest
 		expect(await reopened.child.exited).toBe(0);
 		expect(await files()).toHaveLength(2);
 	} finally {
-		release?.(); server.stop(true);
-		for (const { child, terminal } of children) { if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; terminal.close(); }
-		await rm(cwd, { recursive: true, force: true });
+		release?.();
 	}
-}, 20_000);
+}, { timeoutMs: 26000 }), 35_000);

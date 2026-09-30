@@ -1,5 +1,5 @@
-import type { SessionMessage } from "@forge-agent/protocol";
-import { SUMMARY_SYSTEM, type SummaryDriver } from "../../src/context/compaction.ts";
+import type { SessionMessage } from "../../packages/protocol/src/index.ts";
+import { SUMMARY_SYSTEM, type SummaryDriver } from "../../packages/core/src/context/compaction.ts";
 import { nativeAdapter, requestMessages, responseChunks } from "./native-adapter.ts";
 
 export interface ScriptedModel extends Pick<SummaryDriver, "maxTokens" | "summarize"> {
