@@ -5,7 +5,7 @@ created: 2026-09-30
 
 # Issue #44 会话可靠性与长会话性能
 
-> 状态:本地实现与验收完成(2026-09-30，离线软件门禁、受控基准及双轴复审通过；远端交付未执行)。范围与任务级 AC 以 [Issue #44](https://github.com/L-1ngg/forge-agent/issues/44) 为准；继承 ADR-010、017、023、025–028 和 Issue #40–43 的合同，不改写历史验收。
+> 状态:实现与离线软件验收完成(2026-09-30，离线软件门禁、受控基准及双轴复审通过)。范围、任务级 AC 与任务状态以 [Issue #44](https://github.com/L-1ngg/forge-agent/issues/44) 为准；继承 ADR-010、017、023、025–028 和 Issue #40–43 的合同，不改写历史验收。
 
 ## Entry
 
@@ -41,7 +41,7 @@ created: 2026-09-30
 
 ## Release And Rollback
 
-出口为 Issue #44 全部适用离线 AC、新鲜基准与软件门禁、本地 reviewed commit。任务不包含 push、关闭 Issue、发布或付费真实供应商评估。回退通过本任务提交 revert；整理可由既有 autoUpdate:false 关闭，预算/codec/提交故障始终保守拒绝。旧 JSONL 不自动重写，外部副作用没有新增回滚保证。
+出口为 Issue #44 全部适用离线 AC、新鲜基准与软件门禁、受审提交推送至 `origin/master` 及 Issue 关闭。实现提交为 [`2b7be5d`](https://github.com/L-1ngg/forge-agent/commit/2b7be5df5823ff95d5bca7eadb05d4efc40d92ea)；发布或付费真实供应商评估不在本次交付范围。回退通过本任务提交 revert；整理可由既有 autoUpdate:false 关闭，预算/codec/提交故障始终保守拒绝。旧 JSONL 不自动重写，外部副作用没有新增回滚保证。
 
 ## Evidence
 
