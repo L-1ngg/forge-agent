@@ -3,7 +3,7 @@ import type { EntryRow } from "./transcript/types.ts";
 import { backspace, createEditor, editorText, insertText, replaceEditor } from "./editor.ts";
 import { defaultStyle, setCursor, writeText, type TerminalFrame } from "./frame.ts";
 import type { Key } from "./keys.ts";
-import type { Theme } from "./theme.ts";
+import { THEME_SLOTS, type Theme } from "./theme.ts";
 import { truncateToWidth, wrapText, visibleWidth } from "./width.ts";
 import type { EntryDetail } from "./transcript/detail.ts";
 
@@ -26,6 +26,7 @@ export class DetailView {
 	private visual: VisualRow[] = [];
 	private height = 1;
 	private detail: EntryDetail;
+	private layoutKey: string | undefined;
 
 	constructor(readonly entryId: string, detail: EntryDetail) {
 		this.detail = detail;
@@ -137,30 +138,41 @@ export class DetailView {
 		if (match) { this.line = match.line; this.column = match.column; this.top = Math.max(0, this.visualIndex()); }
 	}
 
-	paint(frame: TerminalFrame, theme: Theme, feedback?: string): void {
-		const style = { ...defaultStyle(), foreground: theme.color("status") };
-		const muted = { ...style, foreground: theme.color("muted") };
-		this.height = Math.max(1, frame.rows - 3);
+	/** Input navigation and copying use the same layout even before a scheduled paint. */
+	reconcile(columns: number, rows: number, theme: Theme): void {
+		this.height = Math.max(1, rows - 3);
 		const numbered = this.detail.firstLine !== undefined;
 		const gutter = numbered ? String(this.detail.firstLine! + this.detail.lines.length - 1).length + 2 : 0;
-		const width = Math.max(1, frame.columns - 2 - gutter);
-		this.visual = this.detail.kind === "assistant" ? renderMarkdown(this.detail.lines.join("\n"), width, theme).map(rendered => ({
-			source: rendered.source?.line ?? 0, offset: rendered.source?.column ?? 0, text: rendered.spans.map(span => span.text).join(""), continuation: false, rendered,
-		})).filter(row => !this.filter || row.text.toLowerCase().includes(this.filter.toLowerCase())) : this.detail.lines.flatMap((text, source) => {
-			if (this.filter && !text.toLowerCase().includes(this.filter.toLowerCase())) return [];
-			let consumed = 0;
-			return (this.wrap ? wrapText(text, width) : [truncateToWidth(text.slice(this.column), width)]).map((part, index) => {
-				const offset = this.wrap ? Math.max(consumed, text.indexOf(part, consumed)) : this.column;
-				consumed = offset + part.length;
-				return { source, text: part, continuation: index > 0, offset };
+		const width = Math.max(1, columns - 2 - gutter);
+		const key = JSON.stringify([width, this.detail.kind, this.detail.lines, this.wrap, this.wrap ? 0 : this.column, this.filter, theme.mode, theme.attributes("strong"), THEME_SLOTS.map(slot => theme.color(slot))]);
+		if (key !== this.layoutKey) {
+			this.visual = this.detail.kind === "assistant" ? renderMarkdown(this.detail.lines.join("\n"), width, theme).map(rendered => ({
+				source: rendered.source?.line ?? 0, offset: rendered.source?.column ?? 0, text: rendered.spans.map(span => span.text).join(""), continuation: false, rendered,
+			})).filter(row => !this.filter || row.text.toLowerCase().includes(this.filter.toLowerCase())) : this.detail.lines.flatMap((text, source) => {
+				if (this.filter && !text.toLowerCase().includes(this.filter.toLowerCase())) return [];
+				let consumed = 0;
+				return (this.wrap ? wrapText(text, width) : [truncateToWidth(text.slice(this.column), width)]).map((part, index) => {
+					const offset = this.wrap ? Math.max(consumed, text.indexOf(part, consumed)) : this.column;
+					consumed = offset + part.length;
+					return { source, text: part, continuation: index > 0, offset };
+				});
 			});
-		});
+			this.layoutKey = key;
+		}
 		if (this.follow) { this.line = this.visual.at(-1)?.source ?? 0; this.column = this.visual.at(-1)?.offset ?? 0; }
 		let index = this.visualIndex();
 		if (index < 0 && this.visual.length) { index = 0; this.line = this.visual[0]!.source; this.column = this.visual[0]!.offset; }
 		if (index < this.top) this.top = Math.max(0, index);
 		if (index >= this.top + this.height) this.top = index - this.height + 1;
 		this.top = Math.min(this.top, Math.max(0, this.visual.length - this.height));
+	}
+
+	paint(frame: TerminalFrame, theme: Theme, feedback?: string): void {
+		this.reconcile(frame.columns, frame.rows, theme);
+		const style = { ...defaultStyle(), foreground: theme.color("status") };
+		const muted = { ...style, foreground: theme.color("muted") };
+		const numbered = this.detail.firstLine !== undefined;
+		const gutter = numbered ? String(this.detail.firstLine! + this.detail.lines.length - 1).length + 2 : 0;
 		writeText(frame, 1, 0, truncateToWidth(this.detail.title, Math.max(1, frame.columns - 2)), { ...style, attributes: { ...style.attributes, bold: true } });
 		for (let row = 0; row < this.height; row++) {
 			const value = this.visual[this.top + row];

@@ -252,8 +252,8 @@ test.each(["removed", "rewritten", "version"] as const)("reopening rejects %s pe
 		if (mode === "removed") broken.checkpoint!.states = [];
 		else if (mode === "rewritten") broken.checkpoint!.states[0]!.text = "Deploy now";
 		else Object.assign(broken.checkpoint!, { version: 999 });
-		await storage.append(broken);
-		await expect(createAgent(settings)).rejects.toThrow(mode === "version" ? "version" : "silently");
+		await expect(storage.append(broken)).rejects.toThrow(mode === "version" ? "version" : "silently");
+		await expect(createAgent({ ...settings, storage: { async load() { return { entries: [...saved.entries, broken], leafId: broken.id }; }, append: entry => storage.append(entry) } })).rejects.toThrow(mode === "version" ? "version" : "silently");
 	} finally { await agent.dispose(); server.stop(true); }
 });
 

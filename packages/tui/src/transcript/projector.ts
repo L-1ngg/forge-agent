@@ -37,6 +37,7 @@ interface MessageFingerprint {
 }
 
 interface ToolProjection {
+	revision: number;
 	toolCallId: string;
 	toolName: string;
 	args?: Record<string, unknown>;
@@ -62,6 +63,11 @@ interface DisplayState {
 
 /** Canonical UI-local reducer for transcript identity, ordering and de-duplication. */
 export class TranscriptProjector {
+	private revision = 0;
+	private snapshot: { revision: number; entries: readonly TranscriptEntry[] } | undefined;
+	private readonly entryCache = new Map<string, { key: readonly unknown[]; entry: TranscriptEntry }>();
+	private readonly entryById = new Map<string, TranscriptEntry>();
+	private readonly toolAnchors = new Map<string, string>();
 	private readonly messages: MessageProjection[] = [];
 	private readonly tools = new Map<string, ToolProjection>();
 	private readonly notices: NoticeProjection[] = [];
@@ -75,6 +81,7 @@ export class TranscriptProjector {
 	private lastCompletedFingerprint: MessageFingerprint | undefined;
 
 	apply(event: SessionEvent): void {
+		if (["message_start", "message_delta", "message_end", "tool_execution_start", "tool_execution_update", "tool_execution_end", "agent_end"].includes(event.type)) this.revision++;
 		switch (event.type) {
 			case "message_start":
 				this.startMessage(event.message);
@@ -110,6 +117,7 @@ export class TranscriptProjector {
 	}
 
 	addNotice(text: string): string {
+		this.revision++;
 		const id = `notice-${this.noticeSeq++}`;
 		this.notices.push({ id, text });
 		this.rootTimeline.push({ kind: "notice", id });
@@ -117,6 +125,11 @@ export class TranscriptProjector {
 	}
 
 	getEntries(): TranscriptEntry[] {
+		return structuredClone(this.getSnapshot().entries) as TranscriptEntry[];
+	}
+	/** Immutable derived entries shared by all readers in a frame. */
+	getSnapshot(): { readonly revision: number; readonly entries: readonly TranscriptEntry[] } {
+		if (this.snapshot?.revision === this.revision) return this.snapshot;
 		// Compute anchors before walking the root timeline. A tool can arrive
 		// before its assistant message; once that message is known, its
 		// standalone placeholder must disappear rather than duplicate the block.
@@ -134,7 +147,9 @@ export class TranscriptProjector {
 				const message = messageBySeq.get(item.seq);
 				if (!message) continue;
 				for (const content of [...message.content.values()].sort((left, right) => left.index - right.index)) {
-					const entry = this.entryForContent(message, content, anchoredTools);
+					const tool = content.source?.type === "tool_call" ? this.tools.get(content.source.id) : undefined;
+					const key = [message.role, message.timestamp, message.complete, message.toolCallId, content.source, content.durationMs, tool?.revision, this.displayState.get(content.entryId), tool ? this.displayState.get(tool.toolCallId) : undefined];
+					const entry = this.cachedEntry(content.entryId, key, () => this.entryForContent(message, content, anchoredTools));
 					if (entry) entries.push(entry);
 				}
 				continue;
@@ -142,30 +157,45 @@ export class TranscriptProjector {
 			if (item.kind === "tool") {
 				if (anchoredTools.has(item.toolCallId)) continue;
 				const tool = this.tools.get(item.toolCallId);
-				if (tool) entries.push(this.toolEntry(toolEntryId(item.toolCallId), tool));
+				if (tool) entries.push(this.cachedEntry(toolEntryId(item.toolCallId), [tool.revision, this.displayState.get(item.toolCallId)], () => this.toolEntry(toolEntryId(item.toolCallId), tool))!);
 				continue;
 			}
 			const notice = noticeById.get(item.id);
-			if (notice) entries.push({ id: notice.id, kind: "notice", text: notice.text, tone: "muted" });
+			if (notice) entries.push(this.cachedEntry(notice.id, [notice.text], () => ({ id: notice.id, kind: "notice", text: notice.text, tone: "muted" }))!);
 		}
-		return entries;
+		this.entryById.clear();
+		for (const entry of entries) this.entryById.set(entry.id, entry);
+		for (const id of this.entryCache.keys()) if (!this.entryById.has(id)) this.entryCache.delete(id);
+		this.snapshot = Object.freeze({ revision: this.revision, entries: Object.freeze(entries) });
+		return this.snapshot;
+	}
+	private cachedEntry(id: string, key: readonly unknown[], build: () => TranscriptEntry | undefined): TranscriptEntry | undefined {
+		const cached = this.entryCache.get(id);
+		if (cached && key.length === cached.key.length && key.every((value, index) => value === cached.key[index])) return cached.entry;
+		const entry = build();
+		if (entry) { freezeEntry(entry); this.entryCache.set(id, { key, entry }); }
+		return entry;
 	}
 
 	getEntry(id: string): TranscriptEntry | undefined {
-		return this.getEntries().find((entry) => entry.id === id);
+		this.getSnapshot();
+		const entry = this.entryById.get(id);
+		return entry ? structuredClone(entry) : undefined;
 	}
 
 	getEntryIds(): readonly string[] {
-		return this.getEntries().map((entry) => entry.id);
+		return this.getSnapshot().entries.map((entry) => entry.id);
 	}
 
 	setEntryDisplayState(id: string, currentDisplayMode: BlockDisplayMode, manualOverride: boolean): void {
+		this.revision++;
 		this.displayState.set(id, { currentDisplayMode, manualOverride });
 		const toolCallId = this.toolCallIdForEntry(id);
 		if (toolCallId) this.displayState.set(toolCallId, { currentDisplayMode, manualOverride });
 	}
 
 	clear(): void {
+		this.revision++; this.snapshot = undefined; this.entryCache.clear(); this.entryById.clear(); this.toolAnchors.clear();
 		this.messages.length = 0;
 		this.tools.clear();
 		this.notices.length = 0;
@@ -233,6 +263,7 @@ export class TranscriptProjector {
 		for (const [index, source] of value.content.entries()) {
 			nextIndexes.add(index);
 			const previous = message.content.get(index);
+			if (previous?.source?.type === "tool_call" && (source.type !== "tool_call" || source.id !== previous.source.id) && this.toolAnchors.get(previous.source.id) === previous.entryId) this.toolAnchors.delete(previous.source.id);
 			const startedAt = message.thinkingStartedAt.get(index);
 			const durationMs = source.type === "thinking" && complete && startedAt !== undefined && eventTimestamp >= startedAt ? eventTimestamp - startedAt : undefined;
 			message.content.set(index, {
@@ -241,15 +272,20 @@ export class TranscriptProjector {
 				source: structuredClone(source),
 				...(durationMs === undefined ? {} : { durationMs }),
 			});
+			if (source.type === "tool_call") this.toolAnchors.set(source.id, message.content.get(index)!.entryId);
 		}
 		if (!preserveMissing) {
-			for (const index of [...message.content.keys()]) if (!nextIndexes.has(index)) message.content.delete(index);
+			for (const [index, previous] of message.content) if (!nextIndexes.has(index)) {
+				if (previous.source?.type === "tool_call" && this.toolAnchors.get(previous.source.id) === previous.entryId) this.toolAnchors.delete(previous.source.id);
+				message.content.delete(index);
+			}
 		}
 	}
 
 	private applyTool(toolCallId: string, toolName: string, args: Record<string, unknown> | undefined, value: AnyBlockEnvelope | undefined): void {
 		const existing = this.tools.get(toolCallId);
-		const tool = existing ?? { toolCallId, toolName };
+		const tool = existing ?? { toolCallId, toolName, revision: this.revision };
+		tool.revision = this.revision;
 		tool.toolName = toolName;
 		if (args !== undefined) tool.args = structuredClone(args);
 		if (value !== undefined) tool.block = structuredClone(value);
@@ -283,7 +319,7 @@ export class TranscriptProjector {
 		}
 		anchoredTools.add(source.id);
 		const tool = this.tools.get(source.id);
-		return this.toolEntry(content.entryId, { toolCallId: source.id, ...tool, toolName: source.name }, source.arguments);
+		return this.toolEntry(content.entryId, { toolCallId: source.id, revision: this.revision, ...tool, toolName: source.name }, source.arguments);
 	}
 
 	private createMessage(role: SessionMessage["role"], timestamp: number, toolCallId?: string, implicit = false): MessageProjection {
@@ -360,10 +396,7 @@ export class TranscriptProjector {
 	}
 
 	private anchorForTool(toolCallId: string): string | undefined {
-		for (const message of this.messages) {
-			for (const content of message.content.values()) if (content.source?.type === "tool_call" && content.source.id === toolCallId) return content.entryId;
-		}
-		return undefined;
+		return this.toolAnchors.get(toolCallId);
 	}
 
 	private toolCallIdForEntry(entryId: string): string | undefined {
@@ -389,6 +422,12 @@ export class TranscriptProjector {
 		if (startedAt === undefined || timestamp < startedAt) return;
 		if (!this.executionFailed) this.addNotice(`Worked for ${formatDuration(startedAt, timestamp)}`);
 	}
+}
+
+function freezeEntry(value: unknown): void {
+	if (!value || typeof value !== "object" || Object.isFrozen(value)) return;
+	for (const child of Object.values(value)) freezeEntry(child);
+	Object.freeze(value);
 }
 
 function fingerprint(message: SessionMessage): MessageFingerprint {

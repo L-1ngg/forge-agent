@@ -9,6 +9,8 @@ created: 2026-09-13
 
 > 后续变更：本文保留当时设计/验收记录。当前已按 [ADR-018](../decisions/018-adaptive-default.md) 删除旧 pi 策略和策略选择接口，统一称为上下文压缩；双策略复现需使用对应历史提交。
 
+> 后续补充(2026-09-30)：[ADR-029](../decisions/029-session-reliability-and-bounded-views.md)将短笔记和执行索引限制为同轮请求预算内的节选，active 文本及来源保持完整，原文搜索/读取继续适用。新鲜有界性、缓存及性能证据见 [Issue #44 施工图](session-reliability-issue-44.md)，下文全量执行 ledger 和旧 Token 对照仅描述当时版本。
+
 
 > 状态:已交付并完成双平台软件验证(2026-09-13)。来源：operator 要求按照“短工作笔记”和“轻量历史搜索”两项方案优化 adaptive。
 

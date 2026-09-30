@@ -3,7 +3,8 @@ import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { selectedBranch, projectMessages, type SessionState, type MessageEntry, type CompactionEntry } from "../session-storage.ts";
 import { estimateContextTokens } from "../usage.ts";
 import { SUMMARY_SYSTEM, resolveRetryPolicy, sumUsage, waitForRetry, type ContextSettings, type SummaryDriver } from "./compaction.ts";
-import { checkpointText, clippedMessage, evidenceText, parseCheckpoint, type CompactionCheckpoint, type TaskCheckpoint } from "./checkpoint.ts";
+import { checkpointText, checkpointProjectionBudget, clippedMessage, evidenceText, parseCheckpoint, type CompactionCheckpoint, type TaskCheckpoint } from "./checkpoint.ts";
+import { isToolArgumentRevision } from "../message-codec.ts";
 
 export interface CompactionMetrics {
 	contextEstimated: boolean;
@@ -25,7 +26,7 @@ interface Unit { entries: MessageEntry[]; }
 function units(history: MessageEntry[]): Unit[] {
 	const result: Unit[] = [];
 	for (const entry of history) {
-		if (entry.message.role === "toolResult" && result.length) result.at(-1)!.entries.push(entry);
+		if ((entry.message.role === "toolResult" || isToolArgumentRevision(entry.message)) && result.length) result.at(-1)!.entries.push(entry);
 		else result.push({ entries: [entry] });
 	}
 	return result;
@@ -37,7 +38,7 @@ function select(history: MessageEntry[], checkpoint: TaskCheckpoint, covered: Se
 	const latest = new Set([...(groups.at(-1)?.entries.map(entry => entry.id) ?? []), ...(history[latestUser] ? [history[latestUser]!.id] : [])]);
 	const protectedGroups = new Set(groups.filter(unit => unit.entries.some(entry => latest.has(entry.id) || (entry.message.role === "user" && !covered.has(entry.id)))));
 	const kept = new Set(protectedGroups), clipped = new Set<string>();
-	const text = checkpointText(checkpoint, history, "notes");
+	const text = checkpointText(checkpoint, history, "notes", checkpointProjectionBudget(inputBudget - Math.ceil(budget.fixedText.length / 4)));
 	const view = () => [{ role: "user" as const, content: [{ type: "text" as const, text }], timestamp: 0 }, ...groups.filter(unit => kept.has(unit)).flatMap(unit => unit.entries.map(entry => clipped.has(entry.id) ? clippedMessage(entry) : entry.message))];
 	for (const unit of groups) if (!protectedGroups.has(unit)) for (const entry of unit.entries) if (entry.message.role === "toolResult" && !entry.message.isError && evidenceText(entry.message).length > 1024) clipped.add(entry.id);
 	if (count(view(), budget) > inputBudget) throw new Error("protected_context_budget_exceeded");

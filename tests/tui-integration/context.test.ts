@@ -24,6 +24,7 @@ test("PTY compact uses the SDK, stays idle and never streams summary as an answe
 		terminal.resize(40, 12); child.kill("SIGWINCH");
 		terminal.write("continue\r");
 		await waitFor(() => completed);
+		await waitFor(() => output.includes("AFTER_COMPACT"));
 		expect(output).toContain("AFTER_COMPACT");
 		terminal.write("\x03");
 		await waitFor(() => child.exitCode !== null);

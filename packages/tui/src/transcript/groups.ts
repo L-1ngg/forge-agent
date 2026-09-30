@@ -34,12 +34,13 @@ function isMember(entry: TranscriptEntry): boolean {
 }
 
 /** VerbRun and dense truncation are separate upstream rules, not per-tool-name buckets. */
-export function transcriptViews(entries: readonly TranscriptEntry[], columns: number, theme: Theme, expanded: ReadonlySet<string>): TranscriptView[] {
+export function transcriptViews(entries: readonly TranscriptEntry[], columns: number, theme: Theme, expanded: ReadonlySet<string>, presentation: typeof presentEntry = presentEntry): TranscriptView[] {
 	const views: TranscriptView[] = [];
 	const present = (entry: TranscriptEntry): TranscriptView => {
 		const hasTimestamp = entry.kind === "user" || entry.kind === "assistant";
 		const layout = computeEntryLayout(columns, hasTimestamp ? "0:00 PM" : undefined);
-		return { id: entry.id, presentation: presentEntry(entry, layout.contentWidth, theme), dense: isCollapsed(entry) };
+		const rendered = presentation(entry, layout.contentWidth, theme);
+		return { id: entry.id, presentation: { ...rendered, chrome: { ...rendered.chrome } }, dense: isCollapsed(entry) };
 	};
 	const group = (members: readonly TranscriptEntry[], title: string): TranscriptView => {
 		const id = `group:${members[0]!.id}`;

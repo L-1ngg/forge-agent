@@ -106,3 +106,18 @@ test("later I/O failure retains the saved prefix and never retries after the pat
 	await reopened.append(input("explicit recovery", first.id));
 	expect(reopened.messages()).toHaveLength(2);
 });
+
+test("cached history snapshots remain isolated across append and branch selection", async () => {
+	const cwd = await directory(), store = SessionStore.create(join(cwd, "session.jsonl"), cwd);
+	const root = input("root"), left = input("left", root.id), right = input("right", root.id);
+	await store.append(root); await store.append(left);
+	const snapshot = store.messages(); snapshot[0]!.content = []; snapshot.push({ role: "user", content: [], timestamp: 1 });
+	const loaded = await store.load(); loaded.entries.length = 0;
+	expect(store.messages().map(message => message.content)).toEqual([[{ type: "text", text: "root" }], [{ type: "text", text: "left" }]]);
+	store.branch(root.id); await store.append(right);
+	expect(store.messages().at(-1)?.content).toEqual([{ type: "text", text: "right" }]);
+	store.branch(left.id); expect(store.messages().at(-1)?.content).toEqual([{ type: "text", text: "left" }]);
+	await expect(store.append(input("invalid", "missing"))).rejects.toThrow("not found");
+	expect(store.messages().at(-1)?.content).toEqual([{ type: "text", text: "left" }]);
+	expect((await store.load()).entries).toHaveLength(3);
+});

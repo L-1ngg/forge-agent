@@ -29,6 +29,7 @@ export async function prepareSessionConfiguration(options: CreateAgentOptions, s
 async function resolveModelOptions(options: CreateAgentOptions): Promise<SessionConfiguration> {
 	resolveRetryPolicy(options.retry);
 	validateRequestLimits(options);
+	if (options.memory?.organizerTimeoutMs !== undefined && (!Number.isSafeInteger(options.memory.organizerTimeoutMs) || options.memory.organizerTimeoutMs <= 0)) throw new RangeError("organizerTimeoutMs must be a positive finite safe integer");
 	if (options.transformContext !== undefined && typeof options.transformContext !== "function") throw new TypeError("transformContext must be a function");
 	if (options.adapter != null && (typeof options.adapter !== "object" || options.adapter.kind !== "text" || typeof options.adapter.chatStream !== "function")) throw new Error("adapter must be a native TanStack text adapter or null");
 	if (typeof options.model !== "string") {

@@ -152,6 +152,7 @@ import { LongTermMemory, createAgent } from "@forge-agent/core/sdk";
 
 const memory = {
   store: new LongTermMemory({ user: "/data/alice/memory", project: "/data/alice/project-a" }),
+  organizerTimeoutMs: 60_000,
   autoUpdate: true,
   injection: true,
 };
@@ -168,6 +169,8 @@ const memory = {
 
 `memoryMiddleware` 在运行开始调用 Markdown adapter 的 `recall`，按预算注入标明 scope/路径的短索引和固定笔记；主题可通过工具按需读取。成功运行结束后官方 deferred `save` 使用当前模型配置额外发出一次受审计的 native `chatStream` 请求，并读取索引指向的有界主题。只有完整 `stop`、无工具调用的单个纯 JSON 计划，经过严格 schema、作用域、路径和内容预检后，才按主题先于索引写入；空计划不写盘。整理失败通过 `memory` 事件报告，不改写主任务成功结果。`calls` 和实际可得的 provider `usage` 由保存事件报告；缺失 usage 保持未知。本地文件存储不代表整理调用离线。
 
+整理模型阶段绑定当前 Invocation 的取消，并由 `organizerTimeoutMs` 限制等待，默认 60,000 ms，必须是有限正安全整数；长于 JavaScript timer 范围的期限分段计时。`abort()`/`dispose()` 或期限结束会取消合作式 adapter 并停止本地等待；不合作 adapter 的迟到计划不能开始自动写盘。整理自身超时报告失败记忆事件，主任务成功保留；显式取消仍按 Invocation 权威结果返回 aborted。期限覆盖模型准备、响应及审计，不强制终止任意文件操作；已开始的文件 I/O 不回滚，部分写入可能保留。合同见 [ADR-029](decisions/029-session-reliability-and-bounded-views.md)。
+
 模型的 `read_memory/search_memory/write_memory/delete_memory` 使用 Zod schema、公共工具批次、hooks、取消与工具事件，作为 internal/trusted 工具不弹交互授权。`autoUpdate: false` 仅关闭 deferred 整理，显式管理工具和宿主 store 仍可用；`injection: false` 仅关闭运行开始的召回。宿主通过 `updateConfiguration({ memory })` 修改配置；已开始的 `chat()` 完成后 applied。
 
 CLI 的 `/memory` 直接管理 Markdown，不依赖模型授权；`permissionMode: "deny-all"` 不改变内部记忆工具的静默执行，但普通文件和 shell 工具仍受策略约束。
@@ -179,6 +182,8 @@ CLI 的 `/memory` 直接管理 Markdown，不依赖模型授权；`permissionMod
 `createAgent(options)` 始终装配生产会话，只接受一个 options 参数。定制模型使用 `model` + `adapter`；定制数据库或会话持久化实现 `SessionStorage` 并通过 `storage` 传入；定制工具通过 `tools` 传入。SDK 和 CLI 均不提供替换整个执行实例的 factory。旧的第二参数在 TypeScript 中报错，在 JavaScript 中于任何装配和模型调用前抛出 `TypeError`。
 
 创建先调用一次 `storage.load()`，再把该状态交给唯一的 `AgentSession`，默认内存存储遵循同一流程；没有第二次装配加载或 `setStorage` 接口。加载失败时不请求模型、不写入存储，原样保留错误。后续装配失败会释放已创建的 MCP 资源；内部创建的 RequestBus 会关闭，外部总线不由失败装配关闭。清理也失败时抛出 `AggregateError`，其 `cause` 和 `errors[0]` 为原始错误。
+
+文件重开、自定义 load 和核心追加共用基础消息 codec：非法 block/必需字段在入口拒绝并定位字段，文件重开保留实际行号。合法扩展、部分失败/取消响应及缺失工具结果仍能加载，严格请求配对另行投影。旧 JSONL 不自动重写；公开历史快照隔离，分支/上下文缓存只在内存，只有成功追加才发布新事实。
 
 SDK 集成测试用原生 TanStack adapter 控制模型返回，存储故障和工具行为分别在 `storage`、`tools` 注入。局部 UI/headless 测试可以使用各自的小接口，底层单元测试可直接测试内部模块。当前装配设计及验证见[基座施工图](phases/tanstack-foundation.md)和[验收记录](phases/tanstack-foundation-acceptance.md)。
 
@@ -242,7 +247,7 @@ CLI 配置与 SDK 创建选项均支持 `context: { enabled, reserveTokens, keep
 
 上下文压缩保留未归档用户输入、最新用户消息及最后一个完整交互单元。先尝试裁剪可找回的旧工具正文；若仅靠裁剪就能让全部历史符合预算并缩小投影，则保留全部交互单元，否则从最新单元向前连续保留可选原文，遇到首个超出 `keepRecentTokens` 额度或输入预算的单元即停止。不按词项、检查点来源或重复正文重新挑选更旧的消息。需要省略未归档内容时，由主模型提取独立、带原文引用的任务状态与摘要。替代状态必须引用更晚的用户证据，旧状态留在历史；assistant 的事实陈述保守归为推断。工具执行结果由原始记录提供，检查点不会改变宿主权限。结构/来源校验不能证明自然语言语义没有遗漏。
 
-上下文压缩发送给任务模型的检查点采用短投影：状态/结论的类型、完整文本与去重的来源 entryId；完整 quote、状态 ID 和替代关系继续保存在本地检查点，降级 summary 也保留完整版本。执行结果 ledger 不省略。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。
+上下文压缩发送给任务模型的检查点采用预算内短投影：笔记额度为本轮 inputBudget 减有效 system/tool 固定材料后的 20%，最多 2,048 估算 tokens；保留 active 状态的类型、完整文本和去重来源 entryId，剩余额度取近期结论。必要状态及来源放不下时，在 provider I/O 前失败。执行索引额度为可用消息预算的 10%，最多 1,024 tokens，优先 active 来源关联的未知副作用，再取近期失败和近期调用；按分支顺序展示并明确标为节选。省略的成功、失败或结果缺失调用仍可由 `search_context`/`read_context` 找回，缺失结果不代表未执行。完整 quote、状态 ID、替代关系与全量执行证据继续保存在本地检查点和原历史，降级 summary 保留完整版本。摘要生成仍提取完整证据，所以短投影不代表摘要生成费用下降。当前合同与受控基准见 [Issue #44 施工图](phases/session-reliability-issue-44.md)。
 
 上下文压缩在第 4 次增量更新、任务切换或无效检查点/无进展时尝试从原文重建；每次操作最多 2 次逻辑生成、4 次实际模型请求（包括临时重试）。超大摘要输入、保护状态放不下、引用无效或最终无进展均返回错误，不发布损坏检查点；自动路径阻止该次过预算任务请求，取消和存储失败继续遵循既有生命周期。
 
@@ -308,9 +313,11 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 每个普通模型工具调用按最终参数经过现有权限策略。`allow` 自动批准、`deny` 自动拒绝,只有 `ask` 经 TanStack 原生 `needsApproval` interrupt 交给宿主;同批所有待审批项收齐后才恢复,获批工具串行执行。拒绝原因进入模型上下文,模型可调整方案;停止整个 Invocation 则使待批次及旧答复失效。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
 
-`agent.respond({ type: "response", id: request.id, result: { decision: "allow_once", editedArgs: { ... } } })` 可提交一次性修改参数;SDK 会严格重新校验和判权,非法或被策略拒绝的修改不会执行。展示、权限判断与执行使用最终参数,工具结果的 `toolArguments` 保存实际参数。`allow_always` 仅在请求允许记住且 scope 匹配时有效。审批仅支持进程内续接,恢复会话不会重放未完成工具;TUI 可停放权限卡、按 `c` 输入草稿或排队,按 Tab 或 `i` 返回权限卡。headless 自动拒绝需要人工审批的调用。
+`agent.respond({ type: "response", id: request.id, result: { decision: "allow_once", editedArgs: { ... } } })` 可提交一次性修改参数;SDK 会严格重新校验和判权,非法或被策略拒绝的修改不会执行。展示、权限判断与执行使用最终参数,工具结果的 `toolArguments` 保存实际参数。审批改写的最终参数在整个批次 resume 前保存为既有 v4 的空 assistant 修订记录（`contextExcluded`、`toolCallId`、`toolName`、`toolArguments`）；任一修订提交失败使本批工具副作用为零并停用实例。修订可检索，但不进入任务消息或成为可重放审批。`allow_always` 仅在请求允许记住且 scope 匹配时有效。审批仅支持进程内续接,恢复会话不会重放未完成工具;TUI 可停放权限卡、按 `c` 输入草稿或排队,按 Tab 或 `i` 返回权限卡。headless 自动拒绝需要人工审批的调用。
 
 每实例默认有独立权限记忆和请求总线。CLI 为兼容现有 TUI 显式传入独占 RequestBus,交互模式允许无限等待;SDK dispose 会关闭该总线,不得跨实例共享。请求观察、授权与释放不依赖 pi 类型。
+
+`RequestBus({ retentionCapacity: 256 })` 分别为近期终态查询、丢弃诊断、未消费 response 和 terminal 通知设置固定容量，默认 256，必须是有限正安全整数；各集合超限时回收最旧项。pending 请求不受这个诊断容量截断，结算会移除未消费请求信封。慢消费者可能遗漏通知，使用 `getRetention().truncated` 的累计计数识别截断，并用 `isPending(id)` 在展示或答复前对账；`getTerminal(id)` 仅查询近期结果，返回未知不表示仍 pending。功能结果仍由 `ask`/`publish` 一次结算。请求 ID 包含实例随机身份和单调序号，`idFactory` 只提供标签，不能决定完整 ID 或复用旧身份；答复必须使用信封的确切 ID。旧、重复及未知答复均拒绝，回收后原因可能变为 `unknown_id`。关闭后的新请求返回 `bus_closed` 取消回执，不新增永久记录。现有请求/答复 envelope 和公开别名保留。
 
 ## 验证边界
 

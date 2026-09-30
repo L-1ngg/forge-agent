@@ -1,6 +1,7 @@
 import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
-import { selectedBranch, type SessionState } from "../session-storage.ts";
+import { selectedBranch, sessionRevision, type SessionState } from "../session-storage.ts";
 import { compactedMessages } from "./rebuild.ts";
+import type { CheckpointProjectionBudget } from "./checkpoint.ts";
 
 export interface ContextSettings { enabled: boolean; reserveTokens: number; keepRecentTokens: number; summaryReasoning: "inherit" | "off"; }
 export const DEFAULT_CONTEXT: ContextSettings = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, summaryReasoning: "inherit" };
@@ -28,10 +29,14 @@ export interface SummaryDriver {
 	wait?(ms: number, signal: AbortSignal): Promise<void>;
 	summarize?(request: SummaryRequest, signal: AbortSignal): Promise<SessionMessage>;
 }
-export function buildContext(state: SessionState): SessionMessage[] {
+const contextViews = new WeakMap<SessionState, { revision: number; leafId: string | null; key: string; messages: SessionMessage[] }>();
+export function buildContext(state: SessionState, budget?: CheckpointProjectionBudget): SessionMessage[] {
+	const revision = sessionRevision(state), key = JSON.stringify(budget ?? null), cached = contextViews.get(state);
+	if (revision !== undefined && cached?.revision === revision && cached.leafId === state.leafId && cached.key === key) return structuredClone(cached.messages);
 	const branch = selectedBranch(state);
-	if ([...branch].reverse().find(entry => entry.type === "compaction")?.checkpoint) return compactedMessages(state);
-	return structuredClone(branch.flatMap(entry => entry.type === "message" ? [entry.message] : []));
+	const messages = [...branch].reverse().find(entry => entry.type === "compaction")?.checkpoint ? compactedMessages(state, budget) : branch.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+	if (revision !== undefined) contextViews.set(state, { revision, leafId: state.leafId, key, messages });
+	return structuredClone(messages);
 }
 
 export const SUMMARY_SYSTEM = "You are a context summarization assistant. Summarize the conversation provided inside the conversation tags. Do not continue the conversation or respond to questions in it. Output only the structured summary.";

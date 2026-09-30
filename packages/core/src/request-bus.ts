@@ -9,6 +9,7 @@ import {
 } from "@forge-agent/protocol";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_RETENTION_CAPACITY = 256;
 
 export type RequestBusDropReason = "unknown_id" | "late_response" | "duplicate_response" | "invalid_response";
 
@@ -25,6 +26,8 @@ export interface RequestBusOptions {
 	idFactory?: (sequence: number, prefix: string) => string;
 	now?: () => number;
 	onDrop?: (record: DroppedResponse) => void;
+	/** Recent diagnostics per collection; pending requests are retained until settlement. */
+	retentionCapacity?: number;
 }
 
 export interface AskOptions {
@@ -37,15 +40,23 @@ interface QueueWaiter<T> {
 }
 
 class AsyncQueue<T> implements AsyncIterable<T>, AsyncIterator<T> {
-	private readonly values: T[] = [];
+	private readonly values = new Map<string | number, T>();
 	private readonly waiters: QueueWaiter<T>[] = [];
 	private closed = false;
+	private sequence = 0;
+	truncated = 0;
+	constructor(private readonly capacity = Infinity) {}
+	get size(): number { return this.values.size; }
+	remove(key: string): void { this.values.delete(key); }
 
-	push(value: T): boolean {
+	push(value: T, key: string | number = this.sequence++): boolean {
 		if (this.closed) return false;
 		const waiter = this.waiters.shift();
 		if (waiter) waiter.resolve({ value, done: false });
-		else this.values.push(value);
+		else {
+			this.values.set(key, value);
+			if (this.values.size > this.capacity) { this.values.delete(this.values.keys().next().value!); this.truncated++; }
+		}
 		return true;
 	}
 
@@ -56,8 +67,8 @@ class AsyncQueue<T> implements AsyncIterable<T>, AsyncIterator<T> {
 	}
 
 	next(): Promise<IteratorResult<T>> {
-		const value = this.values.shift();
-		if (value !== undefined) return Promise.resolve({ value, done: false });
+		const first = this.values.entries().next();
+		if (!first.done) { this.values.delete(first.value[0]); return Promise.resolve({ value: first.value[1], done: false }); }
 		if (this.closed) return Promise.resolve({ value: undefined, done: true });
 		return new Promise((resolve) => this.waiters.push({ resolve }));
 	}
@@ -120,8 +131,8 @@ function isValidResponseResult(kind: RequestKind, result: unknown): boolean {
  */
 export class RequestBus {
 	private readonly requestQueue = new AsyncQueue<RequestEnvelopeUnion>();
-	private readonly responseQueue = new AsyncQueue<ResponseEnvelope>();
-	private readonly terminalQueue = new AsyncQueue<RequestOutcome<RequestKind>>();
+	private readonly responseQueue: AsyncQueue<ResponseEnvelope>;
+	private readonly terminalQueue: AsyncQueue<RequestOutcome<RequestKind>>;
 	private readonly pending = new Map<string, PendingRequest<RequestKind>>();
 	private readonly settled = new Map<string, RequestOutcome<RequestKind>>();
 	private readonly dropped: DroppedResponse[] = [];
@@ -133,27 +144,34 @@ export class RequestBus {
 	private readonly idNamespace: string;
 	private sequence = 0;
 	private closed = false;
+	private readonly capacity: number;
+	private retiredTerminals = 0;
+	private retiredDrops = 0;
 
 	constructor(options: RequestBusOptions = {}) {
+		this.capacity = options.retentionCapacity ?? DEFAULT_RETENTION_CAPACITY;
+		if (!Number.isSafeInteger(this.capacity) || this.capacity < 1) throw new RangeError("retentionCapacity must be a positive finite safe integer");
+		this.responseQueue = new AsyncQueue(this.capacity);
+		this.terminalQueue = new AsyncQueue(this.capacity);
 		this.timeoutMs = options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs;
 		if (this.timeoutMs !== null && (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 0)) throw new Error("Request bus timeoutMs must be a non-negative finite number or null");
 		this.idNamespace = crypto.randomUUID();
 		this.idPrefix = options.idPrefix ?? "r";
-		this.idFactory = options.idFactory ?? ((sequence, prefix) => `${prefix}-${this.idNamespace}-${sequence}`);
+		this.idFactory = options.idFactory ?? ((_sequence, prefix) => prefix);
 		this.now = options.now ?? Date.now;
 		this.onDrop = options.onDrop;
 	}
 
 	/** Stream of requests for the UI or another transport client. */
-	requests(): AsyncIterable<RequestEnvelopeUnion> {
-		return this.requestQueue;
+	async *requests(): AsyncIterable<RequestEnvelopeUnion> {
+		for await (const envelope of this.requestQueue) if (this.isPending(envelope.id)) yield envelope;
 	}
 
 	get requestStream(): AsyncIterable<RequestEnvelopeUnion> {
-		return this.requestQueue;
+		return this.requests();
 	}
 
-	/** Stream of all responses submitted to the bus, including rejected ones. */
+	/** Bounded recent responses, including rejected ones. Reconcile slow consumers with getRetention(). */
 	responses(): AsyncIterable<ResponseEnvelope> {
 		return this.responseQueue;
 	}
@@ -198,8 +216,6 @@ export class RequestBus {
 		if (this.closed) {
 			const id = this.allocateId();
 			const outcome: RequestOutcome<K> = { status: "cancelled", requestId: id, reason: "bus_closed" };
-			this.settled.set(id, outcome as RequestOutcome<RequestKind>);
-			this.terminalQueue.push(outcome as RequestOutcome<RequestKind>);
 			onOutcome(outcome);
 			return id;
 		}
@@ -226,7 +242,7 @@ export class RequestBus {
 				}
 			}
 
-			this.requestQueue.push(envelope);
+			this.requestQueue.push(envelope, id);
 		}
 		return id;
 	}
@@ -320,13 +336,20 @@ export class RequestBus {
 		return this.dropped.map((record) => ({ ...record }));
 	}
 
+	/** Truncation is diagnostic only; isPending remains the authoritative liveness query. */
+	getRetention() {
+		return {
+			capacity: this.capacity, pending: this.pending.size, queuedRequests: this.requestQueue.size,
+			settled: this.settled.size, dropped: this.dropped.length, responses: this.responseQueue.size, terminals: this.terminalQueue.size,
+			truncated: { settled: this.retiredTerminals, dropped: this.retiredDrops, responses: this.responseQueue.truncated, terminals: this.terminalQueue.truncated },
+		};
+	}
+
 	private allocateId(): string {
-		for (;;) {
-			this.sequence++;
-			const id = this.idFactory(this.sequence, this.idPrefix);
-			if (!this.pending.has(id) && !this.settled.has(id)) return id;
-			if (this.sequence >= 10_000) throw new RequestBusIdCollisionError(id);
-		}
+		if (this.sequence >= Number.MAX_SAFE_INTEGER) throw new RequestBusIdCollisionError("sequence exhausted");
+		const label = this.idFactory(++this.sequence, this.idPrefix);
+		if (typeof label !== "string" || !label) throw new RequestBusIdCollisionError(String(label));
+		return `${label}-${this.idNamespace}-${this.sequence}`;
 	}
 
 	private settleTimeout<K extends RequestKind>(requestId: string, pending: PendingRequest<K>): boolean {
@@ -340,9 +363,11 @@ export class RequestBus {
 	private settle(requestId: string, pending: PendingRequest<RequestKind>, outcome: RequestOutcome<RequestKind>): boolean {
 		if (this.pending.get(requestId) !== pending) return false;
 		this.pending.delete(requestId);
+		this.requestQueue.remove(requestId);
 		if (pending.timer !== undefined) clearTimeout(pending.timer);
 		if (pending.signal && pending.abortListener) pending.signal.removeEventListener("abort", pending.abortListener);
 		this.settled.set(requestId, outcome);
+		if (this.settled.size > this.capacity) { this.settled.delete(this.settled.keys().next().value!); this.retiredTerminals++; }
 		this.terminalQueue.push(outcome);
 		pending.resolve(outcome);
 		return true;
@@ -351,6 +376,7 @@ export class RequestBus {
 	private recordDrop(response: unknown, reason: RequestBusDropReason): void {
 		const record = { response, reason, timestamp: this.now() } satisfies DroppedResponse;
 		this.dropped.push(record);
+		if (this.dropped.length > this.capacity) { this.dropped.shift(); this.retiredDrops++; }
 		try {
 			this.onDrop?.(record);
 		} catch {

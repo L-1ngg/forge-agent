@@ -6,6 +6,41 @@ import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { MEMORY_TOOL_NAMES } from "./memory/tools.ts";
 import { validateToolArguments } from "./tool-arguments.ts";
 import { freeze } from "./host-callback.ts";
+import { toolDefinition, convertSchemaToJsonSchema, parseWithStandardSchema, type AnyTool, type JSONSchema } from "@tanstack/ai";
+import { z } from "zod";
+
+const approvalSchema = { reject: z.object({ reason: z.string() }) };
+
+/** Trusted identity comes from the official tool object, never a model-supplied name. */
+export function bridgeSessionTools(tools: readonly HarnessTool<object, unknown>[], native: ReadonlyMap<string, AnyTool>) {
+	const internal = new Set<HarnessTool<object, unknown>>();
+	const effective = [...tools, ...[...native.values()].map(tool => {
+		const schema = convertSchemaToJsonSchema(tool.inputSchema) as JSONSchema;
+		if (schema.type !== "object") throw new Error(`Native tool ${tool.name} requires an object schema`);
+		const bridged: HarnessTool<object, unknown> = {
+			name: tool.name, label: tool.name, description: tool.description, parameters: schema as HarnessTool<object, unknown>["parameters"],
+			validateArguments: args => parseWithStandardSchema<object>(tool.inputSchema!, args),
+			async execute(args, context) {
+				const output = await tool.execute!(args, { ...(context.toolCallId ? { toolCallId: context.toolCallId } : {}), ...(context.signal ? { abortSignal: context.signal } : {}), emitCustomEvent: () => {} });
+				return { content: [{ type: "text", text: JSON.stringify(output) }], details: output };
+			},
+		};
+		internal.add(bridged); return bridged;
+	})];
+	if (new Set(effective.map(tool => tool.name)).size !== effective.length) throw new Error("Tool name collision with an internal tool");
+	return {
+		effective, internal,
+		bind(execute: (callId: string | undefined, args: unknown, original: boolean) => Promise<unknown>): AnyTool[] {
+			return effective.map(tool => {
+				const original = native.get(tool.name);
+				if (original) return { ...original, needsApproval: true, approvalSchema, execute: (args: unknown, context?: { toolCallId?: string }) => execute(context?.toolCallId, args, true) } as AnyTool;
+				// Preparation must see raw input before native Standard Schema validation.
+				const inputSchema = tool.prepareArguments ? tool.parameters : tool.inputSchema ?? tool.parameters;
+				return toolDefinition({ name: tool.name, description: tool.description, needsApproval: true, approvalSchema, inputSchema: inputSchema as JSONSchema, outputSchema: { type: "string" } }).server((args, context) => execute(context?.toolCallId, args, false));
+			});
+		},
+	};
+}
 
 export interface ToolCallContext {
 	assistantMessage: SessionMessage;

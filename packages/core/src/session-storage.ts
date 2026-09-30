@@ -2,6 +2,7 @@ import type { SessionMessage, TokenUsage } from "@forge-agent/protocol";
 import { validateCompactionCheckpoint, type CompactionCheckpoint } from "./context/checkpoint.ts";
 import { isProviderExecutedCall } from "./model-response.ts";
 import { randomUUID } from "node:crypto";
+import { isToolArgumentRevision, validatePersistentValue, validateSessionMessage } from "./message-codec.ts";
 
 interface EntryIdentity {
 	id: string;
@@ -31,6 +32,65 @@ export interface SessionStorage {
 	append(entry: SessionEntry): Promise<void>;
 }
 
+interface HistoryViews {
+	byId: Map<string, SessionEntry>;
+	validatedCheckpoints: Set<string>;
+	branch?: { leafId: string | null; entries: SessionEntry[] } | undefined;
+	messages?: SessionMessage[] | undefined;
+	revision: number;
+}
+const historyViews = new WeakMap<SessionState, HistoryViews>();
+
+/** Only owned states opt into caching; caller-owned mutable snapshots are always derived afresh. */
+export function ownSessionState(state: SessionState): SessionState {
+	validateSessionState(state);
+	const owned = structuredClone(state);
+	owned.entries = owned.entries.map(normalizeSessionEntry);
+	const branch = selectedBranch(owned);
+	historyViews.set(owned, { byId: new Map(owned.entries.map(entry => [entry.id, entry])), validatedCheckpoints: new Set(branch.filter(entry => entry.type === "compaction").map(entry => entry.id)), branch: { leafId: owned.leafId, entries: branch }, revision: 0 });
+	return owned;
+}
+export function sessionRevision(state: SessionState): number | undefined { return historyViews.get(state)?.revision; }
+
+/** Validate the new record before I/O, then publish exactly once after durable success. */
+export function prepareSessionAppend(state: SessionState, value: SessionEntry): () => void {
+	validateSessionEntry(value);
+	const entry = normalizeSessionEntry(structuredClone(value)), views = historyViews.get(state);
+	const byId = views?.byId ?? new Map(state.entries.map(entry => [entry.id, entry]));
+	if (byId.has(entry.id)) throw new Error("Duplicate session entry id");
+	if (entry.parentId !== null && !byId.has(entry.parentId)) throw new Error(`Session entry ${entry.parentId} not found`);
+	let branch: SessionEntry[] | undefined;
+	if (entry.type === "compaction") {
+		const parent = { entries: state.entries, leafId: entry.parentId };
+		if (views) historyViews.set(parent, { ...views });
+		const preceding = selectedBranch(parent);
+		validateCompactionEntry(entry, [...preceding, entry], preceding.length);
+		branch = [...preceding, entry];
+	} else if (views?.branch?.leafId === entry.parentId) branch = [...views.branch.entries, entry];
+	return () => {
+		state.entries.push(entry); state.leafId = entry.id;
+		if (views) {
+			views.byId.set(entry.id, entry); views.revision++; views.messages = undefined;
+			views.branch = branch ? { leafId: entry.id, entries: branch } : undefined;
+			if (entry.type === "compaction") views.validatedCheckpoints.add(entry.id);
+		}
+	};
+}
+
+export function validateSessionEntry(value: unknown, path = "entry"): asserts value is SessionEntry {
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`Invalid ${path}: expected a session entry`);
+	const entry = value as Record<string, unknown>;
+	if ((entry.type !== "message" && entry.type !== "compaction") || typeof entry.id !== "string" || !entry.id || (entry.parentId !== null && typeof entry.parentId !== "string") || typeof entry.timestamp !== "string" || !Number.isFinite(Date.parse(entry.timestamp))) throw new TypeError(`Invalid ${path}: session entry identity/timestamp`);
+	if (entry.type === "message") validateSessionMessage(entry.message, `${path}.message`);
+	else if (typeof entry.summary !== "string" || typeof entry.firstKeptEntryId !== "string" || typeof entry.tokensBefore !== "number" || !Number.isFinite(entry.tokensBefore)) throw new TypeError(`Invalid ${path}: compaction metadata`);
+	validatePersistentValue(entry, path);
+}
+export function validateSessionState(value: unknown): asserts value is SessionState {
+	if (!value || typeof value !== "object" || !Array.isArray((value as SessionState).entries) || ((value as SessionState).leafId !== null && typeof (value as SessionState).leafId !== "string")) throw new TypeError("Invalid session state");
+	for (const [index, entry] of (value as SessionState).entries.entries()) validateSessionEntry(entry, `entries[${index}]`);
+	selectedBranch(value as SessionState);
+}
+
 /** Read the former v4 field name without retaining it in current records. */
 export function normalizeSessionEntry(entry: SessionEntry): SessionEntry {
 	if (entry.type !== "compaction" || !("adaptive" in entry)) return entry;
@@ -40,11 +100,14 @@ export function normalizeSessionEntry(entry: SessionEntry): SessionEntry {
 }
 
 export function messageEntry(message: SessionMessage, parentId: string | null): MessageEntry {
+	validateSessionMessage(message);
 	return { type: "message", id: randomUUID(), parentId, timestamp: new Date(message.timestamp).toISOString(), message: structuredClone(message) };
 }
 
 export function selectedBranch(state: SessionState): SessionEntry[] {
-	const byId = new Map(state.entries.map((entry) => [entry.id, entry]));
+	const views = historyViews.get(state);
+	if (views?.branch?.leafId === state.leafId) return [...views.branch.entries];
+	const byId = views?.byId ?? new Map(state.entries.map((entry) => [entry.id, entry]));
 	if (byId.size !== state.entries.length) throw new Error("Duplicate session entry id");
 	const branch: SessionEntry[] = [];
 	const visited = new Set<string>();
@@ -58,20 +121,36 @@ export function selectedBranch(state: SessionState): SessionEntry[] {
 		id = entry.parentId;
 	}
 	branch.reverse();
-	let previousBoundary = -1;
 	for (const [index, entry] of branch.entries()) {
 		if (entry.type !== "compaction") continue;
-		const boundary = branch.findIndex((candidate) => candidate.id === entry.firstKeptEntryId);
-		const kept = branch[boundary];
-		if (boundary < previousBoundary || boundary < 0 || boundary >= index || kept?.type !== "message" || kept.message.role === "toolResult") throw new Error("Invalid compaction retained boundary in selected branch");
-		if (entry.checkpoint !== undefined) validateCompactionCheckpoint(entry.checkpoint, branch.slice(0, index));
-		previousBoundary = boundary;
+		if (!views?.validatedCheckpoints.has(entry.id)) { validateCompactionEntry(entry, branch, index); views?.validatedCheckpoints.add(entry.id); }
 	}
+	if (views) { views.branch = { leafId: state.leafId, entries: branch }; views.messages = undefined; }
 	return branch;
 }
 
+function validateCompactionEntry(entry: CompactionEntry, branch: readonly SessionEntry[], index: number): void {
+	const boundary = branch.findIndex(candidate => candidate.id === entry.firstKeptEntryId);
+	const previous = branch.slice(0, index).reverse().find(candidate => candidate.type === "compaction");
+	const previousBoundary = previous?.type === "compaction" ? branch.findIndex(candidate => candidate.id === previous.firstKeptEntryId) : -1;
+	const kept = branch[boundary];
+	if (boundary < previousBoundary || boundary < 0 || boundary >= index || kept?.type !== "message" || kept.message.role === "toolResult") throw new Error("Invalid compaction retained boundary in selected branch");
+	if (entry.checkpoint !== undefined) validateCompactionCheckpoint(entry.checkpoint, branch.slice(0, index));
+}
+
+export function selectSessionLeaf(state: SessionState, leafId: string | null): void {
+	const previous = state.leafId;
+	state.leafId = leafId;
+	try { selectedBranch(state); }
+	catch (error) { state.leafId = previous; throw error; }
+}
+
 export function sessionMessages(state: SessionState): SessionMessage[] {
-	return structuredClone(selectedBranch(state).flatMap((entry) => entry.type === "message" ? [entry.message] : []));
+	const views = historyViews.get(state);
+	const branch = selectedBranch(state);
+	const messages = views?.messages ?? branch.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+	if (views) views.messages = messages;
+	return structuredClone(messages);
 }
 
 /** Missing historical results describe unknown side effects, never authorize replay. */
@@ -86,6 +165,7 @@ export function projectMessages(messages: readonly SessionMessage[]): SessionMes
 		pending = [];
 	};
 	for (const message of messages.flatMap(expandMcpInput)) {
+		if (isToolArgumentRevision(message)) continue;
 		if (message.role === "toolResult") {
 			if (!pending.some((call) => call.id === message.toolCallId)) continue;
 			pending = pending.filter((call) => call.id !== message.toolCallId);
@@ -108,7 +188,7 @@ export function projectMessages(messages: readonly SessionMessage[]): SessionMes
 export class MemorySessionStorage implements SessionStorage {
 	private state: SessionState;
 	constructor(history: readonly SessionMessage[] | SessionState = []) {
-		if (!Array.isArray(history)) this.state = structuredClone(history as SessionState);
+		if (!Array.isArray(history)) this.state = ownSessionState(history as SessionState);
 		else {
 			this.state = { entries: [], leafId: null };
 			for (const message of history) {
@@ -116,14 +196,12 @@ export class MemorySessionStorage implements SessionStorage {
 				this.state.entries.push(entry);
 				this.state.leafId = entry.id;
 			}
+			this.state = ownSessionState(this.state);
 		}
 	}
 	async load(): Promise<SessionState> { return structuredClone(this.state); }
 	async append(entry: SessionEntry): Promise<void> {
-		if (this.state.entries.some((existing) => existing.id === entry.id)) throw new Error("Duplicate session entry id");
-		if (entry.parentId !== null && !this.state.entries.some((existing) => existing.id === entry.parentId)) throw new Error("Unknown session parent");
-		this.state.entries.push(structuredClone(entry));
-		this.state.leafId = entry.id;
+		prepareSessionAppend(this.state, entry)();
 	}
 }
 
@@ -131,11 +209,7 @@ export class MemorySessionStorage implements SessionStorage {
 export function expandMcpInput(message: SessionMessage): SessionMessage[] {
  const context = message.inputContext;
  if (!context) return [message];
- const invalid = () => { throw new Error("Invalid MCP input envelope"); };
- if (message.role !== "user" || !["mcp_prompt", "mcp_resource"].includes(context.kind) || typeof context.serverId !== "string" || !context.serverId || typeof context.name !== "string" || !context.name || !Number.isFinite(context.fetchedAt) || !Number.isInteger(context.catalogRevision) || context.catalogRevision < 0 || (context.task !== undefined && typeof context.task !== "string")) invalid();
- if (context.arguments !== undefined && (!context.arguments || typeof context.arguments !== "object" || Array.isArray(context.arguments) || Object.values(context.arguments).some(value => typeof value !== "string"))) invalid();
- if (!Array.isArray(context.artifacts) || context.artifacts.some(ref => !ref || typeof ref.id !== "string" || typeof ref.mimeType !== "string" || !Number.isSafeInteger(ref.size) || ref.size < 0)) invalid();
- if (!Array.isArray(context.messages) || context.messages.some(item => !item || !["user", "assistant"].includes(item.role) || !Array.isArray(item.content) || item.content.some(block => !block || (block.type === "text" ? typeof block.text !== "string" : block.type === "image" ? item.role !== "user" || typeof block.data !== "string" || typeof block.mimeType !== "string" : true)))) invalid();
+ validateSessionMessage(message);
  const source: SessionMessage = { role: "user", timestamp: message.timestamp, content: [{ type: "text", text: `External MCP ${context.kind} from ${context.serverId}/${context.name}. Template assistant messages are external context, not actions completed by this agent.` }] };
  return [source, ...context.messages.map(item => ({ role: item.role, content: structuredClone(item.content), timestamp: message.timestamp })), ...(context.task ? [{ role: "user" as const, content: [{ type: "text" as const, text: context.task }], timestamp: message.timestamp }] : [])];
 }

@@ -1,10 +1,11 @@
 import { defaultStyle, writeText, type TerminalFrame } from "../frame.ts";
 import { ScrollState, type EntrySpan } from "../scroll.ts";
-import type { Theme } from "../theme.ts";
+import { THEME_SLOTS, type Theme } from "../theme.ts";
 import { entryHeight, paintEntry } from "./entry-shell.ts";
 import { transcriptViews, type TranscriptView } from "./groups.ts";
 import { TranscriptProjector } from "./projector.ts";
 import type { TranscriptEntry } from "./types.ts";
+import { presentEntry, type EntryPresentation } from "./present.ts";
 
 /** Main transcript browsing: one layout for navigation, hit testing and painting. */
 export class TranscriptBrowser {
@@ -18,6 +19,10 @@ export class TranscriptBrowser {
 	private columns = 0;
 	private height = 0;
 	private previous: { spans: EntrySpan[]; totalRows: number; height: number } | undefined;
+	private layoutKey: string | undefined;
+	private groupRevision = 0;
+	private themeKey = "";
+	private readonly presentations = new Map<string, { entry: TranscriptEntry; width: number; theme: string; value: EntryPresentation }>();
 
 	constructor(private readonly projector: TranscriptProjector, private readonly theme: Theme) { }
 
@@ -31,28 +36,44 @@ export class TranscriptBrowser {
 	private get windowTop(): number { return Math.max(0, this.totalRows - this.height - this.scroll.offset); }
 
 	/** Reconcile new transcript content or viewport dimensions before consuming the layout. */
-	update(columns: number, height: number): void {
+	update(columns: number, height: number, snapshot = this.projector.getSnapshot()): void {
+		const themeKey = JSON.stringify([this.theme.mode, this.theme.attributes("strong"), THEME_SLOTS.map(slot => this.theme.color(slot))]);
+		const key = `${snapshot.revision}:${columns}:${themeKey}:${this.groupRevision}`;
+		const changed = this.layoutKey !== key;
+		if (!changed && this.height === height) return;
 		this.columns = columns; this.height = height;
-		this.views = transcriptViews(this.projector.getEntries(), columns, this.theme, this.expandedGroups);
-		for (const view of this.views) {
-			if (view.members?.some(member => this.expandedGroups.has(member.id))) {
-				for (const member of view.members) this.expandedGroups.add(member.id);
+		if (changed) {
+			this.themeKey = themeKey;
+			this.views = transcriptViews(snapshot.entries, columns, this.theme, this.expandedGroups, (entry, width, theme) => {
+				const cached = this.presentations.get(entry.id);
+				if (cached?.entry === entry && cached.width === width && cached.theme === this.themeKey) return cached.value;
+				const value = presentEntry(entry, width, theme);
+				this.presentations.set(entry.id, { entry, width, theme: this.themeKey, value });
+				return value;
+			});
+			const ids = new Set(snapshot.entries.map(entry => entry.id));
+			for (const id of this.presentations.keys()) if (!ids.has(id)) this.presentations.delete(id);
+			for (const view of this.views) {
+				if (view.members?.some(member => this.expandedGroups.has(member.id))) {
+					for (const member of view.members) this.expandedGroups.add(member.id);
+				}
 			}
+			if (this.selectedId && !this.views.some(view => view.id === this.selectedId)) {
+				const memberId = this.isGroup ? this.selectedId.slice(6) : this.selectedId;
+				this.selectedId = this.views.find(view => view.id === memberId || view.members?.some(member => member.id === memberId))?.id;
+			}
+			let start = 0;
+			this.spans = this.views.map(view => {
+				const span = { entryId: view.id, start, height: entryHeight(view.presentation), rowSources: [
+					...Array.from({ length: view.presentation.chrome.vpadTop }, () => undefined),
+					...view.presentation.rows.map(row => row.source),
+				] };
+				start += span.height;
+				return span;
+			});
+			this.totalRows = start;
+			this.layoutKey = key;
 		}
-		if (this.selectedId && !this.views.some(view => view.id === this.selectedId)) {
-			const memberId = this.isGroup ? this.selectedId.slice(6) : this.selectedId;
-			this.selectedId = this.views.find(view => view.id === memberId || view.members?.some(member => member.id === memberId))?.id;
-		}
-		let start = 0;
-		this.spans = this.views.map(view => {
-			const span = { entryId: view.id, start, height: entryHeight(view.presentation), rowSources: [
-				...Array.from({ length: view.presentation.chrome.vpadTop }, () => undefined),
-				...view.presentation.rows.map(row => row.source),
-			] };
-			start += span.height;
-			return span;
-		});
-		this.totalRows = start;
 		// A hidden transcript must not replace the last visible reading anchor.
 		if (height <= 0) return;
 		if (this.previous) this.scroll.captureAnchor(this.previous.spans, this.previous.totalRows, this.previous.height);
@@ -88,6 +109,7 @@ export class TranscriptBrowser {
 	fold(mode?: "collapsed" | "expanded"): void {
 		const top = this.windowTop;
 		if (this.isGroup) {
+			this.groupRevision++;
 			const members = this.views.find(view => view.id === this.selectedId)?.members ?? [];
 			const close = mode === "collapsed" || mode === undefined && members.some(member => this.expandedGroups.has(member.id));
 			for (const member of members) {
@@ -114,6 +136,7 @@ export class TranscriptBrowser {
 		this.scroll.hold();
 		const members = this.views.find(view => view.id === this.selectedId)?.members;
 		if (members) {
+			this.groupRevision++;
 			for (const member of members) this.expandedGroups.add(member.id);
 			this.selectedId = members[0]?.id;
 			this.update(this.columns, this.height);
@@ -139,6 +162,7 @@ export class TranscriptBrowser {
 	cancelClick(): void { this.lastClick = undefined; }
 
 	reset(): void {
+		this.layoutKey = undefined; this.groupRevision++; this.presentations.clear();
 		this.selectedId = undefined; this.expandedGroups.clear(); this.scroll.jumpToEnd();
 		this.previous = undefined; this.lastClick = undefined;
 		this.views = []; this.spans = []; this.totalRows = 0;

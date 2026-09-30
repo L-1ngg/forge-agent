@@ -125,3 +125,23 @@ test("reset drops selection, expansion and scroll even when the next session reu
 	expect(text()).toContain("NEW_BODY");
 	expect(text()).not.toContain("same_BODY");
 });
+
+test("cached layouts reflect theme changes, streamed text and immutable snapshot isolation", () => {
+	const projector = new TranscriptProjector(), original = createTheme({ mode: "truecolor" });
+	let changed = false;
+	const browser = new TranscriptBrowser(projector, { ...original, color(slot) { return changed && slot === "status" ? { kind: "rgb", r: 255, g: 0, b: 0 } : original.color(slot); } });
+	const message = { role: "assistant" as const, timestamp: 1, content: [{ type: "text" as const, text: "**INITIAL_TEXT**" }] };
+	projector.apply({ type: "message_start", message, timestamp: 1 });
+	const paint = () => { browser.update(80, 24); const frame = createFrame(80, 24); browser.paint(frame, 0, false); return frame; };
+	const before = paint(), snapshot = projector.getSnapshot();
+	expect(Object.isFrozen(snapshot.entries)).toBe(true); expect(Object.isFrozen(snapshot.entries[0])).toBe(true);
+	const external = projector.getEntries(); external.length = 0;
+	expect(frameToText(paint())).toContain("INITIAL_TEXT");
+	changed = true; const themed = paint();
+	expect(themed.cells.flat().find(cell => cell.grapheme === "I")?.foreground).toEqual({ kind: "rgb", r: 255, g: 0, b: 0 });
+	expect(before.cells.flat().find(cell => cell.grapheme === "I")?.foreground).not.toEqual({ kind: "rgb", r: 255, g: 0, b: 0 });
+	expect(frameToText(themed)).toBe(frameToText(before));
+	projector.apply({ type: "message_delta", contentIndex: 0, contentType: "text", delta: " STREAMED_TEXT", timestamp: 2 });
+	expect(frameToText(paint())).toContain("STREAMED_TEXT");
+	expect(snapshot.entries[0]).toMatchObject({ markdown: "**INITIAL_TEXT**" });
+});

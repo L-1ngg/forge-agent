@@ -31,6 +31,7 @@ Run commands from the repository root. Choose an explicit output path for experi
 |---|---|---|
 | `bun run check`, focused tests, `bun run test:headless` | Dependency/type checks and local fixtures; no live model | Console and `.test-results/`; see Local Checks above |
 | `bun run benchmark:resume` | Synthetic session list/preview benchmark; no model | JSON on stdout; synthetic sessions are removed |
+| `bun scripts/session-reliability-benchmark.ts --output <path>` | Frozen 100/1,000-message layout/frame/streaming and history-query benchmark; no model | Explicit JSON path and stdout; synthetic sessions are removed |
 | `bun scripts/context-notes-benchmark.ts` | Estimate fixed note/search material size; no model | JSON on stdout; no measured provider-token claim |
 | `bun scripts/markdown-preview.ts` | Interactive Markdown sample; no model | Terminal only; no saved conversation |
 | `bun run tui:frame dump --out /tmp/forge-frame.json` | Dump the idle TUI; `dump-scenarios` and `compare` cover cell fixtures | Explicit JSON path; golden files remain in `packages/tui/test/fixtures/golden/` |

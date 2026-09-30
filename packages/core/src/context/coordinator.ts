@@ -8,7 +8,7 @@ import { assertProtectedContextFits, compactContext, type CompactionBudget, type
 import { requestFixedText } from "./request-budget.ts";
 
 interface CompactionHost {
-	messages(): SessionMessage[];
+	messages(budget?: CompactionBudget): SessionMessage[];
 	tools(): NonNullable<SessionAssembly["options"]["tools"]>;
 	usage: UsageTracker;
 	configuration(): SessionAssembly & { settings: ContextSettings };
@@ -30,10 +30,9 @@ export class CompactionCoordinator {
 	}
 	syncUsage(budget = this.budget()): void {
 		const { options } = this.host.configuration();
-		this.host.usage.setContext({ messages: projectMessages(this.host.messages()), contextWindow: budget.window, identity: JSON.stringify([options.model, options.thinkingLevel, budget.output, budget.fixedText]), fixedText: budget.fixedText });
+		this.host.usage.setContextSnapshot({ messages: projectMessages(this.host.messages(budget)), contextWindow: budget.window, identity: JSON.stringify([options.model, options.thinkingLevel, budget.output, budget.fixedText]), fixedText: budget.fixedText });
 	}
 	rebuild(budget?: CompactionBudget): void {
-		buildContext(this.host.history()); // Validate the committed branch before publishing usage.
 		this.host.usage.invalidate();
 		this.syncUsage(budget);
 	}
@@ -42,7 +41,7 @@ export class CompactionCoordinator {
 		const operationId = randomUUID();
 		const budget = requestBudget ?? this.budget();
 		this.syncUsage(budget);
-		const beforeTokens = calculateContextUsage({ messages: projectMessages(this.host.messages()), fixedText: budget.fixedText }).contextTokens ?? 0;
+		const beforeTokens = calculateContextUsage({ messages: projectMessages(this.host.messages(budget)), fixedText: budget.fixedText }).contextTokens ?? 0;
 		let compactionMetrics: CompactionMetrics | undefined;
 		const event = (phase: "start" | "end" | "error" | "skipped", extra: { afterTokens?: number; error?: string; usage?: NonNullable<SessionMessage["usage"]> } = {}) => emit({ type: "compaction", phase, reason, operationId, beforeTokens, timestamp: Date.now(), ...compactionMetrics, ...extra });
 		try {

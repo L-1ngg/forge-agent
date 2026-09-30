@@ -7,6 +7,8 @@ created: 2026-09-27
 
 > 状态:已批准(2026-09-27，2026-09-28 已完成本地实现与验收；可信来源与 Markdown 存储继续适用，工具批次调度引用被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代)。Issue [#37](https://github.com/L-1ngg/forge-agent/issues/37) 是当时需求与验收真相源；施工与证据见 [Issue #37 施工图](../phases/tool-ecosystem-issue-37.md)。
 
+> 后续补充(2026-09-30)：整理模型阶段的 Invocation 取消、有限等待和迟到写盘门禁按 [ADR-029](029-session-reliability-and-bounded-views.md)；不恢复本决定删除的取消恢复账本、事务或锁。新鲜证据见 [Issue #44 施工图](../phases/session-reliability-issue-44.md)，原验收边界不变。
+
 ## 决定
 
 本地静态工具以 Zod Standard Schema 为参数唯一来源，动态 MCP / SDK JSON Schema 保持现有入口。`@tanstack/ai-skills` 的 `withSkills(skillDirectory(...))` 负责技能目录、`load_skill`、加载去重和 `createResourceTool`；项目目录排在个人全局目录之前，由官方 `aggregate`、`dedupe` 和 `filter` 组合。Forge 仅接线宿主目录、显式 `/skill` 输入和不可自动调用的可见性。Skills 脚本仍由普通执行工具及其权限策略处理。

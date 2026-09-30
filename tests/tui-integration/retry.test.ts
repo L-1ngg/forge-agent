@@ -13,6 +13,7 @@ test("PTY: transient retry shows progress and successful completion without stop
 		await waitFor(() => messages.includes("ready")); terminal.write("first\r");
 		await waitFor(() => messages.some(message => typeof message === "object" && message !== null && "calls" in message && message.calls === 2));
 		expect(messages).toContainEqual({ status: "success", calls: 2 });
+		await waitFor(() => output.includes("Model retry scheduled #1") && output.includes("success"));
 		expect(output).toContain("Model retry scheduled #1"); expect(output).toContain("success");
 		terminal.write("next\r");
 		await waitFor(() => messages.some(message => typeof message === "object" && message !== null && "calls" in message && message.calls === 3));

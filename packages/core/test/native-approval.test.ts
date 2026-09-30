@@ -234,6 +234,38 @@ for (const edited of ["reviewed", "deny", 42] as const) test(`edited approval ar
 	} finally { agent.abort(); await events; await agent.dispose(); }
 });
 
+test("edited argument commit failure prevents the entire approved batch from executing", async () => {
+	const requests: SessionMessage[][] = [], effects: string[] = [];
+	const storage = new MemorySessionStorage();
+	let rejected = false;
+	const agent = await createAgent({ model, adapter: fixture(requests), systemPrompt: "test", cwd: process.cwd(),
+		storage: { load: () => storage.load(), async append(entry) {
+			if (entry.type === "message" && entry.message.role === "assistant" && entry.message.toolArguments) { rejected = true; throw new Error("final arguments unavailable"); }
+			await storage.append(entry);
+		} },
+		tools: [{ name: "work", label: "Work", description: "record a value", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
+			async execute(args) { effects.push(String((args as { value: string }).value)); return { content: [], details: {} }; } }],
+		permission: { hooks: [{ evaluate(call) {
+			if (call.arguments.value === "allow") return { kind: "allow", source: "hook" };
+			if (call.arguments.value === "deny") return { kind: "deny", source: "hook", reason: "policy denied" };
+			return undefined;
+		} }] },
+	});
+	const turn = agent.runTurn("work");
+	const running = (async () => { for await (const _event of turn) {} })();
+	try {
+		const request = await agent.requests[Symbol.asyncIterator]().next();
+		if (request.done || request.value.kind !== "permission") throw new Error("Expected permission request");
+		expect(agent.respond(response(request.value.id, { decision: "allow_once", editedArgs: { value: "reviewed" } }))).toBe(true);
+		await expect(running).rejects.toThrow("final arguments unavailable");
+		expect(rejected).toBe(true);
+		expect(effects).toEqual([]);
+		expect(await turn.result).toEqual({ status: "error" });
+		expect(() => agent.runTurn("again")).toThrow("faulted");
+		expect(requests).toHaveLength(1);
+	} finally { agent.abort(); await running.catch(() => {}); await agent.dispose().catch(() => {}); }
+});
+
 test("stopping while approval is pending invalidates the old answer and does not execute tools", async () => {
 	const requests: SessionMessage[][] = [], effects: string[] = [];
 	const agent = await createAgent({ model, adapter: fixture(requests), systemPrompt: "test", cwd: process.cwd(),

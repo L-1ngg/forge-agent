@@ -10,7 +10,7 @@ import type { ModelAdapter } from "./model-adapter.ts";
 import type { ToolHooks } from "./session-tools.ts";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
-import { MemorySessionStorage, type SessionStorage } from "./session-storage.ts";
+import { MemorySessionStorage, validateSessionState, type SessionStorage } from "./session-storage.ts";
 import type { UsageTruthPoint } from "./usage.ts";
 import type { CompactionResult, ContextSettings, RetryPolicy } from "./context/compaction.ts";
 import type { MemoryOptions } from "./memory/tools.ts";
@@ -83,6 +83,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
 	const bus = captured.requestBus ?? new RequestBus();
 	try {
 		const state = await storage.load();
+		validateSessionState(state);
 		return await assembleAgent({ ...captured, permission: { ...captured.permission, memory: captured.permission?.memory ?? new MemoryPermissionStore() } }, storage, bus, state);
 	} catch (error) {
 		if (!captured.requestBus) bus.close();

@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-29)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
+> 状态:生效(2026-09-30)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
 > 原则:文档领路，代码跟随；证据说话，不是信心说话。
 
 ## 当前导航
@@ -39,6 +39,7 @@
 | [Issue #42 整理施工与证据](phases/memory-organizer-issue-42.md)、[Issue #37 原验收](phases/tool-ecosystem-issue-37.md)、[ADR-019](decisions/019-persistent-memory.md) | 当前 deferred 整理的响应校验、Markdown 与 worktree 副本；旧质量数据按[归档索引](archive/README.md)进入 |
 | [宿主上下文变换](phases/context-transform.md)、[分层预算决策](decisions/021-host-context-transform-and-request-budget.md) | transformContext、记忆组合、最终请求预算的接口与本地验收证据 |
 | [会话管理](phases/session-management.md)、[首次写入](phases/session-first-write.md) | 新会话、清屏、项目内恢复及增量落盘 |
+| [Issue #44 施工与证据](phases/session-reliability-issue-44.md)、[ADR-029](decisions/029-session-reliability-and-bounded-views.md) | 管理异步归属、整理期限、消息 codec、有界通知/投影和历史/TUI 缓存 |
 | [会话恢复体验](phases/session-resume-experience.md)、[记录浏览](phases/transcript-browser.md)、[TUI 投影状态收敛](phases/transcript-projector.md) | 会话标题、原文预览、缓存、历史浏览与投影状态 |
 | [实验与验收数据](research/README.md) | 仍被现行验收引用的原始数据、运行方法及证据限制 |
 

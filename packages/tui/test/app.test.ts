@@ -39,6 +39,25 @@ class FakeOutput implements HostOutput {
 	}
 }
 
+test("coalesced output paints the final streamed frame and stops scheduled paints", async () => {
+	const input = new FakeInput(), output = new FakeOutput(), bus = new FakeBus();
+	const port: AppPort = { runTurn() { return scriptedTurn((async function* () {
+		yield { type: "message_start", message: { role: "assistant", timestamp: 1, content: [] }, timestamp: 1 };
+		for (let index = 0; index < 20; index++) yield { type: "message_delta", contentIndex: 0, contentType: "text", delta: "x", timestamp: 1 };
+		yield { type: "message_end", message: { role: "assistant", timestamp: 1, content: [{ type: "text", text: "FINAL_STREAM_SENTINEL" }] }, timestamp: 1 };
+	})(), { status: "success" }); } };
+	const app = new App({ port, requestBus: bus, host: "alt", cwd: "/tmp", homeDir: "/tmp", stdin: input, stdout: output });
+	try {
+		await app.start(); input.emit(Buffer.from("task\r"));
+		await waitFor(() => frameToText(app.composeFrameForTest()).includes("FINAL_STREAM_SENTINEL"));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		expect(output.text).toContain("FINAL_STREAM_SENTINEL");
+		expect(output.chunks.length).toBeLessThan(20);
+		input.emit(Buffer.from("queued-paint")); await app.stop(); const writes = output.chunks.length;
+		await new Promise<void>(resolve => setImmediate(resolve)); expect(output.chunks.length).toBe(writes);
+	} finally { await app.stop(); }
+});
+
 class FakeBus implements AppRequestBus {
 	acceptResponses = true;
 	private closed = false;

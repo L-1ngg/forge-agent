@@ -61,15 +61,25 @@ export class UsageTracker {
 	private runningCount = 0;
 	private readonly options: UsageTrackerOptions;
 	private anchor: { prefix: string; length: number; identity: string | undefined; tokens: number } | undefined;
+	private cached: UsageTruthPoint | undefined;
+	private ownsContext = false;
 
 	constructor(options: UsageTrackerOptions = {}) {
 		this.options = { ...options };
 	}
 
 	setContext(context: ContextAssembly | readonly SessionMessage[]): void {
+		this.cached = undefined; this.ownsContext = false;
 		this.context = isMessageList(context) ? { messages: context } : { ...context };
 		if (this.anchor && (this.anchor.identity !== this.context.identity || this.anchor.prefix !== JSON.stringify((this.context.messages ?? []).slice(0, this.anchor.length)))) this.invalidate();
 		if (!isMessageList(context) && context.usage) this.latest = cloneUsage(context.usage);
+	}
+
+	/** Copy committed material so repeated queries can safely reuse its estimate. */
+	setContextSnapshot(context: ContextAssembly | readonly SessionMessage[]): void {
+		const assembly = isMessageList(context) ? { messages: context } : context;
+		this.setContext({ ...assembly, messages: structuredClone([...(assembly.messages ?? [])]), ...(assembly.usage ? { usage: cloneUsage(assembly.usage) } : {}) });
+		this.ownsContext = true;
 	}
 
 	updateContext(context: ContextAssembly | readonly SessionMessage[]): void {
@@ -77,6 +87,7 @@ export class UsageTracker {
 	}
 
 	recordUsage(usage: TokenUsage, useAnchor = true): void {
+		this.cached = undefined;
 		this.latest = cloneUsage(usage);
 		const messages = this.context.messages ?? [];
 		const last = messages.at(-1);
@@ -86,7 +97,7 @@ export class UsageTracker {
 			this.anchor = { prefix: JSON.stringify(messages), length: messages.length, identity: this.context.identity, tokens };
 		}
 	}
-	invalidate(): void { this.anchor = undefined; }
+	invalidate(): void { this.anchor = undefined; this.cached = undefined; }
 
 	record(usage: TokenUsage): void {
 		this.recordUsage(usage);
@@ -114,7 +125,7 @@ export class UsageTracker {
 	}
 
 	snapshot(): UsageTruthPoint {
-		const snapshot = calculateContextUsage(
+		const snapshot = this.cached ? { ...this.cached } : calculateContextUsage(
 			{ ...this.context, ...(this.latest ? { usage: this.latest } : {}) },
 			this.options,
 		);
@@ -123,6 +134,7 @@ export class UsageTracker {
 			snapshot.contextTokens = this.anchor.tokens + estimateContextTokens(trailing);
 			snapshot.contextEstimated = trailing.length > 0;
 		}
+		if (this.ownsContext && !this.context.tokenCounter && !this.options.tokenCounter) this.cached = { ...snapshot };
 		if (this.runningCount > 0 || this.context.running !== undefined) snapshot.running = this.context.running ?? this.runningCount;
 		return snapshot;
 	}

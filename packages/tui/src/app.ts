@@ -56,6 +56,7 @@ export interface AppRequestBus {
 	terminals(): AsyncIterable<RequestOutcome<RequestKind>>;
 	close(): void;
 	getTerminal?(requestId: string): RequestOutcome<RequestKind> | undefined;
+	isPending?(requestId: string): boolean;
 }
 
 /** Structural view of the core agent port; the Forge SDK agent satisfies this. */
@@ -90,10 +91,10 @@ export interface AppSessionHost {
 
 export interface AppOptions {
 	prepareInput?: (input: string) => AgentInput;
-	mcpCommand?: (input: string, report: (text: string) => void) => Promise<void>;
+	mcpCommand?: (input: string, report: (text: string) => void, signal?: AbortSignal) => Promise<void>;
 	openExternal?: (url: string) => Promise<void>;
-	skillsCommand?: (input: string, report: (text: string) => void) => Promise<void>;
-	memoryCommand?: (input: string) => Promise<{ text: string; prompt?: string }>;
+	skillsCommand?: (input: string, report: (text: string) => void, signal?: AbortSignal) => Promise<void>;
+	memoryCommand?: (input: string, signal?: AbortSignal) => Promise<{ text: string; prompt?: string }>;
 	sessions?: AppSessionHost;
 	port: AppPort;
 	/** main is an alias for alt until an inline host is implemented. */
@@ -136,8 +137,7 @@ export class App {
 	private generation = 0;
 	private running = false;
 	private compactTask: Promise<void> | undefined;
-	private skillsTask: Promise<void> | undefined;
-	private memoryTask: Promise<void> | undefined;
+	private readonly management = new Map<"memory" | "catalog", { session: AppSession | undefined; generation: number; controller: AbortController }>();
 	private browsing = false;
 	private viewer: DetailView | undefined;
 	private submitted = false;
@@ -152,6 +152,7 @@ export class App {
 	private picker: PickerState | undefined;
 	private suggestionVersion = 0;
 	private started = false;
+	private paintTask: ReturnType<typeof setImmediate> | undefined;
     private stopMcpEvents: (() => void) | undefined;
     private bindMcpEvents(): void {
         this.stopMcpEvents?.();
@@ -195,6 +196,9 @@ export class App {
 	async stop(): Promise<void> {
 		if (!this.started) return this.stoppedPromise;
 		this.started = false;
+		if (this.paintTask) clearImmediate(this.paintTask);
+		this.paintTask = undefined;
+		this.invalidateManagement();
         this.stopMcpEvents?.();
 		clearTimeout(this.feedbackTimer);
 		this.pauseSending();
@@ -206,8 +210,6 @@ export class App {
 			this.host.stop();
 			await this.runTask;
 			await this.compactTask;
-			await this.memoryTask;
-			await this.skillsTask;
 			await this.options.sessions?.dispose();
 			await this.switchTask;
 		} finally {
@@ -235,6 +237,7 @@ export class App {
 	}
 
 	private visibleCard(): RequestCard | undefined {
+		this.reconcileCards();
 		const record = this.focus.top() ?? (this.browsing ? this.focus.parkedTop() : undefined);
 		return record ? this.cards.get(record.id) : undefined;
 	}
@@ -491,6 +494,7 @@ export class App {
 	}
 
 	private chooseAction(index: number): void {
+		this.reconcileCards();
 		const record = this.focus.top();
 		const card = record ? this.cards.get(record.id) : undefined;
 		if (!card) return;
@@ -567,36 +571,46 @@ export class App {
 	private pauseSending(): void {
 		this.restoreInputs(this.inputs.pause());
 	}
+	private invalidateManagement(): void {
+		if (this.management.size && this.started) this.projector.addNotice("旧会话的管理操作已失效；需要时请重新执行命令。");
+		for (const operation of this.management.values()) operation.controller.abort();
+		this.management.clear();
+	}
+	private manage(slot: "memory" | "catalog", work: (report: (text: string) => void, signal: AbortSignal) => Promise<void | { text: string; prompt?: string }>): void {
+		if (this.management.has(slot)) { this.projector.addNotice("Management operation is still running"); return; }
+		const operation = { session: this.session, generation: this.generation, controller: new AbortController() };
+		this.management.set(slot, operation);
+		const owns = () => this.started && !operation.controller.signal.aborted && this.management.get(slot) === operation && this.session === operation.session && this.generation === operation.generation;
+		const report = (text: string) => { if (owns()) { this.projector.addNotice(text); this.repaint(); } };
+		void (async () => work(report, operation.controller.signal))().then(result => {
+			if (!owns() || !result) return;
+			report(result.text);
+			if (result.prompt) {
+				if (this.running || this.compactTask) this.inputs.enqueue(result.prompt);
+				else this.runTask = this.runTurn(result.prompt);
+			}
+		}, error => report(error instanceof Error ? error.message : String(error))).finally(() => {
+			if (!owns()) return;
+			this.management.delete(slot);
+			this.repaint();
+		});
+	}
 
 	private dispatchCommand(input: string): boolean {
 		const command = input.trim();
 		if ((command === "/mcp" || command.startsWith("/mcp ")) && !/^\/mcp use-(?:prompt|resource)\s/.test(command)) {
             if (!this.options.mcpCommand) { this.projector.addNotice("MCP management unavailable"); return true; }
-            if (this.skillsTask) { this.projector.addNotice("Management operation is still running"); return true; }
-            const generation = this.generation, session = this.session?.id;
-            const report = (text: string) => { if (this.started && this.generation === generation && this.session?.id === session) { this.projector.addNotice(text); this.repaint(); } };
-            this.skillsTask = this.options.mcpCommand(command, report).catch(error => report(String(error))).finally(() => { this.skillsTask = undefined; this.repaint(); });
+            this.manage("catalog", (report, signal) => this.options.mcpCommand!(command, report, signal));
             return true;
         }
         if (command === "/skills" || command.startsWith("/skills ")) {
 			if (!this.options.skillsCommand) { this.projector.addNotice("Skills management unavailable"); return true; }
-			if (this.skillsTask) { this.projector.addNotice("Skills operation is still running"); return true; }
-			const generation = this.generation, session = this.session?.id;
-			const report = (text: string) => { if (this.started && this.generation === generation && this.session?.id === session) { this.projector.addNotice(text); this.repaint(); } };
-			this.skillsTask = this.options.skillsCommand(command, report).catch(error => report(String(error))).finally(() => { this.skillsTask = undefined; this.repaint(); });
+			this.manage("catalog", (report, signal) => this.options.skillsCommand!(command, report, signal));
 			return true;
 		}
 		if (command === "/memory" || command.startsWith("/memory ")) {
 			if (!this.options.memoryCommand) { this.projector.addNotice("Memory management unavailable"); return true; }
-			if (this.memoryTask) { this.projector.addNotice("Memory operation is still running"); return true; }
-			this.memoryTask = this.options.memoryCommand(command.slice(7).trim()).then(result => {
-				this.projector.addNotice(result.text);
-				if (result.prompt) {
-					if (this.running || this.compactTask || this.switching) this.inputs.enqueue(result.prompt);
-					else if (this.started) this.runTask = this.runTurn(result.prompt);
-					else this.restoreInputs([result.prompt]);
-				}
-			}, error => { this.projector.addNotice(error instanceof Error ? error.message : String(error)); }).finally(() => { this.memoryTask = undefined; this.repaint(); });
+			this.manage("memory", (_report, signal) => this.options.memoryCommand!(command.slice(7).trim(), signal));
 			return true;
 		}
 		if (command === "/new") { this.requestSwitch(); return true; }
@@ -667,6 +681,7 @@ export class App {
 		const old = this.session;
 		if (!sessions || !old || this.switching) return;
 		this.switching = true;
+		this.invalidateManagement();
 		this.suggestionVersion++;
 		this.picker = undefined;
 		this.switchTask = (async () => {
@@ -761,7 +776,10 @@ export class App {
 
 	private openDetail(): void {
 		const entry = this.transcript().openDetail();
-		if (entry) this.viewer = new DetailView(entry.id, entryDetail(entry));
+		if (entry) {
+			this.viewer = new DetailView(entry.id, entryDetail(entry));
+			const screen = this.screen(); this.viewer.reconcile(screen.columns, screen.rows, this.theme);
+		}
 	}
 
 	private copyText(text: string): void {
@@ -860,7 +878,7 @@ export class App {
 	private layoutPlan(columns: number, rows: number, hasStatus: boolean) {
 		const card = this.visibleCard();
 		const interactiveOwner = card ? ("card" as const) : ("composer" as const);
-		const emptyWelcome = this.options.showWelcome && !this.submitted && this.projector.getEntries().length === 0;
+		const emptyWelcome = this.options.showWelcome && !this.submitted && this.projector.getSnapshot().entries.length === 0;
 		const width = emptyWelcome ? Math.min(75, Math.max(4, columns - 2)) : columns;
 		const wrapped = wrapDraft(this.draft, Math.max(1, width - 6));
 		const interactiveLines = card
@@ -888,8 +906,13 @@ export class App {
 	}
 
 	private repaint(): void {
-		if (!this.started) return;
-		this.host.paint(this.composeFrame());
+		if (!this.started || this.paintTask) return;
+		this.paintTask = setImmediate(() => {
+			this.paintTask = undefined;
+			if (!this.started) return;
+			try { this.host.paint(this.composeFrame()); }
+			catch (error) { void this.stop(); throw error; }
+		});
 	}
 
 	private queueLines(columns: number): string[] {
@@ -924,7 +947,7 @@ export class App {
 			const contextLabel = this.contextLabel(this.port.getUsage?.());
 			paintHeader(frame, offsets.header, { cwd: this.options.cwd, homeDir: this.options.homeDir, ...(contextLabel ? { contextLabel } : {}) }, this.theme);
 		}
-		const entries = this.projector.getEntries();
+		const snapshot = this.projector.getSnapshot(), entries = snapshot.entries;
 		const welcome = (this.options.showWelcome ?? false) && !this.submitted && entries.length === 0 && !this.visibleCard();
 		let composerY = offsets.interactive;
 		let composerX = 0;
@@ -937,7 +960,7 @@ export class App {
 			composerWidth = Math.min(75, Math.max(4, columns - 2));
 			composerX = Math.max(0, Math.floor((columns - composerWidth) / 2));
 		} else {
-			this.browser.update(columns, transcriptHeight);
+			this.browser.update(columns, transcriptHeight, snapshot);
 			this.browser.paint(frame, offsets.transcript, this.browsing);
 		}
 		const activityLines = this.activityLines(columns);
@@ -993,6 +1016,7 @@ export class App {
 		try {
 			for await (const envelope of bus.requests()) {
 				if (!this.started || generation !== this.generation) return;
+				if (bus.isPending?.(envelope.id) === false) continue;
 				const card = new RequestCard(envelope);
 				const terminal = bus.getTerminal?.(envelope.id);
 				if (terminal) {
@@ -1016,6 +1040,7 @@ export class App {
 		try {
 			for await (const outcome of bus.terminals()) {
 				if (!this.started || generation !== this.generation) return;
+				if (this.reconcileCards()) this.repaint();
 				const card = this.cards.get(outcome.requestId);
 				if (!card) continue;
 				if (card.record.state === "resolved") continue;
@@ -1028,6 +1053,20 @@ export class App {
 		} catch {
 			if (generation === this.generation && !this.switching) await this.stop();
 		}
+	}
+	private reconcileCards(): boolean {
+		const bus = this.requestBus;
+		if (!bus.isPending) return false;
+		let changed = false;
+		for (const [id, card] of this.cards) {
+			if (bus.isPending(id)) continue;
+			const outcome = bus.getTerminal?.(id);
+			if (outcome) { card.terminal(outcome); this.projector.addNotice(archivedCardLine(card.record)); }
+			else this.projector.addNotice(`Request ${id} ended; its recent outcome is no longer retained.`);
+			this.focus.remove(id); this.cards.delete(id);
+			changed = true;
+		}
+		return changed;
 	}
 
 	private get port(): AppPort { return this.session?.port ?? this.options.port; }

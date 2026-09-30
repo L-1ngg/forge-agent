@@ -7,6 +7,8 @@ created: 2026-09-29
 
 > 状态:本地实现与 Linux 离线验收已完成(2026-09-29)，外层终端人工体验和跨平台验收未执行。任务规格、测试决策和 AC 以 [Issue #41](https://github.com/L-1ngg/forge-agent/issues/41) 为准；浏览职责见 [记录浏览](transcript-browser.md)，主界面行为见 [主界面工作流](tui-main-workflow.md)。
 
+> 后续补充(2026-09-30)：[Issue #44 施工及证据](session-reliability-issue-44.md)增加当前条目快照、展示/布局缓存和重绘合并，并保留本图的 reduction、身份及去重职责。下文“不添加缓存”和未测性能只描述 #41 当时范围，新受控基准不回写为旧验收。
+
 ## Entry 与 Design
 
 起点 `88746032a05b132ca280aeccdfad99d6319d10a9`，`master` 工作区干净，无暂存、未暂存或未跟踪文件。Issue #41 已确定 `TranscriptProjector` 继续归约 `SessionEvent`，`TranscriptBrowser` 继续管理浏览状态；`SessionEvent`、`SessionMessage`、JSONL、SDK 与 CLI/headless 合同不变。

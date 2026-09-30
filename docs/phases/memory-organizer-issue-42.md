@@ -7,6 +7,8 @@ created: 2026-09-29
 
 > 状态:已完成(2026-09-29，本地实现与 Linux 离线验收；真实供应商质量与跨平台未测)。范围与 AC 以 [Issue #42](https://github.com/L-1ngg/forge-agent/issues/42) 为准；官方 deferred 保存及 Markdown 合同见 [ADR-026](../decisions/026-native-skills-and-markdown-memory.md)，模型响应审计见 [ADR-028](../decisions/028-model-response-boundary.md)。[Issue #37 原验收](tool-ecosystem-issue-37.md)只对应当时版本。
 
+> 后续补充(2026-09-30)：本图的响应/计划校验继续适用；新增整理期限、Invocation 取消和迟到写盘门禁见 [ADR-029](../decisions/029-session-reliability-and-bounded-views.md) 与 [Issue #44 施工及证据](session-reliability-issue-44.md)。下文“不新增取消合同”和验收数字只描述 #42 当时交付。
+
 ## Entry And Design
 
 起点 `784da81bf2d300158ebf154ee49c8217f8d11622`，`master` 的 staged、unstaged、untracked 均为空。#42 已确定整理继续由 `memoryMiddleware` 在成功任务后 deferred 调度，并保持一次当前模型请求、user/project 目录、索引与主题布局、主任务结果及失败事件合同。#43 的自动压缩预算不在本次范围。

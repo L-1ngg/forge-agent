@@ -148,3 +148,68 @@ test("all five request kinds have a typed envelope", async () => {
 	];
 	expect(requests.map(([kind, envelope]) => [kind, envelope.kind])).toEqual(requests.map(([kind]) => [kind, kind]));
 });
+
+test("10,000 completed requests retain bounded diagnostics and reject retired ids", async () => {
+	const bus = new RequestBus({ timeoutMs: null });
+	const requests = bus.requests()[Symbol.asyncIterator]();
+	let firstId = "";
+	for (let index = 0; index < 10_000; index++) {
+		const result = bus.ask("permission", permissionPayload);
+		const request = (await requests.next()).value;
+		if (index === 0) firstId = request.id;
+		expect(bus.respond(response(request.id, { decision: "allow_once" }))).toBe(true);
+		await result;
+	}
+	expect(bus.pendingCount).toBe(0);
+	expect(bus.getTerminal(firstId)).toBeUndefined();
+	for (let index = 0; index < 1000; index++) expect(bus.respond(response(firstId, { decision: "allow_once" }))).toBe(false);
+	expect(bus.getDroppedResponses().length).toBeLessThanOrEqual(256);
+	bus.close();
+	let responses = 0, terminals = 0;
+	for await (const _ of bus.responses()) responses++;
+	for await (const _ of bus.terminals()) terminals++;
+	expect(responses).toBeLessThanOrEqual(256); expect(terminals).toBeLessThanOrEqual(256);
+});
+
+for (const consumer of ["none", "fast", "slow"] as const) test(`10,000 requests with ${consumer} notification consumption release all functional state`, async () => {
+	const bus = new RequestBus({ timeoutMs: null, idFactory: () => "repeated", retentionCapacity: 8 });
+	const responses = bus.responses()[Symbol.asyncIterator](), terminals = bus.terminals()[Symbol.asyncIterator]();
+	let first = "", settled = 0;
+	for (let index = 0; index < 10_000; index++) {
+		const id = bus.publish("permission", permissionPayload, outcome => { expect(outcome.status).toBe("response"); settled++; });
+		if (index === 0) first = id;
+		expect(bus.respond(response(id, { decision: "allow_once" }))).toBe(true);
+		if (consumer === "fast" || consumer === "slow" && index % 500 === 0) { await responses.next(); await terminals.next(); }
+	}
+	expect(settled).toBe(10_000);
+	expect(bus.getRetention()).toMatchObject({ capacity: 8, pending: 0, queuedRequests: 0, settled: 8 });
+	const retention = bus.getRetention();
+	expect(retention.responses).toBeLessThanOrEqual(8); expect(retention.terminals).toBeLessThanOrEqual(8);
+	expect(retention.truncated.settled).toBe(9992);
+	expect(retention.truncated.responses > 0).toBe(consumer !== "fast");
+	const current = bus.publish("permission", permissionPayload, () => { settled++; });
+	expect(current).not.toBe(first);
+	expect(bus.respond(response(first, { decision: "allow_once" }))).toBe(false);
+	expect(bus.respond(response("unknown", { decision: "allow_once" }))).toBe(false);
+	expect(bus.isPending(current)).toBe(true);
+	expect(bus.cancel(current)).toBe(true); expect(bus.cancel(current)).toBe(false);
+	bus.close();
+	const before = bus.getRetention();
+	for (let index = 0; index < 10_000; index++) expect(await bus.ask("permission", permissionPayload)).toMatchObject({ status: "cancelled", reason: "bus_closed" });
+	expect(bus.getRetention()).toEqual(before);
+	expect((await bus.requests()[Symbol.asyncIterator]().next()).done).toBe(true);
+});
+
+test("a delivered request canceled before iteration resumes is never shown as answerable", async () => {
+	const bus = new RequestBus({ timeoutMs: null, retentionCapacity: 1 });
+	const iterator = bus.requests()[Symbol.asyncIterator]();
+	const reading = iterator.next();
+	const old = bus.publish("permission", permissionPayload, () => {});
+	bus.cancel(old);
+	const current = bus.publish("permission", permissionPayload, () => {});
+	expect((await reading).value.id).toBe(current);
+	expect(bus.getTerminal(old)).toBeDefined();
+	bus.cancel(current); expect(bus.getTerminal(old)).toBeUndefined();
+	expect(bus.respond(response(old, { decision: "allow_once" }))).toBe(false);
+	bus.close();
+});

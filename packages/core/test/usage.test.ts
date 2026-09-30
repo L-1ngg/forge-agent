@@ -43,6 +43,25 @@ test("usage tracker updates its truth point when the assembled context changes",
 	expect(tracker.snapshot().running).toBeUndefined();
 });
 
+test("usage tracker observes mutations to caller-owned context without resetting it", () => {
+	const messages = [message("x")], tracker = new UsageTracker();
+	tracker.setContext(messages);
+	expect(tracker.snapshot().contextTokens).toBe(2);
+	messages[0]!.content = [{ type: "text", text: "x".repeat(800) }];
+	messages.push(message("more context"));
+	expect(tracker.snapshot().contextTokens).toBe(calculateContextUsage(messages).contextTokens);
+});
+
+test("owned usage snapshots isolate inputs and returned values, then refresh on replacement", () => {
+	const messages = [message("x")], tracker = new UsageTracker();
+	tracker.setContextSnapshot({ messages, usage: structuredClone(usage) });
+	const snapshot = tracker.snapshot(); snapshot.contextTokens = 999;
+	messages[0]!.content = [{ type: "text", text: "x".repeat(800) }];
+	expect(tracker.snapshot()).toMatchObject({ contextTokens: 2, totalTokens: 90 });
+	tracker.setContextSnapshot(messages);
+	expect(tracker.snapshot().contextTokens).toBe(calculateContextUsage(messages).contextTokens);
+});
+
 test("fallback context estimation is deterministic", () => {
 	const messages = [message("hello")];
 	expect(estimateContextTokens(messages)).toBe(3);

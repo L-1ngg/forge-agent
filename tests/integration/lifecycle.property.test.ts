@@ -4,6 +4,11 @@ import type { AgentTurn } from "../../packages/core/src/sdk.ts";
 import type { Exchange } from "../support/http-fixture.ts";
 import { withScenario, bounded } from "../support/scenario.ts";
 import { frames, settings, path } from "../fixtures/protocol.ts";
+import { LongTermMemory, type Model } from "../../packages/core/src/sdk.ts";
+import { nativeAdapter } from "../../packages/core/test/helpers/native-adapter.ts";
+import { nativeReply, isMemoryOrganizerRequest } from "../../packages/core/test/helpers/native-reply.ts";
+import { join } from "node:path";
+import { readdir } from "node:fs/promises";
 
 const operations = ["run", "unstarted-cancel", "stream-cancel", "steer", "follow-up", "stale", "dispose"] as const;
 type Operation = typeof operations[number];
@@ -75,4 +80,61 @@ test("generated operations drive the real SDK: ownership, cancellation, reuse an
 			expect(() => agent.runTurn("closed")).toThrow("disposed");
 		});
 	}), { seed, numRuns: 50, ...(replayPath !== undefined ? { path: replayPath } : {}), endOnFailure: false });
+}, 30_000);
+
+test("replayable SDK sequences combine deferred memory, configuration, approval and cancellation", async () => {
+	const seed = Number(process.env.FORGE_TEST_SEED ?? 44017), replayPath = process.env.FORGE_TEST_PATH;
+	const choices = ["save", "configure", "approve", "deny", "cancel-save"] as const;
+	const model: Model = { id: "sequence", name: "Sequence", api: "faux", provider: "fixture", baseUrl: "https://unused.invalid", reasoning: false, input: ["text"], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+	await fc.assert(fc.asyncProperty(fc.array(fc.constantFrom(...choices), { minLength: 1, maxLength: 8 }), async suffix => {
+		await withScenario("sdk-memory-sequence", async scenario => {
+			const commands = ["save", "configure", "approve", "cancel-save", ...suffix] as const;
+			scenario.trace.record("reproduction", { seed, path: replayPath ?? "", commands });
+			const store = new LongTermMemory({ project: join(scenario.cwd, "memory") });
+			let index = 0, operation: typeof choices[number] = "save", proposed = false, effects = 0, expectedEffects = 0;
+			let taskReady = scenario.gate("initial-task"), taskRelease = scenario.gate("initial-release"), saveReady = scenario.gate("initial-save"), saveRelease = scenario.gate("initial-save-release"), saveEnded = scenario.gate("initial-save-ended");
+			const adapter = nativeAdapter(model, async function* (request) {
+				if (isMemoryOrganizerRequest(request)) {
+					saveReady.release();
+					try { await saveRelease.wait(); yield* nativeReply({ text: JSON.stringify({ updates: [{ action: "write", scope: "project", path: `note-${index}.md`, content: `Durable preference ${index}` }], indexes: [] }) }); }
+					finally { saveEnded.release(); }
+					return;
+				}
+				taskReady.release(); await taskRelease.wait();
+				if (!proposed && (operation === "approve" || operation === "deny")) { proposed = true; yield* nativeReply({ toolCalls: [{ id: `call-${index}`, name: "work", arguments: {} }] }); }
+				else yield* nativeReply({ text: `Completed ${index}` });
+			});
+			const agent = await scenario.agent({ model, adapter, memory: { store }, tools: [{ name: "work", label: "Work", description: "count effect", parameters: { type: "object", properties: {}, additionalProperties: false }, async execute() { effects++; return { content: [], details: {} }; } }] });
+			let old: AgentTurn | undefined, oldRequest: string | undefined;
+			for (const command of commands) {
+				operation = command; proposed = false;
+				taskReady = scenario.gate(`task-${index}`); taskRelease = scenario.gate(`task-release-${index}`); saveReady = scenario.gate(`save-${index}`); saveRelease = scenario.gate(`save-release-${index}`); saveEnded = scenario.gate(`save-ended-${index}`);
+				scenario.trace.record("operation", { index, command });
+				const turn = agent.runTurn(`task-${index}`), running = scenario.collect(turn);
+				await taskReady.wait();
+				if (old) expect(agent.steer("stale-input", old.id)).toEqual({ accepted: false });
+				const receipt = command === "configure" ? await agent.updateConfiguration({ systemPrompt: `Configuration ${index}` }) : undefined;
+				let applied = false; if (receipt) void receipt.applied.then(() => { applied = true; });
+				expect(applied).toBe(false);
+				taskRelease.release();
+				if (command === "approve" || command === "deny") {
+					const request = await agent.requests[Symbol.asyncIterator]().next();
+					if (request.done || request.value.kind !== "permission") throw new Error("Expected approval");
+					if (oldRequest) expect(agent.respond({ type: "response", id: oldRequest, result: { decision: "allow_once" } })).toBe(false);
+					expect(agent.respond({ type: "response", id: request.value.id, result: { decision: command === "approve" ? "allow_once" : "deny" } })).toBe(true);
+					oldRequest = request.value.id; if (command === "approve") expectedEffects++;
+				}
+				await saveReady.wait();
+				if (command === "cancel-save") agent.abort(); else saveRelease.release();
+				const events = await bounded(running, "combined invocation");
+				expect(await turn.result).toEqual({ status: command === "cancel-save" ? "aborted" : "success" });
+				expect(events.filter(event => event.type === "memory" && event.phase === "save")).toMatchObject([{ status: command === "cancel-save" ? "failed" : "saved", calls: 1 }]);
+				if (receipt) expect(await receipt.applied).toMatchObject({ status: "applied", revision: receipt.revision });
+				saveRelease.release(); await saveEnded.wait();
+				const files = await readdir(store.roots.project!);
+				expect(files.includes(`note-${index}.md`)).toBe(command !== "cancel-save");
+				expect(effects).toBe(expectedEffects); old = turn; index++;
+			}
+		});
+	}), { seed, numRuns: 8, ...(replayPath !== undefined ? { path: replayPath } : {}) });
 }, 30_000);

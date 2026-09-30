@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { App, frameToText } from "@forge-agent/tui";
 import { SessionHost } from "../src/session-host.ts";
 import { modelResponse } from "../../core/test/helpers/model-response.ts";
+import { barrier, bounded } from "../../../tests/support/control.ts";
 
 class Input {
 	private listeners = new Set<(chunk: Buffer) => void>();
@@ -17,6 +18,160 @@ async function until(check: () => boolean | Promise<boolean>) {
 	const deadline = Date.now() + 3000;
 	while (!(await check())) { if (Date.now() > deadline) throw new Error("UI condition timed out"); await Bun.sleep(5); }
 }
+
+test("late memory import after new cannot send to the selected session or alter its draft", async () => {
+	const { SessionStore, messageEntry } = await import("@forge-agent/core");
+	const cwd = await mkdtemp(join(tmpdir(), "forge-import-owner-"));
+	const source = SessionStore.create(join(cwd, ".forge-agent", "sessions", "source.jsonl"), cwd);
+	await source.append(messageEntry({ role: "user", content: [{ type: "text", text: "SOURCE_MEMORY" }], timestamp: 1 }, null));
+	const gate = barrier("release memory import");
+	let requests = 0;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: server.url.toString(), systemPrompt: "test" });
+	const input = new Input();
+	let command!: Promise<{ text: string; prompt: string }>;
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} }, memoryCommand: () => command = (async () => { await gate.wait(); return { text: "OLD_IMPORT_COMPLETE", prompt: await sessions.memoryImport(source.path) }; })() });
+	try {
+		await app.start(); const original = sessions.current.id;
+		input.send("/memory import\r/new\r");
+		await until(() => sessions.current.id !== original);
+		input.send("TARGET_DRAFT");
+		gate.release(); await command; await new Promise<void>(resolve => setImmediate(resolve));
+		await bounded(sessions.current.port.waitForIdle(), "selected session idle");
+		expect(requests).toBe(0);
+		expect(sessions.current.hasHistory()).toBe(false);
+		const frame = frameToText(app.composeFrameForTest());
+		expect(frame).toContain("TARGET_DRAFT");
+		expect(frame).not.toContain("OLD_IMPORT_COMPLETE");
+	} finally { gate.release(); await app.stop(); await sessions.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
+});
+
+for (const failSwitch of [false, true]) test(`late memory import is invalidated when resume begins; assembly failure=${failSwitch}`, async () => {
+	const { SessionStore, messageEntry } = await import("@forge-agent/core");
+	const cwd = await mkdtemp(join(tmpdir(), "forge-resume-import-"));
+	const target = SessionStore.create(join(cwd, ".forge-agent", "sessions", "target.jsonl"), cwd);
+	await target.append(messageEntry({ role: "user", content: [{ type: "text", text: "TARGET_HISTORY" }], timestamp: 1 }, null));
+	const release = barrier("late import"), started = barrier("import fetched");
+	let requests = 0;
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(); } });
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: server.url.toString(), systemPrompt: "test" });
+	for await (const _ of sessions.current.port.runTurn("SOURCE_HISTORY")) {}
+	const input = new Input(); let command!: Promise<{ text: string; prompt: string }>;
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} },
+		memoryCommand: () => command = (async () => { const prompt = await sessions.memoryImport(target.path); started.release(); await release.wait(); return { text: "LATE_RESUME_IMPORT", prompt }; })() });
+	const screen = () => frameToText(app.composeFrameForTest());
+	try {
+		await app.start(); const original = sessions.current.id;
+		input.send("/memory import\r"); await started.wait();
+		input.send("/resume\r"); await until(() => screen().includes("选择会话") && screen().includes("TARGET_HISTORY"));
+		if (failSwitch) await writeFile(target.path, "{bad JSON}\n");
+		input.send("\x1b[B\r");
+		await until(() => failSwitch ? screen().includes("会话切换失败") : sessions.current.id === target.path);
+		input.send("CURRENT_DRAFT"); release.release(); await command; await new Promise<void>(resolve => setImmediate(resolve));
+		expect(requests).toBe(1); expect(screen()).toContain("CURRENT_DRAFT"); expect(screen()).not.toContain("LATE_RESUME_IMPORT");
+		expect(sessions.current.id).toBe(failSwitch ? original : target.path);
+	} finally { release.release(); await app.stop(); await sessions.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("current memory import reports its result and sends its prompt once", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-current-import-"));
+	const requests: string[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) { requests.push(await request.text()); return modelResponse(); } });
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", baseUrl: server.url.toString(), systemPrompt: "test" });
+	const input = new Input();
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} }, memoryCommand: async () => ({ text: "CURRENT_IMPORT_RESULT", prompt: "CURRENT_IMPORT_PROMPT" }) });
+	try {
+		await app.start(); input.send("/memory import\r");
+		await until(() => requests.length === 1 && frameToText(app.composeFrameForTest()).includes("CURRENT_IMPORT_RESULT"));
+		await bounded(sessions.current.port.waitForIdle(), "import prompt");
+		expect(requests).toHaveLength(1); expect(requests[0]).toContain("CURRENT_IMPORT_PROMPT"); expect(sessions.current.hasHistory()).toBe(true);
+	} finally { await app.stop(); await sessions.dispose(); server.stop(true); await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("TUI retires a card after its terminal was evicted while notification consumption was paused", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-card-retention-"));
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	const bus = sessions.current.requestBus, release = barrier("slow terminal subscriber"), input = new Input();
+	let responded = 0;
+	const app = new App({ port: sessions.current.port, requestBus: { requests: () => bus.requests(), async *terminals() { await release.wait(); yield* bus.terminals(); }, isPending: id => bus.isPending(id), getTerminal: id => bus.getTerminal(id), respond(value) { responded++; return bus.respond(value); }, close: () => bus.close() }, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} } });
+	try {
+		await app.start();
+		const id = bus.publish("permission", { toolCall: { type: "tool_call", id: "tool", name: "bash", arguments: { command: "CARD_SENTINEL" } } }, () => {});
+		await until(() => frameToText(app.composeFrameForTest()).includes("Permission: bash"));
+		bus.cancel(id);
+		for (let index = 0; index < 300; index++) { const next = bus.publish("question", { prompt: `ended-${index}` }, () => {}); bus.cancel(next); }
+		expect(bus.getTerminal(id)).toBeUndefined();
+		expect(frameToText(app.composeFrameForTest())).not.toContain("Permission: bash");
+		input.send("\r"); expect(responded).toBe(0); expect(bus.pendingCount).toBe(0);
+	} finally { release.release(); await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("a settled real request paints its retirement without another input or frame query", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-card-paint-"));
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	const chunks: string[] = [], input = new Input(), bus = sessions.current.requestBus;
+	const app = new App({ port: sessions.current.port, requestBus: bus, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write(text) { chunks.push(text); } } });
+	try {
+		await app.start();
+		const id = bus.publish("permission", { toolCall: { type: "tool_call", id: "tool", name: "bash", arguments: { command: "RETIRE_SENTINEL" } } }, () => {});
+		await until(() => chunks.join("").includes("Yes, proceed") && chunks.join("").includes("No, reject"));
+		const painted = chunks.length;
+		expect(bus.cancel(id)).toBe(true);
+		await until(() => chunks.slice(painted).join("").includes("cancelled"));
+		expect(chunks.slice(painted).join("")).not.toContain("Yes, proceed");
+		const frame = frameToText(app.composeFrameForTest());
+		expect(frame).toContain("cancelled"); expect(frame).not.toContain("No, reject");
+	} finally { await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});
+
+for (const kind of ["memory", "skills", "mcp"] as const) test(`${kind} late error and finally cannot release a new management operation`, async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-management-owner-"));
+	const gates = [barrier("old management"), barrier("new management")];
+	const completed = [barrier("old settled"), barrier("new settled")];
+	const signals: AbortSignal[] = [];
+	let calls = 0;
+	const work = async (report: (text: string) => void, signal?: AbortSignal) => {
+		const index = calls++;
+		if (signal) signals.push(signal);
+		try { await gates[index]!.wait(); if (index === 0) { report("OLD_REPORT"); throw new Error("OLD_ERROR"); } report("CURRENT_RESULT"); return { text: "CURRENT_RESULT" }; }
+		finally { completed[index]!.release(); }
+	};
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	const input = new Input();
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} },
+		...(kind === "memory" ? { memoryCommand: (_input: string, signal?: AbortSignal) => work(() => {}, signal) } : kind === "skills" ? { skillsCommand: async (_input: string, report: (text: string) => void, signal?: AbortSignal) => { await work(report, signal); } } : { mcpCommand: async (_input: string, report: (text: string) => void, signal?: AbortSignal) => { await work(report, signal); } }) });
+	const screen = () => frameToText(app.composeFrameForTest());
+	try {
+		await app.start(); const original = sessions.current.id;
+		input.send(`/${kind}\r`); await until(() => calls === 1);
+		input.send("/new\r"); await until(() => sessions.current.id !== original);
+		expect(signals[0]?.aborted).toBe(true);
+		input.send(`/${kind}\r`); await until(() => calls === 2);
+		gates[0]!.release(); await completed[0]!.wait(); await new Promise<void>(resolve => setImmediate(resolve));
+		input.send(`/${kind}\r`);
+		expect(calls).toBe(2);
+		expect(screen()).toContain("still running"); expect(screen()).not.toContain("OLD_ERROR"); expect(screen()).not.toContain("OLD_REPORT");
+		gates[1]!.release(); await until(() => screen().includes("CURRENT_RESULT"));
+	} finally { for (const gate of gates) gate.release(); await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("stop invalidates memory import without waiting for its callback or painting a late result", async () => {
+	const cwd = await mkdtemp(join(tmpdir(), "forge-stop-import-"));
+	const gate = barrier("stopped import"), started = barrier("import started");
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	const input = new Input(); let paints = 0;
+	let command!: Promise<{ text: string; prompt: string }>;
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() { paints++; } }, memoryCommand: () => command = (async () => { started.release(); await gate.wait(); return { text: "LATE_STOP_RESULT", prompt: "LATE_STOP_PROMPT" }; })() });
+	try {
+		await app.start(); input.send("/memory import\r"); await started.wait();
+		await bounded(app.stop(), "stop with pending management", 500);
+		const stoppedPaints = paints;
+		gate.release(); await command; await new Promise<void>(resolve => setImmediate(resolve));
+		expect(paints).toBe(stoppedPaints);
+		expect(frameToText(app.composeFrameForTest())).not.toContain("LATE_STOP");
+		expect(sessions.current.hasHistory()).toBe(false);
+	} finally { gate.release(); await app.stop(); await sessions.dispose(); await rm(cwd, { recursive: true, force: true }); }
+});
 
 test("TUI clear retains model context; new isolates it; resume restores history and draft without sending", async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "forge-session-ui-"));
@@ -272,7 +427,7 @@ test("preview cache is bounded to twenty excerpts and is released when the picke
 });
 
 import { skillInput } from "../src/skills-command.ts";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 
 test("TUI unknown Skill input restores its original draft and keeps it with its session", async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "forge-skill-switch-"));
