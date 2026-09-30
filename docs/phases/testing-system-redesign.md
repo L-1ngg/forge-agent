@@ -5,7 +5,7 @@ created: 2026-09-30
 
 # 测试体系全面重设计与重构
 
-> 状态:本地完成、交付中(2026-09-30)。macOS 路径失败已修复；全仓审计、去重、重构、反向验证和最终 Linux 门禁完成。operator 已明确授权 commit、push；本次 macOS CI 待验证，本地通过不代表跨平台验收。逐文件去留依据见[处置清单](testing-system-inventory.md)。
+> 状态:已交付并完成跨平台软件验证(2026-09-30)。macOS 路径失败已修复；全仓审计、去重、重构、反向验证和本地门禁完成。修复提交 `00be399` 的 Ubuntu 24.04/macOS 14 CI 均通过；远端证据见文末。逐文件去留依据见[处置清单](testing-system-inventory.md)。
 > 继承 [现行测试合同](testing-system-implementation.md)、ADR-010、025–029 和各功能的有效软件合同。Issue #33 的历史平台证据保持原版本含义。本设计涉及软件测试，真实模型质量与付费评估继续单独验收。
 
 ## Why
@@ -140,7 +140,7 @@ CI 的 Ubuntu 24.04/macOS 14 矩阵运行相同静态检查、完整测试、hea
 - [x] AC-4: 普通/别名路径及工作树归属、setup 中途失败、慢消费/迟到回调、子进程提前退出的关键场景通过；失败含名称与最后观察诊断。
 - [x] AC-5: 正式 CLI、全部 PTY 和 headless 用例迁移完成；业务流程不依赖固定 sleep，真实计时测试保留原因；测试结束完整等待资源结算。
 - [x] AC-6: 新鲜证据与源码/环境对应；旧报告不能产生假绿，连续与并发运行不混写；首轮失败保留。
-- [x] AC-7: 本地 `bun run check`、`bun run test:headless`、`bun run typecheck:examples`、`bun run build`、diff/文档链接检查通过；两个 CI 平台分别报告实际边界，macOS 与远端 CI 未运行。
+- [x] AC-7: 本地 `bun run check`、`bun run test:headless`、`bun run typecheck:examples`、`bun run build`、diff/文档链接检查通过；修复提交的 Ubuntu 24.04/macOS 14 CI 分别通过，平台隔离边界见文末。
 
 设计确认只授权本地完整重构与验证。commit、push、Issue 发布/关闭、远端 workflow 触发依 operator 的明确授权执行。没有远端授权或 macOS 环境时，交付本地结果并明确 macOS 未验证，不声明跨平台验收完成。
 
@@ -212,4 +212,17 @@ Ran：独立 `bun run test:headless` 返回 0，证据 `.test-results/run-PVfq1Y
 
 Not run / Why：上述本地验收未运行 macOS/Windows、真实供应商、模型质量/费用与人工 UI 验收。本地验收后已获得 commit、push 授权，远端 CI 结果另行记录；配置存在不等于执行通过。
 
-Risk：路径别名和调度回归支持已确认原因与本地稳定性，macOS 的 Bun.Terminal、文件系统与运行器差异仍须在实际 macOS CI 验证。本节为提交前的本地证据，未执行发布或关闭 Issue。
+Risk：本节为提交前的本地证据，macOS 的 Bun.Terminal、文件系统与运行器差异以以下实际 CI 验证为准。未执行发布或关闭 Issue。
+
+## 远端交付与平台验收
+
+operator 授权后，完整修复与重构提交为 `00be39999b5bc521add6e6096baa4da66063a60a`，已正常推送 `origin/master`；对应 [CI 36728440944](https://github.com/L-1ngg/forge-agent/actions/runs/36728440944) 首次执行成功，未重跑。
+
+| 平台 | 执行证据 | 测试 / 失败 / 跳过 | 网络边界 |
+|---|---|---|---|
+| Ubuntu 24.04 x64 | run-G1Q3d0；依赖/类型检查、完整测试、示例类型检查与证据上传通过 | 985 / 0 / 0 | network namespace 与主/子进程拒绝探针通过 |
+| macOS 14 arm64 | run-MyC8PT；相同完整门禁与证据上传通过 | 985 / 0 / 0 | networkIsolation: none，仅 fixture 兼容性证据 |
+
+两平台 JUnit 均为 contract 333、integration 609、cli 43；普通/路径别名的四种恢复场景均通过。GitHub artifacts `test-evidence-ubuntu-24.04` 与 `test-evidence-macos-14` 已下载至本地 `.test-results/ci-36728440944/`，核对 summary 的实际 commit SHA、状态和 JUnit 计数，未把旧报告作为新提交证据。
+
+Windows、真实供应商、模型质量/费用和人工 UI 验收仍未运行。CI 成功不包含公开发布或 Issue 关闭。

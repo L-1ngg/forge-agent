@@ -6,7 +6,6 @@
 
 ## 1. 当前行动项
 
-- [ ] AC-1: [测试体系全面重构](phases/testing-system-redesign.md)本地实施、冗余/覆盖核对与 985 用例门禁已完成，commit、push 已获授权；验证本次提交的 macOS CI，Linux 路径别名回归不代替实际 macOS 验收。
 - [ ] 在明确凭据、目标及请求数/时间/费用预算后，按[原生 Adapter 合同](phases/model-adapter.md)完成真实供应商 AC-7：普通回答、工具续轮、摘要、恢复和取消。当前架构与本次离线软件证据见 [ADR-025](decisions/025-tanstack-agent-foundation.md)及[基座验收](phases/tanstack-foundation-acceptance.md)。
 - [ ] 在具备真实账号、模型预算及平台环境后，按 [MCP 验收记录](phases/mcp-client-acceptance.md)验证仍未实测的边界；[Issue #36](https://github.com/L-1ngg/forge-agent/issues/36) 代码交付与任务关闭不将未测项改写为通过。
 - [ ] 对照[基座验收的外部边界](phases/tanstack-foundation-acceptance.md#外部边界)安排真实任务与跨平台验证；Linux 离线结果不扩展为真实供应商或长期使用证据。
