@@ -22,6 +22,7 @@ const model: Model = {
 test("native tool errors save their proposal before the next model request", async () => {
 	const storage = new MemorySessionStorage();
 	const requests: SessionMessage[][] = [];
+	const events: SessionEvent[] = [];
 	let effects = 0;
 	const adapter = nativeAdapter(model, async function* (request) {
 		requests.push(requestMessages(request.messages));
@@ -30,7 +31,12 @@ test("native tool errors save their proposal before the next model request", asy
 			yield { type: EventType.TOOL_CALL_ARGS, toolCallId: "bad", delta: '{"value":"x"}' };
 			yield { type: EventType.TOOL_CALL_END, toolCallId: "bad", input: { value: "x" }, state: "output-error", result: "Provider rejected tool" };
 			yield { type: EventType.RUN_FINISHED, threadId: "fixture", runId: "first", finishReason: "tool_calls" };
-		} else yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: Date.now() });
+		} else {
+			const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+			expect(saved.map(message => message.role)).toEqual(["user", "assistant", "toolResult"]);
+			expect(saved[2]).toMatchObject({ toolCallId: "bad", isError: true });
+			yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: Date.now() });
+		}
 	});
 	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(), storage,
 		tools: [{ name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
@@ -38,13 +44,15 @@ test("native tool errors save their proposal before the next model request", asy
 	});
 	try {
 		const turn = agent.runTurn("work");
-		for await (const _event of turn) {}
+		for await (const event of turn) events.push(event);
 		expect(await turn.result).toEqual({ status: "success" });
 		expect(effects).toBe(0);
 		expect(requests).toHaveLength(2);
 		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
 		expect(saved.filter(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"))).toHaveLength(1);
 		expect(saved.filter(message => message.role === "toolResult" && message.toolCallId === "bad")).toHaveLength(1);
+		expect(events.filter(event => event.type === "turn_end")).toHaveLength(2);
+		expect(events.filter(event => event.type === "message_end")).toHaveLength(4);
 	} finally { await agent.dispose(); }
 });
 
@@ -71,6 +79,34 @@ test("provider-executed calls retain their metadata without a local missing-resu
 		const proposal = saved.find(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"));
 		expect(proposal?.content).toContainEqual(expect.objectContaining({ id: "remote", thoughtSignature: expect.stringContaining('"providerExecuted":true') }));
 		expect(requests[1]?.find(message => message.role === "assistant" && message.content.some(part => part.type === "tool_call"))?.content).toContainEqual(expect.objectContaining({ id: "remote", thoughtSignature: expect.stringContaining('"sourceId":"citation-1"') }));
+	} finally { await agent.dispose(); }
+});
+
+for (const failAt of [2, 3]) test(`native error batch storage failure at append ${failAt} stops continuation and faults the instance`, async () => {
+	const storage = new MemorySessionStorage();
+	let writes = 0, requests = 0, effects = 0;
+	const adapter = nativeAdapter(model, async function* () {
+		requests++;
+		yield* responseChunks({ role: "assistant", timestamp: 1, stopReason: "tool_use", content: [{ type: "tool_call", id: "invalid", name: "work", arguments: { value: 42 } }] });
+	});
+	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(),
+		storage: { load: () => storage.load(), async append(entry) {
+			if (++writes === failAt) throw new Error("native batch storage failed");
+			await storage.append(entry);
+		} },
+		tools: [{ name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
+			async execute() { effects++; return { content: [], details: {} }; } }],
+	});
+	try {
+		const turn = agent.runTurn("invalid work");
+		await expect((async () => { for await (const _event of turn) {} })()).rejects.toThrow("native batch storage failed");
+		expect(await turn.result).toEqual({ status: "error" });
+		await agent.waitForIdle();
+		expect(requests).toBe(1);
+		expect(effects).toBe(0);
+		expect(writes).toBe(failAt);
+		expect((await storage.load()).entries).toHaveLength(failAt - 1);
+		expect(() => agent.runTurn("retry")).toThrow("faulted");
 	} finally { await agent.dispose(); }
 });
 
@@ -203,9 +239,12 @@ test("a failing permission memory settles approval without executing the tool", 
 
 for (const schema of ["zod", "json"] as const) for (const edited of ["reviewed", "deny", 42] as const) test(`native ${schema} edited approval ${String(edited)} needs no Forge re-evaluation`, async () => {
 	const requests: SessionMessage[][] = [], effects: string[] = [];
+	const sessionEvents: SessionEvent[] = [];
+	let policyCalls = 0;
 	const storage = new MemorySessionStorage();
 	const evaluated: unknown[] = [];
 	const agent = await createAgent({ model, adapter: fixture(requests), systemPrompt: "test", cwd: process.cwd(), storage,
+		shouldStopAfterTurn() { policyCalls++; return typeof edited !== "string"; },
 		tools: [{ name: "work", label: "Work", description: "record a value", ...(schema === "zod" ? { inputSchema: z.strictObject({ value: z.string() }) } : {}), parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
 			async execute(args) { effects.push(String((args as { value: string }).value)); return { content: [{ type: "text", text: "done" }], details: {} }; } }],
 		permission: { hooks: [{ evaluate(call) {
@@ -216,7 +255,7 @@ for (const schema of ["zod", "json"] as const) for (const edited of ["reviewed",
 		} }] },
 	});
 	const turn = agent.runTurn("work");
-	const events = (async () => { for await (const _event of turn) { } })();
+	const events = (async () => { for await (const event of turn) sessionEvents.push(event); })();
 	try {
 		const next = await agent.requests[Symbol.asyncIterator]().next();
 		if (next.done || next.value.kind !== "permission") throw new Error("Expected a permission request");
@@ -233,6 +272,8 @@ for (const schema of ["zod", "json"] as const) for (const edited of ["reviewed",
 			expect(saved.find(message => message.toolCallId === "ask")?.toolArguments).toEqual({ value: edited });
 		} else {
 			expect(await turn.result).toEqual({ status: "error" });
+			expect(policyCalls).toBe(0);
+			expect(sessionEvents.filter(event => event.type === "turn_end")).toEqual([expect.objectContaining({ stopReason: "error" })]);
 			expect(effects).toEqual([]);
 			expect(requests).toHaveLength(1);
 			expect(JSON.stringify(await storage.load())).toContain("edited arguments are invalid");
@@ -332,6 +373,46 @@ test("steering waits through approval and the approved tool retains its configur
 		expect(requests[1]!.filter(message => message.role === "user")).toHaveLength(2);
 		expect((await storage.load()).entries.filter(entry => entry.type === "message" && entry.message.role === "user")).toHaveLength(2);
 	} finally { agent.abort(); await running; await agent.dispose(); }
+});
+
+test("a failed steering preparation records the model configuration already applied after tools", async () => {
+	const started = barrier("configuration tool started"), release = barrier("configuration tool released");
+	const storage = new MemorySessionStorage();
+	const sessionEvents: SessionEvent[] = [];
+	const nextModel = { ...model, id: "updated-fixture" };
+	let requests = 0, effects = 0;
+	const adapter = nativeAdapter(model, async function* () {
+		requests++;
+		yield* responseChunks({ role: "assistant", content: [{ type: "tool_call", id: "held", name: "work", arguments: {} }], stopReason: "tool_use", timestamp: Date.now() });
+	});
+	const nextAdapter = nativeAdapter(nextModel, async function* () {
+		requests++;
+		yield* responseChunks({ role: "assistant", content: [{ type: "text", text: "unexpected" }], stopReason: "stop", timestamp: Date.now() });
+	});
+	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(), storage,
+		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
+		tools: [{ name: "work", label: "Work", description: "record", parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+			async execute() { effects++; started.release(); await release.wait(); return { content: [], details: {} }; } }],
+	});
+	const turn = agent.runTurn("first");
+	const running = (async () => { for await (const event of turn) sessionEvents.push(event); })();
+	try {
+		await started.wait();
+		const update = await agent.updateConfiguration({ model: nextModel, adapter: nextAdapter });
+		const steering = agent.steer({ kind: "skill", name: "missing", task: "invalid" }, turn.id);
+		expect(steering.accepted).toBe(true);
+		release.release();
+		await bounded(running, "failed steering preparation");
+		expect(await turn.result).toEqual({ status: "error" });
+		expect(await update.applied).toEqual({ status: "applied", revision: update.revision });
+		expect(requests).toBe(1);
+		expect(effects).toBe(1);
+		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" ? [entry.message] : []);
+		expect(saved.at(-1)).toMatchObject({ role: "assistant", stopReason: "error", model: nextModel.id, errorMessage: "Skills are disabled" });
+		const ended = sessionEvents.filter(event => event.type === "message_end");
+		expect(ended.at(-1)).toMatchObject({ message: { role: "assistant", stopReason: "error", model: nextModel.id } });
+		await agent.waitForIdle();
+	} finally { release.release(); agent.abort(); await running; await agent.dispose(); }
 });
 
 test("memory saves once after a native approval continuation", async () => {

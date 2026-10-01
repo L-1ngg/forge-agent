@@ -5,7 +5,7 @@ created: 2026-10-01
 
 # 官方 OTel 中间件接入
 
-> 状态:初次接入与 operator 确认的耦合优化均已完成本地实现及离线验收(2026-10-01)。无远端 Issue 操作。真实 provider/collector 与跨平台未验证。
+> 状态:初次接入与 operator 确认的耦合优化均已完成本地实现及离线验收(2026-10-01)；任务接线已随 [Issue #45](native-execution-issue-45.md) 迁入内部原生执行模块，本次回归证据见该施工图。真实 provider/collector 与跨平台未验证。
 
 ## Why / Entry
 
@@ -23,7 +23,7 @@ created: 2026-10-01
 
 ### 已确认的耦合优化
 
-- 任务接线仅接收 `provider`、`model` 与 `revision`，由 `AgentSession` 提取已应用的配置；观测模块不再依赖完整 `SessionConfiguration`。
+- 任务接线仅接收 `provider`、`model` 与 `revision`，由内部原生执行模块从会话提供的 applied 请求快照提取；观测模块不依赖完整 `SessionConfiguration`。职责迁移见 [Issue #45 施工图](native-execution-issue-45.md)。
 - 删除实时查询配置的 `Proxy`。保留原生中间件需要的稳定上下文对象，在模型请求边界更新它的模型身份；root 与当前 iteration 分别保存创建时的身份。宿主的 span 回调拿到对应 span 的模型身份快照，下一轮配置不改写旧 span 的回调信息。其余上下文字段仍遵循原生生命周期。
 - 摘要、记忆调用的 adapter 固定，直接使用官方 `otelMiddleware`；只共享 session/run/kind 属性补充，不进入任务的动态配置与 interrupt 适配。
 - interrupt 兼容处理集中在任务接线。升级 TanStack 时验证审批 run 的 span 是否原生结束，再决定删除兼容代码；不通过新增通用钩子转发框架隐藏版本依赖。
