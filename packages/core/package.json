@@ -16,6 +16,7 @@
     "@forge-agent/protocol": "workspace:*",
     "@forge-agent/tools": "workspace:*",
     "@modelcontextprotocol/client": "2.0.0",
+    "@opentelemetry/api": "1.9.1",
     "@smithy/node-http-handler": "4.12.1",
     "@tanstack/ai": "0.61.0",
     "@tanstack/ai-anthropic": "0.19.1",

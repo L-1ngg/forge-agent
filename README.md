@@ -203,6 +203,20 @@ The [adapter example](examples/custom-adapter.ts) exercises the production execu
 
 Assistant replies render Markdown in both the transcript and detail view, including tables and code highlighting. Narrow tables switch to labelled records; long code lines wrap with a continuation marker. Forge copy actions preserve Markdown source. LaTeX remains literal. To try a fixed sample without a model or saved session, run `bun scripts/markdown-preview.ts`.
 
+## OpenTelemetry
+
+The CLI exports traces through the official TanStack OTel middleware when an OTLP endpoint is configured:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_SERVICE_NAME=forge-agent \
+bun run forge-agent --json -p "Inspect this project"
+```
+
+CLI export uses OTLP HTTP/JSON. The general endpoint appends `/v1/traces`; `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` overrides it with an exact URL. The official exporter also reads standard OTLP headers and timeout variables, and resource detection reads `OTEL_RESOURCE_ATTRIBUTES` / `OTEL_SERVICE_NAME` (default `forge-agent`). Set `OTEL_SDK_DISABLED=true` to disable export. Without an endpoint, telemetry is off. Normal exit waits for provider shutdown; failed delivery does not change the task result or JSON stdout. Forced termination can lose buffered spans.
+
+Content capture is off by default. `FORGE_OTEL_CAPTURE_CONTENT=true` explicitly includes prompts, replies, and tool arguments/results; exceptions may contain text even when capture is off. The CLI exports traces only. SDK hosts can provide their own tracer and optional meter through `createAgent({ otel })`, including redaction and the official callbacks. Task, summary, and memory calls are tagged separately; approval resumes correlate native run IDs. See the [SDK guide](docs/sdk.en.md#opentelemetry) and runnable offline [OTel example](examples/otel.ts).
+
 ## Architecture
 
 | Package | Responsibility |

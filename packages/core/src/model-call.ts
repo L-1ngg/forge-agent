@@ -1,9 +1,11 @@
 import { EventType } from "@ag-ui/core";
 import { chat, type AdapterYieldChunk, type TextOptions, type TokenUsage } from "@tanstack/ai";
+import { otelMiddleware } from "@tanstack/ai/middlewares/otel";
 import type { SessionMessage, SessionEvent } from "@forge-agent/protocol";
 import type { SessionConfiguration } from "./configuration.ts";
 import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
 import { RawResponseAudit, toModelMessages } from "./model-response.ts";
+import { sessionOtelOptions } from "./session-otel.ts";
 
 /** Validate raw provider completion before any tool phase or durable response commit. */
 export async function* observeModelResponse(
@@ -38,7 +40,7 @@ export async function* observeModelResponse(
 }
 
 /** One native chat request for summaries and memory; task runs use the same observer. */
-export async function callModel(configuration: SessionConfiguration, messages: SessionMessage[], systemPrompt: string, settings: ModelRequestSettings, hooks?: { onRequest?: () => void; onUsage?: (usage: TokenUsage) => void }): Promise<SessionMessage> {
+export async function callModel(configuration: SessionConfiguration, messages: SessionMessage[], systemPrompt: string, settings: ModelRequestSettings, hooks?: { kind?: "summary" | "memory"; onRequest?: () => void; onUsage?: (usage: TokenUsage) => void }): Promise<SessionMessage> {
 	const adapter = configuration.adapter ?? await resolveProviderAdapter(configuration.model, settings);
 	let result: SessionMessage | undefined;
 	let failure: unknown;
@@ -57,7 +59,7 @@ export async function callModel(configuration: SessionConfiguration, messages: S
 			onError: (_ctx, info) => { failure = info.error; if (audit) result = audit.partialMessage(); },
 			onAbort: () => { if (audit) result = audit.partialMessage("aborted", "Request aborted"); },
 			onUsage: (_ctx, usage) => { nativeUsage = usage; },
-		}] })) { }
+			}, ...(configuration.otel ? [otelMiddleware(sessionOtelOptions(configuration.otel, hooks?.kind ?? "summary"))] : [])] })) { }
 	} catch (error) { failure = error; }
 	finally { linked.dispose(); }
 	const usage = nativeUsage ?? audit?.reportedUsage;

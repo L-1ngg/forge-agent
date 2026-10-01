@@ -20,6 +20,7 @@ export type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.t
 export type { ToolHooks, ToolCallContext, BeforeToolCallResult, AfterToolCallContext, AfterToolCallResult } from "./session-tools.ts";
 export type { Model } from "./model-types.ts";
 export type { ModelAdapter } from "./model-adapter.ts";
+export type { OtelMiddlewareOptions, OtelSpanInfo, OtelSpanScope } from "@tanstack/ai/middlewares/otel";
 
 export type { SkillsOptions, SkillRoot, SkillLayer, SkillsSnapshot, SkillEntry, SkillDiagnostic, SkillInvocation, AgentInput, SkillErrorCode } from "./skills/types.ts";
 

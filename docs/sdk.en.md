@@ -110,6 +110,29 @@ Supported built-in TanStack transports use Forge's general hard limit. Internal 
 
 These are heuristic checks. The 1024-token margin is not an upper bound on Chinese text or image estimation errors, and provider overflow can still occur. Existing bounded recovery remains; no exact physical-window, answer-quality, or cost-saving guarantee is made. Run the offline [context-transform.ts example](../examples/context-transform.ts); design and evidence are in the [implementation plan](phases/context-transform.md).
 
+## OpenTelemetry
+
+Pass `otel` at creation to enable the official `@tanstack/ai/middlewares/otel` middleware. Omitting it disables telemetry. Core neither registers a global provider nor loads exporters. The SDK exports `OtelMiddlewareOptions`, `OtelSpanInfo`, and `OtelSpanScope`. Options are shallow-copied at creation; tracer/meter and callback resources belong to the host. `updateConfiguration` rejects `otel`.
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Help with the task.",
+  otel: {
+    tracer: tracerProvider.getTracer("my-agent"),
+    meter: meterProvider.getMeter("my-agent"), // optional
+  },
+});
+```
+
+`tracer` is required. An optional `meter` enables the official duration and token usage histograms. `captureContent` defaults to false. Opting in captures the final model input, output, and tool arguments/results; supply `redact` to transform captured text. Names, usage, and exceptions are still recorded without content capture; exception messages may contain business text. Official `attributeEnricher`, `spanNameFormatter`, `onBeforeSpanStart`, and `onSpanEnd` callbacks are supported. The official middleware warns on callback errors without changing task results.
+
+Task, compaction summary, and deferred memory requests use `forge.request.kind=task|summary|memory`. Each native `chat()` produces a root with model iteration/tool children. Provider/model identity follows the applied response adapter, rather than the internal `forge` router. Spans carry `forge.session.id` and `tanstack.ai.run.id`; continuations include `tanstack.ai.parent_run.id`. Task spans include `forge.configuration.revision`. Auxiliary requests correlate by session without inventing a task revision. An approval interrupt ends its root with `tanstack.ai.outcome.type=interrupt`; resume produces a separate run. These roots are not a single Forge invocation span.
+
+In task span callbacks, `ctx.provider`/`ctx.model` retain the identity at that span's creation, even when a later request switches models within the same run. Roots use the model at run start; iteration/tool spans use their model request's identity. Other context fields continue to follow the native lifecycle. Summary and memory requests use fixed adapters and the official middleware directly.
+
+Span status describes the native run; `AgentTurn.result` remains authoritative. Task roots exclude deferred organization time. Organization model calls have separate spans, while later JSON validation and Markdown writes are outside model spans. Later session saves do not produce separate storage spans. Hosts should await `agent.dispose()` before flushing/shutting down their providers. Forge never releases shared tracers/meters. Run the complete offline example with `bun examples/otel.ts`; see the [integration and acceptance record](phases/otel-middleware.md).
+
 ## Skills
 
 Omitting `skills` disables discovery. A configuration object enables it by default; `enabled: false` performs no scan. Core never discovers the host's home directory. Relative paths resolve against `cwd`; `~` is not expanded.

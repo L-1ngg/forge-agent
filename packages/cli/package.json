@@ -13,6 +13,9 @@
     "@forge-agent/tools": "workspace:*",
     "@forge-agent/tui": "workspace:*",
     "@napi-rs/keyring": "2.1.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.222.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-trace-base": "2.11.0",
     "open": "11.0.4",
     "proper-lockfile": "4.1.2"
   },

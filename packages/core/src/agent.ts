@@ -8,6 +8,7 @@ import type { HarnessTool } from "@forge-agent/tools";
 import type { Model } from "./model-types.ts";
 import type { ModelAdapter } from "./model-adapter.ts";
 import type { ToolHooks } from "./session-tools.ts";
+import type { OtelMiddlewareOptions } from "@tanstack/ai/middlewares/otel";
 import { MemoryPermissionStore, type PermissionContext } from "./permission/index.ts";
 import { RequestBus } from "./request-bus.ts";
 import { MemorySessionStorage, validateSessionState, type SessionStorage } from "./session-storage.ts";
@@ -29,6 +30,8 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	skills?: SkillsOptions | false;
 	memory?: MemoryOptions;
 	toolHooks?: ToolHooks;
+	/** Official TanStack OTel options. The host owns tracer/meter lifecycle. */
+	otel?: OtelMiddlewareOptions;
 	sessionId?: string;
 	context?: Partial<ContextSettings>;
 	retry?: Partial<RetryPolicy>;

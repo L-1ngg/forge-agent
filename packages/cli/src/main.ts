@@ -14,6 +14,7 @@ import { jsonError, runHeadless, headlessRequestDecision } from "./headless.ts";
 import { createMemoryHost } from "./memory-host.ts";
 import { MemoryManager } from "./memory-command.ts";
 import type { MemoryOptions } from "@forge-agent/core/sdk";
+import { startTelemetry } from "./telemetry.ts";
 
 interface Args {
 	noMcp?: boolean;
@@ -55,6 +56,7 @@ function usage(): string {
 }
 
 export async function main(argv = Bun.argv.slice(2)): Promise<number> {
+	let telemetry: Awaited<ReturnType<typeof startTelemetry>>;
 	let args: Args;
 	try {
 		args = parseArgs(argv);
@@ -119,7 +121,9 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 			return 2;
 		}
 		const apiKey = await resolveSecret(config.apiKey);
+		telemetry = await startTelemetry();
 		const sessions = await SessionHost.create({
+			...(telemetry ? { otel: telemetry.otel } : {}),
 			provider,
 			model,
 			...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
@@ -195,6 +199,8 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 		if (args.json) console.log(jsonError(error instanceof Error ? error.message : String(error), error instanceof McpCommandError ? "INVALID_ARGUMENT" : "STARTUP_ERROR"));
 		else console.error(error instanceof Error ? error.message : String(error));
 		return error instanceof McpCommandError ? 2 : error instanceof McpError && error.code === "auth-required" ? 24 : 1;
+	} finally {
+		await telemetry?.shutdown();
 	}
 }
 

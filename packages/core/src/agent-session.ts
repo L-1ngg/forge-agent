@@ -31,6 +31,7 @@ import { createMemoryTools } from "./memory/tools.ts";
 import { MarkdownMemoryAdapter } from "./memory/adapter.ts";
 import { SessionInvocation } from "./session-invocation.ts";
 import { SessionResponse } from "./session-response.ts";
+import { sessionOtel } from "./session-otel.ts";
 
 /** The sole owner of input, durable history, configuration and invocation settlement. */
 export class AgentSession implements Agent {
@@ -436,7 +437,11 @@ export class AgentSession implements Agent {
 				onRecall: ({ result }) => this.emit({ type: "memory", phase: "recall", selected: result.fragments?.map(fragment => fragment.source) ?? [], timestamp: Date.now() }),
 				onSave: ({ receipts }) => this.emit({ type: "memory", phase: "save", status: receipts.some(receipt => !receipt.ok) ? "failed" : receipts.length ? "saved" : "skipped", calls: memoryAdapter.organizerCalls, ...(memoryAdapter.organizerUsage ? { usage: memoryAdapter.organizerUsage } : {}), receipts: receipts.map(receipt => ({ ok: receipt.ok, ...(receipt.error ? { error: receipt.error } : {}), ...(receipt.raw ? { raw: receipt.raw } : {}) })), timestamp: Date.now() }),
 			}) : undefined;
-			const middlewareChain = [...(nativeMiddleware ? [nativeMiddleware] : []), ...(source ? [withSkills(source)] : []), middleware];
+			const otel = this.options.otel ? sessionOtel(this.options.otel, () => {
+				const configuration = current?.options ?? this.options;
+				return { provider: configuration.adapter?.name ?? configuration.model.provider, model: configuration.adapter?.model ?? configuration.model.id, revision: current?.revision ?? this.appliedRevision };
+			}) : undefined;
+			const middlewareChain = [...(nativeMiddleware ? [nativeMiddleware] : []), ...(source ? [withSkills(source)] : []), middleware, ...(otel ? [otel] : [])];
 			const threadId = this.options.sessionId ?? randomUUID();
 			while (!signal.aborted) {
 				const runId = randomUUID();
@@ -563,6 +568,7 @@ export class AgentSession implements Agent {
 		if ("streamFn" in patch) return Promise.reject(new TypeError("streamFn was removed; use adapter"));
 		if ("transformContext" in patch) return Promise.reject(new TypeError("transformContext is configured at creation"));
 		if ("shouldStopAfterTurn" in patch) return Promise.reject(new TypeError("shouldStopAfterTurn is configured at creation"));
+		if ("otel" in patch) return Promise.reject(new TypeError("otel is configured at creation"));
 		// Snapshot schemas now, before asynchronous model/auth resolution yields to hosts.
 		const captured = snapshotConfiguration(patch);
 		const operation = this.configurationQueue.then(async () => {

@@ -79,6 +79,7 @@ export function createSummaryDriver(options: SessionConfiguration): SummaryDrive
 }
 
 export function snapshotConfiguration<T extends Partial<CreateAgentOptions>>(options: T): T {
+	options = { ...options, ...(options.otel ? { otel: { ...options.otel } } : {}) };
 	return { ...options, ...(options.mcp ? { mcp: { ...options.mcp, servers: structuredClone(options.mcp.servers) } } : {}), ...(typeof options.model === "object" ? { model: structuredClone(options.model) } : {}), ...(options.skills ? { skills: structuredClone(options.skills) } : {}), ...(options.memory ? { memory: { ...options.memory } } : {}), ...(options.context ? { context: { ...options.context } } : {}), ...(options.retry ? { retry: { ...options.retry } } : {}), ...(options.tools ? { tools: options.tools.map(tool => ({ ...tool, parameters: structuredClone(tool.parameters) })) } : {}) };
 }
 

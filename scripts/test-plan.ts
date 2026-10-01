@@ -107,6 +107,7 @@ export const registry: TestRegistry = {
 		"packages/core/test/sdk-message-codec.test.ts",
 		"packages/core/test/sdk-native-memory.test.ts",
 		"packages/core/test/sdk-native-skills.test.ts",
+		"packages/core/test/sdk-otel.test.ts",
 		"packages/core/test/sdk.test.ts",
 		"packages/core/test/session-conversion.test.ts",
 		"packages/core/test/session-first-write.test.ts",
@@ -125,6 +126,7 @@ export const registry: TestRegistry = {
 		"tests/loop-contract/stop-reason.test.ts",
 	],
 	cli: [
+		"packages/cli/test/telemetry.test.ts",
 		"tests/support/pty.test.ts",
 		"packages/cli/test/headless-smoke.test.ts",
 		"packages/cli/test/headless-request.test.ts",

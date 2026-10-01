@@ -203,6 +203,20 @@ bun examples/context-transform.ts
 
 assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮。窄表格回退为带列名的记录,长代码行折行并显示续行标记。Forge 的复制操作保留 Markdown 原文,LaTeX 保持原文。可运行 `bun scripts/markdown-preview.ts` 查看固定样例,不调用模型或保存会话。
 
+## OpenTelemetry
+
+CLI 配置 OTLP endpoint 后，通过 TanStack 官方 OTel 中间件导出 trace：
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_SERVICE_NAME=forge-agent \
+bun run forge-agent --json -p "检查这个项目"
+```
+
+CLI 使用 OTLP HTTP/JSON。通用 endpoint 自动追加 `/v1/traces`；`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 可覆盖为精确 URL。官方 exporter 读取标准 OTLP headers/timeout 变量，resource detector 读取 `OTEL_RESOURCE_ATTRIBUTES` / `OTEL_SERVICE_NAME`，service 默认 `forge-agent`。`OTEL_SDK_DISABLED=true` 禁用；未配置 endpoint 时关闭。正常退出等待 provider shutdown；导出失败不改变任务结果或 JSON stdout，强杀可能丢失缓冲 span。
+
+默认不采集正文。显式 `FORGE_OTEL_CAPTURE_CONTENT=true` 包含提示词、回答和工具参数/结果；关闭采集时异常信息仍可能带文本。CLI 本轮只导出 traces。SDK 宿主可通过 `createAgent({ otel })` 提供 tracer 与可选 meter，并使用脱敏和官方回调。任务、摘要、记忆请求分别标记，审批续接通过原生 run ID 关联。接入见 [SDK 指南](docs/sdk.md#opentelemetry)及可运行的离线 [OTel 示例](examples/otel.ts)。
+
 ## 架构
 
 | 包 | 职责 |

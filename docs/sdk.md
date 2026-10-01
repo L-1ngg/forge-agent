@@ -110,6 +110,29 @@ hard maxInputTokens = contextWindow - effectiveOutputTokens - 1024
 
 这些检查是启发式估算，1024 余量不是中文/图片误差上界，仍可能收到供应商 overflow。保留原有有界恢复，不承诺精确物理窗口、答案质量或费用节省。可运行离线示例见 [context-transform.ts](../examples/context-transform.ts)，设计和证据见[施工图](phases/context-transform.md)。
 
+## OpenTelemetry
+
+创建时传入 `otel` 即使用 `@tanstack/ai/middlewares/otel` 的官方中间件。省略时关闭；Core 不初始化全局 provider、不加载 exporter。`OtelMiddlewareOptions`、`OtelSpanInfo` 与 `OtelSpanScope` 从 SDK 导出，options 在创建时浅快照，tracer/meter 和回调资源由宿主维护；`updateConfiguration` 不接受 `otel`。
+
+```ts
+const agent = await createAgent({
+  provider: "anthropic", model: "claude-sonnet-4-5", apiKey,
+  cwd: "/work/project", systemPrompt: "Help with the task.",
+  otel: {
+    tracer: tracerProvider.getTracer("my-agent"),
+    meter: meterProvider.getMeter("my-agent"), // optional
+  },
+});
+```
+
+`tracer` 必填；`meter` 可选，提供时记录官方 duration 与 token usage histograms。`captureContent` 默认 false；显式启用后采集最终模型请求、输出和工具参数/结果，可传 `redact` 脱敏。关闭内容采集仍有工具名、模型名、usage 与异常信息；异常可能包含业务文本。官方回调 `attributeEnricher`、`spanNameFormatter`、`onBeforeSpanStart`、`onSpanEnd` 原样支持，回调抛错由官方中间件警告，不改写任务结果。
+
+任务、压缩摘要、deferred 记忆整理分别标记 `forge.request.kind=task|summary|memory`。每个原生 `chat()` 有一个 root 和模型 iteration/tool 子 span；实际 adapter/model 来自已应用的响应配置，不记录内部路由名称 `forge`。Span 带 `forge.session.id`、`tanstack.ai.run.id`，续接带 `tanstack.ai.parent_run.id`；任务带 `forge.configuration.revision`。辅助请求通过 session 关联，不伪造任务 revision。审批 interrupt 的 root 标记 `tanstack.ai.outcome.type=interrupt` 并结束，resume 是独立 run；它们不是一个 Forge invocation span。
+
+任务的 span 回调中，`ctx.provider`/`ctx.model` 保留对应 span 创建时的身份；同一个 run 后续切换模型不会改写旧 span 的回调信息。root 对应 run 开始时的模型，iteration/tool 对应各自模型请求；其他上下文字段仍按原生生命周期更新。摘要和记忆请求使用固定 adapter，直接接入官方中间件。
+
+Span 状态只代表原生运行，`AgentTurn.result` 仍是任务的权威结果。任务 root 不包含 deferred 整理的耗时；整理模型请求有独立 span，其后的 JSON 校验和 Markdown 写入不属于模型 span。会话后置保存也不构成独立 storage span。宿主应先 `await agent.dispose()`，再 flush/shutdown 自己的 provider；Forge 不释放共享 tracer/meter。完整可运行离线示例：`bun examples/otel.ts`；设计及验收见[OTel 接入记录](phases/otel-middleware.md)。
+
 ## Skills
 
 SDK 省略 `skills` 时不扫描任何来源；配置对象默认启用，`enabled: false` 时不扫描。Core 不调用 home 目录探测；相对路径按 `cwd` 解析，不展开 `~`。
