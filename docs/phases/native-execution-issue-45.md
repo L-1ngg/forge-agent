@@ -27,7 +27,7 @@ created: 2026-10-01
 
 顺序为：施工图与公开回归基线 → 私有执行接口和共同结算迁移 → 有针对性的回归及反向验证 → 完整门禁 → Standards/Spec 两轴 WIP 审查 → 修复、复核与本地提交。依赖版本、公开导出和历史格式不变。
 
-任务级出口引用 Issue #45 AC-1–AC-12，不复制定义。需要 `bun run check`、`bun run typecheck:examples`、`bun run build` 和 `bun run test:headless` 的本轮证据；类型检查及相关单文件回归在迁移中运行。外部供应商、其他 OS、崩溃/断电和长期人工使用不作为此次离线软件出口，也不标记通过。没有 push 或关闭 Issue 授权。
+任务级出口引用 Issue #45 AC-1–AC-12，不复制定义。需要 `bun run check`、`bun run typecheck:examples`、`bun run build` 和 `bun run test:headless` 的本轮证据；类型检查及相关单文件回归在迁移中运行。外部供应商、其他 OS、崩溃/断电和长期人工使用不作为此次离线软件出口，也不标记通过。实施阶段先完成本地提交；operator 随后通过「push,关闭issue」授权推送及任务关闭，验收边界不变。
 
 ## Test plan / 合同映射
 
@@ -65,7 +65,7 @@ Ran(2026-10-01，Linux x64/WSL、Bun 1.3.12)：
 
 实际职责变化：`AgentSession` 从 621 行降到 474 行；移出原生 chat/middleware/Skills/Memory/OTel 接线，删除原 `completeResponse`、`commitModelResponse`、`commitPartialResponse`、`completeTurn` 及三处结果补齐分支。会话以 `commitBatch` 唯一保存批次历史并评估策略。响应审计、native usage/tools、消息基准、候选消息和提交状态均为私有，正常/异常出口共用 `SessionResponse.finish`；存储故障仍由会话保留并传播。新增内部模块承接原生接线，全仓代码行数没有宣称减少。
 
-Standards/Spec 两轴 WIP 审查覆盖本次 8 个文件及新文件。Spec 初轮发现两项 P2：输入准备失败时的旧配置身份、失败审批续接误触停止策略；已修复并用公开回归复核，最终两轴均无未解决问题。结构归属与任务级 AC 沿用 Issue 的定义；交付方式为当前分支本地提交，本次没有推送或关闭远端 Issue 的授权。
+Standards/Spec 两轴 WIP 审查覆盖本次 8 个文件及新文件。Spec 初轮发现两项 P2：输入准备失败时的旧配置身份、失败审批续接误触停止策略；已修复并用公开回归复核，最终两轴均无未解决问题。结构归属与任务级 AC 沿用 Issue 的定义；实现提交为 `f0fd1ae81ff456fe06337fdebdb0d0a590bc2a0f`。后续按 operator 授权推送 `origin/master` 并关闭 Issue #45，远端交付结果以该 Issue 的验收评论与关闭状态为准。
 
 Not run / Why：未调用真实供应商或 collector，未在 macOS/Windows 运行，未进行进程崩溃/断电、模型质量/费用或长期人工使用评估。本次验证内部职责重构的软件合同，使用离线 fixtures、真实本地服务/存储与正式 CLI/PTY。
 
