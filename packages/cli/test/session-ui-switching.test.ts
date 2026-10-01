@@ -4,10 +4,47 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { TestInput as Input } from "../../../tests/support/app-driver.ts";
-import { waitFor as until } from "../../../tests/support/control.ts";
+import { barrier, bounded, nextTurn, waitFor as until } from "../../../tests/support/control.ts";
 import { withScenario } from "../../../tests/support/scenario.ts";
 import { SessionHost } from "../src/session-host.ts";
 import { skillInput } from "../src/skills-command.ts";
+
+test("host disposal publishes one promise before synchronous abort callbacks can reenter", async () => withScenario("reentrant host disposal", async scenario => {
+	const sessions = await SessionHost.create({ cwd: scenario.cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	scenario.defer(() => sessions.dispose());
+	const abort = sessions.current.port.abort.bind(sessions.current.port);
+	const dispose = sessions.current.port.dispose.bind(sessions.current.port);
+	let aborts = 0, disposals = 0, reentered: Promise<void> | undefined;
+	sessions.current.port.abort = () => { if (++aborts === 1) reentered = sessions.dispose(); abort(); };
+	sessions.current.port.dispose = async () => { disposals++; await dispose(); };
+	const closing = sessions.dispose();
+	await bounded(closing, "host disposal settles");
+	expect(reentered).toBe(closing);
+	expect(disposals).toBe(1);
+	expect(sessions.dispose()).toBe(closing);
+	await expect(sessions.switchTo()).rejects.toThrow("Session host is closed");
+}));
+
+test("exit during prepared-target release restores the terminal before draining and prevents activation", async () => withScenario("exit races prepared target", async scenario => {
+	const cwd = scenario.cwd, prepared = barrier("candidate prepared"), release = barrier("release callback");
+	const sessions = await SessionHost.create({ cwd, provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "test" });
+	scenario.defer(() => sessions.dispose());
+	const original = sessions.current.id, input = new Input();
+	const observed = { get current() { return sessions.current; }, list: sessions.list.bind(sessions), dispose: sessions.dispose.bind(sessions), switchTo: (id?: string, beforeRelease?: () => Promise<void>) => sessions.switchTo(id, async () => { prepared.release(); await release.wait(); await beforeRelease?.(); }) };
+	const app = new App({ port: sessions.current.port, requestBus: sessions.current.requestBus, sessions: observed, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} } });
+	scenario.defer(() => app.stop());
+	try {
+		await app.start(); input.send("/new\r"); await prepared.wait();
+		let stopped = false;
+		const stop = app.stop(); expect(app.stop()).toBe(stop);
+		void stop.then(() => { stopped = true; });
+		expect(input.raw).toBe(false); await nextTurn(); expect(stopped).toBe(false);
+		release.release(); await bounded(stop, "exit completes candidate release");
+		expect(sessions.current.id).toBe(original);
+		expect(sessions.dispose()).toBe(sessions.dispose());
+		await expect(sessions.switchTo()).rejects.toThrow("Session host is closed");
+	} finally { release.release(); }
+}));
 
 test("TUI clear retains model context; new isolates it; resume restores history and draft without sending", async () => withScenario("TUI clear retains model context; new isolates it; resume restores history and draft without sending", async scenario => {
 	const cwd = scenario.cwd;

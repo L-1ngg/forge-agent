@@ -224,10 +224,13 @@ Content capture is off by default. `FORGE_OTEL_CAPTURE_CONTENT=true` explicitly 
 | `@forge-agent/protocol` | Events, requests, responses, and presentation data |
 | `@forge-agent/core` | Session lifecycle, TanStack chat integration, model adapters, permissions, context, and SDK |
 | `@forge-agent/tools` | Tool contracts and built-in coding tools |
-| `@forge-agent/tui` | Cell compositor and terminal interaction; protocol, Node built-ins, and pure Markdown/highlighting dependencies |
+| `@forge-agent/interaction` | Session coordination, pending input, management and queries, scoped operations; depends only on protocol |
+| `@forge-agent/tui` | Terminal shell, per-activation presentation, cell compositor; consumes interaction, protocol, Node built-ins, and pure Markdown/highlighting dependencies |
 | `@forge-agent/cli` | Configuration, credentials, tool/storage assembly, and TUI/headless entrypoints |
 
-The dependency gate keeps UI dependencies out of the core and rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
+The dependency gate keeps UI and interaction dependencies out of the core, and keeps interaction independent of core, CLI, terminal I/O, and display libraries. It also rejects `pi-ai` dependencies and imports. Team orchestration, message routing, and multi-agent dashboards belong to external host projects.
+
+`SessionCoordinator` selects a `SessionInteraction` that captures its Agent and request bus. `App` renders published state through a `PresentationSession`; successful activation replaces both containers. Auxiliary scopes block late results and cooperate with cancellation, while switching still waits for authoritative execution and storage settlement. `SessionHost` prepares and commits instances. See [ADR-031](docs/decisions/031-session-interaction-coordinator.md) for ownership and cancellation boundaries.
 
 SDK, CLI, and TUI share one `AgentSession`. It owns input queues, configuration snapshots, authoritative outcomes, and session history. TanStack `chat()` owns model/tool continuation, schema validation, approval resume, successful response aggregation, and serial tool execution; request middleware applies context projection and the final budget. Forge checks the raw provider protocol and routes undecided approvals to the host. After the tool batch completes, Forge saves its proposal and results before the next model request. A save failure stops execution and faults the instance, but effects may already exist; a crash may lose the latest batch. Approval resumes within the current process only. See [ADR-030](docs/decisions/030-native-arguments-and-conversation-persistence.md) for the simplified contract.
 

@@ -1,0 +1,16 @@
+{
+  "name": "@forge-agent/interaction",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scope": "./src/interaction-scope.ts"
+  },
+  "dependencies": { "@forge-agent/protocol": "workspace:*" },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

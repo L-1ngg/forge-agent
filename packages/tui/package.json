@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@forge-agent/interaction": "workspace:*",
     "@forge-agent/protocol": "workspace:*",
     "lowlight": "3.3.0",
     "marked": "18.0.11"

@@ -2,7 +2,7 @@ import { dumpFrame, type App } from "../../packages/tui/src/index.ts";
 import { bounded, nextTurn, waitFor } from "./control.ts";
 
 /** Fixture-only synchronization. Input still travels through the actual PTY. */
-export function installPtyControl(app: App, onCapture?: (frame: ReturnType<typeof dumpFrame>) => void): () => void {
+export function installPtyControl(app: Pick<App, "composeFrameForTest">, onCapture?: (frame: ReturnType<typeof dumpFrame>) => void): () => void {
 	let expected = Buffer.alloc(0), received = Buffer.alloc(0);
 	let consumed: Promise<void> = Promise.resolve();
 	let release: (() => void) | undefined;

@@ -224,10 +224,13 @@ CLI 使用 OTLP HTTP/JSON。通用 endpoint 自动追加 `/v1/traces`；`OTEL_EX
 | `@forge-agent/protocol` | 事件、请求、响应与展示数据 |
 | `@forge-agent/core` | 会话生命周期、TanStack chat 接入、模型适配、权限、上下文与 SDK |
 | `@forge-agent/tools` | 工具契约与内置 coding 工具 |
-| `@forge-agent/tui` | cell compositor 与终端交互;依赖 protocol、Node 内置模块及纯 Markdown/高亮库 |
+| `@forge-agent/interaction` | 会话协调、待发送输入、管理与查询、操作作用域;只依赖 protocol |
+| `@forge-agent/tui` | 终端外壳、逐次激活的显示容器与 cell compositor;消费 interaction、protocol、Node 内置模块及纯 Markdown/高亮库 |
 | `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
 
-依赖门禁禁止 core 引入 UI，并拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
+依赖门禁禁止 core 引入 UI 或 interaction，并保持 interaction 不依赖 core、CLI、终端 I/O 或显示库；同时拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
+
+`SessionCoordinator` 选择捕获 Agent/请求总线的 `SessionInteraction`，`App` 通过 `PresentationSession` 投影已发布状态；成功激活时替换两个容器。辅助作用域阻止迟到结果并传递协作取消，切换仍等待权威执行与保存结算。`SessionHost` 负责实例准备和提交。所有权及取消边界见 [ADR-031](docs/decisions/031-session-interaction-coordinator.md)。
 
 SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和会话历史。TanStack `chat()` 负责模型/工具续轮、schema 校验、审批续接、成功响应聚合及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 审计原始 provider 协议，仅未能自动决定的审批交给宿主。工具批次完成后，Forge 在下一次模型请求前保存提案与结果。保存失败仍停止执行并停用实例，但副作用可能已经发生；进程崩溃可能丢失最新批次。审批仅在当前进程续接。简化后的合同见 [ADR-030](docs/decisions/030-native-arguments-and-conversation-persistence.md)。
 

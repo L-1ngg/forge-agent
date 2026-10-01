@@ -11,7 +11,8 @@ test("TUI retires a card after its terminal was evicted while notification consu
 	scenario.defer(() => sessions.dispose());
 	const bus = sessions.current.requestBus, release = barrier("slow terminal subscriber"), input = new Input();
 	let responded = 0;
-	const app = new App({ port: sessions.current.port, requestBus: { requests: () => bus.requests(), async *terminals() { await release.wait(); yield* bus.terminals(); }, isPending: id => bus.isPending(id), getTerminal: id => bus.getTerminal(id), respond(value) { responded++; return bus.respond(value); }, close: () => bus.close() }, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write() {} } });
+	const chunks: string[] = [];
+	const app = new App({ port: sessions.current.port, requestBus: { requests: () => bus.requests(), async *terminals() { await release.wait(); yield* bus.terminals(); }, isPending: id => bus.isPending(id), getTerminal: id => bus.getTerminal(id), respond(value) { responded++; return bus.respond(value); }, close: () => bus.close() }, host: "alt", cwd, homeDir: cwd, stdin: input, stdout: { columns: 110, rows: 32, write(text) { chunks.push(text); } } });
 	scenario.defer(() => app.stop());
 	try {
 		await app.start();
@@ -20,6 +21,9 @@ test("TUI retires a card after its terminal was evicted while notification consu
 		bus.cancel(id);
 		for (let index = 0; index < 300; index++) { const next = bus.publish("question", { prompt: `ended-${index}` }, () => {}); bus.cancel(next); }
 		expect(bus.getTerminal(id)).toBeUndefined();
+		// Resumed delivery drives reconciliation; asking for a frame must be pure.
+		release.release();
+		await until(() => chunks.join("").includes("no longer retained"), "evicted outcome retired in actual terminal output");
 		expect(frameToText(app.composeFrameForTest())).not.toContain("Permission: bash");
 		input.send("\r"); expect(responded).toBe(0); expect(bus.pendingCount).toBe(0);
 	} finally { release.release(); }

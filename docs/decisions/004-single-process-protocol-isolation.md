@@ -8,6 +8,8 @@ created: 2026-09-01
 > 状态:已批准(2026-09-01,operator 发起;起草于 2026-08-31,编号后补故日期晚于内容)。依赖条款中「tui 只 import protocol 与 pi-tui」被 [005](005-tui-own-compositor.md) 修正;独立应用的同进程装配与协议隔离继续有效;内置 Team 与外部部署约束由 [ADR-008](008-general-agent-positioning.md) 修订(2026-09-05)。
 > 参与者:operator(发起)、Grok(分析)
 
+> 2026-10-01 补充：TUI 允许依赖中立 interaction 模块，由 [ADR-031](031-session-interaction-coordinator.md)定向修订；core 与 UI 隔离及同进程装配继续有效，当前门禁见 `scripts/check-deps.ts`。
+
 ## 背景
 
 clowder-ai 用「服务端 + 网页界面 + Redis」的分布式架构实现了核心与界面的物理分离。代价:Redis 快照空档丢数据(28 秒,307→144 keys)、进程管理、Lua CAS 并发控制(单用户场景防的是不存在的并发)、Mission Hub 运维面板——每一层基础设施都在解决上一层制造的问题,而不是用户的问题。详见 [design-rationale.md](../archive/design-rationale.md) C.4、[cat-cafe.md](https://github.com/L-1ngg/forge-agent/blob/24750eb3d22d23d72d3c17fa589b1df425d28940/docs/cat-cafe.md) F.1。

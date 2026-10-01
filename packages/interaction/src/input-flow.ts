@@ -2,7 +2,7 @@ import type { SessionEvent, TurnResult } from "@forge-agent/protocol";
 
 export interface InputDecision { next?: string; restore: string[]; }
 
-/** Host-owned drafts and continuation intent; SDK receipts never become a mailbox. */
+/** Interaction-owned continuation intent; SDK receipts never become a mailbox. */
 export class InputFlow {
 	private readonly queued: string[] = [];
 	private replacement: string | undefined;

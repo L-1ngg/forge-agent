@@ -4,10 +4,31 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findViolations } from "./check-deps.ts";
 
+test("interaction rejects core, UI, relative escapes and terminal I/O while allowing its protocol port", async () => {
+	const rootPath = await mkdtemp(join(tmpdir(), "forge-interaction-deps-"));
+	try {
+		for (const name of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
+			await mkdir(join(rootPath, "packages", name, "src"), { recursive: true });
+			await writeFile(join(rootPath, "packages", name, "package.json"), "{}");
+		}
+		const file = join(rootPath, "packages", "interaction", "src", "port.ts");
+		await writeFile(file, 'import type { SessionEvent } from "@forge-agent/protocol";');
+		expect(await findViolations(new URL(`file://${rootPath}/`))).toEqual([]);
+		for (const specifier of ["@forge-agent/core/sdk", "@forge-agent/tui", "@forge-agent/cli", "../../core/src/index.ts", "node:readline", "node:fs"]) {
+			await writeFile(file, `import "${specifier}";`);
+			expect(await findViolations(new URL(`file://${rootPath}/`))).toContain(`packages/interaction/src/port.ts has forbidden interaction import ${specifier}`);
+		}
+		await writeFile(file, "process.stdout.write('bad');");
+		expect(await findViolations(new URL(`file://${rootPath}/`))).toContain("packages/interaction/src/port.ts must not use terminal or process I/O");
+		await writeFile(join(rootPath, "packages", "interaction", "package.json"), JSON.stringify({ dependencies: { "@forge-agent/core": "workspace:*" } }));
+		expect(await findViolations(new URL(`file://${rootPath}/`))).toContain("packages/interaction/package.json has forbidden dependency @forge-agent/core");
+	} finally { await rm(rootPath, { recursive: true, force: true }); }
+});
+
 test("dependency check rejects the replaced execution engine even inside the model adapter", async () => {
 	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-engine-"));
 	try {
-		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+		for (const packageName of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
 			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
 		}
@@ -27,7 +48,7 @@ test("dependency check rejects the replaced execution engine even inside the mod
 test("dependency check rejects pi-ai imports in examples and scripts", async () => {
 	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-legacy-"));
 	try {
-		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+		for (const packageName of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
 			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
 		}
@@ -47,7 +68,7 @@ test("dependency check rejects pi-ai imports in examples and scripts", async () 
 test("dependency check rejects a direct UI blocking call", async () => {
 	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-"));
 	try {
-		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+		for (const packageName of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
 			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
 		}
@@ -63,7 +84,7 @@ test("dependency check rejects a direct UI blocking call", async () => {
 test("dependency check allows Node built-ins in the TUI package", async () => {
 	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-node-"));
 	try {
-		for (const packageName of ["protocol", "tools", "core", "tui", "cli"]) {
+		for (const packageName of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", packageName, "src"), { recursive: true });
 			await writeFile(join(rootPath, "packages", packageName, "package.json"), "{}");
 		}
@@ -79,7 +100,7 @@ test("dependency check allows Node built-ins in the TUI package", async () => {
 test("dependency check enforces renamed workspace boundaries", async () => {
 	const rootPath = await mkdtemp(join(tmpdir(), "forge-agent-deps-renamed-"));
 	try {
-		for (const name of ["protocol", "tools", "core", "tui", "cli"]) {
+		for (const name of ["protocol", "tools", "core", "interaction", "tui", "cli"]) {
 			await mkdir(join(rootPath, "packages", name, "src"), { recursive: true });
 			await writeFile(join(rootPath, "packages", name, "package.json"), "{}");
 		}

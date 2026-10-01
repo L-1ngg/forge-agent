@@ -27,6 +27,7 @@
       },
       "dependencies": {
         "@forge-agent/core": "workspace:*",
+        "@forge-agent/interaction": "workspace:*",
         "@forge-agent/protocol": "workspace:*",
         "@forge-agent/tools": "workspace:*",
         "@forge-agent/tui": "workspace:*",
@@ -69,6 +70,13 @@
         "@smithy/core": "3.35.0",
       },
     },
+    "packages/interaction": {
+      "name": "@forge-agent/interaction",
+      "version": "0.1.0",
+      "dependencies": {
+        "@forge-agent/protocol": "workspace:*",
+      },
+    },
     "packages/protocol": {
       "name": "@forge-agent/protocol",
       "version": "0.1.0",
@@ -86,6 +94,7 @@
       "name": "@forge-agent/tui",
       "version": "0.1.0",
       "dependencies": {
+        "@forge-agent/interaction": "workspace:*",
         "@forge-agent/protocol": "workspace:*",
         "lowlight": "3.3.0",
         "marked": "18.0.11",
@@ -153,6 +162,8 @@
     "@forge-agent/cli": ["@forge-agent/cli@workspace:packages/cli"],
 
     "@forge-agent/core": ["@forge-agent/core@workspace:packages/core"],
+
+    "@forge-agent/interaction": ["@forge-agent/interaction@workspace:packages/interaction"],
 
     "@forge-agent/protocol": ["@forge-agent/protocol@workspace:packages/protocol"],
 

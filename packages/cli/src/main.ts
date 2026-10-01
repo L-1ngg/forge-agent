@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
-import { McpCommandError, mcpCommand, mcpInput, isMcpCommand, parseMcpCommand, persistMcpEnabled, mcpCompletions } from "./mcp-command.ts";
+import { interactionOptions } from "./interaction-options.ts";
+import { McpCommandError, mcpCommand, mcpInput, isMcpCommand, parseMcpCommand, persistMcpEnabled } from "./mcp-command.ts";
 import { ProjectMcpArtifactStore, SystemMcpCredentialStore, openMcpUrl, browserMcpInteraction } from "./mcp-host.ts";
 import { McpManager, RequestBus } from "@forge-agent/core";
 import { McpError } from "@forge-agent/core/sdk";
 import { cliSkills, skillInput, isSkillsCommand, skillsCommand, skillsText } from "./skills-command.ts";
 import { homedir } from "node:os";
 import { cwd } from "node:process";
-import { createInputCompletionSource, loadConfig, resolveSecret } from "@forge-agent/core";
+import { loadConfig, resolveSecret } from "@forge-agent/core";
 import { builtinTools } from "@forge-agent/tools";
-import { App, scanFiles } from "@forge-agent/tui";
+import { App } from "@forge-agent/tui";
 import { SessionHost, projectRoot } from "./session-host.ts";
 import { jsonError, runHeadless, headlessRequestDecision } from "./headless.ts";
 import { createMemoryHost } from "./memory-host.ts";
@@ -145,44 +146,21 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 			permission: { mode: config.permissionMode, builtInAutoApprove: [{ tool: "read", argsPattern: "*", effect: "allow" }] },
 		});
 		try {
-			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id), async options => {
-				const receipt = await sessions.current.port.updateConfiguration({ memory: options });
-				if ((await receipt.applied).status !== "applied") throw new Error("Memory configuration was not applied");
-			});
+			const memoryManager = new MemoryManager(memory, id => sessions.memoryImport(id));
 			if (prompt && isSkillsCommand(prompt)) {
 				await skillsCommand(sessions.current.port, prompt, value => console.log(args.json ? JSON.stringify(value) : skillsText(value))); return 0;
 			}
 			if (args.json) {
 				return await runHeadless(sessions.current.port, prepareInput(prompt as string), console.log, { requestBus: sessions.current.requestBus });
 			}
-			const completionSource = createInputCompletionSource({
-				completeInput: (input, signal) => mcpCompletions(sessions.current.port.mcp, input, signal),
-				listSkills: () => sessions.current.port.getSkills().entries.filter(entry => entry.status === "available").map(entry => ({ name: entry.name!, description: entry.description! })),
-				commands: [
-					{ name: "help", description: "Show commands" },
-					{ name: "clear", description: "Clear display; keep context" },
-					{ name: "new", description: "Start a new conversation" },
-					{ name: "resume", description: "Resume a project conversation" },
-					{ name: "compact", description: "Compact context" },
-					{ name: "memory", description: "Manage persistent memory" },
-					{ name: "mcp", description: "Manage MCP servers, resources, prompts and authentication" },
-					{ name: "skills", description: "List skills; reload to refresh" },
-					{ name: "skill", description: "Select a skill explicitly" },
-					{ name: "quit", description: "Exit" },
-				],
-				listFiles: (prefix) => scanFiles(workingDirectory, prefix),
-			});
 			const app = new App({
 				prepareInput,
 				openExternal: openMcpUrl,
-				mcpCommand: async (input, report) => { const command = parseMcpCommand(input); if (command.scope && ["enable", "disable"].includes(command.action)) await persistMcpEnabled(workingDirectory, config, command); await mcpCommand(sessions.current.port.mcp, input, value => report(JSON.stringify(value, null, 2)), { credentialStore: config.mcp?.credentialStore ?? "system" }); },
-				skillsCommand: (input, report) => skillsCommand(sessions.current.port, input, value => report(skillsText(value))),
+				...interactionOptions(workingDirectory, config, memoryManager),
 				port: sessions.current.port,
-				memoryCommand: input => memoryManager.execute(input),
 				sessions,
 				host: config.ui.host,
 				requestBus: sessions.current.requestBus,
-				completionSource,
 				getStatus: () => ({ provider, model }),
 				cwd: workingDirectory,
 				homeDir: homedir(),

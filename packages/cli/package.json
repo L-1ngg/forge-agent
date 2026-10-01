@@ -8,6 +8,7 @@
     "forge-agent": "./src/main.ts"
   },
   "dependencies": {
+    "@forge-agent/interaction": "workspace:*",
     "@forge-agent/core": "workspace:*",
     "@forge-agent/protocol": "workspace:*",
     "@forge-agent/tools": "workspace:*",

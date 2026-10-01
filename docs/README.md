@@ -50,6 +50,7 @@
 | 文档 | 职责 |
 |---|---|
 | [TUI 主界面工作流](phases/tui-main-workflow.md) | 主界面交互与跨流程验收 |
+| [会话交互协调器施工与验收](phases/session-interaction-coordinator.md)、[ADR-031](decisions/031-session-interaction-coordinator.md) | 四层分工、中立 interaction 包、业务/显示容器替换、Scope 与结算 |
 | [Markdown 渲染](phases/markdown-rendering.md) | 正文与详情渲染、流式显示和源码复制 |
 | [测试体系](phases/testing-system.md)、[测试施工与验收](phases/testing-system-implementation.md) | 测试分层、确定性证据、平台和网络隔离边界 |
 | [测试全面重设计](phases/testing-system-redesign.md)、[逐文件处置清单](phases/testing-system-inventory.md) | 2026-09-30 全仓重构、覆盖与冗余审计，以及本地和 Ubuntu/macOS CI 验收证据 |

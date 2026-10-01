@@ -8,6 +8,8 @@ created: 2026-09-04
 > 状态:已批准(2026-09-04,operator 确认 1A/2A/3A 与 phase-2.2 Key Decisions 4-7)。选择 1A(下文决策 2,产品目标)由 [ADR-006](006-tui-cell-parity.md) 修订,reference 路径再由 [ADR-007](007-no-compile-grok-reference.md) 修订;自有 compositor 仍有效;Markdown 自写及依赖边界由 [ADR-016](016-markdown-rendering.md) 定向修订。2026-09-06 核对:旧截图仅为历史参考,Team 方向以 ADR-008 为准。
 > 参与者:operator(发起,选择 1A/2A/3A)、Grok(起草)
 
+> 2026-10-01 补充：依赖允许集与 CLI 命令/补全接线由 [ADR-031](031-session-interaction-coordinator.md)定向修订；TUI 消费中立 interaction，App 保留生命周期入口，原 compositor 和终端宿主选择继续有效。
+
 ## 背景
 
 立项时的规划与 [design-rationale.md](../archive/design-rationale.md) C.2 把 TUI 钉在 `pi-tui` 原语上:UX 概念自写成 `Component`,`render()` 返回 `string[]`。Phase 2 M3-M6 按这条路径落地;Phase 2.1 试图在同一底座上补 typed entry、EntryShell、row budget 和 cell/PNG zero-diff。

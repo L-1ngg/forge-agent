@@ -20,14 +20,17 @@ export function skillInput(input: string): AgentInput {
 	return { kind: "skill", name: match[1]!, task: match[2] ?? "" };
 }
 export function isSkillsCommand(input: string): boolean { return /^\s*\/skills(?:\s|$)/.test(input); }
-export async function skillsCommand(agent: Pick<Agent, "getSkills" | "refreshSkills">, input: string, output: (value: object) => void): Promise<void> {
+export async function skillsCommand(agent: Pick<Agent, "getSkills" | "refreshSkills">, input: string, output: (value: object) => void, signal?: AbortSignal): Promise<void> {
+	const report = (value: object) => { signal?.throwIfAborted(); output(value); };
+	signal?.throwIfAborted();
 	const command = input.trim();
-	if (command === "/skills") { output({ type: "skills", ...agent.getSkills() }); return; }
+	if (command === "/skills") { report({ type: "skills", ...agent.getSkills() }); return; }
 	if (command !== "/skills reload") throw new Error("Usage: /skills [reload]");
 	const receipt = await agent.refreshSkills();
-	output({ type: "skills", phase: "accepted", revision: receipt.revision });
+	report({ type: "skills", phase: "accepted", revision: receipt.revision });
 	const applied = await receipt.applied;
-	output({ type: "skills", phase: applied.status, revision: applied.revision, ...(applied.status === "applied" ? { snapshot: agent.getSkills() } : {}) });
+	signal?.throwIfAborted();
+	report({ type: "skills", phase: applied.status, revision: applied.revision, ...(applied.status === "applied" ? { snapshot: agent.getSkills() } : {}) });
 }
 export function skillsText(value: object): string {
 	if ("phase" in value) return `Skills ${value.phase}${"revision" in value ? ` #${value.revision}` : ""}`;

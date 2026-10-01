@@ -1,6 +1,6 @@
 # 通用 Agent — 规划
 
-> 状态:后续路线(2026-09-30)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
+> 状态:后续路线(2026-10-01)。当前定位与职责边界见 [ADR-008](decisions/008-general-agent-positioning.md)。本文件只维护后续路线与行动项。
 > 按[当前文档导航](README.md)读取合同与证据；历史路线仅在追溯时进入[归档索引](archive/README.md)。
 > 已实现能力与依赖边界见 [README](../README.md#architecture),内核与 SDK 的施工及证据见 [TanStack 基座](phases/tanstack-foundation.md)、[基座验收](phases/tanstack-foundation-acceptance.md)。
 

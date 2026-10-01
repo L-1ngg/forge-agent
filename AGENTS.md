@@ -8,6 +8,8 @@
 
 ## 真相源层级
 
+修改会话交互、异步归属或 TUI 状态时，读 [ADR-031](docs/decisions/031-session-interaction-coordinator.md) 与[施工及验收](docs/phases/session-interaction-coordinator.md)：interaction 管业务与作用域，TUI 管显示容器，SessionHost 管实例准备和提交。
+
 日常从[当前文档导航](docs/README.md)按任务读取；仅在追溯历史决策、回归来源或用户指定时进入 `docs/archive/`。归档按其记录版本解释，读取规则见[归档规范](docs/README.md#归档与读取规则)。验收结论沿用[证据边界](docs/README.md#验收边界)，归档不改变未测或豁免结论。
 
 拿不准哪个文档说了算时按此表;文档与代码冲突时**先修文档,再对齐代码**:

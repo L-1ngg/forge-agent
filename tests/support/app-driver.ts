@@ -1,6 +1,6 @@
 import type { HostInput, HostOutput } from "../../packages/tui/src/host.ts";
 
-/** Host doubles only: App still owns key decoding, rendering and execution flow. */
+/** Host doubles only: production presentation and interaction still run. */
 export class TestInput implements HostInput {
 	raw: boolean | undefined;
 	private readonly listeners = new Set<(chunk: Buffer) => void>();

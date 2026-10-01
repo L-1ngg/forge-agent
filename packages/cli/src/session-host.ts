@@ -49,6 +49,7 @@ export class SessionHost {
 	private switching = false;
 	private closed = false;
 	private operation: Promise<SessionView> | undefined;
+	private disposeTask: Promise<void> | undefined;
 	private available = new Set<string>();
 	private summaries = new Map<string, { revision: string; summary?: SessionSummary; diagnostics: string[] }>();
 	private constructor(private readonly root: string, private readonly options: HostOptions) { }
@@ -170,9 +171,16 @@ export class SessionHost {
 			return next;
 		} catch (error) { await next.port.dispose(); throw error; }
 	}
-	async dispose(): Promise<void> {
+	dispose(): Promise<void> {
+		if (this.disposeTask) return this.disposeTask;
+		let resolve!: () => void, reject!: (error: unknown) => void;
+		this.disposeTask = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
 		this.closed = true;
 		this.summaries.clear(); this.available.clear();
+		void this.release().then(resolve, reject);
+		return this.disposeTask;
+	}
+	private async release(): Promise<void> {
 		this.view.port.abort();
 		await this.operation?.catch(() => {});
 		await this.view.port.dispose();

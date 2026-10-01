@@ -33,9 +33,12 @@ export function createInputCompletionSource(options: InputCompletionSourceOption
 	const commands = [...(options.commands ?? [])];
 	return {
 		async getSuggestions(input, cursor, requestOptions) {
+			requestOptions?.signal?.throwIfAborted();
 			const boundedCursor = clampCursor(input, cursor);
 			const beforeCursor = input.slice(0, boundedCursor);
-			const custom = await options.completeInput?.(beforeCursor, requestOptions?.signal); if (custom) return custom;
+			const custom = await options.completeInput?.(beforeCursor, requestOptions?.signal);
+			requestOptions?.signal?.throwIfAborted();
+			if (custom) return custom;
 			const skill = /^\s*\/skill\s+([^\s]*)$/.exec(beforeCursor);
 			if (skill && options.listSkills) {
 				const items = options.listSkills().filter(item => item.name.startsWith(skill[1]!)).map(item => ({ value: item.name, label: item.name, ...(item.description ? { description: item.description } : {}) }));

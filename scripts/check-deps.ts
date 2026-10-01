@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 import ts from "typescript";
 
 const root = new URL("../", import.meta.url);
-const packageNames = ["protocol", "tools", "core", "tui", "cli"] as const;
+const packageNames = ["protocol", "tools", "core", "interaction", "tui", "cli"] as const;
 
 function dependencyNames(manifest: Record<string, unknown>): string[] {
 	return ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"].flatMap((field) =>
@@ -61,17 +61,20 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			violations.push(`packages/${packageName}/package.json must not depend on pi-ai`);
 		}
 
-		if (packageName === "core" && dependencies.includes("@forge-agent/tui")) {
-			violations.push("packages/core/package.json must not depend on @forge-agent/tui");
+		if (packageName === "core") {
+			for (const dependency of ["@forge-agent/tui", "@forge-agent/interaction"]) if (dependencies.includes(dependency)) violations.push(`packages/core/package.json must not depend on ${dependency}`);
 		}
 		if (packageName === "tools" && dependencies.includes("@forge-agent/core")) {
 			violations.push("packages/tools/package.json must not depend on @forge-agent/core");
 		}
 		if (packageName === "tui") {
-			const allowed = new Set(["@forge-agent/protocol", "marked", "lowlight"]);
+			const allowed = new Set(["@forge-agent/protocol", "@forge-agent/interaction", "marked", "lowlight"]);
 			for (const dependency of dependencies) {
 				if (!allowed.has(dependency)) violations.push(`packages/tui/package.json has forbidden dependency ${dependency}`);
 			}
+		}
+		if (packageName === "interaction") {
+			for (const dependency of dependencies) if (dependency !== "@forge-agent/protocol") violations.push(`packages/interaction/package.json has forbidden dependency ${dependency}`);
 		}
 
 		const glob = new Bun.Glob("src/**/*.ts");
@@ -85,17 +88,22 @@ export async function findViolations(projectRoot: URL = root): Promise<string[]>
 			if (packageName === "core" && callsBlockingGlobal(source)) {
 				violations.push(`${displayPath} must not call prompt/confirm directly`);
 			}
+			if (packageName === "interaction" && /\b(?:process\s*\.\s*(?:stdin|stdout|stderr)|Bun\s*\.\s*(?:stdin|stdout|stderr|spawn|spawnSync)|(?:prompt|confirm)\s*\()/.test(source)) violations.push(`${displayPath} must not use terminal or process I/O`);
 			for (const specifier of imports) {
+				if (packageName === "interaction") {
+					const ownPath = specifier.startsWith(".") && !relative(packageUrl.pathname, resolve(path, "..", specifier)).startsWith("..");
+					if (!ownPath && specifier !== "@forge-agent/protocol" && !["node:util", "node:events"].includes(specifier)) violations.push(`${displayPath} has forbidden interaction import ${specifier}`);
+				}
 				if (specifier === "@earendil-works/pi-agent-core" || specifier.startsWith("@earendil-works/pi-agent-core/")) {
 					violations.push(`${displayPath} must not import pi-agent-core`);
 				}
-				if (packageName === "core" && specifier === "@forge-agent/tui") {
-					violations.push(`${displayPath} must not import @forge-agent/tui`);
+				if (packageName === "core" && ["@forge-agent/tui", "@forge-agent/interaction"].some(name => specifier === name || specifier.startsWith(name + "/"))) {
+					violations.push(`${displayPath} must not import ${specifier}`);
 				}
 				if (packageName === "tools" && specifier === "@forge-agent/core") {
 					violations.push(`${displayPath} must not import @forge-agent/core`);
 				}
-				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol" && specifier !== "marked" && specifier !== "lowlight") {
+				if (packageName === "tui" && !specifier.startsWith(".") && !specifier.startsWith("node:") && specifier !== "@forge-agent/protocol" && specifier !== "@forge-agent/interaction" && specifier !== "@forge-agent/interaction/scope" && specifier !== "marked" && specifier !== "lowlight") {
 					violations.push(`${displayPath} has forbidden external import ${specifier}`);
 				}
 				if (specifier === "@earendil-works/pi-ai" || specifier.startsWith("@earendil-works/pi-ai/")) {

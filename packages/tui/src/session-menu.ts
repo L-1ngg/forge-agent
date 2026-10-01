@@ -3,15 +3,14 @@ import type { Key } from "./keys.ts";
 import type { Theme } from "./theme.ts";
 import { truncateToWidth, wrapText } from "./width.ts";
 
-export interface AppSessionSummary { id: string; title: string; updatedAt: number; }
-export interface AppSessionPreview { id: string; revision: string; messages: { role: "user" | "assistant"; text: string; truncated: boolean; stopReason?: string }[]; }
-export type SessionMenuAction = { type: "cancel" } | { type: "select"; id: string } | { type: "discard" } | { type: "preview"; id: string; revision: number };
+import type { SessionSummary as AppSessionSummary, SessionPreview as AppSessionPreview } from "@forge-agent/interaction";
+export type { SessionSummary as AppSessionSummary, SessionPreview as AppSessionPreview } from "@forge-agent/interaction";
+export type SessionMenuAction = { type: "cancel" | "cancel_preview" } | { type: "select"; id: string } | { type: "discard" } | { type: "preview"; id: string };
 
 /** A modal owns keys without stopping the active model or answering permission cards. */
 export class SessionMenu {
 	private index = 0;
 	private expanded: string | undefined;
-	private revision = 0;
 	private preview: AppSessionPreview | undefined;
 	private previewError: string | undefined;
 	private top = 0;
@@ -21,18 +20,17 @@ export class SessionMenu {
 	cachedPreview(id: string): AppSessionPreview | undefined { return this.cache.get(id); }
 	constructor(readonly kind: "list" | "discard", private sessions: AppSessionSummary[] = [], private diagnostics: string[] = [], private readonly currentId?: string, private loading = false) { }
 	setList(sessions: AppSessionSummary[], diagnostics: string[]): void { this.sessions = sessions; this.diagnostics = diagnostics; this.loading = false; }
-	setPreview(id: string, revision: number, preview?: AppSessionPreview, error?: string): void {
-		if (id !== this.expanded || revision !== this.revision) return;
+	setPreview(preview?: AppSessionPreview, error?: string): void {
 		this.preview = preview; this.previewError = error;
 		if (preview) {
-			this.cache.delete(id); this.cache.set(id, preview);
+			this.cache.delete(preview.id); this.cache.set(preview.id, preview);
 			if (this.cache.size > 20) this.cache.delete(this.cache.keys().next().value!);
 		}
 	}
-	private collapse(): void { this.expanded = undefined; this.preview = undefined; this.previewError = undefined; this.top = 0; this.revision++; }
+	private collapse(): void { this.expanded = undefined; this.preview = undefined; this.previewError = undefined; this.top = 0; }
 	handleKey(key: Key): SessionMenuAction | undefined {
 		if (key.type === "escape") {
-			if (this.expanded) { this.collapse(); return; }
+			if (this.expanded) { this.collapse(); return { type: "cancel_preview" }; }
 			return { type: "cancel" };
 		}
 		if (this.kind === "discard") return key.type === "char" && key.text.toLowerCase() === "y" ? { type: "discard" } : key.type === "char" && key.text.toLowerCase() === "n" ? { type: "cancel" } : undefined;
@@ -40,6 +38,7 @@ export class SessionMenu {
 		if (key.type === "arrow" && this.sessions.length && (key.direction === "up" || key.direction === "down")) {
 			this.collapse();
 			this.index = (this.index + (key.direction === "down" ? 1 : -1) + this.sessions.length) % this.sessions.length;
+			return { type: "cancel_preview" };
 		}
 		if (this.expanded && (key.type === "pageDown" || key.type === "pageUp" || key.type === "mouse" && (key.action === "up" || key.action === "down"))) {
 			const down = key.type === "pageDown" || key.type === "mouse" && key.action === "down";
@@ -47,9 +46,9 @@ export class SessionMenu {
 		}
 		const selected = this.sessions[this.index];
 		if (key.type === "ctrl" && key.key === "e" && selected) {
-			if (this.expanded) { this.collapse(); return; }
+			if (this.expanded) { this.collapse(); return { type: "cancel_preview" }; }
 			this.expanded = selected.id;
-			return { type: "preview", id: selected.id, revision: ++this.revision };
+			return { type: "preview", id: selected.id };
 		}
 		return key.type === "enter" && selected ? { type: "select", id: selected.id } : undefined;
 	}

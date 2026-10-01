@@ -7,6 +7,9 @@ export type TestRegistry = Record<TestGroup, readonly string[]>;
 /** Every executable suite has an explicit owner; helpers and fixtures are not suites. */
 export const registry: TestRegistry = {
 	contract: [
+		"packages/interaction/test/interaction-scope.test.ts",
+		"packages/interaction/test/session-coordinator.test.ts",
+		"packages/tui/test/presentation-session.test.ts",
 		"packages/core/test/blocks.test.ts",
 		"packages/core/test/input.test.ts",
 		"packages/core/test/model-auth.test.ts",
@@ -61,6 +64,7 @@ export const registry: TestRegistry = {
 		"tests/support/scenario.test.ts",
 	],
 	integration: [
+		"packages/cli/test/interaction-options.test.ts",
 		"packages/cli/test/headless.test.ts",
 		"packages/cli/test/memory-command.test.ts",
 		"packages/cli/test/memory-host.test.ts",
