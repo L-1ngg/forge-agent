@@ -208,11 +208,12 @@ test("Azure request settings select endpoint, deployment and API version", async
 	try {
 		const model = getCatalogModel("azure-openai-responses", "gpt-4")!;
 		const response = await nativeRequest(model, [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 0 }], {
+			maxTokens: 100,
 			env: { AZURE_OPENAI_API_KEY: "azure-fixture-key", AZURE_OPENAI_BASE_URL: server.url.toString(), AZURE_OPENAI_DEPLOYMENT_NAME_MAP: "gpt-4=deployment-fixture", AZURE_OPENAI_API_VERSION: "2024-10-21" },
 		});
 		expect(response.stopReason).toBe("stop");
 		expect(url).toContain("/openai/v1/responses?api-version=2024-10-21");
-		expect(body).toMatchObject({ model: "deployment-fixture" });
+		expect(body).toMatchObject({ model: "deployment-fixture", max_output_tokens: 100 });
 		expect(apiKey).toBe("azure-fixture-key");
 		expect(authorization).toBeNull();
 	} finally { server.stop(true); }

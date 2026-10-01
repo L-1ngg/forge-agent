@@ -9,6 +9,22 @@ created: 2026-09-29
 
 > 后续补充(2026-09-30)：本图的响应/计划校验继续适用；新增整理期限、Invocation 取消和迟到写盘门禁见 [ADR-029](../decisions/029-session-reliability-and-bounded-views.md) 与 [Issue #44 施工及证据](session-reliability-issue-44.md)。下文“不新增取消合同”和验收数字只描述 #42 当时交付。
 
+> 后续修复(2026-10-01，已完成本地修复与 Linux 离线验收)：记忆整理的最终输入预算检查及本次证据见下方补充；#42 原验收数字不作为本次修复证据。
+
+## 辅助模型请求预算修复
+
+架构审查在 `e2ec600` 复现：声明窗口 4,096 tokens 的模型，主任务成功后仍发送估算输入为 4,657 tokens 的整理请求。主任务的最终预算门禁位于 `AgentSession`，辅助调用的 `callModel` 没有相同检查；按字符限制旧索引和主题不能替代完整请求预算。
+
+共享 `callModel` 在 adapter 解析和发送前复用现有 `checkRequestBudget`，计算消息、系统提示词、配置 `contextWindow`（缺省用模型窗口）、供应商实际输出预留与既有 `REQUEST_MARGIN`。该最终门禁同时覆盖摘要和整理；摘要自己的材料选择及更严格预检继续保留。超限报告已有预算错误，不发送请求；整理以 failed 回执结束，不改写主任务成功，不开始计划写盘。计数仍只在实际 dispatch 时增加，缺失 usage 保持未知。
+
+验证使用公开 SDK、native adapter 和临时 Markdown：宿主窗口覆盖、模型窗口、旧 Claude reasoning 的有效输出预留均拒绝超限整理，`calls=0` 且原笔记不变；足够预算的同类输入仍可保存。修复可整体 revert，无格式迁移。
+
+**Ran (2026-10-01)**：新增回归在修复前为 3 fail / 1 pass，修复后为 4 pass / 0 fail，证据为 `.test-results/auxiliary-request-budget/{red,green}.log`。预算回归与 provider 接入两个文件共 46/46 通过，证据为同目录 `azure-fixture-green.log`。最终 `bun run check` 通过依赖检查、源码/自动化/测试类型检查，以及 Linux x64 / Bun 1.3.12 network namespace 下的 contract 348、integration 631、CLI/PTY 49，共 1,028 项，零失败、零跳过；完整证据为 `.test-results/run-LBT9l6/`，入口日志为 `.test-results/auxiliary-request-budget/check-final.log`。`bun run test:headless` 1/1 通过，独立证据为 `.test-results/run-SyFAkp/`；`bun run typecheck:examples`、六包 `bun run build`、文档本地链接与 `git diff --check` 通过。
+
+全量检查同时暴露 Azure 路由夹具把输出额度设为整个 8,192-token 窗口的无效假设；首次失败证据保留在 `.test-results/run-bczeIJ/`。该测试现显式请求 100 tokens，并断言传给 provider 的额度，原端点、部署和认证断言继续保留。
+
+**Not run / Why / Risk**：本次按离线软件修复验收，未调用真实供应商或运行 macOS/Windows、长期质量与费用评估。字符估算不等于供应商 tokenizer，实际窗口、整理质量和费用仍需独立验证；离线检查只证明估算超限会在发送及计划写盘前拒绝，并保留主任务成功。
+
 ## Entry And Design
 
 起点 `784da81bf2d300158ebf154ee49c8217f8d11622`，`master` 的 staged、unstaged、untracked 均为空。#42 已确定整理继续由 `memoryMiddleware` 在成功任务后 deferred 调度，并保持一次当前模型请求、user/project 目录、索引与主题布局、主任务结果及失败事件合同。#43 的自动压缩预算不在本次范围。

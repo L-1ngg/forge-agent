@@ -6,6 +6,8 @@ import type { SessionConfiguration } from "./configuration.ts";
 import { resolveProviderAdapter, providerModelOptions, type ModelAdapter, type ModelRequestSettings } from "./model-adapter.ts";
 import { RawResponseAudit, toModelMessages } from "./model-response.ts";
 import { sessionOtelOptions } from "./session-otel.ts";
+import { checkRequestBudget, REQUEST_MARGIN } from "./context/request-budget.ts";
+import { effectiveOutputTokens } from "./model-output.ts";
 
 /** Validate raw provider completion before any tool phase or durable response commit. */
 export async function* observeModelResponse(
@@ -41,6 +43,10 @@ export async function* observeModelResponse(
 
 /** One native chat request for summaries and memory; task runs use the same observer. */
 export async function callModel(configuration: SessionConfiguration, messages: SessionMessage[], systemPrompt: string, settings: ModelRequestSettings, hooks?: { kind?: "summary" | "memory"; onRequest?: () => void; onUsage?: (usage: TokenUsage) => void }): Promise<SessionMessage> {
+	settings.signal.throwIfAborted();
+	const contextWindow = configuration.contextWindow ?? configuration.model.contextWindow;
+	const output = effectiveOutputTokens(configuration.model, settings.maxTokens, settings.reasoning ?? "off");
+	checkRequestBudget({ messages, systemPrompt }, { contextWindow, effectiveOutputTokens: output, maxInputTokens: contextWindow - output - REQUEST_MARGIN });
 	const adapter = configuration.adapter ?? await resolveProviderAdapter(configuration.model, settings);
 	let result: SessionMessage | undefined;
 	let failure: unknown;

@@ -28,8 +28,8 @@ export function isolateRequest(context: Context): Context {
 	return { ...context, messages, ...(context.tools ? { tools: context.tools.map(({ name, description, parameters }) => ({ name, description, parameters: structuredClone(parameters) })) } : {}) };
 }
 
-export function checkRequestBudget(context: Context, budget: RequestBudget, revision: number): number {
+export function checkRequestBudget(context: Context, budget: Pick<RequestBudget, "contextWindow" | "maxInputTokens" | "effectiveOutputTokens">, revision?: number): number {
 	const input = estimateContextTokens(context.messages) + Math.ceil(requestFixedText(context).length / 4);
-	if (!Number.isFinite(input) || input > budget.maxInputTokens) throw new Error(`request-budget (general): input=${input}, output=${budget.effectiveOutputTokens}, margin=${REQUEST_MARGIN}, window=${budget.contextWindow}, revision=${revision}`);
+	if (!Number.isFinite(input) || input > budget.maxInputTokens) throw new Error(`request-budget (general): input=${input}, output=${budget.effectiveOutputTokens}, margin=${REQUEST_MARGIN}, window=${budget.contextWindow}${revision === undefined ? "" : `, revision=${revision}`}`);
 	return input;
 }

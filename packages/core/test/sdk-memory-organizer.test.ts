@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventType, type AdapterYieldChunk } from "@tanstack/ai";
@@ -12,9 +12,45 @@ import { processConverseStream } from "../node_modules/@tanstack/ai-bedrock/dist
 import { nativeAdapter, type NativeStream } from "../../../tests/fixtures/native-adapter.ts";
 import { isMemoryOrganizerRequest, nativeReply } from "../../../tests/fixtures/native-reply.ts";
 import { barrier, bounded } from "../../../tests/support/control.ts";
+import { withScenario } from "../../../tests/support/scenario.ts";
 
 const model = getCatalogModel("openai", "gpt-5.4")!;
 const validPlan = JSON.stringify({ updates: [{ action: "write", scope: "project", path: "topic.md", content: "Durable note" }], indexes: [] });
+
+for (const fixture of [
+	{ name: "host window", model, contextWindow: 4096, thinkingLevel: "off", rejected: true },
+	{ name: "model window", model: { ...model, contextWindow: 4096 }, thinkingLevel: "off", rejected: true },
+	{ name: "reasoning output reserve", model: getCatalogModel("anthropic", "claude-sonnet-4-5")!, contextWindow: 13000, thinkingLevel: "medium", rejected: true },
+	{ name: "sufficient window", model, contextWindow: 64000, thinkingLevel: "off", rejected: false },
+] as const) test(`organizer input budgets preserve task success and existing memory: ${fixture.name}`, () => withScenario(`organizer-budget-${fixture.name}`, async scenario => {
+	const project = join(scenario.directory, "project-memory"), user = join(scenario.directory, "user-memory");
+	await Promise.all([mkdir(project), mkdir(user)]);
+	const index = "[Topic](topic.md)\n" + "index ".repeat(980), topic = "topic ".repeat(1000);
+	await Promise.all([project, user].flatMap(root => [writeFile(join(root, "MEMORY.md"), index), writeFile(join(root, "topic.md"), topic)]));
+	let organizerRequests = 0;
+	const adapter = nativeAdapter(fixture.model, async function* (request) {
+		const organizer = isMemoryOrganizerRequest(request);
+		if (organizer) organizerRequests++;
+		yield* nativeReply({ text: organizer ? validPlan : "Task complete" });
+	});
+	const agent = await scenario.agent({
+		model: fixture.model, adapter, maxTokens: 512, thinkingLevel: fixture.thinkingLevel,
+		...("contextWindow" in fixture ? { contextWindow: fixture.contextWindow } : {}),
+		memory: { store: new LongTermMemory({ project, user }), injection: false },
+	});
+	const turn = agent.runTurn("Remember a durable preference"), events = await scenario.collect(turn);
+	expect(await turn.result).toEqual({ status: "success" });
+	expect(organizerRequests).toBe(fixture.rejected ? 0 : 1);
+	expect(events.find(event => event.type === "memory" && event.phase === "save")).toMatchObject(fixture.rejected
+		? { status: "failed", calls: 0, receipts: [{ ok: false, error: expect.stringContaining("request-budget") }] }
+		: { status: "saved", calls: 1 });
+	expect(await Bun.file(join(project, "topic.md")).text()).toEqual(fixture.rejected ? topic : expect.stringContaining("Durable note"));
+	expect(await Bun.file(join(user, "topic.md")).text()).toBe(topic);
+	for (const root of [project, user]) {
+		expect(await Bun.file(join(root, "MEMORY.md")).text()).toBe(index);
+		expect((await readdir(root)).sort()).toEqual(["MEMORY.md", "topic.md"]);
+	}
+}));
 
 test("aborting a deferred organizer settles local waiting and blocks its late plan", async () => {
 	const root = await mkdtemp(join(tmpdir(), "forge-organizer-abort-"));

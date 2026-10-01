@@ -192,6 +192,8 @@ const memory = {
 
 `memoryMiddleware` 在运行开始调用 Markdown adapter 的 `recall`，按预算注入标明 scope/路径的短索引和固定笔记；主题可通过工具按需读取。成功运行结束后官方 deferred `save` 使用当前模型配置额外发出一次受审计的 native `chatStream` 请求，并读取索引指向的有界主题。只有完整 `stop`、无工具调用的单个纯 JSON 计划，经过严格 schema、作用域、路径和内容预检后，才按主题先于索引写入；空计划不写盘。整理失败通过 `memory` 事件报告，不改写主任务成功结果。`calls` 和实际可得的 provider `usage` 由保存事件报告；缺失 usage 保持未知。本地文件存储不代表整理调用离线。
 
+摘要与记忆整理在解析 adapter 或发送请求前，共用最终输入预算检查：完整消息和系统提示词必须为有效输出额度（含供应商要求的 reasoning 预留）及估算余量留出空间，窗口沿用宿主 `contextWindow` 或模型声明。旧笔记的字符限额不替代此检查。整理超限时报告 `request-budget` 失败回执，`calls=0`，不开始计划写盘，主任务成功保留；计数只在实际 dispatch 时增加。该检查仍使用本地估算，不保证供应商物理窗口精确匹配。
+
 整理模型阶段绑定当前 Invocation 的取消，并由 `organizerTimeoutMs` 限制等待，默认 60,000 ms，必须是有限正安全整数；长于 JavaScript timer 范围的期限分段计时。`abort()`/`dispose()` 或期限结束会取消合作式 adapter 并停止本地等待；不合作 adapter 的迟到计划不能开始自动写盘。整理自身超时报告失败记忆事件，主任务成功保留；显式取消仍按 Invocation 权威结果返回 aborted。期限覆盖模型准备、响应及审计，不强制终止任意文件操作；已开始的文件 I/O 不回滚，部分写入可能保留。合同见 [ADR-029](decisions/029-session-reliability-and-bounded-views.md)。
 
 模型的 `read_memory/search_memory/write_memory/delete_memory` 使用 Zod schema、公共工具批次、hooks、取消与工具事件，作为 internal/trusted 工具不弹交互授权。`autoUpdate: false` 仅关闭 deferred 整理，显式管理工具和宿主 store 仍可用；`injection: false` 仅关闭运行开始的召回。宿主通过 `updateConfiguration({ memory })` 修改配置；已开始的 `chat()` 完成后 applied。
