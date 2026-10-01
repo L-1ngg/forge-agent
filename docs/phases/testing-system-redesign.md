@@ -5,7 +5,7 @@ created: 2026-09-30
 
 # 测试体系全面重设计与重构
 
-> 状态:已交付并完成跨平台软件验证(2026-09-30)。macOS 路径失败已修复；全仓审计、去重、重构、反向验证和本地门禁完成。修复提交 `00be399` 的 Ubuntu 24.04/macOS 14 CI 均通过；远端证据见文末。逐文件去留依据见[处置清单](testing-system-inventory.md)。
+> 状态:重构已交付并完成跨平台软件验证(2026-09-30)。macOS 路径失败已修复；全仓审计、去重、重构、反向验证和本地门禁完成。修复提交 `00be399` 的 Ubuntu 24.04/macOS 14 CI 均通过；远端证据与后续权限 PTY 退出竞态修复见文末。逐文件去留依据见[处置清单](testing-system-inventory.md)。
 > 继承 [现行测试合同](testing-system-implementation.md)、ADR-010、025–029 和各功能的有效软件合同。Issue #33 的历史平台证据保持原版本含义。本设计涉及软件测试，真实模型质量与付费评估继续单独验收。
 
 ## Why
@@ -226,3 +226,13 @@ operator 授权后，完整修复与重构提交为 `00be39999b5bc521add6e6096ba
 两平台 JUnit 均为 contract 333、integration 609、cli 43；普通/路径别名的四种恢复场景均通过。GitHub artifacts `test-evidence-ubuntu-24.04` 与 `test-evidence-macos-14` 已下载至本地 `.test-results/ci-36728440944/`，核对 summary 的实际 commit SHA、状态和 JUnit 计数，未把旧报告作为新提交证据。
 
 Windows、真实供应商、模型质量/费用和人工 UI 验收仍未运行。CI 成功不包含公开发布或 Issue 关闭。
+
+## 权限拒绝 PTY 退出竞态修复(2026-10-01)
+
+[CI 36804062251](https://github.com/L-1ngg/forge-agent/actions/runs/36804062251) 验证 `d8e10e6` 时，Ubuntu 通过，macOS 14 arm64 的 contract 333、integration 619 均通过，CLI 48/49 通过。唯一失败为 `permission.test.ts` 的 allow/deny 场景：`cli-permission: missing exchanges: denied-continuation`。该轮 SDK/CLI OTel 用例全部通过。
+
+测试原先看到 `Denied by user` 已写入会话就发送 `Ctrl+C`，但工具结果持久化是模型续轮之前的中间状态；退出可能取消尚未发出的下一次请求。修复仅调整测试的观察边界：等待拒绝后的第四次请求到达、最终回复出现在真实终端并写入会话，再发送退出按键。保留目标文件、退出码、终端恢复和严格 HTTP 预期，未修改生产逻辑、超时或平台覆盖。
+
+现有 HTTP fixture 的 gate 暂停最终回复，确认工具拒绝已保存时最终回复仍未保存。保留原退出顺序时回归因最终回复缺失而变红；修正后释放 gate，再等待实际输出及持久化。Linux 网络隔离下两个权限 PTY 场景连续 5 轮通过；临时 HOME/XDG 与目录已清理。
+
+本地 `bun run check` 通过：333 contract + 619 integration + 49 CLI/PTY = 1001 tests，依赖边界、workspace/automation/tests typecheck 与网络隔离探针通过；`bun run typecheck:examples` 通过。完整证据为 `.test-results/run-ijPBPw/summary.json`。本地证据不代替 macOS 验证；修复提交的跨平台结论以其实际 CI 结果为准，不沿用旧提交的绿色结果。

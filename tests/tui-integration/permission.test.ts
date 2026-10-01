@@ -6,13 +6,14 @@ import { PtyDriver } from "../support/pty.ts";
 import { bounded, withScenario } from "../support/scenario.ts";
 
 test("formal CLI PTY permission allow writes once, deny preserves the real file", () => withScenario("cli-permission", async scenario => {
+	const denialReply = scenario.gate("denial reply");
 	const allowed = await modelResponse([{ id: "allow-write", name: "write", arguments: { path: "result.txt", content: "authorized" } }]).text();
 	const denied = await modelResponse([{ id: "deny-write", name: "write", arguments: { path: "result.txt", content: "forbidden" } }]).text();
 	const fixture = scenario.httpFixture(scenario.id, [
 		{ id: "allow", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("allow this"); }, response: { chunks: [allowed] } },
 		{ id: "continued", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("allow-write"); expect(JSON.stringify(body)).toContain("tool_result"); }, response: { chunks: [await modelResponse([], "end_turn", "CLI_WRITE_COMPLETE").text()] } },
 		{ id: "deny", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("deny this"); }, response: { chunks: [denied] } },
-		{ id: "denied-continuation", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("Denied by user"); }, response: { chunks: [await modelResponse([], "end_turn", "CLI_DENIAL_COMPLETE").text()] } },
+		{ id: "denied-continuation", method: "POST", path: "/v1/messages", match(body) { expect(JSON.stringify(body)).toContain("Denied by user"); }, response: { beforeChunk: () => denialReply.wait(), chunks: [await modelResponse([], "end_turn", "CLI_DENIAL_COMPLETE").text()] } },
 	]);
 	await mkdir(join(scenario.cwd, ".forge-agent"));
 	await Bun.write(join(scenario.cwd, ".forge-agent/config.json"), JSON.stringify({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-test", baseUrl: fixture.url, thinkingLevel: "off", retry: { enabled: false }, memory: { autoUpdate: false, injection: false } }));
@@ -30,13 +31,20 @@ test("formal CLI PTY permission allow writes once, deny preserves the real file"
 	expect(await readFile(join(scenario.cwd, "result.txt"), "utf8")).toBe("authorized");
 	send("deny this"); await wait(() => pty.text.includes("Permission: write"));
 	terminal.write("\x1b[B\x1b[B\r");
-	await wait(async () => {
+	const savedContains = async (text: string) => {
 		const directory = join(scenario.cwd, ".forge-agent/sessions");
-		for (const file of await readdir(directory)) if ((await readFile(join(directory, file), "utf8")).includes("Denied by user")) return true;
+		for (const file of await readdir(directory)) if ((await readFile(join(directory, file), "utf8")).includes(text)) return true;
 		return false;
-	});
+	};
+	await wait(() => savedContains("Denied by user"), "denial result persisted");
+	// A persisted denial is an intermediate result; the model must still resume.
+	await fixture.received(4);
+	expect(await savedContains("CLI_DENIAL_COMPLETE")).toBe(false);
+	denialReply.release();
+	await wait(async () => pty.screenText.includes("CLI_DENIAL_COMPLETE") && await savedContains("CLI_DENIAL_COMPLETE"), "denial continuation rendered and persisted");
 	expect(await readFile(join(scenario.cwd, "result.txt"), "utf8")).toBe("authorized");
 	terminal.write("\x03"); expect(await bounded(child.exited, "CLI exit")).toBe(0);
+	expect(await savedContains("CLI_DENIAL_COMPLETE")).toBe(true);
 	expect(pty.text).toContain("\x1b[?2004l");
 }), 15_000);
 
