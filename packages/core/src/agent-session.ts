@@ -284,16 +284,16 @@ export class AgentSession implements Agent {
 		await this.persistMessage(message);
 		current.commit(message);
 		this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
+		await current.persistResults();
 		if (["error", "aborted", "length", "deferred"].includes(message.stopReason ?? "") || !message.content.some(block => block.type === "tool_call")) await this.completeTurn(current);
 	}
 	private async commitModelResponse(current: SessionResponse, messages: readonly ModelMessage[]): Promise<void> {
 		if (current.committed || this.failure !== undefined) return;
-		const message = current.project(messages);
-		if (message.content.some(part => part.type === "tool_call")) await current.prepare(message);
+		const message = current.message ?? current.project(messages);
 		await this.completeResponse(message, current);
 	}
 	private async commitPartialResponse(current: SessionResponse | undefined, error: unknown, signal: AbortSignal): Promise<void> {
-		if (!current?.audit || current.committed || this.failure !== undefined) return;
+		if (!current?.audit || current.message || current.committed || this.failure !== undefined) return;
 		const reason = signal.aborted || current.audit.reason === "aborted" ? "aborted" : current.audit.reason === "length" || current.audit.reason === "deferred" ? current.audit.reason : "error";
 		const detail = reason === "aborted" ? "Request aborted" : reason === "error" ? current.audit.failure ?? (error instanceof Error ? error.message : String(error)) : undefined;
 		await this.completeResponse(current.audit.partialMessage(reason, detail), current);
@@ -389,37 +389,41 @@ export class AgentSession implements Agent {
 				current.baseMessageCount = messages.length;
 				return { messages, providerMessages: toModelMessages(request.messages), systemPrompts: prompts, tools, modelOptions: providerModelOptions(current.options.model, current.settings) };
 			},
-			onInterruptBoundary: async ctx => {
-				if (ctx.phase === "beforeTools" && current.audit?.hasTools) await this.commitModelResponse(current, ctx.messages);
-				return { interrupts: [] };
-			},
 			onUsage: (_ctx, usage) => { current.nativeUsage = usage; },
 			onToolPhaseComplete: async (ctx, info) => {
-				if (!current || !this.lastResponse || info.needsApproval.length || signal.aborted || this.failure !== undefined) return;
-				for (const call of current.unsavedCalls()) {
+				if (!current || signal.aborted || this.failure !== undefined) return;
+				if (info.needsApproval.length) {
+					await current.prepare(current.project(ctx.messages), info.needsApproval);
+					return;
+				}
+				current.message ??= current.project(ctx.messages);
+				for (const call of current.pendingResults()) {
 					const denial = current.denial(call.id);
 					const native = info.results.find(result => result.toolCallId === call.id);
-					const result = denial !== undefined ? errorResult(denial) : errorResult(native ? JSON.stringify(native.result) : "Tool was not executed");
-					await current.saveResult(call, result);
+					const prior = ctx.messages.find(message => message.role === "tool" && message.toolCallId === call.id);
+					const result = errorResult(denial ?? (native ? JSON.stringify(native.result) : prior ? typeof prior.content === "string" ? prior.content : JSON.stringify(prior.content) : "Tool was not executed"));
+					current.recordResult(call, result);
 				}
+				await this.commitModelResponse(current, ctx.messages);
 				await this.completeTurn(current);
 				if (this.active?.policy?.stopped) ctx.abort("forge:policy_stop");
 			},
 			onShouldContinue: async ctx => {
 				// TanStack skips beforeTools and onToolPhaseComplete when every call
 				// already has a native error result. Save both sides before its next model request.
-				if (current?.audit?.hasTools && !current.committed && !signal.aborted && this.failure === undefined) {
-					await this.commitModelResponse(current, ctx.messages);
-					for (const call of current.unsavedCalls()) {
+				if (current?.audit?.hasTools && !current.message && !current.committed && !signal.aborted && this.failure === undefined) {
+					current.message ??= current.project(ctx.messages);
+					for (const call of current.pendingResults()) {
 						const native = ctx.messages.find(message => message.role === "tool" && message.toolCallId === call.id);
 						const detail = native ? typeof native.content === "string" ? native.content : JSON.stringify(native.content) : "Tool was not executed";
-						await current.saveResult(call, errorResult(detail));
+						current.recordResult(call, errorResult(detail));
 					}
+					await this.commitModelResponse(current, ctx.messages);
 					await this.completeTurn(current);
 				}
 				return !signal.aborted && !this.active?.policy?.stopped && !this.active?.policy?.failed && !this.preparationFailed;
 			},
-			onFinish: async ctx => { if (current?.audit && !current.committed) await this.commitModelResponse(current, ctx.messages); },
+			onFinish: async ctx => { if (current?.audit && !current.audit.hasTools && !current.committed) await this.commitModelResponse(current, ctx.messages); },
 			onError: async (_ctx, info) => { engineFailure = info.error; await this.commitPartialResponse(current, info.error, signal); },
 			onAbort: async () => { await this.commitPartialResponse(current, new Error("Request aborted"), signal); },
 		};
@@ -455,8 +459,9 @@ export class AgentSession implements Agent {
 		} catch (error) { engineFailure = error; }
 		finally { linked.dispose(); this.inChat = false; this.applyConfigurations(); }
 		if (this.failure !== undefined) throw this.failure;
-		if (signal.aborted && current && this.lastResponse?.content.some(part => part.type === "tool_call")) {
-			for (const call of current.unsavedCalls()) await current.saveResult(call, errorResult("Operation aborted"));
+		if (current?.message && !current.committed) {
+			for (const call of current.pendingResults()) current.recordResult(call, errorResult(current.denial(call.id) ?? (signal.aborted ? "Operation aborted" : engineFailure ?? "Tool was not executed")));
+			await this.completeResponse(current.message, current);
 		}
 		if (signal.aborted && this.lastResponse?.stopReason !== "aborted" && (!this.lastResponse || this.lastResponse.content.some(part => part.type === "tool_call"))) {
 			await this.recordFailure(signal.reason ?? new Error("Request aborted"), signal);

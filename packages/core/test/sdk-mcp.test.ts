@@ -48,12 +48,12 @@ test("MCP configuration receipt preserves the current model response and whole t
 	finally { release.resolve(); await agent.dispose(); await fixture.close(); await model.stop(true); }
 });
 
-test("MCP final rewritten arguments are exact; invalid schema input never reaches server", async () => {
+test("MCP native schema arguments reach the hook and server unchanged", async () => {
 	calls.length = 0; const fixture = remote(); let requests = 0;
 	const model = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++requests === 1 ? modelResponse([{ id: "echo", name: mcpToolName("fixture", "echo"), arguments: { value: "original" } }]) : modelResponse(); } });
 	let authorized: unknown;
-	const agent = await createAgent({ ...base, baseUrl: `http://127.0.0.1:${model.port}`, permission: allow, toolInputRewrites: { [mcpToolName("fixture", "echo")]: () => ({ value: "rewritten" }) }, toolHooks: { beforeToolCall: async context => { authorized = structuredClone(context.args); return undefined; } }, mcp: { servers: { fixture: { transport: "http", url: fixture.url } } } });
-	try { for await (const _event of agent.runTurn("rewrite")) {} expect(authorized).toEqual({ value: "rewritten" }); expect(calls).toEqual([{ name: "echo", args: { value: "rewritten" } }]); }
+	const agent = await createAgent({ ...base, baseUrl: `http://127.0.0.1:${model.port}`, permission: allow, toolHooks: { beforeToolCall: async context => { authorized = structuredClone(context.args); return undefined; } }, mcp: { servers: { fixture: { transport: "http", url: fixture.url } } } });
+	try { for await (const _event of agent.runTurn("echo")) {} expect(authorized).toEqual({ value: "original" }); expect(calls).toEqual([{ name: "echo", args: { value: "original" } }]); }
 	finally { await agent.dispose(); await fixture.close(); await model.stop(true); }
 });
 

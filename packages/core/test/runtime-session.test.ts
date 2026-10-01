@@ -97,13 +97,13 @@ test("SDK session fault disables reuse without additional persistence", async ()
 	} finally { await agent.dispose(); }
 });
 
-test("SDK tool batches prepare before approval and persist each serial effect before the next", async () => {
+test("SDK persists serial tool batches after effects and before the next model", async () => {
 	const trace: string[] = [];
 	let calls = 0;
 	const server = Bun.serve({
 		hostname: "127.0.0.1", port: 0, async fetch(request) {
 			const body = await request.json(); trace.push(`model:${++calls}`);
-			if (calls > 1) { expect(JSON.stringify(body)).toContain("final-b"); return answer(); }
+			if (calls > 1) { expect(JSON.stringify(body)).toContain('"b"'); return answer(); }
 			const events = [
 				{ type: "message_start", message: { id: "msg_tools", type: "message", role: "assistant", model: settings.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } },
 				...["a", "b"].flatMap((id, index) => [
@@ -122,7 +122,6 @@ test("SDK tool batches prepare before approval and persist each serial effect be
 		...settings, baseUrl: server.url.toString(),
 		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
 		storage: { load: () => storage.load(), async append(entry) { if (entry.type === "message") trace.push(`save:${entry.message.toolCallId ?? entry.message.role}`); await storage.append(entry); } },
-		toolInputRewrites: { work: async input => { const value = input as { id: string }; trace.push(`rewrite:${value.id}`); return { id: `final-${value.id}` }; } },
 		tools: [{
 			name: "work", label: "Work", description: "record", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false },
 			async execute(input) { const { id } = input as { id: string }; trace.push(`execute:${id}`); return { content: [{ type: "text", text: id }], details: id }; },
@@ -130,7 +129,7 @@ test("SDK tool batches prepare before approval and persist each serial effect be
 	});
 	try {
 		await collect(agent.runTurn("work"));
-		expect(trace).toEqual(["save:user", "model:1", "rewrite:a", "rewrite:b", "save:assistant", "execute:final-a", "save:a", "execute:final-b", "save:b", "model:2", "save:assistant"]);
+		expect(trace).toEqual(["save:user", "model:1", "execute:a", "execute:b", "save:assistant", "save:a", "save:b", "model:2", "save:assistant"]);
 	} finally { await agent.dispose(); server.stop(true); }
 });
 

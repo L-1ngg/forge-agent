@@ -4,7 +4,7 @@ import type { ShouldStopAfterTurn } from "./turn-policy.ts";
 import type { SkillsOptions, SkillsSnapshot, AgentInput } from "./skills/types.ts";
 import type { TurnResult, SessionTurn, RequestEnvelopeUnion, ResponseEnvelope, SessionEvent } from "@forge-agent/protocol";
 import type { ConfigurationPatch, ConfigurationReceipt } from "./configuration.ts";
-import type { HarnessTool, ToolInputRewrite } from "@forge-agent/tools";
+import type { HarnessTool } from "@forge-agent/tools";
 import type { Model } from "./model-types.ts";
 import type { ModelAdapter } from "./model-adapter.ts";
 import type { ToolHooks } from "./session-tools.ts";
@@ -44,7 +44,6 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	cwd: string;
 	thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	tools?: Array<HarnessTool<object, unknown>>;
-	toolInputRewrites?: Readonly<Record<string, ToolInputRewrite<object>>>;
 	permission?: PermissionContext;
 	storage?: SessionStorage;
 	requestBus?: RequestBus;

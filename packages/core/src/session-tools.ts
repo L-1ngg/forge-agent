@@ -4,9 +4,9 @@ import type { SessionConfiguration } from "./configuration.ts";
 import { decide, formatPermissionRule, type PermissionContext, type PermissionDecision } from "./permission/index.ts";
 import { permissionResultFromOutcome, type RequestBus } from "./request-bus.ts";
 import { MEMORY_TOOL_NAMES } from "./memory/tools.ts";
-import { validateToolArguments } from "./tool-arguments.ts";
+import { toolInputSchema } from "./tool-arguments.ts";
 import { freeze } from "./host-callback.ts";
-import { toolDefinition, convertSchemaToJsonSchema, parseWithStandardSchema, type AnyTool, type JSONSchema } from "@tanstack/ai";
+import { toolDefinition, convertSchemaToJsonSchema, type AnyTool, type JSONSchema } from "@tanstack/ai";
 import { z } from "zod";
 
 const approvalSchema = { reject: z.object({ reason: z.string() }) };
@@ -19,7 +19,6 @@ export function bridgeSessionTools(tools: readonly HarnessTool<object, unknown>[
 		if (schema.type !== "object") throw new Error(`Native tool ${tool.name} requires an object schema`);
 		const bridged: HarnessTool<object, unknown> = {
 			name: tool.name, label: tool.name, description: tool.description, parameters: schema as HarnessTool<object, unknown>["parameters"],
-			validateArguments: args => parseWithStandardSchema<object>(tool.inputSchema!, args),
 			async execute(args, context) {
 				const output = await tool.execute!(args, { ...(context.toolCallId ? { toolCallId: context.toolCallId } : {}), ...(context.signal ? { abortSignal: context.signal } : {}), emitCustomEvent: () => {} });
 				return { content: [{ type: "text", text: JSON.stringify(output) }], details: output };
@@ -34,9 +33,7 @@ export function bridgeSessionTools(tools: readonly HarnessTool<object, unknown>[
 			return effective.map(tool => {
 				const original = native.get(tool.name);
 				if (original) return { ...original, needsApproval: true, approvalSchema, execute: (args: unknown, context?: { toolCallId?: string }) => execute(context?.toolCallId, args, true) } as AnyTool;
-				// Preparation must see raw input before native Standard Schema validation.
-				const inputSchema = tool.prepareArguments ? tool.parameters : tool.inputSchema ?? tool.parameters;
-				return toolDefinition({ name: tool.name, description: tool.description, needsApproval: true, approvalSchema, inputSchema: inputSchema as JSONSchema, outputSchema: { type: "string" } }).server((args, context) => execute(context?.toolCallId, args, false));
+				return toolDefinition({ name: tool.name, description: tool.description, needsApproval: true, approvalSchema, inputSchema: tool.inputSchema ?? toolInputSchema(tool), outputSchema: { type: "string" } }).server((args, context) => execute(context?.toolCallId, args, false));
 			});
 		},
 	};
@@ -45,7 +42,7 @@ export function bridgeSessionTools(tools: readonly HarnessTool<object, unknown>[
 export interface ToolCallContext {
 	assistantMessage: SessionMessage;
 	toolCall: ToolCallBlock;
-	args: Record<string, unknown>;
+	args: Readonly<Record<string, unknown>>;
 	context: { systemPrompt: string; messages: SessionMessage[]; tools: Array<HarnessTool<object, unknown>>; };
 }
 export interface BeforeToolCallResult { block: boolean; reason?: string; }
@@ -122,35 +119,20 @@ export function toolHookContext(message: SessionMessage, call: ToolCallBlock, ar
 }
 
 /** Prepare exactly once before an approval descriptor is shown. */
-export async function prepareToolCall(message: SessionMessage, call: ToolCallBlock, options: SessionConfiguration, messages: SessionMessage[], internal: ReadonlySet<HarnessTool<object, unknown>>, signal: AbortSignal): Promise<PreparedToolCall> {
+export async function prepareToolCall(message: SessionMessage, call: ToolCallBlock, input: Record<string, unknown>, options: SessionConfiguration, messages: SessionMessage[], internal: ReadonlySet<HarnessTool<object, unknown>>, signal: AbortSignal): Promise<PreparedToolCall> {
 	const tool = options.tools?.find(item => item.name === call.name);
 	if (!tool) return { call, args: call.arguments, decision: { kind: "deny", source: "hook", reason: `Tool ${call.name} not found` } };
 	try {
 		signal.throwIfAborted();
-		let args = validateToolArguments(tool, tool.prepareArguments ? tool.prepareArguments(structuredClone(call.arguments)) : structuredClone(call.arguments));
-		const rewrite = options.toolInputRewrites?.[call.name];
-		if (rewrite) args = validateToolArguments(tool, await rewrite(args, { cwd: options.cwd, toolCallId: call.id, signal }));
-		const hook = await options.toolHooks?.beforeToolCall?.(toolHookContext(message, call, args, options, messages), signal);
+		const args = snapshot(input);
+		const hook = await options.toolHooks?.beforeToolCall?.(toolHookContext(message, call, structuredClone(args), options, messages), signal);
 		if (hook?.block) return { call, tool, args, decision: { kind: "deny", source: "hook", reason: hook.reason ?? "Tool execution was blocked" } };
 		signal.throwIfAborted();
-		args = snapshot(validateToolArguments(tool, args));
 		const decision = internal.has(tool) ? { kind: "allow" as const, source: "built-in" as const } : decide(freeze(makeToolCall(call.id, call.name, args)), options.permission ?? {});
 		return { call, tool, args, decision };
 	} catch (error) {
 		if (signal.aborted) throw error;
 		return { call, tool, args: call.arguments, decision: { kind: "deny", source: "hook", reason: error instanceof Error ? error.message : String(error) } };
-	}
-}
-
-/** User edits skip preparation hooks and are checked against the displayed final schema. */
-export function decideEditedArgs(prepared: PreparedToolCall, editedArgs: unknown, options: SessionConfiguration, internal: ReadonlySet<HarnessTool<object, unknown>>): PreparedToolCall {
-	if (!prepared.tool) return prepared;
-	try {
-		const args = snapshot(validateToolArguments(prepared.tool, editedArgs));
-		const decision = internal.has(prepared.tool) ? { kind: "allow" as const, source: "built-in" as const } : decide(freeze(makeToolCall(prepared.call.id, prepared.call.name, args)), options.permission ?? {});
-		return { ...prepared, args, decision };
-	} catch (error) {
-		return { ...prepared, decision: { kind: "deny", source: "hook", reason: error instanceof Error ? error.message : String(error) } };
 	}
 }
 

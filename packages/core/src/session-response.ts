@@ -1,10 +1,10 @@
 import { readInterruptBinding, type AnyTool, type Interrupt, type ModelMessage, type RunAgentResumeItem, type TokenUsage } from "@tanstack/ai";
 import type { HarnessTool, ToolResult } from "@forge-agent/tools";
-import { serializePermissionArguments, type RequestOutcome, type SessionEvent, type SessionMessage, type ToolCallBlock } from "@forge-agent/protocol";
+import type { RequestOutcome, SessionEvent, SessionMessage, ToolCallBlock } from "@forge-agent/protocol";
 import type { SessionConfiguration } from "./configuration.ts";
 import type { ModelRequestSettings } from "./model-adapter.ts";
 import { isProviderExecutedCall, type RawResponseAudit } from "./model-response.ts";
-import { prepareToolCall, decideEditedArgs, rememberPermission, executePreparedTool, errorResult, type PreparedToolCall } from "./session-tools.ts";
+import { prepareToolCall, rememberPermission, executePreparedTool, snapshot, type PreparedToolCall } from "./session-tools.ts";
 import type { RequestBus } from "./request-bus.ts";
 import { cancellable } from "./host-callback.ts";
 
@@ -14,76 +14,70 @@ export class SessionResponse {
 	nativeUsage: TokenUsage | undefined;
 	nativeTools: AnyTool[] = [];
 	baseMessageCount = 0;
-	private message: SessionMessage | undefined;
+	message: SessionMessage | undefined;
+	committed = false;
 	private completed = false;
 	private prepared = new Map<string, PreparedToolCall>();
-	private saved = new Set<string>();
 	private started = new Set<string>();
-	private results: SessionMessage[] = [];
+	private results = new Map<string, SessionMessage>();
 	private approving = false;
 	constructor(readonly options: SessionConfiguration, readonly revision: number, readonly settings: ModelRequestSettings,
 		private readonly internal: ReadonlySet<HarnessTool<object, unknown>>, private readonly history: () => SessionMessage[],
 		private readonly persist: (message: SessionMessage) => Promise<void>, private readonly emit: (event: SessionEvent) => void) {}
-	get committed(): boolean { return this.message !== undefined; }
-	get toolResults(): SessionMessage[] { return this.results; }
+	get toolResults(): SessionMessage[] { return (this.message?.content ?? []).flatMap(call => call.type === "tool_call" && this.results.has(call.id) ? [this.results.get(call.id)!] : []); }
 	project(messages: readonly ModelMessage[]): SessionMessage {
 		if (!this.audit) throw new Error("Model response audit is unavailable");
 		return this.audit.project(messages.slice(this.baseMessageCount), this.nativeUsage);
 	}
-	async prepare(message: SessionMessage): Promise<void> {
+	async prepare(message: SessionMessage, pending: readonly { toolCallId: string; input: unknown }[]): Promise<void> {
+		this.message = message;
 		const history = this.history();
-		for (const call of message.content) {
-			if (call.type !== "tool_call" || isProviderExecutedCall(call)) continue;
-			const prepared = await prepareToolCall(message, call, this.options, history, this.internal, this.settings.signal);
+		for (const item of pending) {
+			const call = message.content.find((part): part is ToolCallBlock => part.type === "tool_call" && part.id === item.toolCallId);
+			if (!call) throw new Error(`Native approval has no proposal: ${item.toolCallId}`);
+			const prepared = await prepareToolCall(message, call, item.input as Record<string, unknown>, this.options, history, this.internal, this.settings.signal);
 			this.prepared.set(call.id, prepared);
-			if (prepared.tool && prepared.decision.kind !== "deny") call.arguments = structuredClone(prepared.args);
 		}
 	}
-	commit(message: SessionMessage): void { if (this.committed) throw new Error("Response already committed"); this.message = message; }
+	commit(message: SessionMessage): void { if (this.committed) throw new Error("Response already committed"); this.message = message; this.committed = true; }
 	complete(): boolean { if (this.completed) return false; this.completed = true; return true; }
-	unsavedCalls(): ToolCallBlock[] { return (this.message?.content ?? []).filter((call): call is ToolCallBlock => call.type === "tool_call" && !isProviderExecutedCall(call) && !this.saved.has(call.id)); }
+	pendingResults(): ToolCallBlock[] { return (this.message?.content ?? []).filter((call): call is ToolCallBlock => call.type === "tool_call" && !isProviderExecutedCall(call) && !this.results.has(call.id)); }
 	denial(callId: string): string | undefined { const decision = this.prepared.get(callId)?.decision; return decision?.kind === "deny" ? decision.reason : undefined; }
 	private begin(call: ToolCallBlock, args: Record<string, unknown>): void {
 		if (this.started.has(call.id)) return;
 		this.started.add(call.id);
 		this.emit({ type: "tool_execution_start", toolCallId: call.id, toolName: call.name, args: structuredClone(args), timestamp: Date.now() });
 	}
-	async saveResult(call: ToolCallBlock, result: ToolResult<unknown>): Promise<void> {
-		if (this.saved.has(call.id)) throw new Error(`Tool result already saved: ${call.id}`);
+	recordResult(call: ToolCallBlock, result: ToolResult<unknown>, args?: Record<string, unknown>): void {
+		if (this.results.has(call.id)) throw new Error(`Tool result already recorded: ${call.id}`);
 		const prepared = this.prepared.get(call.id);
-		this.begin(call, prepared?.args ?? call.arguments);
+		const input = args ?? prepared?.args ?? call.arguments;
+		this.begin(call, input);
 		this.emit({ type: "tool_execution_end", toolCallId: call.id, toolName: call.name, content: JSON.stringify(result), isError: result.isError === true, timestamp: Date.now() });
-		const message: SessionMessage = { role: "toolResult", toolCallId: call.id, toolName: call.name, ...(prepared ? { toolArguments: structuredClone(prepared.args) } : {}), content: result.content, details: result.details, isError: result.isError === true, timestamp: Date.now() };
-		this.emit({ type: "message_start", message: structuredClone(message), timestamp: Date.now() });
-		await this.persist(message);
-		this.saved.add(call.id); this.results.push(message);
-		this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
+		this.results.set(call.id, { role: "toolResult", toolCallId: call.id, toolName: call.name, toolArguments: structuredClone(input), content: result.content, details: result.details, isError: result.isError === true, timestamp: Date.now() });
 	}
-	private async flushPriorDenials(callId: string): Promise<void> {
-		for (const call of this.unsavedCalls()) {
-			if (call.id === callId) return;
-			const denial = this.denial(call.id);
-			if (denial === undefined) throw new Error(`Native tool execution is out of order: ${call.id}`);
-			await this.saveResult(call, errorResult(denial));
+	async persistResults(): Promise<void> {
+		for (const message of this.toolResults) {
+			this.emit({ type: "message_start", message: structuredClone(message), timestamp: Date.now() });
+			await this.persist(message);
+			this.emit({ type: "message_end", message: structuredClone(message), timestamp: Date.now() });
 		}
-		throw new Error(`Tool call ${callId} is absent from the current response`);
 	}
 	async execute(callId: string | undefined, args: unknown, original: boolean): Promise<unknown> {
-		if (!this.message) throw new Error("Tool proposal is not committed");
+		if (!this.message) throw new Error("Tool proposal is unavailable");
 		const prepared = this.prepared.get(callId ?? "");
 		if (!prepared || prepared.decision.kind !== "allow" && prepared.decision.kind !== "ask") throw new Error("Tool approval is not active");
-		if (serializePermissionArguments(prepared.args) !== serializePermissionArguments(args as Record<string, unknown>)) throw new Error("Tool arguments differ from the approved values");
 		this.settings.signal.throwIfAborted();
-		await this.flushPriorDenials(prepared.call.id);
-		this.begin(prepared.call, prepared.args);
-		const result = await executePreparedTool(prepared, this.message, this.options, this.history(), this.settings.signal, this.emit);
-		await this.saveResult(prepared.call, result);
+		const input = snapshot(args as Record<string, unknown>);
+		this.begin(prepared.call, input);
+		const result = await executePreparedTool({ ...prepared, args: input }, this.message, this.options, this.history(), this.settings.signal, this.emit);
+		this.recordResult(prepared.call, result, input);
 		if (result.isError) throw new Error(result.content.find(part => part.type === "text")?.text ?? "Tool execution failed");
 		return original ? result.details : result.content.filter(part => part.type === "text").map(part => part.text).join("\n");
 	}
 	async approve(interrupts: readonly Interrupt[], bus: RequestBus): Promise<RunAgentResumeItem[]> {
 		if (this.approving) throw new Error("An approval batch is already pending");
-		if (!this.message) throw new Error("Tool proposal is not committed");
+		if (!this.message) throw new Error("Tool proposal is unavailable");
 		const records = interrupts.map(interrupt => {
 			const binding = readInterruptBinding(interrupt);
 			if (binding?.kind !== "tool-approval") throw new Error(`Unsupported native interrupt: ${interrupt.id}`);
@@ -98,20 +92,20 @@ export class SessionResponse {
 		const wait = new Promise<void>(resolve => { release = resolve; });
 		const decide = (id: string, prepared: PreparedToolCall, outcome?: RequestOutcome<"permission">): void => {
 			if (sealed) return;
-			let final = prepared, denial: string | undefined;
+			let editedArgs: Record<string, unknown> | undefined, denial: string | undefined;
 			try {
 				if (outcome?.status === "response") {
 					const response = outcome.result;
 					if (response.decision === "deny") denial = response.reason ?? "Tool execution denied";
 					else {
-						if (response.editedArgs !== undefined) final = decideEditedArgs(prepared, response.editedArgs, this.options, this.internal);
-						denial = final.decision.kind === "deny" ? final.decision.reason : rememberPermission(final, response, this.options.permission);
+						editedArgs = response.editedArgs;
+						denial = rememberPermission(prepared, response, this.options.permission);
 					}
 				} else if (outcome) denial = `Permission request ${outcome.status}: ${outcome.requestId}`;
-				else if (final.decision.kind === "deny") denial = final.decision.reason;
+				else if (prepared.decision.kind === "deny") denial = prepared.decision.reason;
 			} catch (error) { denial = `Permission decision failed: ${error instanceof Error ? error.message : String(error)}`; }
-			this.prepared.set(prepared.call.id, denial ? { ...final, decision: { kind: "deny", source: "hook", reason: denial } } : final);
-			answers.set(id, { interruptId: id, status: "resolved", payload: denial ? { approved: false, payload: { reason: denial } } : { approved: true, editedArgs: final.args } });
+			if (denial) this.prepared.set(prepared.call.id, { ...prepared, decision: { kind: "deny", source: "hook", reason: denial } });
+			answers.set(id, { interruptId: id, status: "resolved", payload: denial ? { approved: false, payload: { reason: denial } } : { approved: true, ...(editedArgs !== undefined ? { editedArgs } : {}) } });
 			if (outcome && --remaining === 0) release();
 		};
 		try {
@@ -122,14 +116,6 @@ export class SessionResponse {
 			if (remaining) await cancellable(() => wait, this.settings.signal);
 			this.settings.signal.throwIfAborted();
 			if (answers.size !== records.length) throw new Error("Incomplete native approval batch");
-			// Parameter revisions are append-only evidence, not a replayable approval ledger.
-			// Commit every edit before resuming, including edits later in the serial batch.
-			for (const { prepared } of records) {
-				const final = this.prepared.get(prepared.call.id)!;
-				if (final.decision.kind === "deny" || serializePermissionArguments(prepared.args) === serializePermissionArguments(final.args)) continue;
-				await this.persist({ role: "assistant", content: [], timestamp: Date.now(), contextExcluded: true, toolCallId: final.call.id, toolName: final.call.name, toolArguments: structuredClone(final.args) });
-				this.settings.signal.throwIfAborted();
-			}
 			return records.map(({ interrupt }) => answers.get(interrupt.id)!);
 		} finally {
 			sealed = true; this.approving = false;

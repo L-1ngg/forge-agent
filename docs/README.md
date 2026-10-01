@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-09-30)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
+> 状态:生效(2026-10-01)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
 > 原则:文档领路，代码跟随；证据说话，不是信心说话。
 
 ## 当前导航
@@ -20,13 +20,14 @@
 | 文档 | 职责 |
 |---|---|
 | [TanStack 基座](phases/tanstack-foundation.md)、[当时验收](phases/tanstack-foundation-acceptance.md) | chat 唯一循环、职责处置及原版本验收边界 |
-| [原生审批施工与验收](phases/native-tool-approval.md)、[ADR-027](decisions/027-native-tool-approval-and-interruption.md) | 当前权限审批、interrupt/resume、串行工具执行与取消合同 |
+| [原生审批施工与验收](phases/native-tool-approval.md)、[ADR-027](decisions/027-native-tool-approval-and-interruption.md) | 原生审批首次接入、interrupt/resume、串行工具执行与取消；当前参数/保存合同按 ADR-030 |
 | [职责收敛](phases/architecture-responsibilities.md)、[会话装配](phases/agent-assembly.md) | AgentTurn.result、输入归属、压缩协调和统一装配 |
 | [原生 Adapter](phases/model-adapter.md)、[逐轮停止策略](phases/turn-policy.md) | 模型接入、任务/摘要共享接缝、shouldStopAfterTurn 与调用用量 |
-| [Issue #40 施工与证据](phases/model-response-boundary.md)、[ADR-028](decisions/028-model-response-boundary.md) | TanStack 响应聚合、原始协议审计与工具前提交 |
+| [Issue #40 施工与证据](phases/model-response-boundary.md)、[ADR-028](decisions/028-model-response-boundary.md) | TanStack 响应聚合与原始协议审计；保存时序按 ADR-030 |
+| [会话中间件简化](phases/session-middleware-simplification.md)、[ADR-030](decisions/030-native-arguments-and-conversation-persistence.md) | 当前原生参数审批、删除改参链与批次后的普通会话保存 |
 | [Issue #37 施工图](phases/tool-ecosystem-issue-37.md)、[ADR-026](decisions/026-native-skills-and-markdown-memory.md) | 当前官方 Skills、Memory、Zod 接线和验收 |
 | [MCP 完整施工设计](phases/mcp-client.md)、[ADR-022](decisions/022-mcp-host-integration.md) | Issue #36 的完整实现与统一验收：官方 SDK、连接所有权、OAuth、Tools/Resources/Prompts、Elicitation；当前证据见[验收记录](phases/mcp-client-acceptance.md) |
-| [基座决策](decisions/025-tanstack-agent-foundation.md)、[工具参数与校验](phases/tool-argument-validation.md) | 第三方选型、严格参数、判权与提交屏障；执行归属以 ADR-027 为准 |
+| [基座决策](decisions/025-tanstack-agent-foundation.md)、[工具参数与校验](phases/tool-argument-validation.md) | 第三方选型与参数基础检查；当前审批与保存以 ADR-030 为准 |
 | [架构决策](decisions) | ADR 及替代关系；先读状态行，再沿当前决策指针读取 |
 
 ### 上下文、记忆与会话

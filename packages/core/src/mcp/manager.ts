@@ -209,9 +209,8 @@ export class McpManager implements McpController {
         // Use a fresh provider per immutable definition so identical $id values
         // from different servers/revisions cannot share validators.
         const validator = new AjvJsonSchemaValidator();
-        const validate = validator.getValidator<object>(definition.inputSchema as Parameters<AjvJsonSchemaValidator["getValidator"]>[0]);
-		const check = (args: unknown) => { const result = validate(args); if (!result.valid) throw new McpError("invalid-arguments", result.errorMessage); return result.data; };
-		return { name: mcpToolName(connection.id, definition.name), label: `${connection.id}/${definition.name}`, description: definition.description ?? `MCP tool ${connection.id}/${definition.name}`, parameters: definition.inputSchema, validateArguments: check,
+        validator.getValidator<object>(definition.inputSchema as Parameters<AjvJsonSchemaValidator["getValidator"]>[0]);
+		return { name: mcpToolName(connection.id, definition.name), label: `${connection.id}/${definition.name}`, description: definition.description ?? `MCP tool ${connection.id}/${definition.name}`, parameters: definition.inputSchema,
 			execute: async (args, context) => {
                 if (this.revoking.has(connection.id)) throw new McpError("auth-required", "MCP authorization was revoked");
 				const result = await connection.client.callTool({ name: definition.name, arguments: args as Record<string, unknown> }, { toolDefinition: definition, signal: this.signal(connection, context.signal), timeout: connection.config.timeouts?.tool ?? 60000, resetTimeoutOnProgress: true, maxTotalTimeout: connection.config.timeouts?.total ?? 300000, onprogress: progress => context.onUpdate?.({ content: [{ type: "text", text: JSON.stringify(progress) }], details: { serverId: connection.id, progress } }) }).catch(error => this.failure(connection, error));
@@ -247,9 +246,10 @@ export class McpManager implements McpController {
 			}),
 			defineLocalTool({
 				name: "mcp_read_resource", label: "Read MCP resource", description: "Read a URI or expand a discovered URI template with arguments",
-				inputSchema: resourceSchema, normalizeInput: normalizeResource,
+				inputSchema: resourceSchema,
 				execute: async (args, context) => {
-					const result = await this.read(args.serverId, (args as { uri: string }).uri, context.signal);
+					const { serverId, uri } = normalizeResource(args);
+					const result = await this.read(serverId, uri, context.signal);
 					return { content: result.content, details: result };
 				},
 			}),

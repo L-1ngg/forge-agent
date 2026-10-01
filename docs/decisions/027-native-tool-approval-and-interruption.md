@@ -7,6 +7,8 @@ created: 2026-09-28
 
 > 状态:已批准(2026-09-28；[Issue #39](https://github.com/L-1ngg/forge-agent/issues/39) 已授权自主确定施工取舍)。施工与证据见[权限审批施工图](../phases/native-tool-approval.md)。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):改参复判、通用参数处理链与保存屏障。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 决定
 
 普通模型工具统一声明 TanStack `needsApproval: true`。Forge 在模型工具提案产生后、审批展示前完成参数规范化、严格校验、宿主参数准备和现有五层权限策略判断。`allow` 与 `deny` 自动形成原生审批答复，只有 `ask` 交给宿主；整批答复收齐后，使用原生 `resume` 和 `parentRunId` 继续执行。获批工具的副作用发生在原生 `.server()`，按原生串行顺序执行。拒绝是工具结果，允许模型继续；停止是 Invocation 的 abort，清除待批次并阻止续接。

@@ -20,25 +20,19 @@ async function collect(turn: AgentTurn): Promise<SessionEvent[]> {
 
 // These assertions originated in the deleted Pi runtime tests. They exercise
 // the public SDK and actual native chat loop without accessing internal state.
-test("tool argument preparation runs before strict validation and authorization", async () => {
-	const prepared: unknown[] = [], authorized: object[] = [], executed: object[] = [];
+test("native schema validation precedes authorization and rejects invalid calls", async () => {
+	const authorized: object[] = [], executed: object[] = [];
 	const agent = await createTestAgent({
 		permission: { hooks: [{ evaluate(call) { authorized.push(structuredClone(call.arguments)); return { kind: "allow", source: "hook" }; } }] },
 		tools: [{ name: "normalize", label: "Normalize", description: "normalize", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
-			prepareArguments(args) {
-				prepared.push(structuredClone(args));
-				if (!args || typeof args !== "object") throw new Error("Expected an argument object");
-				return { value: Reflect.get(args, "legacyValue") };
-			},
 			async execute(args) { executed.push(structuredClone(args)); return { content: [], details: {} }; },
 		}],
-		responses: [{ toolCalls: [{ id: "valid", name: "normalize", arguments: { legacyValue: "prepared" } }, { id: "invalid", name: "normalize", arguments: { legacyValue: 3 } }] }, { text: "done" }],
+		responses: [{ toolCalls: [{ id: "valid", name: "normalize", arguments: { value: "valid" } }, { id: "invalid", name: "normalize", arguments: { value: 3 } }] }, { text: "done" }],
 	});
 	const turn = agent.runTurn("normalize"); const events = await collect(turn);
 	expect(await turn.result).toEqual({ status: "success" });
-	expect(prepared).toEqual([{ legacyValue: "prepared" }, { legacyValue: 3 }]);
-	expect(authorized).toEqual([{ value: "prepared" }]);
-	expect(executed).toEqual([{ value: "prepared" }]);
+	expect(authorized).toEqual([{ value: "valid" }]);
+	expect(executed).toEqual([{ value: "valid" }]);
 	const ends = events.filter(event => event.type === "tool_execution_end");
 	expect(ends.find(event => event.toolCallId === "valid")).toMatchObject({ isError: false });
 	expect(ends.find(event => event.toolCallId === "invalid")).toMatchObject({ isError: true });

@@ -7,6 +7,8 @@ created: 2026-09-27
 
 > 状态:已批准(2026-09-27；唯一 `chat()` 循环与会话职责仍适用，Skills/Memory 选型被 [ADR-026](026-native-skills-and-markdown-memory.md) 取代，工具批次选择被 [ADR-027](027-native-tool-approval-and-interruption.md) 取代，响应收集器职责被 [ADR-028](028-model-response-boundary.md) 收窄)。替代 ADR-024 的 Forge 自有循环/StreamFn 决定，以及 ADR-015 的 Pi runtime 生产内核选择。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):执行前保存屏障与参数处理链。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 决策
 
 采用已发布 `@tanstack/ai@0.61.0` 的 `chat()`、middleware 和 `toolDefinition()`。删除本地 Pi Agent/agent-loop、模型事件流兼容形状及多层生命周期包装。SDK 原生 `adapter` 同时接入任务和摘要；Forge 只维护会话输入/配置/持久化/终态、可取消的权限和工具批次策略、证据型上下文与宿主扩展。设计和全仓处置清单见[施工图](../phases/tanstack-foundation.md)。

@@ -7,6 +7,8 @@ created: 2026-09-27
 
 > 状态:本地实现与当时离线验收已完成，外部验收未完成(2026-09-27)；工具预执行及并行选择被 [Issue #39 施工图](native-tool-approval.md) 取代，响应收集器职责被 [Issue #40 施工图](model-response-boundary.md) 取代。本文保留当时施工与验收边界，当前决策见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md) 和 [ADR-028](../decisions/028-model-response-boundary.md)。
 
+> 合同更新(2026-10-01):执行前/逐工具保存屏障、通用改参链及审批修订日志被 [ADR-030](../decisions/030-native-arguments-and-conversation-persistence.md) 部分取代；本次施工与证据见[会话中间件简化](session-middleware-simplification.md)。本文保留当时实现与验收记录。
+
 ## Entry
 
 起点 `1336da5ff869f08df37959f01eb353f6c8d9dc96`。当时保留启动前 `docs/research/README.md` 与 `docs/research/tanstack-ai-opportunities.md`，后者现见[历史研究](../archive/research/tanstack-ai-opportunities.md)；本地原文副本位于 `review-notes/foundation-baseline/`。用户数据、会话和配置不自动迁移；初始交付限定本地工作区，operator 在完成离线验收后明确授权本地 commit。不 push、发布或修改远端任务。

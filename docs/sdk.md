@@ -28,7 +28,7 @@ async function openAgent(model: Model, adapter: ModelAdapter) {
 
 本次接口迁移删除 `StreamFn`、`AssistantMessageEventStream` 和 Pi 模型事件类型，没有兼容包装。将 `{ model, streamFn }` 改为 `{ model, adapter }`，响应改为 TanStack 原生 chunks；旧 `streamFn` 参数在 JavaScript 调用中也明确拒绝。已有 JSONL、Markdown 记忆和 MCP 附件无需因本次迁移转换格式。
 
-配置类型统一为 `CreateAgentOptions`，删除同义导出 `AgentOptions`。`SessionStore` 已实现 `SessionStorage`，将 `storage: store.asStorage()` 改为 `storage: store`。工具干预上下文使用 `SessionMessage`/`ToolCallBlock`；授权与执行共享最终参数值，宿主只能通过约定的参数和结果干预接口影响该批次。
+配置类型统一为 `CreateAgentOptions`，删除同义导出 `AgentOptions`。`SessionStore` 已实现 `SessionStorage`，将 `storage: store.asStorage()` 改为 `storage: store`。工具干预上下文使用 `SessionMessage`/`ToolCallBlock`；参数编辑使用原生审批的 `editedArgs`，结果干预使用 `afterToolCall`。
 
 运行离线示例：`bun examples/custom-adapter.ts`、`bun examples/turn-policy.ts`、`bun examples/context-transform.ts`。它们使用 [scripted-adapter.ts](../examples/scripted-adapter.ts) 的原生 adapter，无需凭据；完整调用示例见 [custom-adapter.ts](../examples/custom-adapter.ts)。
 
@@ -36,7 +36,7 @@ async function openAgent(model: Model, adapter: ModelAdapter) {
 
 `createAgent → AgentSession → TanStack chat() → TextAdapter` 是 SDK、CLI 与 TUI 共用的执行路径。`chat()` 负责模型与工具续轮，Forge 不再维护 Pi Agent/agent-loop。Forge 会话保留输入归属、配置 revision、权威终态、逐条持久化和证据型压缩；`onConfig` middleware 在请求边界准备投影和最终预算。
 
-工具通过原生 `toolDefinition().server()` 接入；Forge 在审批前完成参数准备、严格校验和逐调用判权，只展示 `ask`，TanStack 负责 interrupt/resume 与串行执行。完整工具提案及最终参数先逐条保存，才允许工具副作用；Forge 在每项工具执行后保存结果，下一次模型请求读取已保存的历史。成功响应内容由 TanStack 当前 `ModelMessage` 聚合，Forge 审计原始协议、补足续轮签名并投影成 `SessionMessage`；无工具回答在 run 结束时提交一次，失败和取消保留已有部分内容。`SessionMessage` 继续承担历史与展示合同。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。当前审批合同见 [ADR-027](decisions/027-native-tool-approval-and-interruption.md)，响应边界见 [ADR-028](decisions/028-model-response-boundary.md)。
+工具通过原生 `toolDefinition().server()` 接入；TanStack 负责 schema 校验、interrupt/resume 与串行执行。Forge 消费原生已校验参数，逐调用判权，只展示 `ask`。批次完成后有序保存提案和结果，下一次模型请求读取已保存历史。成功响应内容由 TanStack 当前 `ModelMessage` 聚合，Forge 审计原始协议、补足续轮签名并投影成 `SessionMessage`；无工具回答在 run 结束时提交一次，失败和取消保留已有部分内容。`SessionMessage` 继续承担历史与展示合同。TanStack 的工作消息和 middleware metadata 不作为第二份可恢复会话状态。当前参数和保存合同见 [ADR-030](decisions/030-native-arguments-and-conversation-persistence.md)，原生审批与响应审计的其余职责见 [ADR-027](decisions/027-native-tool-approval-and-interruption.md) 和 [ADR-028](decisions/028-model-response-boundary.md)。
 
 ## 每轮停止策略（shouldStopAfterTurn）
 
@@ -229,7 +229,7 @@ interface SessionStorage {
 }
 ```
 
-`SessionState` 包含完整 `entries` 和选中 `leafId`。v4 记录包含稳定 id、parentId、timestamp，以及原始 message 或独立 compaction。core 分配身份并串行追加：已消费 user 在模型请求前保存，assistant 终态在工具前保存，工具批次收尾后按调用顺序保存结果。取消保留已形成过程，不回滚整次 invocation；error/aborted 原始响应保留，但从后续请求过滤。
+`SessionState` 包含完整 `entries` 和选中 `leafId`。v4 记录包含稳定 id、parentId、timestamp，以及原始 message 或独立 compaction。core 分配身份并串行追加：已消费 user 在模型请求前保存，无工具回答在结束时保存，有工具回答及结果在批次结束后按提案和调用顺序保存，再请求下一轮模型。取消等待已开始工具清理并保存实际结果；error/aborted 原始响应保留，但从后续请求过滤。没有执行前或逐工具写盘屏障，进程崩溃可能丢失最新批次，存储失败发生时工具效果可能已完成。
 
 `append()` 成功必须可重载；开始后的写入必须等待结算。任何保存失败停止新调度并停用实例，不盲重试可能部分完成的写入。宿主检查实际状态后重建，同一会话不得有多个并发写实例。JSONL 不保证断电或部分写入事务性；工具外部副作用不会回滚。
 
@@ -311,9 +311,9 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 ## 权限
 
-每个普通模型工具调用按最终参数经过现有权限策略。`allow` 自动批准、`deny` 自动拒绝,只有 `ask` 经 TanStack 原生 `needsApproval` interrupt 交给宿主;同批所有待审批项收齐后才恢复,获批工具串行执行。拒绝原因进入模型上下文,模型可调整方案;停止整个 Invocation 则使待批次及旧答复失效。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
+每个普通模型工具调用按原生已校验的待审批参数经过一次现有权限策略。`allow` 自动批准、`deny` 自动拒绝,只有 `ask` 经 TanStack 原生 `needsApproval` interrupt 交给宿主;同批所有待审批项收齐后才恢复,获批工具串行执行。拒绝原因进入模型上下文,模型可调整方案;停止整个 Invocation 则使待批次及旧答复失效。宿主可配置 `permission.rules`,或并行消费 `agent.requests`,通过 `agent.respond(response)` 答复。请求流应与执行流并行消费,不能等执行完成才处理授权。无答复默认 30 秒后拒绝,没有界面不等于自动放行。
 
-`agent.respond({ type: "response", id: request.id, result: { decision: "allow_once", editedArgs: { ... } } })` 可提交一次性修改参数;SDK 会严格重新校验和判权,非法或被策略拒绝的修改不会执行。展示、权限判断与执行使用最终参数,工具结果的 `toolArguments` 保存实际参数。审批改写的最终参数在整个批次 resume 前保存为既有 v4 的空 assistant 修订记录（`contextExcluded`、`toolCallId`、`toolName`、`toolArguments`）；任一修订提交失败使本批工具副作用为零并停用实例。修订可检索，但不进入任务消息或成为可重放审批。`allow_always` 仅在请求允许记住且 scope 匹配时有效。审批仅支持进程内续接,恢复会话不会重放未完成工具;TUI 可停放权限卡、按 `c` 输入草稿或排队,按 Tab 或 `i` 返回权限卡。headless 自动拒绝需要人工审批的调用。
+`agent.respond({ type: "response", id: request.id, result: { decision: "allow_once", editedArgs: { ... } } })` 可提交一次性修改参数。编辑参数由 TanStack 原生 schema 校验；非法编辑使本次 resume 返回 error，不执行本批工具。合法编辑由该次人工批准授权，Forge 不重新判权、比较参数或写参数修订日志。普通工具结果的 `toolArguments` 保存实际执行参数；旧修订记录仍可读。`allow_always` 仅在请求允许记住且 scope 匹配展示调用时有效，记住的是展示范围；编辑参数优先使用 `allow_once`。审批仅支持进程内续接,恢复会话不会重放未完成工具;TUI 可停放权限卡、按 `c` 输入草稿或排队,按 Tab 或 `i` 返回权限卡。headless 自动拒绝需要人工审批的调用。
 
 每实例默认有独立权限记忆和请求总线。CLI 为兼容现有 TUI 显式传入独占 RequestBus,交互模式允许无限等待;SDK dispose 会关闭该总线,不得跨实例共享。请求观察、授权与释放不依赖 pi 类型。
 
@@ -361,7 +361,7 @@ const lookup: HarnessTool<{ key: string }, { source: string }> = {
 };
 ```
 
-`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错,模型仍可继续;停止任务使用 `abort()`。进度使用同一结果形状,结算后迟到进度被忽略。`prepareArguments` 可同步规范化模型输入；`toolInputRewrites` 可异步改写。`parameters` 的 JSON Schema 严格校验类型、必填及额外字段,不把数值字符串转换为数字；宿主 `validateArguments` 在 JSON Schema 初检后执行,其返回对象也必须符合 schema。每个工具提案在审批前按调用顺序完成初检、改写、before hook、最终校验和判权；待审批项收齐后 TanStack 原生串行执行,每项保存后才开始下一项。`beforeToolCall` 返回 block/reason,`afterToolCall` 可覆盖 content/details/isError。hooks 的 assistantMessage/context.messages 使用 `SessionMessage`,toolCall 使用 `ToolCallBlock`（`type: "tool_call"`）。授权、实际执行和 after hook 观察同一份最终参数；准备失败不执行该工具。原 `wrapTool` 已移除；参数改写请使用 `toolInputRewrites`,授权请使用 SDK 权限配置。
+`content` 只包含文本/图片并进入模型；`details` 独立保存供宿主展示，必须可 JSON 持久化且可快照。工具错误返回 `isError: true` 或抛错,模型仍可继续;停止任务使用 `abort()`。进度使用同一结果形状,结算后迟到进度被忽略。提供 `inputSchema` 的本地工具直接使用 TanStack Standard Schema；仅提供 `parameters` 的动态 JSON Schema 使用官方 Ajv 的薄 Standard Schema 接口，校验类型、必填及额外字段，不做强制类型转换。`prepareArguments`、`toolInputRewrites` 和 `validateArguments` 已删除，转换与业务检查放在工具内部。`beforeToolCall` 观察已校验的参数副本并可返回 block/reason，修改副本不影响执行；`afterToolCall` 观察实际执行参数并可覆盖 content/details/isError。hooks 的 assistantMessage/context.messages 使用 `SessionMessage`,toolCall 使用 `ToolCallBlock`（`type: "tool_call"`）。待审批项收齐后 TanStack 原生串行执行，批次结束后有序保存，再请求下一轮模型；单项 schema 或 before 阻止不执行该工具。
 
 普通任务和摘要共用 `retry` 配置，但计数独立。任务仅对临时故障重试，默认三次、2/4/8 秒；原错误响应保存在历史并从重试请求排除。已消费输入和完成工具结果复用，不重复用户输入、不重放工具。overflow 使用独立的一次上下文恢复，不能套入普通 retry。`retry` 事件提供 scheduled/attempt/end，取消会中止等待。
 

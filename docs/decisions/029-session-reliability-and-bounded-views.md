@@ -7,6 +7,8 @@ created: 2026-09-30
 
 > 状态:已实现并完成本地软件验收(2026-09-30；范围和测试边界以 [Issue #44](https://github.com/L-1ngg/forge-agent/issues/44) 为准)。施工、本次证据与未验证的外部边界见[施工图](../phases/session-reliability-issue-44.md)。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):审批参数修订日志与执行前保存保证。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 决定
 
 管理命令绑定启动时的会话和操作身份。会话切换开始或 App 停止即取消并释放旧操作，成功、prompt、错误和 finally 使用同一归属检查。切换装配失败不会复活旧操作；当前会话正常结果继续报告和提交。宿主回调可以接收 signal；不合作回调不能延迟 App 停止，已开始的外部副作用不回滚。

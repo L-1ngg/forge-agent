@@ -6,6 +6,7 @@ import { bashTool, editTool, readTool, writeTool } from "../src/index.ts";
 import { createBashTool } from "../src/bash.ts";
 import { defineLocalTool } from "../src/define-builtin.ts";
 import { z } from "zod";
+import { parseWithStandardSchema } from "@tanstack/ai";
 
 test("local tool definitions derive strict provider and execution contracts from one schema", () => {
 	const tool = defineLocalTool({
@@ -14,9 +15,9 @@ test("local tool definitions derive strict provider and execution contracts from
 		async execute(input) { return { content: [{ type: "text", text: input.key }], details: input.limit ?? 1 }; },
 	});
 	expect(tool.parameters).toMatchObject({ type: "object", required: ["key"], additionalProperties: false });
-	expect(() => tool.validateArguments?.({ key: "ok", limit: 1.5 })).toThrow();
-	expect(() => tool.validateArguments?.({ key: "ok", extra: true })).toThrow();
-	expect(tool.validateArguments?.({ key: "ok", limit: 2 })).toEqual({ key: "ok", limit: 2 });
+	expect(() => parseWithStandardSchema(tool.inputSchema!, { key: "ok", limit: 1.5 })).toThrow();
+	expect(() => parseWithStandardSchema(tool.inputSchema!, { key: "ok", extra: true })).toThrow();
+	expect(parseWithStandardSchema<object>(tool.inputSchema!, { key: "ok", limit: 2 })).toEqual({ key: "ok", limit: 2 });
 });
 
 test("built-in schemas and validators share strict input contracts", () => {
@@ -30,14 +31,14 @@ test("built-in schemas and validators share strict input contracts", () => {
 		required: ["command"], additionalProperties: false,
 		properties: { timeout_ms: { type: "integer", minimum: 1, maximum: 600000 } },
 	});
-	expect(() => readTool.validateArguments?.({ path: "file", offset: "2" })).toThrow();
-	expect(() => readTool.validateArguments?.({ path: "file", limit: 0 })).toThrow();
-	expect(() => writeTool.validateArguments?.({ path: "file", content: "ok", extra: true })).toThrow();
-	expect(() => writeTool.validateArguments?.({ path: "", content: "ok" })).toThrow();
-	expect(() => editTool.validateArguments?.({ path: "file", old_text: "", new_text: "ok" })).toThrow();
-	expect(() => bashTool.validateArguments?.({ command: "ok", timeout_ms: "1000" })).toThrow();
-	expect(() => bashTool.validateArguments?.({ command: "" })).toThrow();
-	expect(readTool.validateArguments?.({ path: "file", offset: 2 })).toEqual({ path: "file", offset: 2 });
+	expect(() => parseWithStandardSchema(readTool.inputSchema!, { path: "file", offset: "2" })).toThrow();
+	expect(() => parseWithStandardSchema(readTool.inputSchema!, { path: "file", limit: 0 })).toThrow();
+	expect(() => parseWithStandardSchema(writeTool.inputSchema!, { path: "file", content: "ok", extra: true })).toThrow();
+	expect(() => parseWithStandardSchema(writeTool.inputSchema!, { path: "", content: "ok" })).toThrow();
+	expect(() => parseWithStandardSchema(editTool.inputSchema!, { path: "file", old_text: "", new_text: "ok" })).toThrow();
+	expect(() => parseWithStandardSchema(bashTool.inputSchema!, { command: "ok", timeout_ms: "1000" })).toThrow();
+	expect(() => parseWithStandardSchema(bashTool.inputSchema!, { command: "" })).toThrow();
+	expect(parseWithStandardSchema<object>(readTool.inputSchema!, { path: "file", offset: 2 })).toEqual({ path: "file", offset: 2 });
 });
 
 function errorDetails(result: { isError?: boolean; content: Array<{ type: string; text?: string }> }): unknown {

@@ -1,12 +1,12 @@
-import { convertSchemaToJsonSchema, parseWithStandardSchema } from "@tanstack/ai";
+import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import type { ZodType } from "zod";
 import type { ToolOutcome } from "./errors.ts";
 import type { HarnessTool, ObjectSchema, ToolContext } from "./types.ts";
 
 export function defineLocalTool<TInput extends object, TOutput>(
-	tool: Omit<HarnessTool<TInput, TOutput>, "parameters" | "validateArguments"> & { inputSchema: ZodType<TInput>; normalizeInput?: (input: TInput) => TInput },
+	tool: Omit<HarnessTool<TInput, TOutput>, "parameters"> & { inputSchema: ZodType<TInput> },
 ): HarnessTool<TInput, TOutput> {
-	const { inputSchema, normalizeInput, ...definition } = tool;
+	const { inputSchema, ...definition } = tool;
 	const parameters = convertSchemaToJsonSchema(inputSchema);
 	const objectUnion = parameters?.oneOf?.length && parameters.oneOf.every(branch => branch.type === "object");
 	if (parameters?.type !== "object" && !objectUnion) throw new TypeError(`Tool ${tool.name} requires an object schema`);
@@ -14,16 +14,12 @@ export function defineLocalTool<TInput extends object, TOutput>(
 		...definition,
 		inputSchema,
 		parameters: { type: "object", ...parameters } as ObjectSchema,
-		validateArguments: args => {
-			const input = parseWithStandardSchema<TInput>(inputSchema, args);
-			return normalizeInput ? normalizeInput(input) : input;
-		},
 	};
 }
 
 /** Keep file/process operations and their structured errors independent of model presentation. */
 export function defineBuiltinTool<TInput extends object, TOutput>(
-	tool: Omit<HarnessTool<TInput, TOutput>, "parameters" | "validateArguments" | "execute"> & {
+	tool: Omit<HarnessTool<TInput, TOutput>, "parameters" | "execute"> & {
 		inputSchema: ZodType<TInput>;
 		execute(input: TInput, context: ToolContext): Promise<ToolOutcome<TOutput>>;
 	},

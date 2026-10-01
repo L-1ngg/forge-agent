@@ -29,7 +29,7 @@ test("cancellation while launching a batch saves started results but does not st
 	} finally { await agent.dispose(); }
 });
 
-test("SDK storage failure before tool dispatch faults the instance without executing tools", async () => {
+test("SDK partial storage failure after tool dispatch faults the instance without replay", async () => {
 	const memory = new MemorySessionStorage();
 	let executions = 0;
 	let writes = 0;
@@ -39,13 +39,13 @@ test("SDK storage failure before tool dispatch faults the instance without execu
 	});
 	const agent = await createAgent({ ...options, ...model,
 		permission: { hooks: [{ evaluate: () => ({ kind: "allow", source: "hook" }) }] },
-		tools: [{ name: "write", label: "Write", description: "write", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute() { executions++; throw new Error("unexpected execution"); } }], storage: {
+		tools: [{ name: "write", label: "Write", description: "write", parameters: { type: "object", properties: {}, required: [], additionalProperties: false }, async execute() { executions++; return { content: [], details: {} }; } }], storage: {
 		load: () => memory.load(),
 		async append(entry) { writes++; await memory.append(entry); if (writes === 2) throw new Error("partial write failure"); },
 	} });
 	try {
 		await expect((async () => { for await (const _event of agent.runTurn("work")) {} })()).rejects.toThrow("partial write failure");
-		expect(executions).toBe(0);
+		expect(executions).toBe(1);
 		expect(writes).toBe(2);
 		expect((await memory.load()).entries).toHaveLength(2);
 		expect(() => agent.runTurn("retry")).toThrow("faulted");

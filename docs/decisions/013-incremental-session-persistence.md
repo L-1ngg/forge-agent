@@ -8,6 +8,8 @@ created: 2026-09-07
 > 状态:有效部分已按 [ADR-014](014-pi-aligned-context-management.md) 实现并完成本地验收；历史引用找回与损坏行处理方向被其部分替代(2026-09-07)，见[当时实现证据](../archive/phases/context-management-acceptance.md)。当前存储接口与首次写入行为见 [SDK](../sdk.md)和[首次写入](../phases/session-first-write.md)。
 > 参与者:operator、Codex。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):工具前及逐工具保存门禁。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 背景
 
 在上下文管理的 pi 逐项对比第 9 项中，operator 询问“如果我想要改为pi的方案呢？”，在了解取消保留历史、未完成工具配对及执行中存储失败的影响后确认改为逐步持久化。

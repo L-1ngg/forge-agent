@@ -18,8 +18,6 @@ export interface ToolContext {
 	onUpdate?: (result: ToolResult<unknown>) => void;
 }
 
-export type ToolInputRewrite<TInput extends object> = (input: TInput, context: ToolContext) => TInput | Promise<TInput>;
-
 export interface HarnessTool<TInput extends object, TOutput> {
 	name: string;
 	label: string;
@@ -27,9 +25,6 @@ export interface HarnessTool<TInput extends object, TOutput> {
 	parameters: ObjectSchema;
 	/** Native schema for local tools; dynamic SDK and MCP tools use parameters. */
 	inputSchema?: ZodType<TInput>;
-	prepareArguments?: (args: unknown) => TInput;
-	/** Exact final-input validator; runs before authorization without coercion. */
-	validateArguments?: (args: unknown) => TInput;
 	execute(input: TInput, context: ToolContext): Promise<ToolResult<TOutput>>;
 }
 

@@ -26,11 +26,6 @@ function captureTool(executed: CaptureInput[]): HarnessTool<object, unknown> {
 	};
 }
 
-function rewriteToSafePath(input: object): object {
-	const value = input as CaptureInput;
-	return { ...value, path: value.path.replace(/^\//, "") };
-}
-
 async function collectEvents(port: { runTurn(input: string): AsyncIterable<unknown> }): Promise<unknown[]> {
 	const events: unknown[] = [];
 	for await (const event of port.runTurn("capture")) events.push(event);
@@ -43,10 +38,9 @@ async function nextPermissionRequest(bus: RequestBus) {
 	return result.value;
 }
 
-test("SDK authorizes the rewritten input and sends that object on the permission bus", async () => {
+test("SDK hooks observe isolated input and permission sees the native arguments", async () => {
 	const executed: CaptureInput[] = [];
 	const observedAfter: object[] = [];
-	let rewriteCount = 0;
 	const bus = new RequestBus({ idPrefix: "rewrite-payload", timeoutMs: 1_000 });
 	try {
 		const port = await createTestAgent({
@@ -55,14 +49,8 @@ test("SDK authorizes the rewritten input and sends that object on the permission
 				{ text: "done" },
 			],
 			tools: [captureTool(executed)],
-			toolInputRewrites: {
-				capture: (input) => {
-					rewriteCount++;
-					return rewriteToSafePath(input);
-				},
-			},
 			toolHooks: {
-				beforeToolCall: async ({ args }) => { args.path = `${args.path}.final`; return undefined; },
+				beforeToolCall: async ({ args }) => { Reflect.set(args, "path", "local-observation"); return undefined; },
 				afterToolCall: async ({ args }) => { observedAfter.push(structuredClone(args as object)); return undefined; },
 			},
 			permission: { memory: new MemoryPermissionStore() },
@@ -70,37 +58,28 @@ test("SDK authorizes the rewritten input and sends that object on the permission
 		});
 		const eventsPromise = collectEvents(port);
 		const request = await nextPermissionRequest(bus);
-		expect(request.payload.toolCall.arguments).toEqual({ path: "tmp/file.ts.final" });
+		expect(request.payload.toolCall.arguments).toEqual({ path: "/tmp/file.ts" });
 		bus.respond(response(request.id, { decision: "allow_once" }));
 
 		await eventsPromise;
-		expect(rewriteCount).toBe(1);
-		expect(executed).toEqual([{ path: "tmp/file.ts.final" }]);
-		expect(observedAfter).toEqual([{ path: "tmp/file.ts.final" }]);
+		expect(executed).toEqual([{ path: "/tmp/file.ts" }]);
+		expect(observedAfter).toEqual([{ path: "/tmp/file.ts" }]);
 	} finally {
 		bus.close();
 	}
 });
 
-test("a deny rule evaluated on rewritten input prevents the underlying tool from running", async () => {
+test("a deny rule on native input prevents the underlying tool from running", async () => {
 	const executed: CaptureInput[] = [];
-	let rewriteCount = 0;
 	const port = await createTestAgent({
 		responses: [{ toolCalls: [{ id: "capture-deny", name: "capture", arguments: { path: "/blocked" } }], stopReason: "tool_use" }],
 		tools: [captureTool(executed)],
-		toolInputRewrites: {
-			capture: (input) => {
-				rewriteCount++;
-				return rewriteToSafePath(input);
-			},
-		},
 		permission: {
-			rules: [{ tool: "capture", argsPattern: '{"path":"blocked"}', effect: "deny", reason: "blocked final path" }],
+			rules: [{ tool: "capture", argsPattern: '{"path":"/blocked"}', effect: "deny", reason: "blocked path" }],
 		},
 	});
 
 	const events = await collectEvents(port);
-	expect(rewriteCount).toBe(1);
 	expect(executed).toHaveLength(0);
 	expect(events.some((event) => (event as { type?: string; isError?: boolean }).type === "tool_execution_end" && (event as { isError?: boolean }).isError)).toBe(true);
 });
@@ -128,12 +107,13 @@ test("strict JSON Schema rejects type coercion before hooks, permission and exec
 		typeof event === "object" && event !== null && "type" in event && event.type === "tool_execution_end") as Array<{ type: "tool_execution_end"; toolCallId: string; isError: boolean }>;
 	expect(ends.find(event => event.toolCallId === "invalid")?.isError).toBe(true);
 	expect(ends.find(event => event.toolCallId === "valid")?.isError).toBe(false);
+	expect(JSON.stringify(events.filter(event => typeof event === "object" && event !== null && "type" in event && event.type === "message_end"))).toContain("Validation failed");
 	expect(beforeCalls).toBe(1);
 	expect(authorized).toEqual([{ value: 3 }]);
 	expect(executed).toEqual([{ value: 3 }]);
 });
 
-for (const source of ["rewrite", "hook"] as const) test(`invalid ${source} input cannot reach permission or execute`, async () => {
+test("before hook can block valid native input before permission or execution", async () => {
 	let permissions = 0;
 	let executions = 0;
 	const port = await createTestAgent({
@@ -141,11 +121,7 @@ for (const source of ["rewrite", "hook"] as const) test(`invalid ${source} input
 		tools: [{ name: "count", label: "Count", description: "Count", parameters: {
 			type: "object", properties: { value: { type: "integer" } }, required: ["value"], additionalProperties: false,
 		}, async execute() { executions++; return { content: [], details: {} }; } }],
-		...(source === "rewrite" ? { toolInputRewrites: { count: () => ({ value: "3" }) } } : {}),
-		toolHooks: { beforeToolCall: async ({ args }) => {
-			if (source === "hook") (args as { value: string | number }).value = "3";
-			return undefined;
-		} },
+		toolHooks: { beforeToolCall: async () => ({ block: true, reason: "blocked by host" }) },
 		permission: { hooks: [{ evaluate() { permissions++; return { kind: "allow", source: "hook" }; } }] },
 	});
 	const events = await collectEvents(port);
@@ -154,7 +130,7 @@ for (const source of ["rewrite", "hook"] as const) test(`invalid ${source} input
 	expect(executions).toBe(0);
 });
 
-test("allow_always remembers the rewritten scope and permits the same rewritten call once more", async () => {
+test("allow_always remembers the displayed scope and permits the same call once more", async () => {
 	const executed: CaptureInput[] = [];
 	const memory = new MemoryPermissionStore();
 	const bus = new RequestBus({ idPrefix: "rewrite-memory", timeoutMs: 500 });
@@ -166,19 +142,18 @@ test("allow_always remembers the rewritten scope and permits the same rewritten 
 				{ text: "done" },
 			],
 			tools: [captureTool(executed)],
-			toolInputRewrites: { capture: rewriteToSafePath },
 			permission: { memory },
 			requestBus: bus,
 		});
 		const eventsPromise = collectEvents(port);
 		const request = await nextPermissionRequest(bus);
-		const rewrittenCall: ToolCallBlock = { type: "tool_call", id: "scope", name: "capture", arguments: { path: "tmp/file.ts" } };
-		bus.respond(response(request.id, { decision: "allow_always", scope: permissionScopeForToolCall(rewrittenCall) }));
+		const displayedCall: ToolCallBlock = { type: "tool_call", id: "scope", name: "capture", arguments: { path: "/tmp/file.ts" } };
+		bus.respond(response(request.id, { decision: "allow_always", scope: permissionScopeForToolCall(displayedCall) }));
 
 		await eventsPromise;
-		expect(executed).toEqual([{ path: "tmp/file.ts" }, { path: "tmp/file.ts" }]);
+		expect(executed).toEqual([{ path: "/tmp/file.ts" }, { path: "/tmp/file.ts" }]);
 		expect(memory.entries()).toHaveLength(1);
-		expect(memory.entries()[0]).toMatchObject(permissionScopeForToolCall(rewrittenCall));
+		expect(memory.entries()[0]).toMatchObject(permissionScopeForToolCall(displayedCall));
 	} finally {
 		bus.close();
 	}

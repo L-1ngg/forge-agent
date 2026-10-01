@@ -9,6 +9,8 @@ created: 2026-09-27
 
 ## Entry
 
+当前工具参数和保存时序以 [ADR-030](../decisions/030-native-arguments-and-conversation-persistence.md) 为准(2026-10-01)；下文保留原接线及当时验收。
+
 起点 `1b369e856a0fbce9af71632351f1c7a943b3d9eb`，`master` 比 `origin/master` 领先 2 次提交；staged、unstaged、untracked 均为空。Issue 已确认 Zod、官方 `withSkills`/`memoryMiddleware`、Markdown adapter、internal/trusted、项目/个人目录和显式 `/skill` 的方向。按 [SOP](../SOP.md#改动分级)，本次大改动的 ADR 和施工图先交 operator 确认，再修改生产代码。
 
 | 入口 | 通过条件 | 不通过时 |

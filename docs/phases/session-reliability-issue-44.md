@@ -7,6 +7,8 @@ created: 2026-09-30
 
 > 状态:实现与离线软件验收完成(2026-09-30，离线软件门禁、受控基准及双轴复审通过)。范围、任务级 AC 与任务状态以 [Issue #44](https://github.com/L-1ngg/forge-agent/issues/44) 为准；继承 ADR-010、017、023、025–028 和 Issue #40–43 的合同，不改写历史验收。
 
+> 合同更新(2026-10-01):执行前/逐工具保存屏障、通用改参链及审批修订日志被 [ADR-030](../decisions/030-native-arguments-and-conversation-persistence.md) 部分取代；本次施工与证据见[会话中间件简化](session-middleware-simplification.md)。本文保留当时实现与验收记录。
+
 ## Entry
 
 起点 `eea5167f9a9a134ea73442d144b781eaa3712c34`，`master` staged、unstaged、untracked 均为空。规格已固定方向、完整范围和公开测试接口，本次实现不重新确认已定决策。

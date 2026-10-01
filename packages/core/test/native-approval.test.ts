@@ -108,7 +108,7 @@ test("one native approval batch waits for ask, executes allowed calls once, and 
 		expect(next.value.payload.toolCall.arguments).toEqual({ value: "ask" });
 		expect(effects).toEqual([]);
 		expect(requests).toHaveLength(1);
-		expect((await storage.load()).entries.filter(entry => entry.type === "message" && entry.message.role === "assistant")).toHaveLength(1);
+		expect((await storage.load()).entries.filter(entry => entry.type === "message" && entry.message.role === "assistant")).toHaveLength(0);
 		expect(agent.respond(response(next.value.id, { decision: "allow_once" }))).toBe(true);
 		await events;
 		expect(await turn.result).toEqual({ status: "success" });
@@ -123,7 +123,8 @@ test("one native approval batch waits for ask, executes allowed calls once, and 
 		const firstTool = sessionEvents.findIndex(event => event.type === "tool_execution_start");
 		const finalAnswer = sessionEvents.findIndex(event => event.type === "message_end" && event.message.role === "assistant" && event.message.content.some(part => part.type === "text"));
 		expect(proposalEnd).toBeGreaterThan(-1);
-		expect(firstTool).toBeGreaterThan(proposalEnd);
+		expect(firstTool).toBeGreaterThan(-1);
+		expect(proposalEnd).toBeGreaterThan(firstTool);
 		expect(finalAnswer).toBeGreaterThan(firstTool);
 		expect(sessionEvents.at(-1)?.type).toBe("agent_end");
 	} finally { agent.abort(); await events; await agent.dispose(); }
@@ -146,18 +147,17 @@ test("an entirely denied batch returns reasons to the model and finishes the inv
 	} finally { await agent.dispose(); }
 });
 
-test("native approval sees arguments normalized by a Zod-backed host tool", async () => {
+test("native approval sees defaults parsed by a Zod-backed host tool", async () => {
 	const effects: string[] = [];
-	let prepared = 0, calls = 0;
+	let calls = 0;
 	const adapter = nativeAdapter(model, async function* () {
 		yield* responseChunks(++calls === 1
-			? { role: "assistant", content: [{ type: "tool_call", id: "normalized", name: "work", arguments: { legacyValue: "ready" } }], stopReason: "tool_use", timestamp: calls }
+			? { role: "assistant", content: [{ type: "tool_call", id: "normalized", name: "work", arguments: {} }], stopReason: "tool_use", timestamp: calls }
 			: { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: calls });
 	});
 	const agent = await createAgent({ model, adapter, systemPrompt: "test", cwd: process.cwd(),
-		tools: [{ name: "work", label: "Work", description: "record", inputSchema: z.object({ value: z.string() }),
+		tools: [{ name: "work", label: "Work", description: "record", inputSchema: z.object({ value: z.string().default("ready") }),
 			parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
-			prepareArguments(args) { prepared++; return { value: (args as { legacyValue: string }).legacyValue }; },
 			async execute(args) { const value = (args as { value: string }).value; effects.push(value); return { content: [{ type: "text", text: value }], details: value }; } }],
 	});
 	const turn = agent.runTurn("work");
@@ -169,7 +169,6 @@ test("native approval sees arguments normalized by a Zod-backed host tool", asyn
 		expect(agent.respond(response(next.value.id, { decision: "allow_once" }))).toBe(true);
 		await bounded(running, "normalized turn");
 		expect(await turn.result).toEqual({ status: "success" });
-		expect(prepared).toBe(1);
 		expect(effects).toEqual(["ready"]);
 		expect(calls).toBe(2);
 	} finally { agent.abort(); await running; await agent.dispose(); }
@@ -202,13 +201,15 @@ test("a failing permission memory settles approval without executing the tool", 
 	} finally { agent.abort(); await running; await agent.dispose(); }
 });
 
-for (const edited of ["reviewed", "deny", 42] as const) test(`edited approval arguments ${String(edited)} are checked before execution`, async () => {
+for (const schema of ["zod", "json"] as const) for (const edited of ["reviewed", "deny", 42] as const) test(`native ${schema} edited approval ${String(edited)} needs no Forge re-evaluation`, async () => {
 	const requests: SessionMessage[][] = [], effects: string[] = [];
 	const storage = new MemorySessionStorage();
+	const evaluated: unknown[] = [];
 	const agent = await createAgent({ model, adapter: fixture(requests), systemPrompt: "test", cwd: process.cwd(), storage,
-		tools: [{ name: "work", label: "Work", description: "record a value", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
+		tools: [{ name: "work", label: "Work", description: "record a value", ...(schema === "zod" ? { inputSchema: z.strictObject({ value: z.string() }) } : {}), parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
 			async execute(args) { effects.push(String((args as { value: string }).value)); return { content: [{ type: "text", text: "done" }], details: {} }; } }],
 		permission: { hooks: [{ evaluate(call) {
+			evaluated.push(call.arguments.value);
 			if (call.arguments.value === "allow") return { kind: "allow", source: "hook" };
 			if (call.arguments.value === "deny") return { kind: "deny", source: "hook", reason: "edited value denied" };
 			return undefined;
@@ -224,46 +225,19 @@ for (const edited of ["reviewed", "deny", 42] as const) test(`edited approval ar
 		expect(agent.respond(response(next.value.id, result))).toBe(false);
 		await events;
 		const saved = (await storage.load()).entries.flatMap(entry => entry.type === "message" && entry.message.role === "toolResult" ? [entry.message] : []);
-		if (edited === "reviewed") {
-			expect(effects).toEqual(["allow", "reviewed"]);
-			expect(saved.find(message => message.toolCallId === "ask")?.toolArguments).toEqual({ value: "reviewed" });
+		expect(evaluated).toEqual(["allow", "deny", "ask"]);
+		expect((await storage.load()).entries.filter(entry => entry.type === "message" && entry.message.role === "assistant" && entry.message.toolArguments)).toHaveLength(0);
+		if (typeof edited === "string") {
+			expect(await turn.result).toEqual({ status: "success" });
+			expect(effects).toEqual(["allow", edited]);
+			expect(saved.find(message => message.toolCallId === "ask")?.toolArguments).toEqual({ value: edited });
 		} else {
-			expect(effects).toEqual(["allow"]);
-			expect(JSON.stringify(requests[1])).toContain(edited === "deny" ? "edited value denied" : "Validation failed");
+			expect(await turn.result).toEqual({ status: "error" });
+			expect(effects).toEqual([]);
+			expect(requests).toHaveLength(1);
+			expect(JSON.stringify(await storage.load())).toContain("edited arguments are invalid");
 		}
 	} finally { agent.abort(); await events; await agent.dispose(); }
-});
-
-test("edited argument commit failure prevents the entire approved batch from executing", async () => {
-	const requests: SessionMessage[][] = [], effects: string[] = [];
-	const storage = new MemorySessionStorage();
-	let rejected = false;
-	const agent = await createAgent({ model, adapter: fixture(requests), systemPrompt: "test", cwd: process.cwd(),
-		storage: { load: () => storage.load(), async append(entry) {
-			if (entry.type === "message" && entry.message.role === "assistant" && entry.message.toolArguments) { rejected = true; throw new Error("final arguments unavailable"); }
-			await storage.append(entry);
-		} },
-		tools: [{ name: "work", label: "Work", description: "record a value", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
-			async execute(args) { effects.push(String((args as { value: string }).value)); return { content: [], details: {} }; } }],
-		permission: { hooks: [{ evaluate(call) {
-			if (call.arguments.value === "allow") return { kind: "allow", source: "hook" };
-			if (call.arguments.value === "deny") return { kind: "deny", source: "hook", reason: "policy denied" };
-			return undefined;
-		} }] },
-	});
-	const turn = agent.runTurn("work");
-	const running = (async () => { for await (const _event of turn) {} })();
-	try {
-		const request = await agent.requests[Symbol.asyncIterator]().next();
-		if (request.done || request.value.kind !== "permission") throw new Error("Expected permission request");
-		expect(agent.respond(response(request.value.id, { decision: "allow_once", editedArgs: { value: "reviewed" } }))).toBe(true);
-		await expect(running).rejects.toThrow("final arguments unavailable");
-		expect(rejected).toBe(true);
-		expect(effects).toEqual([]);
-		expect(await turn.result).toEqual({ status: "error" });
-		expect(() => agent.runTurn("again")).toThrow("faulted");
-		expect(requests).toHaveLength(1);
-	} finally { agent.abort(); await running.catch(() => {}); await agent.dispose().catch(() => {}); }
 });
 
 test("stopping while approval is pending invalidates the old answer and does not execute tools", async () => {

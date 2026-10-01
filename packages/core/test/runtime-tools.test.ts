@@ -49,7 +49,7 @@ for (const scenario of ["allow", "mixed", "deny", "invalid", "unknown", "throw",
 	} finally { await agent.dispose(); await permissions; server.stop(true); }
 });
 
-for (const failAt of ["assistant", "toolResult"] as const) test(`SDK ${failAt} save failure blocks later effects and settles tools`, async () => {
+for (const failAt of ["assistant", "toolResult"] as const) test(`SDK ${failAt} save failure follows batch effects and blocks the next model`, async () => {
 	let requests = 0; let effects = 0; let writes = 0;
 	const started = gate(); const release = gate();
 	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { requests++; return modelResponse(["a", "b"].map(id => ({ id, name: "work", arguments: { id } }))); } });
@@ -61,9 +61,9 @@ for (const failAt of ["assistant", "toolResult"] as const) test(`SDK ${failAt} s
 	});
 	const run = (async () => { for await (const _event of agent.runTurn("work")) { } })().catch(error => error as Error);
 	try {
-		if (failAt === "toolResult") { await started.promise; await Promise.resolve(); release.resolve(); }
+		await started.promise; await Promise.resolve(); release.resolve();
 		const error = await run; expect(error?.message).toBe("disk failed");
-		expect(requests).toBe(1); expect(effects).toBe(failAt === "assistant" ? 0 : 1); expect(writes).toBe(failAt === "assistant" ? 2 : 3);
+		expect(requests).toBe(1); expect(effects).toBe(2); expect(writes).toBe(failAt === "assistant" ? 2 : 3);
 		expect(() => agent.runTurn("again")).toThrow("faulted");
 	} finally { release.resolve(); await run; await agent.dispose(); server.stop(true); }
 });
@@ -131,7 +131,7 @@ for (const invalidAt of ["execute", "after"] as const) test(`SDK rejects nonpers
 	} finally { release.resolve(); await run; await agent.dispose(); server.stop(true); }
 });
 
-test("SDK assistant persistence barrier prevents tool effects while its write is pending", async () => {
+test("SDK pending assistant save follows tool effects and delays the next model", async () => {
  const saving = gate(); const release = gate(); let effects = 0; let requests = 0;
  const storage = new MemorySessionStorage();
  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() { return ++requests === 1 ? modelResponse([{ id: "once", name: "work", arguments: { id: "once" } }]) : modelResponse(); } });
@@ -147,7 +147,7 @@ test("SDK assistant persistence barrier prevents tool effects while its write is
  const running = (async () => { for await (const _event of turn) {} })();
  try {
   await saving.promise; await nextTurn();
-  expect(effects).toBe(0); expect(requests).toBe(1);
+  expect(effects).toBe(1); expect(requests).toBe(1);
   release.resolve(); await running;
   expect(await turn.result).toEqual({ status: "success" });
   expect(effects).toBe(1); expect(requests).toBe(2);

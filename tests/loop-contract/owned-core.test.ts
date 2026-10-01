@@ -36,11 +36,11 @@ function userTexts(events: SessionEvent[]): string[] {
 
 test("owned core preserves a length-limited response without preparing or executing its tool calls", async () => {
 	let executions = 0;
-	let rewrites = 0;
+	let beforeCalls = 0;
 	const port = await createTestAgent({
 		permission: { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] },
 		tools: [tool(async () => { executions++; return { content: [{ type: "text", text: "unexpected" }], details: "unexpected" }; })],
-		toolInputRewrites: { capture: (input) => { rewrites++; return input; } },
+		toolHooks: { beforeToolCall: () => { beforeCalls++; return undefined; } },
 		responses: [
 			{ toolCalls: ["first", "second"].map((id) => ({ id, name: "capture", arguments: { value: "valid but truncated" } })), stopReason: "length" },
 			{ text: "recovered" },
@@ -48,7 +48,7 @@ test("owned core preserves a length-limited response without preparing or execut
 	});
 	const events = await collect(port);
 	expect(executions).toBe(0);
-	expect(rewrites).toBe(0);
+	expect(beforeCalls).toBe(0);
 	for (const id of ["first", "second"]) {
 		expect(events.filter((event) => event.type === "tool_execution_start" && event.toolCallId === id)).toHaveLength(0);
 		expect(events.filter((event) => event.type === "tool_execution_end" && event.toolCallId === id)).toHaveLength(0);

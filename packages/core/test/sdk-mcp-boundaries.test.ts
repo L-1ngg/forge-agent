@@ -91,7 +91,7 @@ for (const failure of ["denied", "append", "budget"] as const) test(`MCP Prompt 
 	} finally { await agent.dispose(); await server.close(); await model.stop(true); }
 });
 
-test("MCP template expansion after rewrite authorizes the exact final URI and enters model context", async () => {
+test("MCP authorizes template arguments and expands the URI inside the tool", async () => {
 	const server = serve(mcpFixture); let requests = 0; let authorized: unknown;
 	const model = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 		const body = await request.json();
@@ -100,12 +100,12 @@ test("MCP template expansion after rewrite authorizes the exact final URI and en
 			expect(resource?.input_schema?.oneOf).toHaveLength(2);
 			return modelResponse([{ id: "template", name: "mcp_read_resource", arguments: { serverId: "fixture", template: "fixture://item/{id}", arguments: { id: "original" } } }]);
 		}
-		expect(JSON.stringify(body)).toContain("rewritten"); return modelResponse();
+		expect(JSON.stringify(body)).toContain("original"); return modelResponse();
 	} });
 	const agent = await createAgent({ ...base, baseUrl: `http://127.0.0.1:${model.port}`, permission: { hooks: [{ evaluate(call) { authorized = call.arguments; return { kind: "allow", source: "hook" }; } }] },
-		toolInputRewrites: { mcp_read_resource: () => ({ serverId: "fixture", template: "fixture://item/{id}", arguments: { id: "rewritten" } }) }, mcp: { servers: { fixture: { transport: "http", url: server.url } } },
+		mcp: { servers: { fixture: { transport: "http", url: server.url } } },
 	});
-	try { const turn = agent.runTurn("read template"); for await (const _ of turn) {} expect((await turn.result).status).toBe("success"); expect(authorized).toEqual({ serverId: "fixture", uri: "fixture://item/rewritten" }); expect(requests).toBe(2); }
+	try { const turn = agent.runTurn("read template"); for await (const _ of turn) {} expect((await turn.result).status).toBe("success"); expect(authorized).toEqual({ serverId: "fixture", template: "fixture://item/{id}", arguments: { id: "original" } }); expect(requests).toBe(2); }
 	finally { await agent.dispose(); await server.close(); await model.stop(true); }
 });
 

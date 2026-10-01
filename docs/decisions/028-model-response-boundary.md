@@ -7,6 +7,8 @@ created: 2026-09-28
 
 > 状态:已批准(2026-09-28)。施工与证据见 [Issue #40 施工图](../phases/model-response-boundary.md)；工具审批与执行继续按 [ADR-027](027-native-tool-approval-and-interruption.md)。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):工具前提交时序。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 决定
 
 每次成功模型请求以 TanStack `chat()` 当前产生的 `ModelMessage` 为文本、thinking 和工具调用的主要来源。Forge 在原始 adapter 流旁只记录协议终态、事件配对、严格工具 JSON、失败时的部分输出，以及 TanStack 消息未表达的签名、redacted 标记和顺序索引。原始迭代器及其 `finally` 完成后才能判断成功；正常 EOF 不是成功终态。成功消息投影为原有 `SessionMessage`，而不是另存一份 TanStack transcript。

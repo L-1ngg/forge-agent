@@ -215,7 +215,7 @@ assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮
 
 依赖门禁禁止 core 引入 UI，并拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
 
-SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和持久历史。TanStack `chat()` 负责模型/工具续轮、成功响应聚合及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 审计原始 provider 协议，并在任何工具执行前保存完整提案与最终参数；仅未能自动决定的审批交给宿主。批准后工具在原生 `.server()` 中执行一次，Forge 在下一次模型请求前保存结果。审批仅在当前进程续接。
+SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和会话历史。TanStack `chat()` 负责模型/工具续轮、schema 校验、审批续接、成功响应聚合及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 审计原始 provider 协议，仅未能自动决定的审批交给宿主。工具批次完成后，Forge 在下一次模型请求前保存提案与结果。保存失败仍停止执行并停用实例，但副作用可能已经发生；进程崩溃可能丢失最新批次。审批仅在当前进程续接。简化后的合同见 [ADR-030](docs/decisions/030-native-arguments-and-conversation-persistence.md)。
 
 ```mermaid
 flowchart LR

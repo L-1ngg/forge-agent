@@ -9,6 +9,8 @@ created: 2026-09-27
 
 > 后续补充(2026-09-30)：整理模型阶段的 Invocation 取消、有限等待和迟到写盘门禁按 [ADR-029](029-session-reliability-and-bounded-views.md)；不恢复本决定删除的取消恢复账本、事务或锁。新鲜证据见 [Issue #44 施工图](../phases/session-reliability-issue-44.md)，原验收边界不变。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):执行前/逐工具存储屏障。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 决定
 
 本地静态工具以 Zod Standard Schema 为参数唯一来源，动态 MCP / SDK JSON Schema 保持现有入口。`@tanstack/ai-skills` 的 `withSkills(skillDirectory(...))` 负责技能目录、`load_skill`、加载去重和 `createResourceTool`；项目目录排在个人全局目录之前，由官方 `aggregate`、`dedupe` 和 `filter` 组合。Forge 仅接线宿主目录、显式 `/skill` 输入和不可自动调用的可见性。Skills 脚本仍由普通执行工具及其权限策略处理。

@@ -8,6 +8,8 @@ created: 2026-09-26
 > 状态:循环与模型接缝决定被 [ADR-025](025-tanstack-agent-foundation.md) 取代(2026-09-27)；严格校验与移除 pi-ai 的决定继续有效。历史批准记录(2026-09-26)：operator 确认逐步迁移方向，并选择工具参数统一严格校验；首项施工见[工具参数校验](../phases/tool-argument-validation.md)。
 > 参与者:operator 确定目标与类型校验策略；Codex 调研当前边界并提出迁移顺序。
 
+> 部分被 [ADR-030](030-native-arguments-and-conversation-persistence.md) 取代(2026-10-01):通用参数改写与重复校验链。下文保留原决策及当时证据，其余合同继续有效。
+
 ## 背景
 
 Forge 自己维护单 Agent 执行循环和会话策略，但工具校验、模型目录/传输、流事件类型、预算辅助及错误分类仍直接依赖 `@earendil-works/pi-ai`。当前工具参数先在 `runtime/agent-loop.ts` 校验，再在 `session-tools.ts` 的改写及授权路径重复校验；普通 JSON Schema 使用 pi-ai 的转换语义，MCP 使用官方 Ajv 严格校验。operator 希望逐步引入 TanStack AI，最终移除 pi-ai 包，而不是只整理现有代码。

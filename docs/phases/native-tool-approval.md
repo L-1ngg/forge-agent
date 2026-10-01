@@ -7,6 +7,8 @@ created: 2026-09-28
 
 > 状态:已完成(2026-09-28)。任务范围与 AC 以 [Issue #39](https://github.com/L-1ngg/forge-agent/issues/39) 为准；架构取舍见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md)。
 
+> 合同更新(2026-10-01):执行前/逐工具保存屏障、通用改参链及审批修订日志被 [ADR-030](../decisions/030-native-arguments-and-conversation-persistence.md) 部分取代；本次施工与证据见[会话中间件简化](session-middleware-simplification.md)。本文保留当时实现与验收记录。
+
 ## Why
 
 现有 `AgentSession` 在 native 工具阶段前由 Forge 逐项等待权限、预执行整个批次，再让 `.server()` 读取缓存结果。Issue #39 要把执行和审批续接交回 TanStack，并使拒绝、停止和最终结算各有明确语义。

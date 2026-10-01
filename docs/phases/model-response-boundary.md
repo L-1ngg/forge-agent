@@ -7,6 +7,8 @@ created: 2026-09-28
 
 > 状态:本地实现与 Linux 离线验收已完成(2026-09-28)，真实供应商、跨平台及长期人工验收未完成。任务范围与 AC 以 [Issue #40](https://github.com/L-1ngg/forge-agent/issues/40) 为准；现行工具执行合同见 [ADR-027](../decisions/027-native-tool-approval-and-interruption.md)。
 
+> 合同更新(2026-10-01):执行前/逐工具保存屏障、通用改参链及审批修订日志被 [ADR-030](../decisions/030-native-arguments-and-conversation-persistence.md) 部分取代；本次施工与证据见[会话中间件简化](session-middleware-simplification.md)。本文保留当时实现与验收记录。
+
 ## Entry And Design
 
 起点 `0fe2e505f7e0cffb00b772ee688cc5950c574d72`，`master` 工作区干净，无暂存、未暂存或未跟踪文件。Issue #40 已确定 `chat()` 唯一循环、原文 JSONL 和公开测试边界。起点的 `ResponseCollector` 在原始流上重建完整成功消息，TanStack 同时聚合 `ModelMessage`；本次删除前者的成功消息状态。
