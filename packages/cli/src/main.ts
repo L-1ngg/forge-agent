@@ -135,6 +135,7 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
 			...(config.retry ? { retry: config.retry } : {}),
 			...(config.maxTokens !== undefined ? { maxTokens: config.maxTokens } : {}),
 			...(config.contextWindow !== undefined ? { contextWindow: config.contextWindow } : {}),
+			...(config.cacheHints !== undefined ? { cacheHints: config.cacheHints } : {}),
 			cwd: workingDirectory,
 			mcp: selectedMcp,
 			mcpCredentialStore: config.mcp?.credentialStore ?? "system",

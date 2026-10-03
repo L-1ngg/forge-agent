@@ -89,6 +89,7 @@ export const registry: TestRegistry = {
 		"packages/core/test/native-model.test.ts",
 		"packages/core/test/openai-stream.test.ts",
 		"packages/core/test/persistent-memory.test.ts",
+		"packages/core/test/prompt-cache.test.ts",
 		"packages/core/test/provider-matrix.test.ts",
 		"packages/core/test/provider-replay.test.ts",
 		"packages/core/test/provider-stream.test.ts",

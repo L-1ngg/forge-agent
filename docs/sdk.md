@@ -32,6 +32,23 @@ async function openAgent(model: Model, adapter: ModelAdapter) {
 
 运行离线示例：`bun examples/custom-adapter.ts`、`bun examples/turn-policy.ts`、`bun examples/context-transform.ts`。它们使用 [scripted-adapter.ts](../examples/scripted-adapter.ts) 的原生 adapter，无需凭据；完整调用示例见 [custom-adapter.ts](../examples/custom-adapter.ts)。
 
+## Prompt cache
+
+`cacheHints?: boolean` 默认 `true`，可在 `createAgent`、`updateConfiguration` 和 CLI 的用户/项目 JSON 配置中设置。Forge 仅为以下主任务请求添加供应商缓存提示：
+
+| provider / api | 请求参数 |
+|---|---|
+| `xai` / `openai-responses` | 由 `sessionId` 稳定派生的 `prompt_cache_key` |
+| `anthropic` / `anthropic-messages` | `cache_control: { type: "ephemeral" }`，默认 5 分钟 TTL |
+
+其他供应商、压缩摘要和 deferred 记忆整理不自动添加这些提示。`cacheHints: false` 仅关闭 Forge 添加的参数，不关闭供应商隐式缓存，也不约束自定义 adapter 内部的缓存策略。兼容代理拒绝参数时可显式关闭；Forge 不会静默删除字段后重试。
+
+xAI 的 key 在同会话和工具续轮中一致。SDK 重新打开存储时需提供相同的 `sessionId` 才能保持 key；CLI 恢复会话会沿用该标识。相同 key 仅辅助供应商路由，不保证命中。
+
+System 顺序为主提示词 → Skills 目录 → 记忆；主提示词配置更新替换原槽位。每次运行仍使用官方记忆召回和 deferred 保存。记忆变化会使其后的历史前缀失效；配置变化、上下文压缩、TTL 和供应商路由同样可能影响命中。
+
+`SessionMessage.usage` 的 `input` 是未缓存输入，`cacheRead` 和 `cacheWrite` 分别记录缓存读写，三者都占上下文。缓存读取占比按 `cacheRead / (input + cacheRead + cacheWrite)` 计算，分母为零时不计算。内置目录的费用是价格估算，不保证与代理账单一致。实现与本次验证范围见[缓存修复记录](phases/model-adapter.md#prompt-cache-接线与计量修复)。
+
 ## 执行职责
 
 `createAgent → AgentSession → TanStack chat() → TextAdapter` 是 SDK、CLI 与 TUI 共用的执行路径。`chat()` 负责模型与工具续轮，Forge 不再维护 Pi Agent/agent-loop。Forge 会话保留输入归属、配置 revision、权威终态、逐条持久化和证据型压缩；`onConfig` middleware 在请求边界准备投影和最终预算。

@@ -20,6 +20,7 @@ export async function prepareSessionConfiguration(options: CreateAgentOptions, s
 	configuration.thinkingLevel ??= "off";
 	if ("streamFn" in configuration) throw new TypeError("streamFn was removed; supply a native TanStack adapter");
 	if (typeof configuration.systemPrompt !== "string" || !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(configuration.thinkingLevel)) throw new Error("Invalid model configuration");
+	if (configuration.cacheHints !== undefined && typeof configuration.cacheHints !== "boolean") throw new TypeError("cacheHints must be a boolean");
 	validateSessionTools(configuration);
 	if (skills.enabled && configuration.tools?.some(tool => tool.name === "load_skill")) throw new Error("load_skill is reserved when Skills are enabled");
 	const resolved = await resolveModelOptions(configuration);

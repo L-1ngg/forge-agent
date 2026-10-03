@@ -7,7 +7,7 @@ import type { SessionMessage } from "@forge-agent/protocol";
 import type { SummaryDriver } from "./context/compaction.ts";
 import type { McpManager, McpAssembly } from "./mcp/manager.ts";
 
-export type ConfigurationPatch = { mcp?: import("./mcp/types.ts").McpConfiguration | false; } & Partial<Pick<CreateAgentOptions, "provider" | "model" | "adapter" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "skills" | "memory">>;
+export type ConfigurationPatch = { mcp?: import("./mcp/types.ts").McpConfiguration | false; } & Partial<Pick<CreateAgentOptions, "provider" | "model" | "adapter" | "apiKey" | "baseUrl" | "systemPrompt" | "thinkingLevel" | "tools" | "maxTokens" | "contextWindow" | "cacheHints" | "skills" | "memory">>;
 export interface ConfigurationReceipt {
 	accepted: true;
 	revision: number;

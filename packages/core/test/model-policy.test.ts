@@ -32,3 +32,13 @@ test("overflow and retry classification separates quota from transient errors", 
 	const result: SessionMessage = { role: "toolResult", content: [], toolCallId: "call", toolName: "work", isError: false, timestamp: 0 };
 	expect(isContextOverflow(result, 200000)).toBe(false);
 });
+
+test("cache writes still occupy the context window", () => {
+	const result = answer("stop");
+	result.usage = { ...usage(), input: 100, cacheRead: 700, cacheWrite: 300, output: 20, totalTokens: 1120 };
+	expect(isContextOverflow(result, 1000)).toBe(true);
+	result.stopReason = "length"; result.usage.output = 0;
+	expect(isContextOverflow(result, 1000)).toBe(true);
+	result.usage.cacheWrite = 0;
+	expect(isContextOverflow(result, 1000)).toBe(false);
+});

@@ -37,6 +37,8 @@ export interface CreateAgentOptions extends InputQueueOptions {
 	retry?: Partial<RetryPolicy>;
 	maxTokens?: number;
 	contextWindow?: number;
+	/** Provider cache hints for task requests (default true); implicit caching is provider-owned. */
+	cacheHints?: boolean;
 	provider?: string;
 	model: string | Model<string>;
 	/** Native TanStack adapter shared by task and summary requests; null restores the catalog adapter. */

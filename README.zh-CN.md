@@ -52,6 +52,8 @@ bun run forge-agent -- -p "Read package.json and summarize it" --json
 }
 ```
 
+主任务默认向 xAI Responses 和 Anthropic Messages 添加缓存提示。代理不接受这些参数时，可在 JSON 配置中设置 `"cacheHints": false`；这不会关闭供应商隐式缓存。SDK 也支持该选项和动态更新。会话标识、记忆与用量语义见 [Prompt cache](docs/sdk.md#prompt-cache)。
+
 可选 `baseUrl` 指向兼容代理。字段区分大小写,未知顶层字段会被拒绝。每次启动进入新会话，首次输入被消费前不保存；之后写入 Git worktree 根目录的 `.forge-agent/sessions/`，非 Git 项目则使用启动目录。已移除 `--session` 和配置 `sessionPath`，通过 `/resume` 恢复历史。
 
 - `/clear` 只清空可见对话，保留模型上下文并明确提示。

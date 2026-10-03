@@ -69,7 +69,6 @@ export async function runNativeExecution(host: NativeExecutionHost, input: Nativ
 	const nativeTools = new Map<string, AnyTool>();
 	if (resource) nativeTools.set(resource.name, resource);
 	for (const tool of memoryTools) nativeTools.set(tool.name, tool);
-	let forgePrompt: string | undefined;
 	const commit = async (batch: ResponseBatch) => { lastResponse = batch.message; await host.commit(batch); };
 	const commitFailure = async (reason: "error" | "aborted", error: unknown) => {
 		const batch = failureBatch(failureConfiguration, reason, error);
@@ -109,8 +108,8 @@ export async function runNativeExecution(host: NativeExecutionHost, input: Nativ
 			const bridge = bridgeSessionTools(snapshot.tools, nativeTools);
 			current = new SessionResponse({ ...snapshot.options, tools: bridge.effective }, snapshot.revision, snapshot.settings, bridge.internal, () => host.history().messages, emit);
 			emit({ type: "turn_start", timestamp: Date.now() });
-			const prompts = [...config.systemPrompts.filter(prompt => (typeof prompt === "string" ? prompt : prompt.content) !== forgePrompt), { content: current.options.systemPrompt }];
-			forgePrompt = current.options.systemPrompt;
+			// Forge owns the first slot; native Skills/Memory append their prompts.
+			const prompts = [{ content: current.options.systemPrompt }, ...config.systemPrompts.slice(1)];
 			const systemPrompt = prompts.map(prompt => typeof prompt === "string" ? prompt : prompt.content).join("\n\n");
 			const projection = await host.projectRequest(systemPrompt, bridge.effective);
 			signal.throwIfAborted();
@@ -149,7 +148,7 @@ export async function runNativeExecution(host: NativeExecutionHost, input: Nativ
 			const configuration = current?.options ?? requestSnapshot?.options ?? options;
 			return { provider: configuration.adapter?.name ?? configuration.model.provider, model: configuration.adapter?.model ?? configuration.model.id, revision: current?.revision ?? requestSnapshot?.revision ?? input.revision };
 		}) : undefined;
-		const middlewareChain = [...(nativeMemory ? [nativeMemory] : []), ...(skills.automatic ? [withSkills(skills.automatic)] : []), middleware, ...(otel ? [otel] : [])];
+		const middlewareChain = [...(skills.automatic ? [withSkills(skills.automatic)] : []), ...(nativeMemory ? [nativeMemory] : []), middleware, ...(otel ? [otel] : [])];
 		const threadId = options.sessionId ?? randomUUID();
 		while (!signal.aborted) {
 			const runId = randomUUID();
@@ -157,6 +156,7 @@ export async function runNativeExecution(host: NativeExecutionHost, input: Nativ
 			let interrupts: readonly Interrupt[] | undefined;
 			for await (const chunk of chat({
 				adapter: routed, messages: continuation?.messages ?? toModelMessages(input.messages), threadId, runId,
+				systemPrompts: [{ content: options.systemPrompt }],
 				...(continuation ? { parentRunId: continuation.parentRunId, resume: continuation.resume } : {}),
 				abortController: linked.controller, tools: continuation ? current!.tools : [...(resource ? [resource] : []), ...memoryTools],
 				middleware: middlewareChain, agentLoopStrategy: () => true, debug: false,

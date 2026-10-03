@@ -3,6 +3,7 @@ import { adjustMaxTokensForThinking } from "./model-policy.ts";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { Readable } from "node:stream";
+import { createHash } from "node:crypto";
 import type { ConverseStreamCommandInput, ConverseStreamOutput } from "@aws-sdk/client-bedrock-runtime";
 import Anthropic from "@anthropic-ai/sdk";
 import { createAnthropicChat, createAnthropicChatWithClient, type AnthropicChatModel } from "@tanstack/ai-anthropic";
@@ -24,6 +25,8 @@ export interface ModelRequestSettings {
 	reasoning?: ThinkingLevel;
 	apiKey?: string;
 	sessionId?: string;
+	/** Explicit opt-in from task preparation; summaries and memory saves omit it. */
+	cacheHints?: boolean;
 	env?: Record<string, string>;
 }
 
@@ -160,12 +163,13 @@ function geminiThinkingConfig(model: Model<string>, reasoning: ModelRequestSetti
 export function providerModelOptions(model: Model<string>, options: ModelRequestSettings): Record<string, unknown> {
 	switch (model.api) {
 		case "anthropic-messages": {
+			const cache = options.cacheHints && model.provider === "anthropic" ? { cache_control: { type: "ephemeral" } } : {};
 			const requested = options.maxTokens ?? model.maxTokens;
 			const adaptive = usesAdaptiveThinking(model);
-			if (!options.reasoning) return { max_tokens: requested, ...(adaptive ? {} : { thinking: { type: "disabled" } }) };
-			if (adaptive) return { max_tokens: requested, thinking: { type: "adaptive" }, output_config: { effort: options.reasoning === "minimal" ? "low" : options.reasoning } };
+			if (!options.reasoning) return { ...cache, max_tokens: requested, ...(adaptive ? {} : { thinking: { type: "disabled" } }) };
+			if (adaptive) return { ...cache, max_tokens: requested, thinking: { type: "adaptive" }, output_config: { effort: options.reasoning === "minimal" ? "low" : options.reasoning } };
 			const { maxTokens, thinkingBudget } = adjustMaxTokensForThinking(requested, model.maxTokens, options.reasoning);
-			return { max_tokens: maxTokens, thinking: { type: "enabled", budget_tokens: thinkingBudget } };
+			return { ...cache, max_tokens: maxTokens, thinking: { type: "enabled", budget_tokens: thinkingBudget } };
 		}
 		case "google-generative-ai":
 		case "google-vertex": {
@@ -203,7 +207,12 @@ export function providerModelOptions(model: Model<string>, options: ModelRequest
 				...(compat?.supportsReasoningEffort && effort ? { reasoning_effort: effort } : {}),
 			};
 		}
-		default: return { store: false, ...(options.maxTokens === undefined ? {} : { max_output_tokens: options.maxTokens }), ...(options.reasoning ? { reasoning: { effort: options.reasoning } } : {}) };
+		default: return {
+			store: false,
+			...(model.api === "openai-responses" && model.provider === "xai" && options.cacheHints && options.sessionId
+				? { prompt_cache_key: createHash("sha256").update("forge-agent:task:").update(options.sessionId).digest("hex") } : {}),
+			...(options.maxTokens === undefined ? {} : { max_output_tokens: options.maxTokens }), ...(options.reasoning ? { reasoning: { effort: options.reasoning } } : {}),
+		};
 	}
 }
 

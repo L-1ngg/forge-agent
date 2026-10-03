@@ -32,6 +32,23 @@ Use `CreateAgentOptions` for configuration; the synonymous `AgentOptions` export
 
 Run the offline examples with `bun examples/custom-adapter.ts`, `bun examples/turn-policy.ts`, and `bun examples/context-transform.ts`. They use the native adapter in [scripted-adapter.ts](../examples/scripted-adapter.ts) without credentials. See [custom-adapter.ts](../examples/custom-adapter.ts) for a complete SDK call.
 
+## Prompt cache
+
+`cacheHints?: boolean` defaults to `true` and is supported by `createAgent`, `updateConfiguration`, and CLI user/project JSON configuration. Forge adds provider cache hints only to these task requests:
+
+| provider / api | Request parameter |
+|---|---|
+| `xai` / `openai-responses` | `prompt_cache_key` derived deterministically from `sessionId` |
+| `anthropic` / `anthropic-messages` | `cache_control: { type: "ephemeral" }`, with the default 5-minute TTL |
+
+Other providers, compaction summaries, and deferred memory organizers receive no automatic hints. `cacheHints: false` disables only the parameters added by Forge; it does not disable implicit provider caching or control caching inside custom adapters. Disable hints explicitly if a compatible proxy rejects the parameters. Forge does not silently remove them and retry.
+
+The xAI key stays stable within a session and across tool continuations. When reopening storage through the SDK, supply the same `sessionId` to retain the key; CLI session restoration preserves this identity. A stable key helps provider routing but does not guarantee a hit.
+
+System prompts are ordered as main prompt → Skills catalog → memory. Updating the main prompt replaces its original slot. Each run still uses native memory recall and deferred saving. Changed memory invalidates the history prefix after it; configuration changes, context compaction, TTL, and provider routing can also affect hits.
+
+In `SessionMessage.usage`, `input` is uncached input, while `cacheRead` and `cacheWrite` record cache reads and writes; all three consume context. Calculate the cached input fraction as `cacheRead / (input + cacheRead + cacheWrite)`, leaving it undefined when the denominator is zero. Built-in catalog costs are estimates and may differ from proxy bills. See the [cache repair record](phases/model-adapter.md#prompt-cache-接线与计量修复) for implementation and validation limits.
+
 ## Execution Responsibilities
 
 SDK, CLI, and TUI share `createAgent → AgentSession → TanStack chat() → TextAdapter`. TanStack `chat()` owns model and tool continuation; the local Pi Agent and agent-loop are removed. Forge retains input ownership, configuration revisions, authoritative settlement, incremental persistence, and evidence-based compaction. Request-boundary `onConfig` middleware prepares the projection and final budget.

@@ -62,10 +62,13 @@ function usageFor(value: TokenUsage, model: Model, calculate: boolean): NonNulla
 	const output = value.completionTokens ?? 0;
 	const cacheRead = value.promptTokensDetails?.cachedTokens ?? 0;
 	const cacheWrite = value.promptTokensDetails?.cacheWriteTokens ?? 0;
-	// Anthropic reports uncached input separately; the other supported adapters
-	// report cache hits/writes as part of promptTokens.
-	const input = model.api === "anthropic-messages" ? prompt : Math.max(0, prompt - cacheRead - cacheWrite);
-	const usage: Usage = { input, output, cacheRead, cacheWrite, totalTokens: model.api === "anthropic-messages" ? input + output + cacheRead + cacheWrite : value.totalTokens ?? prompt + output, cost: zeroUsage().cost };
+	// Anthropic and Converse report uncached input separately. Anthropic's
+	// normalized total also omits cache tokens; Converse's reported total includes them.
+	const uncachedPrompt = model.api === "anthropic-messages" || model.api === "bedrock-converse-stream";
+	const input = uncachedPrompt ? prompt : Math.max(0, prompt - cacheRead - cacheWrite);
+	const total = input + output + cacheRead + cacheWrite;
+	const totalTokens = model.api !== "anthropic-messages" && value.totalTokens !== undefined && value.totalTokens > 0 ? value.totalTokens : total;
+	const usage: Usage = { input, output, cacheRead, cacheWrite, totalTokens, cost: zeroUsage().cost };
 	if (calculate) { calculateCost(model, usage); return usage; }
 	const { cost: _catalogCost, ...tokens } = usage;
 	return { ...tokens, ...(value.cost !== undefined ? { cost: { input: value.costDetails?.upstreamInputCost ?? 0, output: value.costDetails?.upstreamOutputCost ?? 0, cacheRead: 0, cacheWrite: 0, total: value.cost } } : {}) };

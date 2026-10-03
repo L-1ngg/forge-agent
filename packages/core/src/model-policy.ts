@@ -46,7 +46,7 @@ const nonOverflow = /^(Throttling error|Service unavailable):|rate limit|too man
 export function isContextOverflow(message: Pick<SessionMessage, "stopReason" | "errorMessage" | "usage">, contextWindow?: number): boolean {
 	if (message.stopReason === "error" && message.errorMessage && !nonOverflow.test(message.errorMessage) && overflowPatterns.some(pattern => pattern.test(message.errorMessage!))) return true;
 	if (!contextWindow || message.stopReason !== "stop" && message.stopReason !== "length") return false;
-	const input = (message.usage?.input ?? 0) + (message.usage?.cacheRead ?? 0);
+	const input = (message.usage?.input ?? 0) + (message.usage?.cacheRead ?? 0) + (message.usage?.cacheWrite ?? 0);
 	return message.stopReason === "stop" && input > contextWindow || message.stopReason === "length" && message.usage?.output === 0 && input >= contextWindow * 0.99;
 }
 

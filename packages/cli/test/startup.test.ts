@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 
 async function runCli(config: Record<string, unknown>, env: Record<string, string> = {}) {
 	const directory = await mkdtemp(join(tmpdir(), "forge-agent-startup-"));
@@ -89,12 +90,29 @@ for (const credentialSource of ["apiKey", "XAI_API_KEY"] as const) {
 			expect(result.session).toContain("Hello!");
 			expect(requests).toHaveLength(1);
 			expect(requests[0]).toMatchObject({ path: "/v1/responses", authorization: "Bearer test-local-key", body: { model: "grok-4.6", stream: true } });
+			expect(requests[0]!.body.prompt_cache_key).toBeString();
 			expect(result.events).toContainEqual(expect.objectContaining({ type: "message_end", message: expect.objectContaining({ role: "assistant", stopReason: "stop", content: expect.arrayContaining([expect.objectContaining({ type: "text", text: "Hello!" })]) }) }));
 		} finally {
 			server.stop(true);
 		}
 	});
 }
+
+test("CLI cacheHints false reaches the task adapter", async () => {
+	const requests: Record<string, unknown>[] = [];
+	const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+		requests.push(await request.json());
+		return modelResponse();
+	} });
+	try {
+		const result = await runCli({
+			provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "local-key", baseUrl: server.url.toString(), cacheHints: false,
+			skills: { enabled: false }, memory: { autoUpdate: false, injection: false },
+		});
+		expect(result.exitCode).toBe(0); expect(requests).toHaveLength(1);
+		expect(requests[0]!.cache_control).toBeUndefined();
+	} finally { server.stop(true); }
+});
 
 test("CLI rejects legacy sessionPath instead of silently restoring a fixed conversation", async () => {
 	const result = await runCli({ provider: "xai", model: "grok-4.6", sessionPath: "old.jsonl" });

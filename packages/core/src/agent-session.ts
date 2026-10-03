@@ -298,7 +298,7 @@ export class AgentSession implements Agent {
 		this.responseDriver = this.driver;
 		return {
 			options: { ...this.options }, revision: this.appliedRevision, tools: this.tools,
-			settings: { signal, maxTokens: this.compaction.taskMaxTokens(), ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(this.options.thinkingLevel !== "off" ? { reasoning: this.options.thinkingLevel } : {}) },
+			settings: { signal, maxTokens: this.compaction.taskMaxTokens(), cacheHints: this.options.cacheHints !== false, ...(this.options.apiKey !== undefined ? { apiKey: this.options.apiKey } : {}), ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}), ...(this.options.thinkingLevel !== "off" ? { reasoning: this.options.thinkingLevel } : {}) },
 		};
 	}
 	private async projectNativeRequest(systemPrompt: string, tools: HarnessTool<object, unknown>[], signal: AbortSignal) {

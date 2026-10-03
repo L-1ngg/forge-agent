@@ -52,6 +52,8 @@ Configuration loads from `~/.config/forge-agent/config.json` (or `$XDG_CONFIG_HO
 }
 ```
 
+Task requests enable cache hints by default for xAI Responses and Anthropic Messages. Set `"cacheHints": false` in JSON configuration if a proxy rejects these parameters; this does not disable implicit provider caching. The SDK also supports this option and dynamic updates. See [Prompt cache](docs/sdk.en.md#prompt-cache) for session identity, memory, and usage semantics.
+
 Optional `baseUrl` points the CLI at a compatible proxy. Keys are case-sensitive and unknown top-level fields are rejected. Each launch starts a new conversation. Nothing is saved until the first message is consumed; conversation files then live under `.forge-agent/sessions/` at the Git worktree root (or the launch directory outside Git). `--session` and the `sessionPath` config key have been removed; use `/resume` to reopen history.
 
 - `/clear` clears the visible transcript and keeps the current model context, with an explicit notice.

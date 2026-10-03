@@ -19,6 +19,7 @@ export interface HarnessConfig {
 	retry?: Partial<RetryPolicy>;
 	maxTokens?: number;
 	contextWindow?: number;
+	cacheHints?: boolean;
 	provider?: string;
 	model?: string;
 	baseUrl?: string;
@@ -36,6 +37,7 @@ export interface LoadConfigOptions {
 }
 
 const defaults: HarnessConfig = {
+	cacheHints: true,
 	systemPrompt: "You are a coding assistant. Work carefully in the current directory and keep responses concise.",
 	thinkingLevel: "medium",
 	permissionMode: "default",
@@ -53,7 +55,7 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if (typeof config !== "object" || config === null || Array.isArray(config)) {
 		throw new Error(`Invalid config ${path}: expected a JSON object`);
 	}
-	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "memory", "skills", "mcp"];
+	const allowedKeys: Array<keyof HarnessConfig> = ["provider", "model", "baseUrl", "apiKey", "systemPrompt", "thinkingLevel", "permissionMode", "ui", "context", "retry", "maxTokens", "contextWindow", "cacheHints", "memory", "skills", "mcp"];
 	const unknownKeys = Object.keys(config).filter((key) => !allowedKeys.includes(key as keyof HarnessConfig));
 	if (unknownKeys.length > 0) {
 		throw new Error(`Invalid config ${path}: unknown field(s) ${unknownKeys.join(", ")}. Supported fields: ${allowedKeys.join(", ")}`);
@@ -61,6 +63,7 @@ async function readConfig(path: string): Promise<Partial<HarnessConfig>> {
 	if ("apiKey" in config && (typeof config.apiKey !== "string" || !config.apiKey.trim())) {
 		throw new Error(`Invalid config ${path}: apiKey must be a non-empty string`);
 	}
+	if ("cacheHints" in config && typeof config.cacheHints !== "boolean") throw new TypeError(`Invalid config ${path}: cacheHints must be a boolean`);
 	if ("skills" in config) {
 		const skills = config.skills;
 		if (!skills || typeof skills !== "object" || Array.isArray(skills) || Object.keys(skills).some(key => !["enabled", "roots"].includes(key)) || ("enabled" in skills && typeof skills.enabled !== "boolean")) throw new Error(`Invalid config ${path}: skills accepts enabled and roots`);
