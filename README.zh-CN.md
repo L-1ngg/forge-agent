@@ -3,166 +3,61 @@
 [![CI](https://github.com/L-1ngg/forge-agent/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/L-1ngg/forge-agent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**通用单 Agent 项目,目前处于个人开发中。**
+**可在终端使用、也可嵌入应用的可扩展单 Agent 工具集。**
 
-Forge Agent 基于 TanStack AI 构建通用单 Agent 基座，处理输入归属、执行终态、逐步持久化和上下文管理，并提供可嵌入的 Bun SDK 与终端应用。可以直接用 CLI 完成 coding 任务,通过 SDK 装配工具与提示词,或 fork 后构建专用 Agent。
+用 Forge 理解代码库、编辑文件、运行命令，并在不同会话之间继续工作。你也可以把同一个 Agent 嵌入 Bun 应用，装配自己的工具、提示词、权限和存储，或 fork 项目来构建专用 Agent。
 
-[English](README.md) · [SDK 接入](docs/sdk.md) · [贡献说明](CONTRIBUTING.md)
+Forge 提供交互式终端、工具审批、上下文压缩和 Markdown 记忆，通过 Skills 复用任务指引，通过 MCP 接入外部工具和资源。项目基于 [TanStack AI](https://tanstack.com/ai)，目前由个人持续开发。
 
-## 当前能力
-
-- **执行与会话控制:**围绕模型流与工具执行处理输入归属、执行终态、权限、单次 invocation 内的 steering/follow-up、取消与 v4 会话逐步保存。
-- **长任务:**自动或手动上下文压缩、有限超限恢复；提供带证据的短检查点、分支历史搜索与原文找回。Read/Bash 提供有限预览与命令临时日志。
-- **可嵌入 SDK:**实例独立,接受 TanStack 原生 adapter，工具、提示词、权限和存储由宿主提供;CLI 与 SDK 复用同一执行路径。
-- **Coding CLI:**读取、写入、编辑和 shell 工具,支持交互 TUI 与 JSON 事件输出。
-- **终端界面:**流式 transcript、工具和 diff 展示、权限卡片、输入排队、自有 cell renderer。
-
-[TanStack AI](https://tanstack.com/ai) 提供 `chat()` 模型/工具循环、middleware、工具定义和原生供应商 adapter；Forge 维护会话行为、权限、内置模型目录、认证与费用辅助函数。本地 Pi runtime 与 `pi-ai` 依赖已删除。缺少内置等价传输的 Mistral Conversations 和 Codex Responses 模型不在内置目录中。资料调研与报告是后续扩展方向。
+[English](README.md) · [快速开始](#快速开始) · [CLI 使用指南](docs/cli.md) · [SDK 接入指南](docs/sdk.md) · [贡献说明](CONTRIBUTING.md)
 
 ## 快速开始
 
-需要 **Bun 1.3.12** 和模型供应商账号。自动化验证面向 Linux/macOS;尚未承诺原生 Windows 或 Node.js 支持。
+需要 **Bun 1.3.12**、Linux 或 macOS，以及可用的模型供应商账号。从源码运行：
 
 ```bash
 git clone https://github.com/L-1ngg/forge-agent.git
 cd forge-agent
 bun install --frozen-lockfile
 
-# 以 xAI 为例,运行前在 shell 环境中配置密钥。
+# 以 xAI 为例，将占位内容替换为你的 API key。
 export FORGE_AGENT_PROVIDER=xai
 export FORGE_AGENT_MODEL=grok-4.6
+export FORGE_AGENT_API_KEY="your-api-key"
 bun run forge-agent
 ```
 
-使用 `FORGE_AGENT_API_KEY` 或供应商原生变量(如 `XAI_API_KEY`、`OPENAI_API_KEY`)传入密钥,不要提交凭据。内置模型标识符来自 Forge 固定的目录快照；受支持的模型走 TanStack 传输。
+在终端中输入任务：
 
-Headless JSON 事件输出:
+```text
+解释这个仓库的目录结构，以及如何运行它的检查。
+```
+
+Forge 会显示模型输出和工具执行过程，需要你决定的工具调用会弹出审批。其他供应商、兼容代理和配置文件见 [CLI 配置指南](docs/cli.md#配置)。不要把凭据提交到 Git。
+
+## 使用 Forge
+
+终端中可以查看流式回复、工具结果、文件差异和权限请求。任务执行期间可以浏览已有输出，也可以排队提交下一条消息。Markdown 回复支持表格和代码高亮。
+
+| 你想做什么 | 操作 |
+|---|---|
+| 开始独立对话 | `/new` |
+| 继续当前项目的历史会话 | `/resume` |
+| 清空显示，保留模型上下文 | `/clear` |
+| 查看 Skills、记忆或 MCP 连接 | `/skills`、`/memory`、`/mcp status` |
+| 查看可用命令 | `/help` |
+
+在脚本中使用 JSON 事件输出：
 
 ```bash
-bun run forge-agent -- -p "Read package.json and summarize it" --json
+bun run forge-agent --json -p "读取 package.json 并概括它的内容"
 ```
 
-配置依次加载 `~/.config/forge-agent/config.json`(设置 XDG 时为 `$XDG_CONFIG_HOME/forge-agent/config.json`)、`.forge-agent/config.json`、`FORGE_AGENT_PROVIDER` / `FORGE_AGENT_MODEL` / `FORGE_AGENT_API_KEY`。CLI 参数覆盖 provider/model 选择。项目配置可以引用环境变量:
-
-```json
-{
-  "provider": "xai",
-  "model": "grok-4.6",
-  "apiKey": "$FORGE_AGENT_API_KEY"
-}
-```
-
-主任务默认向 xAI Responses 和 Anthropic Messages 添加缓存提示。代理不接受这些参数时，可在 JSON 配置中设置 `"cacheHints": false`；这不会关闭供应商隐式缓存。SDK 也支持该选项和动态更新。会话标识、记忆与用量语义见 [Prompt cache](docs/sdk.md#prompt-cache)。
-
-可选 `baseUrl` 指向兼容代理。字段区分大小写,未知顶层字段会被拒绝。每次启动进入新会话，首次输入被消费前不保存；之后写入 Git worktree 根目录的 `.forge-agent/sessions/`，非 Git 项目则使用启动目录。已移除 `--session` 和配置 `sessionPath`，通过 `/resume` 恢复历史。
-
-- `/clear` 只清空可见对话，保留模型上下文并明确提示。
-- `/new` 开始独立会话，沿用当前模型、工具和配置。任务执行中会先取消并等待工具和保存收尾，再切换；保存失败则停止切换。
-- `/resume` 列出当前项目会话，按最近活动排序，优先显示首条提问作为标题及简短时间；无文本时显示占位。↑/↓ 选择，`Ctrl+E` 按需展开最近最多 6 条用户/助手原文，`PgUp/PgDn` 或滚轮滚动。预览中的 `Esc` 先收起，再按退出列表；`Enter` 恢复。移动选择会收起预览。浏览与展开不调用模型、不保存会话，也不会中断当前任务；选定另一个会话才会。
-- 预览每条最多 500 个字符并标记省略，图片显示占位，中断/失败保留状态提示；完整历史在恢复后查看。未变化文件的列表信息及本次选择器中最多 20 份预览使用内存缓存，再次请求时检查文件变化；冷加载仍可能受历史大小影响。
-- 同一 Git worktree 的根目录与子目录共享历史，不同 worktree 隔离。项目内已有的默认 `.forge-agent/session.jsonl` 仍可发现，不自动覆盖或转换。
-- 已保存会话的未发送文本和排队输入在当前进程内暂存，返回原会话时恢复为可编辑草稿，不自动发送；退出后不保存。要携带编辑中的草稿发起切换，可在独立首行放置 `/new` 或 `/resume`；空会话有草稿时会提示丢弃确认（`y` 确认，`n` 或 Esc 取消）。
-
-恢复会话重建历史和模型上下文，不重放中断工具。工具需要配合取消，切换会等待其收尾。损坏会话会报告诊断，需按 SDK 的副本转换流程检查后恢复。
-
-## MCP 服务
-
-Forge 可连接本地 stdio、远程 Streamable HTTP 和旧版 SSE MCP 服务。Tools 走现有权限流程；SDK 与 `/mcp` 提供 Resources、URI templates、Prompts、OAuth 和 form/URL Elicitation。在 `.forge-agent/config.json` 或用户配置中设置 `mcp.servers`；项目配置按同名 server 整条覆盖。
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "files": { "transport": "stdio", "command": "your-mcp-server", "args": [] },
-      "remote": { "transport": "http", "url": "https://example.com/mcp", "auth": { "type": "oauth", "scopes": ["read"] } }
-    }
-  }
-}
-```
-
-`bun run forge-agent -- --mcp 'status'` 无需模型凭据。`/mcp login remote` 显式启动浏览器授权；`/mcp resources files` 浏览目录；`/mcp use-prompt files review --args '{"topic":"change"}' -- 审查这个变更` 将 Prompt 作为上下文提交。`--no-mcp` 禁止连接。CLI 持久修改使用 `--mcp 'disable files --scope project'`（或 `user`）；TUI 不带 scope 的 enable/disable 只改变当前 Agent。
-
-CLI 凭据默认使用系统凭据库，Linux 要求 Secret Service；显式设置 `mcp.credentialStore: "linux-keyutils"` 时只在当前 Linux/WSL 实例内保存，系统重启后可能需要重新登录，不静默 fallback。SDK 默认使用实例内存存储。具体合同见 [SDK MCP](docs/sdk.md#mcp)，可运行[目录示例](examples/mcp-client.ts)；已测行为和未完成的外部验收见[验收证据](docs/phases/mcp-client-acceptance.md)。
-
-## 本地 Skills
-
-CLI 按工作区 → 用户 → 内置的优先级发现 `<project>/.forge/skills`、`~/.forge/skills`、产品随附 `packages/cli/builtin_skills`（本轮为空）中的 `SKILL.md` 目录。`<project>` 是当前 Git worktree 根，无 Git 时为启动目录；既有 `.forge-agent` 配置、会话与记忆路径不迁移。
-
-```text
-/skills
-/skills reload
-/skill code-review 请审查当前补丁。
-```
-
-`/skills` 查看有效与遮蔽项；`/skill` 提供名称补全，按 Enter 接受候选后输入任务。正文准备成功后只提交一次用户输入，任务文本保留原文，失败输入返还编辑草稿。headless 支持 `--json -p '/skills'`、`--json -p '/skills reload'` 和 `--json -p '/skill code-review 请审查当前补丁。'`。管理命令不请求模型、不创建对话历史；启动仍需配置 provider/model 凭据。
-
-模型通过 TanStack AI `withSkills` 初始只看到名称和用途，再以其 `load_skill` 按需读取正文。`disable-model-invocation: true` 禁止自动选用，但允许显式 `/skill`。官方 `read_skill_resource` 读取 `references/` 或 `assets/` 下的资料。加载不执行脚本、不安装依赖，`allowed-tools` 不产生授权。Skills 工具具有可信来源，不触发交互授权，`deny-all` 下也是如此；脚本命令仍走普通工具权限。
-
-目录发现和元数据校验由 TanStack `skillDirectory` 负责，坏项按其规则跳过。项目来源先于个人来源，官方 first-wins 组合器处理同名项。`/skills reload` 刷新来源。Skills 变更在当前 `chat()` 结束后 applied；上下文压缩后的新运行仍可重新加载指引。最终请求上限包含注入的目录和工具。
-
-`--no-skills` 可关闭；也可在 `.forge-agent/config.json` 覆盖来源（相对路径以启动 cwd 解析）：
-
-```json
-{
-  "skills": {
-    "enabled": true,
-    "roots": { "workspace": "./team-skills", "user": "/home/alice/shared-skills" }
-  }
-}
-```
-
-默认根缺失为空；显式覆盖缺失报错。设 `enabled: false` 后不扫描、不注入目录、不注册加载工具。SDK 默认关闭并要求宿主提供 roots，见 [Skills 接入](docs/sdk.md#skills)及 [ADR-026](docs/decisions/026-native-skills-and-markdown-memory.md)。
-
-## 持久记忆
-
-持久记忆采用普通 Markdown 主题与简短的 `MEMORY.md` 索引。TanStack `memoryMiddleware` 在运行开始召回索引，在成功结束后 deferred 调用现有模型整理本轮内容，再将有价值的变化写入本机 Markdown。当前要求和项目权威资料优先于旧笔记，记忆不扩大权限。当前整理校验见 [Issue #42](docs/phases/memory-organizer-issue-42.md)；原始接入及其证据保留在 [Issue #37 施工记录](docs/phases/tool-ecosystem-issue-37.md)。
-
-CLI 默认启用记忆注入与 deferred 更新，可分别关闭。记忆管理工具是 internal 工具，`permissionMode: "deny-all"` 下也不触发交互授权；普通文件和 shell 工具仍受权限策略约束。
-
-`/memory` 显示帮助和目录位置，例如：
-
-```text
-/memory list
-/memory save project workflow.md 本项目使用 Bun。
-/memory read project workflow.md
-/memory edit project workflow.md 本地开发使用 Bun；production 尚未决定。
-/memory pin project workflow.md
-/memory sources project workflow.md
-/memory read project workflow.md
-/memory delete project workflow.md
-```
-
-`save`、`edit`、`delete` 直接操作 Markdown 文件，没有先读版本协议；也可直接用编辑器管理。`search <scope> <words>` 覆盖未入索引的笔记；`read <scope> <path> <offset>` 用返回的 `nextOffset` 继续分页。`unpin` 取消固定。`import <session-path>` 显式、限量读取当前项目的单个会话，由模型整理；启动不会为记忆扫描全部历史。
-
-目录为 `$XDG_DATA_HOME/forge-agent/memory`，缺省 `~/.local/share/forge-agent/memory`，位于 Git 工作区外。用户通用偏好与项目笔记分开。新 worktree 首次使用时复制主 worktree 的项目 Markdown，随后独立维护；后续修改、删除与 Git 合并不自动同步副本。删除记忆不删除会话历史。
-
-配置中的 `memory.autoUpdate` 和 `memory.injection` 分别控制 deferred 整理与运行开始的召回；`/memory auto off`、`/memory inject off` 只改变当前进程，当前 Agent 在本次运行结束后应用。两者关闭时仍可显式管理记忆。`--memory 'read project workflow.md'` 无需模型。`memory` 保存事件报告 skipped、saved 或 failed，并在模型提供时带上整理 usage；整理失败不改写主任务结果。下次运行重新召回，主题与索引分别写入。
-
-SDK 只有在宿主提供 `memory: { store: new LongTermMemory({ project: absoluteDirectory }) }` 时才启用，见 [SDK 指南](docs/sdk.md#持久记忆)。
-
-## 上下文管理
-
-SDK 宿主可通过 `transformContext` 选择、精简或注入本次请求消息，不改变持久历史。任务请求在关闭自动压缩时也经过最终输入/输出预算检查，不自动缩减输出上限。回调生命周期、内置传输限制与估算边界见[宿主上下文变换](docs/sdk.md#宿主上下文变换)。
-
-CLI 与 SDK 默认启用上下文压缩，包括短检查点、历史搜索/读取与请求预算，无需额外开启。以下可选配置只是显式写出默认值：
-
-```json
-{
-  "context": {
-    "enabled": true
-  }
-}
-```
-
-SDK 的 `createAgent` 省略 `context` 或传空对象时也使用上下文压缩。已运行的 CLI 需重启才能加载新默认值和配置，无需更换模型。
-
-上下文压缩向模型提供简短的任务状态和证据 ID，完整证据仍保存在会话历史与检查点中。模型可用 `search_context` 找到当前分支的相关记录，再用 `read_context` 查看原文；两者均受现有权限策略控制，不重新执行历史工具。压缩有输入/输出预算和有限重建次数；旧 pi 会话从原始分支历史恢复模型上下文，失败不自动回退 pi。旧 pi 策略与 `context.strategy` 选择项已删除。
-
-它不保证所有任务都省 Token 或更便宜。首次上下文压缩的[真实模型对照](docs/phases/adaptive-context-compaction-acceptance.md)与后续短检查点/搜索的[软件验证及材料大小估算](docs/phases/context-notes-search.md)是不同证据；新投影尚未重新完成真实模型质量和总费用评估。完整参数、权限和兼容边界见 [SDK 上下文指南](docs/sdk.md#上下文管理)。
+Headless 模式会拒绝需要人工决定的请求，并返回对应退出码。[CLI 使用指南](docs/cli.md)包含在其他项目中启动、快捷键、会话恢复、权限与自动化的完整说明。
 
 ## 嵌入 Agent
 
-包是**仓库内私有 workspace 包**,尚未发布 npm。在本 monorepo 的宿主 package 中声明 `"@forge-agent/core": "workspace:*"`,通过 `@forge-agent/core/sdk` 导入。仓库根目录示例使用相对路径:
+通过 SDK 在 Bun 应用内运行 Agent，无需启动 TUI。当前包是仓库内的 private workspace，尚未发布到 npm。下面的示例适用于仓库根目录：
 
 ```ts
 import { createAgent } from "./packages/core/src/sdk.ts";
@@ -185,104 +80,81 @@ try {
 }
 ```
 
-可运行的 [SDK quickstart](examples/sdk-quickstart.ts) 对应上方最小示例。SDK 默认使用内存历史,不装配 coding 工具。[自定义工具示例](examples/embedded-agent.ts) 显式提供工具和授权规则:
+配置凭据后，可用 `bun examples/sdk-quickstart.ts` 运行同一示例。Workspace 内的使用方声明 `"@forge-agent/core": "workspace:*"`，通过 `@forge-agent/core/sdk` 导入。
 
-```bash
-bun examples/embedded-agent.ts
-```
+SDK 默认使用内存历史，不自动装配 coding 工具。按应用需求提供工具、存储和权限处理。详见 [SDK 指南](docs/sdk.md)、[自定义工具示例](examples/embedded-agent.ts)和[自定义 adapter 示例](examples/custom-adapter.ts)；adapter 示例无需凭据，也不请求真实模型。
 
-示例宿主读取 `FORGE_AGENT_PROVIDER`、`FORGE_AGENT_MODEL` 及可选的 `FORGE_AGENT_API_KEY` / `FORGE_AGENT_BASE_URL`。长期宿主接入前先读 [存储、权限与生命周期](docs/sdk.md)。
+## 配置与扩展
 
-无需凭据或模型请求即可运行原生 adapter 示例：
+按需要选择定制入口：
 
-```bash
-bun examples/custom-adapter.ts
-bun examples/turn-policy.ts
-bun examples/context-transform.ts
-```
+| 需求 | 入口 |
+|---|---|
+| 选择模型、代理或缓存提示 | [CLI 配置](docs/cli.md#配置)；[SDK 原生 adapter](docs/sdk.md#原生-tanstack-模型-adapter) |
+| 添加工具或控制权限 | [SDK 工具与装配](docs/sdk.md#装配与定制边界)；[CLI 权限模式](docs/cli.md#工具权限) |
+| 复用任务指引和配套资料 | [本地 Skills](docs/cli.md#skills) |
+| 接入外部工具、资源和提示词 | [MCP 服务](docs/cli.md#mcp-服务) |
+| 跨会话保留偏好与项目笔记 | [Markdown 记忆](docs/cli.md#记忆) |
+| 管理较长任务的上下文 | [上下文管理](docs/cli.md#上下文管理) |
+| 导出模型和工具调用 trace | [OpenTelemetry](docs/cli.md#opentelemetry) |
 
-[adapter 示例](examples/custom-adapter.ts) 使用生产执行链。任务和摘要共用自定义 adapter，取消、配置及旧接口迁移见 [adapter 合同](docs/sdk.md#原生-tanstack-模型-adapter)。
-
-assistant 回复在正文和详情页渲染 Markdown,支持表格与代码高亮。窄表格回退为带列名的记录,长代码行折行并显示续行标记。Forge 的复制操作保留 Markdown 原文,LaTeX 保持原文。可运行 `bun scripts/markdown-preview.ts` 查看固定样例,不调用模型或保存会话。
-
-## OpenTelemetry
-
-CLI 配置 OTLP endpoint 后，通过 TanStack 官方 OTel 中间件导出 trace：
-
-```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
-OTEL_SERVICE_NAME=forge-agent \
-bun run forge-agent --json -p "检查这个项目"
-```
-
-CLI 使用 OTLP HTTP/JSON。通用 endpoint 自动追加 `/v1/traces`；`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 可覆盖为精确 URL。官方 exporter 读取标准 OTLP headers/timeout 变量，resource detector 读取 `OTEL_RESOURCE_ATTRIBUTES` / `OTEL_SERVICE_NAME`，service 默认 `forge-agent`。`OTEL_SDK_DISABLED=true` 禁用；未配置 endpoint 时关闭。正常退出等待 provider shutdown；导出失败不改变任务结果或 JSON stdout，强杀可能丢失缓冲 span。
-
-默认不采集正文。显式 `FORGE_OTEL_CAPTURE_CONTENT=true` 包含提示词、回答和工具参数/结果；关闭采集时异常信息仍可能带文本。CLI 本轮只导出 traces。SDK 宿主可通过 `createAgent({ otel })` 提供 tracer 与可选 meter，并使用脱敏和官方回调。任务、摘要、记忆请求分别标记，审批续接通过原生 run ID 关联。接入见 [SDK 指南](docs/sdk.md#opentelemetry)及可运行的离线 [OTel 示例](examples/otel.ts)。
+CLI 默认发现本地 Skills，并开启记忆召回、任务结束后的记忆整理和上下文压缩；记忆整理可能额外调用模型。SDK 默认开启上下文压缩，Skills 和记忆需要宿主显式配置。各功能指南说明具体开关与边界。
 
 ## 架构
 
-| 包 | 职责 |
-|---|---|
-| `@forge-agent/protocol` | 事件、请求、响应与展示数据 |
-| `@forge-agent/core` | 会话生命周期、TanStack chat 接入、模型适配、权限、上下文与 SDK |
-| `@forge-agent/tools` | 工具契约与内置 coding 工具 |
-| `@forge-agent/interaction` | 会话协调、待发送输入、管理与查询、操作作用域;只依赖 protocol |
-| `@forge-agent/tui` | 终端外壳、逐次激活的显示容器与 cell compositor;消费 interaction、protocol、Node 内置模块及纯 Markdown/高亮库 |
-| `@forge-agent/cli` | 配置、凭据、工具与存储装配,TUI/headless 入口 |
-
-依赖门禁禁止 core 引入 UI 或 interaction，并保持 interaction 不依赖 core、CLI、终端 I/O 或显示库；同时拒绝 `pi-ai` 依赖及 import。Team 编排、消息路由、多 Agent dashboard 归外部宿主项目。
-
-`SessionCoordinator` 选择捕获 Agent/请求总线的 `SessionInteraction`，`App` 通过 `PresentationSession` 投影已发布状态；成功激活时替换两个容器。辅助作用域阻止迟到结果并传递协作取消，切换仍等待权威执行与保存结算。`SessionHost` 负责实例准备和提交。所有权及取消边界见 [ADR-031](docs/decisions/031-session-interaction-coordinator.md)。
-
-SDK、CLI 与 TUI 共用一个 `AgentSession`，由它负责输入队列、配置快照、权威终态和会话历史。TanStack `chat()` 负责模型/工具续轮、schema 校验、审批续接、成功响应聚合及串行工具执行，请求 middleware 完成上下文投影和最终预算检查。Forge 审计原始 provider 协议，仅未能自动决定的审批交给宿主。工具批次完成后，Forge 在下一次模型请求前保存提案与结果。保存失败仍停止执行并停用实例，但副作用可能已经发生；进程崩溃可能丢失最新批次。审批仅在当前进程续接。简化后的合同见 [ADR-030](docs/decisions/030-native-arguments-and-conversation-persistence.md)。
+CLI、TUI 和 SDK 共用一个 `AgentSession`。Forge 管理输入、配置、权限、会话历史和上下文，TanStack AI 负责模型与工具续轮及供应商 adapter。
 
 ```mermaid
 flowchart LR
   H[SDK / CLI / TUI] --> S[AgentSession]
   S --> C[TanStack chat]
   C --> A[Native TextAdapter]
-  C --> T[原生审批与串行工具]
+  C --> T[已授权工具]
   S --> D[SessionStorage]
-  T --> D
 ```
 
-`SessionMessage` 原文与证据检查点是唯一可恢复状态；它们只在请求/响应边界与 TanStack 消息转换一次，不再维护第二份 runtime 历史或兼容循环。SDK 通过 `adapter` 接受原生 adapter，旧 `StreamFn` 接口已移除；已有 JSONL、Markdown 记忆和 MCP 附件格式保持。迁移见 [SDK 指南](docs/sdk.md#原生-tanstack-模型-adapter)，权限决策见 [ADR-027](docs/decisions/027-native-tool-approval-and-interruption.md)，响应边界见 [ADR-028](docs/decisions/028-model-response-boundary.md)。
-
-## Roadmap
-
-| 阶段 | 方向 |
+| 包 | 职责 |
 |---|---|
-| **Now** | 完成 TanStack 基座验证与剩余真实任务验收 |
-| **Next** | 后续工具扩展,来源可追溯的资料调研与报告 |
-| **Later** | 长任务可靠性、恢复边界与上下文质量/成本的持续验证,之后是服务 API 与分发 |
+| `@forge-agent/protocol` | 事件、请求、响应和共享数据 |
+| `@forge-agent/core` | Agent 会话、模型接入、权限、上下文与 SDK |
+| `@forge-agent/tools` | 工具契约与内置 coding 工具 |
+| `@forge-agent/interaction` | 会话协调、输入和管理操作 |
+| `@forge-agent/tui` | 终端渲染与交互 |
+| `@forge-agent/cli` | 配置、凭据、工具、存储与启动模式 |
 
-[开发规划](docs/plan.md) 是行动项真相源。以上是方向,不承诺发布日期。
+Core 不依赖 UI。Team 编排和多 Agent dashboard 由宿主应用负责。生命周期和持久化合同见 [SDK 执行职责](docs/sdk.md#执行职责)，设计决策见[内部架构文档](docs/README.md)。
 
-## 开发状态与限制
+## 项目状态与路线
 
-个人持续开发中,API 与配置可能变化。自动化通过不代表完整真实供应商与人工终端验收通过。
+Forge 目前由个人持续开发，API 和配置可能变化。
 
-- 当前只提供 Bun SDK,不承诺 npm 分发、稳定 API 或进程级沙箱。
-- 自定义工具需配合取消;工具副作用不会回滚。
-- JSONL 不保证断电或部分写入时的事务性;提交开始后取消需等待结算。
-- TUI 使用 alt-screen，支持滚轮交互；剪贴板优先使用可用的原生渠道，OSC 52 为终端相关的回退方式，不保证终端接受。
-- 源码预发布是开发快照,不是可安装二进制或生产发行版。
+- 当前运行目标是 Linux、macOS 上的 Bun，暂不承诺原生 Windows 或 Node.js 兼容。
+- 包保持 private；源码预发布是开发快照，不是可安装二进制或生产发行版。
+- 工具权限不提供进程级沙箱；工具副作用不会回滚，取消需要工具配合。
+- 会话历史增量保存，JSONL 不保证崩溃或断电时的事务性；恢复会话不会重放未完成的工具。
+- 自动化测试不代表完整真实供应商覆盖、长期任务质量或更低的模型费用。
+
+当前优先完成真实供应商与 MCP 验证，再推进资料调研场景和长任务测试，服务 API 与分发安排在后续。[开发规划](docs/plan.md)维护具体行动项，不承诺发布日期。
 
 ## 开发与文档
+
+安装依赖后运行：
 
 ```bash
 bun run check
 bun run typecheck:examples
 ```
 
-`check` 已包含正式 headless smoke 与全部登记测试；`test:headless` 单独执行同一 smoke。平台要求、定向分组和每轮独立证据见 [Contributing](CONTRIBUTING.md#local-checks)；[脚本与示例入口](CONTRIBUTING.md#scripts-and-examples) 区分离线命令与真实模型实验。
+这些检查使用本地 fixtures，无需模型凭据。平台要求、定向测试与每次运行的证据见[贡献说明](CONTRIBUTING.md#local-checks)。
 
-[中文 SDK](docs/sdk.md) · [English SDK](docs/sdk.en.md) · [贡献说明](CONTRIBUTING.md) · [内部文档](docs/README.md)
+- [CLI 使用指南](docs/cli.md)：日常使用、配置、会话与扩展。
+- [SDK 接入指南](docs/sdk.md)：嵌入、工具、存储、权限与生命周期。
+- [脚本与示例](CONTRIBUTING.md#scripts-and-examples)：可运行示例，以及哪些命令会请求真实模型。
+- [内部文档](docs/README.md)：架构决策、规划与验收记录。
+- [发布指南](docs/release.md)：维护者的源码预发布流程。
 
-维护者可在双平台验证后创建 [源码预发布草稿](docs/release.md),公开发布仍是单独的手动操作。
-
-参考项目:[pi](https://github.com/earendil-works/pi)、[grok-build](https://github.com/xai-org/grok-build)。各自代码适用其上游许可证。
+参考项目包括 [Pi](https://github.com/earendil-works/pi) 和 [grok-build](https://github.com/xai-org/grok-build)。
 
 ## 许可证
 
-[MIT](LICENSE),copyright 2026 L1ngg。
+[MIT](LICENSE)，copyright 2026 L1ngg。

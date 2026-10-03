@@ -1,6 +1,6 @@
 # SDK 接入
 
-[English](sdk.en.md) · [中文 README](../README.zh-CN.md)
+[English](sdk.en.md) · [中文 README](../README.zh-CN.md) · [CLI 使用指南](cli.md)
 
 > 范围:仓库内 Bun SDK,入口 `@forge-agent/core/sdk`。未承诺 npm 发布、Node.js 兼容或进程隔离。
 

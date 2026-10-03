@@ -1,6 +1,6 @@
 # docs/ — 文档系统
 
-> 状态:生效(2026-10-01)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
+> 状态:生效(2026-10-03)。职责分工见 [ADR-001](decisions/001-doc-system.md)，归档与读取规则见 [ADR-020](decisions/020-document-archival.md)。
 > 原则:文档领路，代码跟随；证据说话，不是信心说话。
 
 ## 当前导航
@@ -12,6 +12,7 @@
 | 文档 | 职责 |
 |---|---|
 | [英文 README](../README.md)、[中文 README](../README.zh-CN.md) | 使用入口、当前能力与依赖边界；双语一起维护 |
+| [cli.md](cli.md)、[cli.en.md](cli.en.md) | 中/英文 CLI 使用、配置、会话、权限与扩展指南 |
 | [sdk.md](sdk.md)、[sdk.en.md](sdk.en.md) | 中/英文 Bun SDK 接入、输入归属、存储与生命周期合同 |
 | [release.md](release.md) | 英文手动源码预发布操作与失败处理 |
 

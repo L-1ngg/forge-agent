@@ -1,6 +1,6 @@
 # Embedding Forge Agent
 
-[简体中文](sdk.md) · [Project README](../README.md)
+[简体中文](sdk.md) · [Project README](../README.md) · [CLI guide](cli.en.md)
 
 The SDK is a private Bun workspace package, exported at `@forge-agent/core/sdk`. It is not published on npm and does not promise Node.js compatibility or process isolation.
 
