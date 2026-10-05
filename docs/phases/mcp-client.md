@@ -6,6 +6,7 @@ created: 2026-09-21
 # MCP client 完整施工设计
 
 > 状态:已完成(代码实现与软件验证，2026-09-21)。operator 于 2026-09-21 明确确认现有设计并授权完整生产实现；已接入生产代码；operator 随后在获知未测边界后授权 commit、push 并关闭 Issue。软件与外部验收边界见[验收记录](mcp-client-acceptance.md)。需求范围、任务状态和唯一 AC 清单见 [Issue #36](https://github.com/L-1ngg/forge-agent/issues/36)。架构取舍见 [ADR-022](../decisions/022-mcp-host-integration.md)。
+> 当前补充:附件取消结算与 UTF-8 截断已完成本地修复与软件验证(2026-10-05)，证据见[本地补充](mcp-client-acceptance.md#2026-10-05-附件取消与-utf-8-回归)，不新增外部服务或平台验收。
 > 一次性交付：本地/远程、Tools、Resources、Prompts、OAuth、Elicitation、SDK/CLI/TUI 及验收共同完成，不分交付批次。下文按职责组织，不代表可以推迟其中任何能力。
 
 ## Why
@@ -186,6 +187,11 @@ SDK outputSchema 验证使用执行快照 Tool，不重复手写输出 validator
 | audio/其他 binary | 保存原 bytes 和 MIME，模型只收到标识与不支持原生理解的说明；不自动转写或解析 |
 
 默认单次结果总保存限额 16 MiB、单个附件 8 MiB、单次模型正文 64 KiB。超过正文阈值时完整原文在限额内保存为附件，模型显示有标识的摘要/截断片段与读取方式；超过总限额返回 `content-too-large`，明确原结果未完整保留。这里是解析后的宿主限额，不能声称是 transport 内存硬上限；协议帧/HTTP body 限额能由 SDK配置时使用，否则记录未覆盖的接收峰值，不另写 transport parser。
+
+正文截断只保留完整 UTF-8 字符，不在多字节字符中间解码。资源与 Prompt 的管理读取贯穿用户、连接与实例生命周期的合并 signal；附件 `put` 返回后先登记本次引用，再核对取消状态。宿主 `put` 忽略取消时，迟到完成仍使准备失败，并通过可选 `delete` 清理本次附件；不报告准备成功，也不删除此前已引用的附件。自定义 store 不提供 `delete` 或删除失败时，清理由宿主负责，不声明外部副作用回滚。
+
+- [x] AC-CONTENT-1：资源/Prompt 在附件保存期间取消或释放实例，迟到结果不成功返回，本次附件被支持删除的 store 清理，旧附件保持可读。
+- [x] AC-CONTENT-2：2/3/4 字节 UTF-8 字符跨 64 KiB 边界时，预览是原文前缀且无新增替换字符，完整附件 bytes 不变。
 
 附件 adapter 接口只需 `put(bytes, metadata, signal) -> reference`、`read(id, signal)`；已有引用不允许覆盖。SDK 默认内存存储，与实例一起释放；持久宿主显式注入。CLI 文件 adapter 位于 `.forge-agent/artifacts/<sessionId>/`，随机不可猜测 ID 对应不可变文件和 JSON metadata；延迟首次写入，private 权限，路径由 adapter 生成，不用远端 URI 当本地路径。未被历史引用的本次暂存附件在输入失败/取消时删除；已引用附件不在退出时删除，也不自动做全库 GC。恢复发现缺失附件时展示 missing，不自动重新请求远端来冒充原内容。
 

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "../src/session-store.ts";
+import { SessionSearch } from "../src/session-search.ts";
 import { messageEntry, type MessageEntry } from "../src/session-storage.ts";
 import { buildContext } from "../src/context/compaction.ts";
 
@@ -39,6 +40,7 @@ test("old sessions convert to a distinct v4 copy with original branches and iden
 	await SessionStore.convertCopy(source, target, dir);
 	const store = await SessionStore.open(target, dir);
 	expect(store.header.version).toBe(4);
+	expect(store.header.timestamp).toBe(header.timestamp);
 	expect(store.getEntries()).toEqual(entries);
 	expect(store.getTree()[0]?.children).toHaveLength(2);
 	expect(await readFile(source, "utf8")).toBe(original);
@@ -77,4 +79,39 @@ test("complete JSON without a newline is readable but is never appended in place
 	expect(loaded.diagnostics).toEqual([]);
 	expect(loaded.messages()).toHaveLength(1);
 	await expect(loaded.append(messageEntry({ role: "user", timestamp: 2, content: [] }, entry.id))).rejects.toThrow("appendable copy");
+});
+
+test("session search shares recovery parsing for damaged JSON and keeps all branches searchable", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "forge-search-")); dirs.push(dir);
+	const path = join(dir, "damaged.jsonl"), store = await SessionStore.open(path, dir);
+	const first = messageEntry({ role: "user", timestamp: 1, content: [{ type: "text", text: "root" }] }, null);
+	const left = messageEntry({ role: "user", timestamp: 2, content: [{ type: "text", text: "left evidence" }] }, first.id);
+	const right = messageEntry({ role: "user", timestamp: 3, content: [{ type: "text", text: "right evidence" }] }, first.id);
+	await store.append(first); await store.append(left); await store.append(right);
+	const original = await readFile(path, "utf8");
+	await writeFile(path, original + "{incomplete}\n");
+	expect((await SessionStore.open(path, dir, { create: false })).messages()).toHaveLength(2);
+	const search = new SessionSearch(path);
+	expect(await search.search("evidence")).toEqual([left.id, right.id]);
+	expect(await search.readEntry(left.id)).toEqual(left);
+	expect(await readFile(path, "utf8")).toBe(original + "{incomplete}\n");
+});
+
+test("session search rejects invalid persistent messages instead of returning unvalidated entries", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "forge-search-")); dirs.push(dir);
+	const path = join(dir, "invalid.jsonl");
+	await SessionStore.open(path, dir);
+	const entry = messageEntry({ role: "user", timestamp: 1, content: [{ type: "text", text: "evidence" }] }, null);
+	await writeFile(path, await readFile(path, "utf8") + JSON.stringify({ ...entry, message: { ...entry.message, role: "system" } }) + "\n");
+	const search = new SessionSearch(path);
+	await expect(search.search("evidence")).rejects.toThrow("line 2 entry.message.role");
+	await expect(search.readEntry(entry.id)).rejects.toThrow("line 2 entry.message.role");
+});
+
+test("session search never creates a missing session file", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "forge-search-")); dirs.push(dir);
+	const path = join(dir, "missing.jsonl"), search = new SessionSearch(path);
+	await expect(search.search("evidence")).rejects.toThrow();
+	await expect(search.readEntry("missing")).rejects.toThrow();
+	await expect(readFile(path, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 });

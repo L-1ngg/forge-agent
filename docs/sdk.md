@@ -335,6 +335,8 @@ Read 使用从 1 开始的 `offset` 与可选行数 `limit`，正文默认最多
 
 旧 v3 数据通过 `SessionStore.convertCopy(source, target, cwd, options?)` 显式转成 v4 副本，目标存在即失败；损坏或无换行文件要继续追加也使用此入口。open 的 onDiagnostic 回调报告坏 JSON 行，leafId 可选择分支；`create: false` 禁止在文件缺失时创建，适合只读发现和恢复验证；`store.appendable` 表示文件是否允许原地追加，false 时必须使用已验证副本；不可解释的选中父链或摘要边界拒绝加载。回退使用保留的旧文件及匹配旧二进制，关闭自动压缩不会使 v4 变回旧格式。
 
+`SessionStore` 后续追加不会重建缺失文件，并会核对上次成功读取/写入的文件身份、大小与修改时间。外部移走、替换或修改文件使追加失败并停用该存储实例；恢复文件后需要显式重开。这是单写实例的冲突检测，不提供跨进程写锁或断电事务保证。`@forge-agent/core` 的 `SessionSearch` 使用同一只读解析与消息校验，搜索全部分支记录，且不会创建缺失文件。
+
 受控真实 provider 验收示例：`bun examples/context-acceptance.ts`，显式读取宿主配置、限制实验请求和时间，并清理本次临时会话。
 
 ## 事件与生命周期
@@ -462,6 +464,8 @@ server 定义支持 `stdio` 的 command/args/cwd/env、`http`/`sse` 的 url/head
 显式输入可为 `{ kind: "mcp_prompt", serverId, name, arguments, task }` 或 `{ kind: "mcp_resource", serverId, uri, task }`，同样用于 runTurn/steer/followUp。准备成功后保存一条带 `inputContext` 的 user 封套；模型请求按原角色展开并保留 task 原文。外部 assistant 内容不表示现场执行成功。恢复不重新取远端模板；准备失败不消费输入、不请求模型。预算和压缩使用展开视图，原封套保留作证据。
 
 内容上限为整个结果 16 MiB、单附件 8 MiB、模型正文 64 KiB，截断有显式标记和附件引用。图片仅在模型支持时作为图片输入；音频保留 bytes，不声称已转写；链接不会自动抓取。`readArtifact` 读取原附件，缺失时报 `artifact-missing`，不重新请求服务器。SDK 默认 `MemoryMcpArtifactStore` 随实例释放；持久历史的宿主应注入持久 artifact store。自定义 store 若不实现可选 `delete`，失败准备阶段的附件清理由宿主负责。
+
+正文预览保留完整 UTF-8 字符。资源/Prompt 准备在附件保存完成后仍核对用户取消及实例/连接释放；忽略 signal 的 store 迟到返回时，准备失败并尝试删除本次暂存附件，已保存的旧附件保持不变。宿主未实现 `delete` 或删除失败时仍负责清理，取消不保证已开始的外部写入回滚。
 
 SDK 默认 `MemoryMcpCredentialStore` 仅在当前实例保留凭据；共享 store 必须由宿主显式注入。`McpCredentialStore.withLock` 必须覆盖整个读取、refresh、写回或 logout 交易；原生操作若忽略取消，仍须持锁到真实结算，不能用 Promise.race 提前解锁。取消返回 `credential-outcome-unknown` 不证明回滚；logout 只删除本地 grant，不保证远端撤销。CLI 复用系统凭据库和跨进程文件锁，Linux 默认 Secret Service；显式 `linux-keyutils` 不承诺系统重启持久化。
 

@@ -1,5 +1,4 @@
-import type { SessionEntry } from "./session-store.ts";
-import { readFile } from "node:fs/promises";
+import { SessionStore, type SessionEntry } from "./session-store.ts";
 
 export class SessionSearch {
 	constructor(private readonly path: string) {}
@@ -17,10 +16,6 @@ export class SessionSearch {
 	}
 
 	private async entries(): Promise<SessionEntry[]> {
-		return (await readFile(this.path, "utf8"))
-			.split("\n")
-			.slice(1)
-			.filter(Boolean)
-			.map((line) => JSON.parse(line) as SessionEntry);
+		return (await SessionStore.open(this.path, process.cwd(), { create: false })).getEntries();
 	}
 }

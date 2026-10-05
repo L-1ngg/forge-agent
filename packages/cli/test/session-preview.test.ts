@@ -46,8 +46,8 @@ test("list and preview reuse unchanged files and invalidate additions, edits and
 	const path = join(cwd, ".forge-agent", "sessions", "history.jsonl");
 	const store = await SessionStore.open(path, cwd);
 	await store.append(messageEntry({ role: "user", content: [{ type: "text", text: "opening" }], timestamp: 1 }, null));
-	const observer = spyOn(fs, "readFile");
-	const reads = () => observer.mock.calls.filter(args => String(args[0]).endsWith(".jsonl")).length;
+	const observer = spyOn(fs, "open");
+	const reads = () => observer.mock.calls.filter(args => String(args[0]).endsWith(".jsonl") && args[1] === "r").length;
 	try {
 		const id = (await host.list()).sessions[0]!.id;
 		const coldReads = reads();
@@ -78,20 +78,26 @@ test("a file changed during preview reading is not cached as a current snapshot"
 	const store = await SessionStore.open(join(cwd, ".forge-agent", "sessions", "changing.jsonl"), cwd);
 	await store.append(messageEntry({ role: "user", content: [{ type: "text", text: "before read" }], timestamp: 1 }, null));
 	const id = (await host.list()).sessions[0]!.id;
-	const read = fs.readFile;
+	const open = fs.open;
 	let changed = false;
-	const observer = spyOn(fs, "readFile").mockImplementation(new Proxy(read, { apply(target, receiver, args) {
+	const observer = spyOn(fs, "open").mockImplementation(new Proxy(open, { apply(target, receiver, args) {
 		const result = Reflect.apply(target, receiver, args);
-		if (String(args[0]) !== id || changed) return result;
+		if (String(args[0]) !== id || args[1] !== "r" || changed) return result;
 		changed = true;
-		return result.then(async (body: string) => {
-			await store.append(messageEntry({ role: "assistant", content: [{ type: "text", text: "appended during read" }], timestamp: 2 }, store.getLeafId()));
-			return body;
+		return result.then((handle: Awaited<ReturnType<typeof open>>) => {
+			handle.readFile = new Proxy(handle.readFile, { async apply(read, reader, readArgs) {
+				const body = await Reflect.apply(read, reader, readArgs);
+				await store.append(messageEntry({ role: "assistant", content: [{ type: "text", text: "appended during read" }], timestamp: 2 }, store.getLeafId()));
+				return body;
+			} });
+			return handle;
 		});
 	} }));
 	try {
 		const old = await host.preview(id);
 		expect(old.messages.at(-1)?.text).toBe("before read");
+		expect(changed).toBe(true);
+		expect(old.revision).toBe("");
 		const fresh = await host.preview(id, old);
 		expect(fresh.messages.at(-1)?.text).toBe("appended during read");
 	} finally { observer.mockRestore(); await host.dispose(); await rm(cwd, { recursive: true, force: true }); }

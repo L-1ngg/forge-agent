@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "../src/session-store.ts";
@@ -106,6 +106,38 @@ test("later I/O failure retains the saved prefix and never retries after the pat
 	await reopened.append(input("explicit recovery", first.id));
 	expect(reopened.messages()).toHaveLength(2);
 });
+
+for (const reopen of [false, true]) {
+	test.each(["missing", "replaced", "truncated", "modified"] as const)(`external file change rejects append and requires explicit recovery (reopen=${reopen}, %s)`, async change => {
+		const cwd = await directory();
+		const path = join(cwd, "session.jsonl"), backup = join(cwd, "saved.jsonl");
+		let store = SessionStore.create(path, cwd);
+		const first = input("saved");
+		await store.append(first);
+		if (reopen) store = await SessionStore.open(path, cwd, { create: false });
+		const before = await readFile(path, "utf8");
+		if (change === "truncated" || change === "modified") {
+			await writeFile(backup, before);
+			await writeFile(path, change === "truncated" ? before.slice(0, before.indexOf("\n") + 1) : before.replace("saved", "other"));
+			if (change === "modified") await utimes(path, new Date(0), new Date(0));
+		} else {
+			await rename(path, backup);
+			if (change === "replaced") await writeFile(path, before);
+		}
+		const changed = change === "missing" ? undefined : await readFile(path, "utf8");
+		await expect(store.append(input("failed", first.id))).rejects.toThrow();
+		if (changed === undefined) expect(await readdir(cwd)).toEqual(["saved.jsonl"]);
+		else expect(await readFile(path, "utf8")).toBe(changed);
+		expect((await store.load()).entries).toEqual([first]);
+		await rm(path, { force: true });
+		await rename(backup, path);
+		await expect(store.append(input("retry", first.id))).rejects.toThrow("faulted");
+		expect(await readFile(path, "utf8")).toBe(before);
+		const recovered = await SessionStore.open(path, cwd, { create: false });
+		await recovered.append(input("recovered", first.id));
+		expect((await SessionStore.open(path, cwd, { create: false })).messages()).toHaveLength(2);
+	});
+}
 
 test("cached history snapshots remain isolated across append and branch selection", async () => {
 	const cwd = await directory(), store = SessionStore.create(join(cwd, "session.jsonl"), cwd);

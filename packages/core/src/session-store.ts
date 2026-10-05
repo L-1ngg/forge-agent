@@ -1,7 +1,8 @@
 import { expandMcpInput } from "./session-storage.ts";
 import type { SessionMessage } from "@forge-agent/protocol";
 import { normalizeSessionEntry, ownSessionState, prepareSessionAppend, selectSessionLeaf, selectedBranch, sessionMessages, validateSessionEntry, type SessionEntry, type SessionState, type SessionStorage } from "./session-storage.ts";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile } from "node:fs/promises";
+import { constants, type Stats } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -20,6 +21,11 @@ export interface SessionTreeNode {
 
 export interface SessionDiagnostic { line: number; message: string; }
 export interface SessionOpenOptions { create?: boolean; leafId?: string | null; onDiagnostic?: (diagnostic: SessionDiagnostic) => void; }
+
+type FileRevision = Pick<Stats, "dev" | "ino" | "size" | "mtimeMs" | "ctimeMs">;
+function sameFileRevision(left: FileRevision | undefined, right: FileRevision): boolean {
+	return left !== undefined && left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+}
 
 function parseSession(text: string, allowOld = false): { header: SessionHeader; entries: SessionEntry[]; diagnostics: SessionDiagnostic[]; appendable: boolean } {
 	const records: unknown[] = [];
@@ -49,6 +55,7 @@ export class SessionStore implements SessionStorage {
 	private writing: Promise<void> = Promise.resolve();
 	private faulted = false;
 	private persisted = false;
+	private fileRevision: FileRevision | undefined;
 	private constructor(readonly path: string, readonly header: SessionHeader, entries: SessionEntry[], readonly diagnostics: readonly SessionDiagnostic[] = [], readonly appendable = true, leafId?: string | null) {
 		this.state = ownSessionState({ entries, leafId: leafId !== undefined ? leafId : entries.at(-1)?.id ?? null });
 	}
@@ -60,12 +67,18 @@ export class SessionStore implements SessionStorage {
 	get saved(): boolean { return this.persisted; }
 	static async open(path: string, cwd: string, options: SessionOpenOptions = {}): Promise<SessionStore> {
 		try {
-			const parsed = parseSession(await readFile(path, "utf8"));
-			for (const diagnostic of parsed.diagnostics) options.onDiagnostic?.(diagnostic);
-			const store = new SessionStore(path, parsed.header, parsed.entries, parsed.diagnostics, parsed.appendable, options.leafId);
-			store.validateBranch();
-			store.persisted = true;
-			return store;
+			const handle = await open(path, "r");
+			try {
+				const revision = await handle.stat();
+				if (!revision.isFile()) throw new Error("Session path must be a regular file");
+				const parsed = parseSession(await handle.readFile("utf8"));
+				for (const diagnostic of parsed.diagnostics) options.onDiagnostic?.(diagnostic);
+				const store = new SessionStore(path, parsed.header, parsed.entries, parsed.diagnostics, parsed.appendable, options.leafId);
+				store.validateBranch();
+				store.fileRevision = revision;
+				store.persisted = true;
+				return store;
+			} finally { await handle.close(); }
 		} catch (error) {
 			if (options.create === false) throw error;
 			if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) throw error;
@@ -81,9 +94,7 @@ export class SessionStore implements SessionStorage {
 		const header: SessionHeader = { ...parsed.header, version: 4 };
 		const copy = new SessionStore(target, header, parsed.entries, [], true, options.leafId);
 		copy.validateBranch();
-		await mkdir(dirname(target), { recursive: true });
-		await writeFile(target, [header, ...parsed.entries].map((entry) => JSON.stringify(entry)).join("\n") + "\n", { encoding: "utf8", flag: "wx" });
-		copy.persisted = true;
+		await copy.writeRecords(parsed.entries, true);
 		return copy;
 	}
 	private validateBranch(): void {
@@ -115,14 +126,18 @@ export class SessionStore implements SessionStorage {
 		this.writing = writing.catch(() => {});
 		return writing;
 	}
-	private async writeRecords(entries: readonly SessionEntry[]): Promise<void> {
-		if (this.persisted) {
-			await appendFile(this.path, entries.map(entry => JSON.stringify(entry)).join("\n") + "\n", "utf8");
-			return;
-		}
-		await mkdir(dirname(this.path), { recursive: true });
-		this.header.timestamp = new Date().toISOString();
-		await writeFile(this.path, [this.header, ...entries].map(entry => JSON.stringify(entry)).join("\n") + "\n", { encoding: "utf8", flag: "wx" });
+	private async writeRecords(entries: readonly SessionEntry[], preserveTimestamp = false): Promise<void> {
+		if (!this.persisted) await mkdir(dirname(this.path), { recursive: true });
+		const handle = await open(this.path, this.persisted ? constants.O_WRONLY | constants.O_APPEND : "wx");
+		let revision: FileRevision;
+		try {
+			if (this.persisted && !sameFileRevision(this.fileRevision, await handle.stat())) throw new Error("Session file changed outside this store; reopen a verified copy");
+			if (!this.persisted && !preserveTimestamp) this.header.timestamp = new Date().toISOString();
+			const records = this.persisted ? entries : [this.header, ...entries];
+			await handle.writeFile(records.map(entry => JSON.stringify(entry)).join("\n") + "\n", "utf8");
+			revision = await handle.stat();
+		} finally { await handle.close(); }
+		this.fileRevision = revision;
 		this.persisted = true;
 	}
 	getTree(): SessionTreeNode[] {

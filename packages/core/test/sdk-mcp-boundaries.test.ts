@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
-import { createAgent, MemorySessionStorage } from "../src/sdk.ts";
+import { createAgent, MemoryMcpArtifactStore, MemorySessionStorage, type McpArtifactStore } from "../src/sdk.ts";
 import { sessionMessages } from "../src/session-storage.ts";
 import { mcpFixture } from "./helpers/mcp-server.ts";
 import { modelResponse } from "../../../tests/fixtures/model-response.ts";
 import { mcpToolName } from "../src/mcp/config.ts";
+import { barrier } from "../../../tests/support/control.ts";
 
 const base = { provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "fixture", systemPrompt: "base", cwd: process.cwd() };
 const allow = { rules: [{ tool: "*", argsPattern: "*", effect: "allow" as const }] };
@@ -57,6 +58,59 @@ test("MCP large text is retained as original bytes, limits reject, and binary re
 		expect(Buffer.from((await agent.mcp.readArtifact(result.artifacts[0]!.id)).bytes).toString()).toBe(`Resource fixture://long:\n${long}`);
 		const binary = await agent.mcp.readResource("content", "fixture://binary"); expect(Array.from((await agent.mcp.readArtifact(binary.artifacts[0]!.id)).bytes)).toEqual([0, 255, 1]);
 		await expect(agent.mcp.readResource("content", "fixture://oversize")).rejects.toThrow("16 MiB");
+	} finally { await agent.dispose(); await server.close(); }
+});
+
+for (const operation of ["resource", "prompt"] as const) {
+	for (const cancellation of ["abort", "dispose"] as const) {
+		test(`MCP ${operation} cleans late artifact writes after ${cancellation} without deleting old artifacts`, async () => {
+			const saved = new MemoryMcpArtifactStore(), started = barrier("artifact write started"), finish = barrier("artifact write released");
+			const old = await saved.put(Buffer.from("old evidence"), { mimeType: "text/plain" });
+			const staged: string[] = [];
+			const artifacts: McpArtifactStore = {
+				async put(bytes, metadata) { started.release(); await finish.wait(); const reference = await saved.put(bytes, metadata); staged.push(reference.id); return reference; },
+				read: saved.read.bind(saved), delete: saved.delete.bind(saved),
+			};
+			const server = serve(() => {
+				const instance = new McpServer({ name: "late-artifact", version: "1" });
+				instance.registerResource("long", "fixture://long", {}, uri => ({ contents: [{ uri: uri.href, text: "x".repeat(70000) }] }));
+				instance.registerPrompt("long", {}, () => ({ messages: [{ role: "user", content: { type: "text", text: "x".repeat(70000) } }] }));
+				return instance;
+			});
+			const controller = new AbortController();
+			const agent = await createAgent({ ...base, permission: allow, mcp: { artifacts, servers: { late: { transport: "http", url: server.url } } } });
+			const pending = operation === "resource" ? agent.mcp.readResource("late", "fixture://long", { signal: controller.signal }) : agent.mcp.getPrompt("late", "long", {}, { signal: controller.signal });
+			const outcome = pending.then(() => "resolved", () => "rejected");
+			try {
+				await started.wait();
+				if (cancellation === "abort") controller.abort(); else await agent.dispose();
+				finish.release();
+				expect(await outcome).toBe("rejected");
+				expect(staged).toHaveLength(1);
+				await expect(saved.read(staged[0]!)).rejects.toThrow("missing");
+				expect(Buffer.from((await saved.read(old.id)).bytes).toString()).toBe("old evidence");
+			} finally { finish.release(); await outcome; await agent.dispose(); await server.close(); }
+		});
+	}
+}
+
+test.each(["\u00e9", "\u754c", "\u{1f600}"])("MCP UTF-8 preview preserves a source prefix across a multi-byte boundary (%s)", async unit => {
+	const uri = "fixture://unicode", prefix = `Resource ${uri}:\n`, bytes = Buffer.byteLength(unit);
+	const text = "x".repeat((64 * 1024 - Buffer.byteLength(prefix) - 1) % bytes) + unit.repeat(Math.ceil(64 * 1024 / bytes) + 10);
+	const server = serve(() => {
+		const instance = new McpServer({ name: "unicode", version: "1" });
+		instance.registerResource("unicode", uri, {}, url => ({ contents: [{ uri: url.href, text }] }));
+		return instance;
+	});
+	const agent = await createAgent({ ...base, permission: allow, mcp: { servers: { unicode: { transport: "http", url: server.url } } } });
+	try {
+		const result = await agent.mcp.readResource("unicode", uri);
+		const preview = result.content.flatMap(block => block.type === "text" ? [block.text] : []).join("").split("\n[Truncated;")[0]!;
+		expect(result.diagnostics).toContain("text-truncated");
+		expect(preview.includes("\ufffd")).toBe(false);
+		expect((prefix + text).startsWith(preview)).toBe(true);
+		expect(Buffer.byteLength(preview)).toBeLessThanOrEqual(64 * 1024);
+		expect(Buffer.from((await agent.mcp.readArtifact(result.artifacts[0]!.id)).bytes).toString()).toBe(prefix + text);
 	} finally { await agent.dispose(); await server.close(); }
 });
 

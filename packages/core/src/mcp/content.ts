@@ -3,18 +3,24 @@ import { McpError, type McpArtifactStore, type McpContentSnapshot } from "./type
 
 const TOTAL_LIMIT = 16 * 1024 * 1024, ARTIFACT_LIMIT = 8 * 1024 * 1024, TEXT_LIMIT = 64 * 1024;
 export async function normalizeMcpContent(input: { serverId: string; remoteName: string; catalogRevision: number; content: ContentBlock[]; structuredContent?: unknown }, store: McpArtifactStore, signal?: AbortSignal): Promise<McpContentSnapshot> {
+	signal?.throwIfAborted();
 	const original = JSON.stringify({ content: input.content, ...("structuredContent" in input ? { structuredContent: input.structuredContent } : {}) });
 	if (Buffer.byteLength(original) > TOTAL_LIMIT) throw new McpError("content-too-large", "MCP result exceeds 16 MiB; original content was not retained");
 	const result: McpContentSnapshot = { serverId: input.serverId, remoteName: input.remoteName, catalogRevision: input.catalogRevision, fetchedAt: Date.now(), original: JSON.parse(original), content: [], artifacts: [], diagnostics: [], ...("structuredContent" in input ? { structuredContent: input.structuredContent } : {}) };
 	let textBytes = 0;
 	const artifact = async (bytes: Uint8Array, mimeType: string) => {
 		if (bytes.byteLength > ARTIFACT_LIMIT) throw new McpError("content-too-large", "MCP attachment exceeds 8 MiB; original content was not retained");
-		const ref = await store.put(bytes, { mimeType }, signal); result.artifacts.push(ref); return ref;
+		const ref = await store.put(bytes, { mimeType }, signal); result.artifacts.push(ref); signal?.throwIfAborted(); return ref;
 	};
 	const text = async (value: string) => {
 		const bytes = Buffer.from(value); const remaining = Math.max(0, TEXT_LIMIT - textBytes); textBytes += bytes.length;
 		if (bytes.length <= remaining) result.content.push({ type: "text", text: value });
-		else { const ref = await artifact(bytes, "text/plain"); result.content.push({ type: "text", text: `${bytes.subarray(0, remaining).toString("utf8")}\n[Truncated; complete text: artifact ${ref.id}, ${ref.size} bytes. Use mcp_read_artifact.]` }); result.diagnostics.push("text-truncated"); }
+		else {
+			const ref = await artifact(bytes, "text/plain");
+			// Streaming decode leaves an incomplete trailing code point out of the preview.
+			const preview = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes.subarray(0, remaining), { stream: true });
+			result.content.push({ type: "text", text: `${preview}\n[Truncated; complete text: artifact ${ref.id}, ${ref.size} bytes. Use mcp_read_artifact.]` }); result.diagnostics.push("text-truncated");
+		}
 	};
 	try {
 		for (const block of input.content) {
@@ -34,6 +40,6 @@ export async function normalizeMcpContent(input: { serverId: string; remoteName:
 			const serialized = JSON.stringify(input.structuredContent);
 			if (!input.content.some(block => block.type === "text" && block.text.trim() === serialized)) await text(`Structured result:\n${serialized}`);
 		}
-		return result;
+		signal?.throwIfAborted(); return result;
 	} catch (error) { await Promise.allSettled(result.artifacts.map(ref => store.delete?.(ref.id))); throw error; }
 }

@@ -6,6 +6,7 @@ created: 2026-09-12
 # 会话历史首次落盘职责收敛
 
 > 状态:已完成本地实现与自动化验收(2026-09-12)。operator 已同意将首次落盘和后续追加集中到文件存储 module，保持现有保存与恢复行为，并要求提交本地 commit；未推送，未新增人工验收。
+> 当前补充:文件变更检测与只读搜索一致性已完成本地修复与软件验证(2026-10-05)，证据见本文末节，不扩展原平台与持久性结论。
 
 ## Why / Entry
 
@@ -15,12 +16,17 @@ CLI `NewSessionStorage` 自行编码 v4 header 和首条记录，再打开 `Sess
 
 - `SessionStore.create(path, cwd, id?)` 同步准备未落盘实例；`load()` 返回空历史，不创建目录或文件。稳定会话 id 在分配时确定，文件 header 时间在首次写入时确定。
 - 首次 `append()` 与后续追加共用已有串行队列、重复 id/分支校验和故障停用。第一次以 `wx` 写入 header 与首条记录，成功后才更新内存历史与已保存状态；后续使用已有 append 行为，不自动重试失败写入。
+- 后续追加只打开已存在的文件，不携带创建标志；在同一文件 handle 上核对上次成功打开/写入的 `dev`、`ino`、`size`、`mtimeMs` 与 `ctimeMs`。文件被移走、替换或修改时，写入失败且实例停用，保留内存中的已保存前缀；恢复原文件后仍须显式重开。打开已有文件时在同一 handle 上取得读前版本与内容；读取期间变化仍可返回可解释的只读快照，保持既有预览行为，但后续追加必须通过读前版本检查，不能把旧历史作为新文件的写入基础。宿主继续按读前/后文件版本禁止缓存过时预览。
+- `SessionSearch` 复用 `SessionStore.open({ create: false })` 的格式、消息 codec、损坏行诊断规则与字段归一化，仍搜索全部记录而非只搜索选中分支；读取缺失文件不创建会话。
 - `saved` 表示本实例已成功创建或打开会话文件，不代表外部删除后文件仍存在，也不把写入成功升级为断电事务保证。
 - `SessionStore.open()` 保留默认即时建文件、`create: false` 只读加载及损坏文件处理；新建文件的内部写入复用相同路径。`convertCopy()` 保留旧 header 的身份和时间，不改源文件。
 - CLI 使用 `SessionStore.create()` 并读取 `saved`，删除 `NewSessionStorage` 及 CLI 内的 v4 编码与首写 I/O。项目路径、会话 id 分配、实例切换仍由 CLI 决定。
 - 保留现有 `SessionStorage` interface；内存与文件是已有 adapter，不新增文件系统抽象或延迟存储转发 module。
 
 ## Acceptance / Verify
+
+- [x] AC-FILE-1：已保存/重新打开的文件被移走、替换、原地截短或等长修改后，追加拒绝且不重建、不污染当前路径；恢复后原实例仍停用，显式重开可恢复。
+- [x] AC-FILE-2：只读搜索可查询含可跳过坏 JSON 行的可解释历史，拒绝非法 header/消息字段，缺失文件不创建；既有搜索范围保持全部记录。
 
 - [x] AC-SAVE-1：CLI 不再编码 header/首条 JSONL；空启动、只读加载、新建未输入均不创建会话文件。
 - [x] AC-SAVE-2：首写成功可立即重载；串行追加顺序、分支和既有 v4 恢复不变，稳定 id 保留。
@@ -43,3 +49,14 @@ CLI `NewSessionStorage` 自行编码 v4 header 和首条记录，再打开 `Sess
 - Not run：外层终端人工体验、真实 provider、macOS/Windows 原生、断电/部分写入与远端 CI。
 - Why / Risk：本轮为文件存储职责收敛，在 WSL 以真实临时文件及本地模型/PTY 验证；不将追加成功视为断电事务保证，不承诺自动故障修复。保留了原有非事务性 JSONL 和单写实例约束。
 - 清理：临时基线、定向与完整检查日志已删除，验证结果保留于本节。
+
+## 2026-10-05 文件变更与搜索回归
+
+本次排查与修复基于 `db2eae1` 工作区，不改 v4 格式或 `SessionStorage` 接口。
+
+- 原因：后续 `appendFile` 默认携带创建语义，文件移走后会写出无 header 的新文件；文件替换/修改后也会基于旧内存历史继续追加。`SessionSearch` 另写 JSONL 解析，既不能容忍恢复入口可跳过的坏 JSON 行，也未校验持久消息字段。
+- 修复：同一 handle 读取内容和读前文件版本，后续以不创建文件的 append handle 校验版本；不匹配时沿用 faulted 语义。搜索复用只读 `SessionStore`。转换副本仍保留原 header 时间。CLI 缓存测试适配实际文件 handle，并明确断言读中变化的预览无有效缓存 revision。
+- Ran：原实现的 15 个定向复现用例为 0 pass / 15 fail，覆盖本节 6 个文件变更、2 个搜索问题及同期 MCP 的 7 个边界；补充原地等长修改与缺失搜索防创建后，本轮新增 18 个回归用例。
+- Ran：`bun test packages/cli/test/session-preview.test.ts packages/core/test/session-first-write.test.ts packages/core/test/session-conversion.test.ts packages/core/test/sdk-mcp-boundaries.test.ts` 为 46 pass / 0 fail，包含既有格式转换、分支、缓存和 MCP 回归。
+- Ran：最终 `bun run check` 通过，依赖边界、六包、automation/root tests 类型检查以及 1060 pass / 0 fail；其中 contract 349、integration 661、CLI/PTY 50，139 个文件。Linux OS 网络隔离探针通过，证据保留在本地 `.test-results/run-lqg92L/`。`bun run typecheck:examples` 与 `git diff --check` 通过。
+- Not run / Why / Risk：真实 provider/远程 MCP、macOS/Windows、跨进程并发及断电恢复未执行；本轮使用 Linux/Bun 1.3.12、真实临时文件、fixture HTTP 和 CLI/PTY。版本检查继续以单写实例为前提，不是文件锁，也不能保证元数据检查与实际写入之间的外部并发修改。损坏文件的历史修复仍需显式验证副本。
